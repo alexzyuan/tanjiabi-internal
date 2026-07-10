@@ -1,0 +1,103 @@
+/* Clearance calculator page. */
+#view-clearance .clearance-rate-panel {
+grid-template-columns:repeat(auto-fit, minmax(190px, 1fr));
+}
+.clearance-rate-panel label {
+display:grid;
+align-content:start;
+}
+.clearance-rate-panel input {
+width:100%;
+}
+#view-clearance .clearance-workbench {
+display:grid;
+grid-template-columns:minmax(0, 1.45fr) minmax(280px, 0.65fr);
+gap:var(--spectrum-spacing-150);
+margin-top:var(--spectrum-spacing-150);
+}
+#view-clearance .clearance-input-panel,
+#view-clearance .clearance-rule-card,
+#view-clearance .clearance-result-panel {
+min-width:0;
+}
+#view-clearance .clearance-paste-label {
+display:grid;
+gap:var(--spectrum-spacing-75);
+color:var(--tj-text-muted);
+font-size:13px;
+font-weight:700;
+}
+.clearance-paste-label textarea {
+width:100%;
+min-height:260px;
+resize:vertical;
+font-family:"SFMono-Regular", Consolas, "Liberation Mono", monospace;
+line-height:1.5;
+}
+#view-clearance .clearance-rule-list {
+display:grid;
+gap:var(--spectrum-spacing-100);
+}
+.clearance-rule-list div {
+display:grid;
+gap:var(--spectrum-spacing-50);
+padding:var(--spectrum-spacing-100);
+border:1px solid var(--tj-border-strong);
+border-radius:var(--spectrum-control-radius);
+background:var(--tj-surface-muted);
+}
+.clearance-rule-list strong {
+color:var(--tj-text-strong);
+font-size:13px;
+}
+.clearance-rule-list span {
+color:var(--tj-text-muted);
+font-size:12px;
+line-height:1.45;
+}
+#view-clearance .clearance-kpi-grid {
+grid-template-columns:repeat(5, minmax(0, 1fr));
+margin-top:var(--spectrum-spacing-150);
+}
+#view-clearance .clearance-result-panel {
+margin-top:var(--spectrum-spacing-150);
+}
+#view-clearance .clearance-table-wrap table {
+min-width:1320px;
+}
+.clearance-table-wrap th,
+.clearance-table-wrap td {
+text-align:left;
+}
+#view-clearance .clearance-action-row {
+background:color-mix(in srgb, var(--tj-warning) 10%, var(--tj-content-bg));
+}
+#view-clearance .clearance-positive {
+color:var(--spectrum-positive);
+font-weight:700;
+}
+#view-clearance .clearance-negative {
+color:var(--spectrum-negative);
+font-weight:700;
+}
+@media (max-width:720px) {
+#view-clearance .clearance-rate-panel,
+#view-clearance .clearance-workbench,
+#view-clearance .clearance-kpi-grid {
+  grid-template-columns:1fr;
+}
+.clearance-paste-label textarea {
+  min-height:220px;
+}
+body:not(.login-body) #view-clearance > .module-hero {
+  display:flex !important;
+  align-items:stretch !important;
+  flex-direction:column !important;
+}
+body:not(.login-body) #view-clearance > .module-hero > div:first-child {
+  width:100% !important;
+}
+body:not(.login-body) #view-clearance > .module-hero .hero-actions {
+  justify-content:flex-start !important;
+}
+}

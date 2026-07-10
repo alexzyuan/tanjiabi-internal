@@ -1,0 +1,28 @@
+/* Shared compact filter toolbar. */
+.filter-toolbar {
+  display: grid;
+  gap: 12px;
+  align-items: start;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--tj-border-subtle);
+  border-radius: 8px;
+  background: var(--tj-content-bg);
+}
+
+.filter-toolbar label {
+  gap: 6px;
+  color: var(--tj-text-body);
+  font-weight: 750;
+}
+
+.filter-toolbar input,
+.filter-toolbar select {
+  width: 100%;
+  height: 38px;
+  border: 1px solid var(--tj-border-control);
+  border-radius: 8px;
+  padding: 0 10px;
+  color: var(--tj-text-body);
+  background: var(--tj-content-bg);
+}

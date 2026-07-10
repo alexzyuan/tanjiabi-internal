@@ -1,0 +1,95 @@
+/* Inventory provision page */
+#view-provision .inventory-table-stack {
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+#view-provision .inventory-table-stack .table-wrap {
+  overflow-x: auto;
+}
+
+#view-provision .inventory-table-stack table {
+  min-width: 1080px;
+}
+
+#view-provision .inventory-table-stack article:first-child table {
+  min-width: 720px;
+}
+
+#view-provision .inventory-chart-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.9fr) minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 10px;
+}
+
+#view-provision .inventory-chart-grid svg {
+  width: 100%;
+  min-height: 300px;
+}
+
+#view-provision .chart-bucket {
+  color: var(--tj-action-blue);
+  fill: var(--tj-action-blue);
+  stroke: var(--tj-action-blue);
+}
+
+#view-provision .chart-bucket--0-30,
+#view-provision .chart-bucket--1 {
+  color: var(--tj-positive);
+  fill: var(--tj-positive);
+  stroke: var(--tj-positive);
+}
+
+#view-provision .chart-bucket--31-60,
+#view-provision .chart-bucket--2 {
+  color: var(--spectrum-accent-visual);
+  fill: var(--spectrum-accent-visual);
+  stroke: var(--spectrum-accent-visual);
+}
+
+#view-provision .chart-bucket--61-90,
+#view-provision .chart-bucket--3 {
+  color: var(--tj-action-blue);
+  fill: var(--tj-action-blue);
+  stroke: var(--tj-action-blue);
+}
+
+#view-provision .chart-bucket--91-180,
+#view-provision .chart-bucket--4 {
+  color: var(--tj-warning);
+  fill: var(--tj-warning);
+  stroke: var(--tj-warning);
+}
+
+#view-provision .chart-bucket--181-270,
+#view-provision .chart-bucket--5 {
+  color: var(--spectrum-negative);
+  fill: var(--spectrum-negative);
+  stroke: var(--spectrum-negative);
+}
+
+#view-provision .chart-bucket--271-plus,
+#view-provision .chart-bucket--6 {
+  color: var(--tj-danger);
+  fill: var(--tj-danger);
+  stroke: var(--tj-danger);
+}
+
+#view-provision .inventory-donut-track {
+  stroke: var(--tj-tone-neutral-bg);
+}
+
+#view-provision .bucket-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 8px;
+  border-radius: 2px;
+  background: currentColor;
+}
+
+#view-provision .provision-risk-row {
+  background: var(--tj-tone-warning-row-bg);
+}

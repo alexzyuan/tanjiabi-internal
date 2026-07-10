@@ -1,0 +1,313 @@
+/* Store inspection dashboard page. */
+.store-inspection-actions {
+  justify-content: flex-end;
+}
+
+.store-inspection-status,
+.inspection-table-badge,
+.inspection-check-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.store-inspection-status {
+  padding: 0 var(--spectrum-spacing-150);
+}
+
+.inspection-table-badge {
+  padding: 0 var(--spectrum-spacing-100);
+}
+
+.inspection-badge-high {
+  color: var(--tj-text-inverse);
+  background: var(--tj-danger);
+}
+
+.inspection-badge-mid {
+  color: var(--tj-tone-warning-text);
+  background: var(--tj-tone-warning-bg);
+  border: 1px solid color-mix(in srgb, var(--tj-warning) 46%, var(--tj-content-bg));
+}
+
+.inspection-badge-low {
+  color: var(--tj-tone-success-text);
+  background: var(--tj-tone-success-bg);
+  border: 1px solid color-mix(in srgb, var(--tj-positive) 34%, var(--tj-content-bg));
+}
+
+.store-inspection-kpis {
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+}
+
+.store-inspection-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.85fr);
+  gap: var(--spectrum-spacing-150);
+  margin-top: var(--spectrum-spacing-150);
+}
+
+.store-inspection-schedule-panel {
+  margin-top: var(--spectrum-spacing-150);
+}
+
+.store-inspection-schedule-form {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(220px, 0.8fr) auto;
+  align-items: end;
+  gap: var(--spectrum-spacing-200);
+  padding: 0 var(--spectrum-spacing-200) var(--spectrum-spacing-200);
+}
+
+.store-inspection-schedule-form .toggle-row {
+  min-height: var(--spectrum-control-height);
+}
+
+.store-inspection-time-field {
+  display: grid;
+  gap: var(--spectrum-spacing-75);
+  color: var(--tj-text-muted);
+  font-size: 13px;
+}
+
+.store-inspection-time-field input {
+  min-height: var(--spectrum-control-height);
+  border: 1px solid var(--tj-border-strong);
+  border-radius: var(--spectrum-control-radius);
+  padding: 0 var(--spectrum-spacing-150);
+  color: var(--tj-text-strong);
+  background: var(--tj-content-bg);
+  font: inherit;
+}
+
+.store-inspection-time-field input:focus-visible {
+  border-color: var(--spectrum-accent-visual);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--spectrum-focus-ring-color) 14%, transparent);
+  outline: 0;
+}
+
+.store-inspection-form {
+  padding: 0 0 var(--spectrum-spacing-200);
+}
+
+.store-inspection-form > .panel-head,
+.store-inspection-preview > .panel-head {
+  padding: var(--spectrum-spacing-200) var(--spectrum-spacing-200) 0;
+}
+
+.store-inspection-basics,
+.store-inspection-extra,
+.store-inspection-priority,
+.store-inspection-checklist {
+  padding: var(--spectrum-spacing-200);
+}
+
+.store-inspection-priority,
+.store-inspection-checklist {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  gap: var(--spectrum-spacing-150);
+  border-top: 1px solid var(--tj-border-strong);
+}
+
+.store-inspection-checklist {
+  grid-template-columns: repeat(3, minmax(150px, 1fr));
+}
+
+.store-inspection-priority label,
+.store-inspection-checklist label {
+  display: grid;
+  gap: var(--spectrum-spacing-75);
+  color: var(--tj-text-muted);
+  font-size: 13px;
+}
+
+.store-inspection-form input,
+.store-inspection-form select,
+.store-inspection-form textarea,
+.store-inspection-filters input,
+.store-inspection-filters select {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--spectrum-control-height);
+  border: 1px solid var(--tj-border-strong);
+  border-radius: var(--spectrum-control-radius);
+  padding: 0 var(--spectrum-spacing-150);
+  color: var(--tj-text-strong);
+  background: var(--tj-content-bg);
+  font: inherit;
+}
+
+.store-inspection-form textarea {
+  padding-top: var(--spectrum-spacing-100);
+  padding-bottom: var(--spectrum-spacing-100);
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.store-inspection-form input:focus,
+.store-inspection-form select:focus,
+.store-inspection-form textarea:focus,
+.store-inspection-filters input:focus,
+.store-inspection-filters select:focus {
+  border-color: var(--spectrum-accent-visual);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--spectrum-focus-ring-color) 14%, transparent);
+  outline: 0;
+}
+
+.store-inspection-extra label {
+  min-width: 0;
+}
+
+.store-inspection-preview {
+  align-self: start;
+}
+
+.store-inspection-focus {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spectrum-spacing-150);
+  padding: var(--spectrum-spacing-200);
+}
+
+.inspection-focus-card {
+  display: grid;
+  gap: var(--spectrum-spacing-75);
+  padding: var(--spectrum-spacing-150);
+  border-radius: var(--spectrum-card-radius);
+  background: var(--spectrum-background-layer-2);
+}
+
+.inspection-focus-card.inspection-badge-high {
+  color: var(--tj-tone-danger-text);
+  background: color-mix(in srgb, var(--tj-danger) 10%, var(--tj-content-bg));
+  border: 1px solid color-mix(in srgb, var(--tj-danger) 36%, var(--tj-content-bg));
+}
+
+.inspection-focus-card.inspection-badge-mid {
+  color: var(--tj-tone-warning-text);
+  background: var(--tj-tone-warning-bg);
+  border: 1px solid color-mix(in srgb, var(--tj-warning) 46%, var(--tj-content-bg));
+}
+
+.inspection-focus-card.inspection-badge-low {
+  color: var(--tj-tone-success-text);
+  background: color-mix(in srgb, var(--tj-positive) 10%, var(--tj-content-bg));
+  border: 1px solid color-mix(in srgb, var(--tj-positive) 32%, var(--tj-content-bg));
+}
+
+.inspection-focus-card span,
+.inspection-focus-card small {
+  color: inherit;
+  opacity: 0.86;
+}
+
+.inspection-focus-card strong {
+  font-size: 22px;
+  color: inherit;
+}
+
+.store-inspection-check-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spectrum-spacing-100);
+  padding: 0 var(--spectrum-spacing-200) var(--spectrum-spacing-200);
+}
+
+.store-inspection-report-panel .panel-head {
+  align-items: flex-start;
+}
+
+.store-inspection-report-panel .panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--spectrum-spacing-100);
+}
+
+.store-inspection-report-output {
+  width: 100%;
+  height: min(68vh, 720px);
+  min-height: 520px;
+  border: 1px solid var(--tj-border-strong);
+  border-radius: var(--spectrum-control-radius);
+  padding: var(--spectrum-spacing-150);
+  color: var(--tj-text-strong);
+  background: var(--tj-content-bg);
+  font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  resize: vertical;
+}
+
+body:not(.login-body) #store-inspection-report-output.store-inspection-report-output {
+  min-height: 520px;
+}
+
+.store-inspection-report-output:focus {
+  border-color: var(--spectrum-accent-visual);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--spectrum-focus-ring-color) 14%, transparent);
+  outline: 0;
+}
+
+.inspection-check-pill {
+  gap: var(--spectrum-spacing-75);
+  min-height: 30px;
+  padding: 0 var(--spectrum-spacing-150);
+}
+
+.inspection-check-pill b {
+  font-weight: 750;
+}
+
+.store-inspection-filters {
+  grid-template-columns: minmax(180px, 1fr) minmax(150px, 0.6fr) minmax(150px, 0.6fr);
+}
+
+.inspection-delete-button {
+  height: 30px;
+  padding: 0 var(--spectrum-spacing-150);
+  box-shadow: none;
+}
+
+@media (max-width: 1180px) {
+  .store-inspection-workspace,
+  .store-inspection-kpis,
+  .store-inspection-priority,
+  .store-inspection-checklist {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .store-inspection-schedule-form {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+}
+
+@media (max-width: 720px) {
+  .store-inspection-workspace,
+  .store-inspection-kpis,
+  .store-inspection-focus,
+  .store-inspection-priority,
+  .store-inspection-checklist,
+  .store-inspection-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .store-inspection-actions {
+    justify-content: flex-start;
+  }
+
+  .store-inspection-report-panel .panel-head,
+  .store-inspection-report-panel .panel-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

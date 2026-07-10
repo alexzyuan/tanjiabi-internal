@@ -1,0 +1,67 @@
+/* FBA task form MSKU search. */
+.search-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.search-row input {
+  flex: 1;
+}
+
+.search-row select {
+  width: 118px;
+  flex: 0 0 118px;
+}
+
+.msku-search {
+  position: relative;
+}
+
+.msku-suggest-panel {
+  position: absolute;
+  top: 42px;
+  left: 0;
+  z-index: 36;
+  width: min(100%, 620px);
+  max-height: 260px;
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid var(--tj-border-subtle);
+  border-radius: 8px;
+  background: var(--tj-content-bg);
+  box-shadow: var(--tj-shadow);
+}
+
+.msku-suggest-panel[hidden] {
+  display: none;
+}
+
+.search-results {
+  min-height: 34px;
+  max-height: 128px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--tj-border-subtle);
+  border-radius: 8px;
+  color: var(--tj-text-muted);
+  background: var(--tj-surface-muted);
+  line-height: 1.6;
+}
+
+.search-result-item {
+  display: block;
+  width: 100%;
+  padding: 6px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--tj-text-body);
+  background: transparent;
+  text-align: left;
+  line-height: 1.35;
+  cursor: pointer;
+}
+
+.search-result-item:hover {
+  background: var(--tj-action-blue-soft);
+}

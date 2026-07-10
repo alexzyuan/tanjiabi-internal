@@ -1,0 +1,337 @@
+/* Sales dashboard filter controls and overview metrics. */
+#sales-global-filters[hidden] {
+  display: none !important;
+}
+
+body:not(.sales-view) #sales-global-filters {
+  display: none !important;
+}
+
+body.sales-view #view-sales .insight-row {
+  display: none !important;
+}
+
+.date-range-control {
+  position: relative;
+  min-width: 0;
+}
+
+.date-range-button {
+  width: 100%;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid var(--tj-border-control);
+  color: var(--tj-text-body);
+  background: var(--tj-content-bg);
+  padding: 0 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.date-range-button::after {
+  content: "▾";
+  color: var(--tj-text-muted);
+  font-size: 12px;
+}
+
+.date-range-popover {
+  position: absolute;
+  top: 42px;
+  left: 0;
+  z-index: 30;
+  width: min(680px, calc(100vw - 40px));
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px;
+  background: var(--tj-content-bg);
+  border: 1px solid var(--tj-border-subtle);
+  border-radius: 8px;
+  box-shadow: 0 26px 60px rgba(22, 35, 58, 0.16);
+}
+
+.date-range-popover[hidden] {
+  display: none;
+}
+
+.date-presets {
+  display: grid;
+  gap: 6px;
+  border-right: 1px solid var(--tj-border-subtle);
+  padding-right: 10px;
+}
+
+.date-presets button {
+  height: 30px;
+  border: 0;
+  background: transparent;
+  color: var(--tj-text-body);
+  text-align: left;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.date-presets button:hover {
+  background: var(--tj-action-blue-soft);
+}
+
+.date-range-fields {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) auto minmax(140px, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.date-range-fields span {
+  color: var(--tj-text-muted);
+}
+
+.insight-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.insight-card {
+  padding: 14px 16px;
+  background: var(--tj-content-bg);
+  border: 1px solid var(--tj-border-subtle);
+  border-left: 3px solid var(--spectrum-accent-visual);
+  border-top: 3px solid var(--spectrum-accent-visual);
+  border-radius: 8px;
+  box-shadow: var(--tj-shadow-soft);
+}
+
+.insight-card.warning {
+  border-left-color: var(--tj-warning);
+  background: linear-gradient(180deg, var(--tj-content-bg), var(--tj-tone-warning-row-bg));
+}
+
+.insight-card.action {
+  border-left-color: var(--tj-danger);
+}
+
+.insight-card:nth-child(2) {
+  border-top-color: var(--tj-warning);
+}
+
+.insight-card:nth-child(3) {
+  border-top-color: var(--tj-danger);
+}
+
+.insight-card span,
+.card-title {
+  display: block;
+  color: var(--tj-text-muted);
+  font-size: 12px;
+  font-weight: 750;
+  margin-bottom: 8px;
+}
+
+.insight-card strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--tj-text-strong);
+  font-size: 17px;
+  font-weight: 850;
+}
+
+.insight-card p {
+  margin: 0;
+  color: var(--tj-text-muted);
+  line-height: 1.55;
+  font-size: 14px;
+}
+
+.overview-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 0;
+}
+
+.sales-overview-grid {
+  margin-top: 0;
+}
+
+#view-sales > .section-title:first-child {
+  margin-top: 10px;
+}
+
+#view-sales > .sales-overview-grid:first-child {
+  margin-top: 0;
+}
+
+#view-sales .sales-overview-grid > .panel {
+  min-width: 0;
+}
+
+.kpi-stack {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+#view-sales .kpi-stack {
+  width: 100%;
+}
+
+.kpi-card,
+.mini-card {
+  background: var(--tj-content-bg);
+  border: 1px solid var(--tj-border-subtle);
+  border-radius: 8px;
+  box-shadow: var(--tj-shadow-soft);
+}
+
+.kpi-card {
+  min-height: 104px;
+  padding: 14px 16px;
+  border-top: 3px solid var(--spectrum-accent-visual);
+}
+
+.kpi-green {
+  border-top-color: var(--tj-positive);
+}
+
+.kpi-orange {
+  border-top-color: var(--tj-warning);
+}
+
+.kpi-red {
+  border-top-color: var(--tj-danger);
+}
+
+.card-title {
+  position: relative;
+  margin: 0 0 8px;
+}
+
+.card-title::before {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 16px;
+  margin-right: 9px;
+  vertical-align: -3px;
+  background: var(--tj-action-blue);
+  border-radius: 3px;
+}
+
+.kpi-card strong,
+.mini-card strong {
+  font-family: "DIN Alternate", "DIN Condensed", "Arial Narrow", "PingFang SC", sans-serif;
+  color: var(--tj-text-strong);
+  font-weight: 850;
+}
+
+.kpi-card strong {
+  display: block;
+  margin: 16px 0 12px;
+  text-align: center;
+  font-size: 28px;
+}
+
+.kpi-green strong {
+  color: var(--tj-tone-success-text);
+}
+
+.kpi-orange strong {
+  color: var(--tj-tone-warning-text);
+}
+
+.kpi-red strong {
+  color: var(--tj-tone-danger-text);
+}
+
+.kpi-progress {
+  height: 6px;
+  overflow: hidden;
+  margin: 0 0 14px;
+  background: var(--tj-surface-muted);
+  border-radius: 999px;
+}
+
+.kpi-progress span {
+  display: block;
+  width: var(--progress);
+  max-width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, var(--tj-action-blue), var(--spectrum-accent-visual));
+  border-radius: inherit;
+}
+
+.kpi-green .kpi-progress span {
+  background: linear-gradient(90deg, var(--tj-positive), var(--spectrum-positive));
+}
+
+.kpi-orange .kpi-progress span {
+  background: linear-gradient(90deg, var(--tj-warning), var(--spectrum-notice));
+}
+
+.kpi-red .kpi-progress span {
+  background: linear-gradient(90deg, var(--tj-danger), var(--spectrum-negative));
+}
+
+.target-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--tj-text-muted);
+  font-size: 14px;
+}
+
+.target-line span:last-child {
+  font-weight: 700;
+}
+
+.mini-card {
+  min-height: 98px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  background: linear-gradient(180deg, var(--tj-content-bg), var(--tj-surface-muted));
+  padding: 12px 14px;
+  border-radius: 8px;
+}
+
+.mini-card span {
+  color: var(--tj-text-muted);
+}
+
+.mini-card strong {
+  font-size: 19px;
+}
+
+.mini-card .orange,
+.mini-card strong.orange {
+  color: var(--tj-warning);
+}
+
+.mini-card .red,
+.mini-card strong.red {
+  color: var(--tj-danger);
+}
+
+.mini-card small {
+  color: var(--tj-text-muted);
+}
+
+@media (max-width: 1180px) {
+  .kpi-stack {
+    grid-template-columns: repeat(3, minmax(180px, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .kpi-card strong {
+    font-size: 24px;
+  }
+
+  .kpi-stack {
+    grid-template-columns: 1fr;
+  }
+}

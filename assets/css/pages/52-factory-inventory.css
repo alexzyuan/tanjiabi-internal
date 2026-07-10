@@ -1,0 +1,142 @@
+/* Factory inventory page. */
+.factory-inventory-hero { align-items: flex-start; }
+#view-factory-inventory.active {
+display:flex;
+flex-direction:column;
+height:calc(100vh - 28px);
+min-height:680px;
+overflow:hidden;
+}
+.factory-inventory-sticky {
+flex:0 0 auto;
+position:relative;
+z-index:4;
+padding-bottom:var(--spectrum-spacing-150);
+background:linear-gradient(180deg, var(--tj-page-bg) 0%, var(--tj-page-bg) 86%, color-mix(in srgb, var(--tj-page-bg) 92%, transparent) 100%);
+}
+.factory-inventory-filters {
+grid-template-columns:repeat(2, minmax(150px, 0.75fr)) minmax(190px, 1fr) minmax(260px, 1.4fr) minmax(170px, 0.85fr);
+}
+.factory-inventory-filters .checkbox-label {
+min-height:var(--spectrum-control-height);
+flex-direction:row;
+align-items:center;
+justify-content:flex-start;
+gap:var(--spectrum-spacing-100);
+}
+.factory-inventory-filters .checkbox-label input {
+width:16px;
+height:16px;
+}
+.factory-inventory-kpi-grid { grid-template-columns:repeat(8, minmax(0, 1fr)); }
+.factory-inventory-panel {
+display:flex;
+flex:1 1 auto;
+flex-direction:column;
+margin-top:var(--spectrum-spacing-150);
+min-height:0;
+}
+.factory-inventory-table-wrap {
+flex:1 1 auto;
+max-height:none;
+min-height:0;
+overflow:auto;
+}
+.factory-inventory-table-wrap table { min-width:1840px; }
+#factory-inventory-table th,
+#factory-inventory-table td { vertical-align:middle; }
+#factory-inventory-table th:nth-child(1),
+#factory-inventory-table th:nth-child(2),
+#factory-inventory-table th:nth-child(3),
+#factory-inventory-table th:nth-child(8),
+#factory-inventory-table th:nth-child(9),
+#factory-inventory-table td:nth-child(1),
+#factory-inventory-table td:nth-child(2),
+#factory-inventory-table td:nth-child(3),
+#factory-inventory-table td:nth-child(8),
+#factory-inventory-table td:nth-child(9) { text-align:left; }
+#factory-inventory-table .factory-order-row td {
+padding:0;
+border-bottom:0;
+background:color-mix(in srgb, var(--tj-action-blue) 8%, var(--tj-content-bg));
+}
+.factory-order-strip {
+display:flex;
+min-height:52px;
+align-items:center;
+gap:var(--spectrum-spacing-200);
+padding:0 var(--spectrum-spacing-200);
+color:var(--tj-text-muted);
+font-size:13px;
+font-weight:700;
+white-space:nowrap;
+}
+.factory-order-strip strong {
+min-width:180px;
+color:var(--tj-action-blue);
+font-size:14px;
+}
+.factory-order-strip span {
+overflow:hidden;
+text-overflow:ellipsis;
+}
+#factory-inventory-table .factory-item-row td {
+height:52px;
+padding-top:var(--spectrum-spacing-75);
+padding-bottom:var(--spectrum-spacing-75);
+}
+#factory-inventory-table td small {
+display:block;
+margin-top:var(--spectrum-spacing-50);
+color:var(--tj-text-muted);
+font-size:12px;
+font-weight:700;
+}
+.factory-inventory-image {
+display:block;
+width:42px;
+height:42px;
+border:1px solid var(--tj-border-strong);
+border-radius:var(--spectrum-control-radius);
+object-fit:cover;
+background:var(--tj-surface-muted);
+}
+.factory-image-placeholder {
+display:grid;
+width:42px;
+height:42px;
+place-items:center;
+border:1px dashed var(--tj-border-strong);
+border-radius:var(--spectrum-control-radius);
+color:var(--spectrum-text-disabled);
+background:var(--tj-surface-muted);
+font-size:12px;
+font-weight:700;
+}
+.factory-row-muted {
+color:var(--tj-text-muted);
+font-size:12px;
+font-weight:700;
+}
+.factory-shipped-input {
+width:92px;
+height:var(--spectrum-control-height);
+padding:0 var(--spectrum-spacing-100);
+border:1px solid var(--tj-border-strong);
+border-radius:var(--spectrum-control-radius);
+color:var(--tj-text-strong);
+background:var(--tj-content-bg);
+font:inherit;
+font-weight:700;
+text-align:right;
+}
+.factory-shipped-input:focus-visible {
+outline:var(--spectrum-focus-ring-width) solid var(--spectrum-focus-ring-color);
+outline-offset:var(--spectrum-focus-ring-gap);
+}
+@media (max-width:720px) {
+body.factory-inventory-view:not(.login-body) { overflow-x:auto; }
+body.factory-inventory-view:not(.login-body) .app-shell,
+html.os-windows body.factory-inventory-view:not(.login-body) .app-shell { min-width:1180px !important; }
+body.factory-inventory-view:not(.login-body) .dashboard { min-width:1000px !important; }
+}

@@ -1,0 +1,308 @@
+/* Aftersales mail dashboard page. */
+.aftersales-mail-workspace {
+  display: grid;
+  grid-template-columns: minmax(280px, 320px) minmax(420px, 1fr) minmax(320px, 380px);
+  gap: 0;
+  align-items: stretch;
+  max-width: 100%;
+  min-height: calc(100vh - 230px);
+  border: 1px solid var(--spectrum-border-default);
+  border-radius: var(--spectrum-card-radius);
+  overflow: hidden;
+  background: var(--tj-content-bg);
+}
+.aftersales-mail-workspace > .panel {
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.aftersales-mail-list-panel,
+.aftersales-mail-message-panel {
+  border-right: 1px solid var(--spectrum-border-default) !important;
+}
+.aftersales-mail-list-panel {
+  display: grid;
+  grid-template-rows: auto auto auto auto minmax(0, 1fr);
+  gap: var(--spectrum-spacing-150);
+  background: var(--tj-page-bg);
+}
+#view-aftersales-mail .aftersales-mail-filters {
+  display: grid;
+  grid-template-columns: minmax(0, .72fr) minmax(0, 1.28fr);
+  gap: var(--spectrum-spacing-100);
+}
+#view-aftersales-mail .aftersales-mail-filters label {
+  min-width: 0;
+}
+.aftersales-mail-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--spectrum-spacing-100);
+}
+.aftersales-mail-kpis article {
+  min-width: 0;
+  padding: var(--spectrum-spacing-100);
+  border: 1px solid var(--spectrum-border-default);
+  border-radius: var(--spectrum-control-radius);
+  background: var(--tj-content-bg);
+}
+.aftersales-mail-kpis span,
+.aftersales-mail-list-meta {
+  color: var(--tj-text-muted);
+  font-size: 12px;
+}
+.aftersales-mail-kpis strong {
+  display: block;
+  margin-top: var(--spectrum-spacing-50);
+  color: var(--tj-text-strong);
+  font-size: 18px;
+}
+.aftersales-mail-list-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--spectrum-spacing-100);
+}
+.aftersales-mail-list {
+  min-height: 0;
+  overflow: auto;
+  margin: 0 calc(var(--spectrum-spacing-200) * -1) calc(var(--spectrum-spacing-200) * -1);
+}
+.aftersales-mail-item {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: var(--spectrum-spacing-150);
+  padding: var(--spectrum-spacing-150) var(--spectrum-spacing-200);
+  border-top: 1px solid var(--spectrum-border-default);
+  cursor: pointer;
+}
+.aftersales-mail-item:hover,
+.aftersales-mail-item.is-selected {
+  background: color-mix(in srgb, var(--tj-action-blue) 12%, var(--tj-content-bg));
+}
+.aftersales-mail-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--tj-action-blue) 24%, var(--tj-page-bg));
+  color: var(--tj-action-blue);
+  font-weight: 700;
+}
+.aftersales-mail-item-main,
+.aftersales-mail-item-top {
+  min-width: 0;
+}
+.aftersales-mail-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spectrum-spacing-100);
+}
+.aftersales-mail-item-top strong,
+.aftersales-mail-item-subject,
+.aftersales-mail-item-snippet {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aftersales-mail-item-top time,
+.aftersales-mail-item-snippet,
+.aftersales-mail-item-foot {
+  color: var(--tj-text-muted);
+  font-size: 12px;
+}
+.aftersales-mail-item-subject {
+  margin-top: var(--spectrum-spacing-50);
+  color: var(--tj-text-strong);
+  font-weight: 600;
+}
+.aftersales-mail-item-snippet {
+  margin-top: var(--spectrum-spacing-50);
+}
+.aftersales-mail-item-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spectrum-spacing-100);
+  margin-top: var(--spectrum-spacing-100);
+}
+.aftersales-mail-empty {
+  padding: var(--spectrum-spacing-300);
+  color: var(--tj-text-muted);
+  text-align: center;
+}
+.aftersales-mail-message-panel,
+.aftersales-mail-reply-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  background: var(--tj-content-bg);
+}
+.aftersales-mail-body,
+.aftersales-mail-reply {
+  min-width: 0;
+  min-height: 0;
+}
+.aftersales-mail-body {
+  overflow: auto;
+  padding-right: var(--spectrum-spacing-50);
+}
+.aftersales-mail-meta {
+  display: grid;
+  gap: var(--spectrum-spacing-75);
+  margin-bottom: var(--spectrum-spacing-200);
+  padding: var(--spectrum-spacing-200);
+  border-radius: var(--spectrum-control-radius);
+  background: var(--tj-page-bg);
+  color: var(--tj-text-muted);
+}
+.aftersales-mail-meta strong {
+  color: var(--tj-text-strong);
+  font-size: 15px;
+}
+.aftersales-mail-body pre {
+  min-height: 240px;
+  overflow: visible;
+  margin: 0;
+  padding: var(--spectrum-spacing-100) var(--spectrum-spacing-50);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--tj-text-strong);
+  font: inherit;
+  line-height: 1.75;
+  white-space: pre-wrap;
+}
+.aftersales-mail-attachments {
+  margin-top: var(--spectrum-spacing-200);
+}
+.aftersales-mail-attachments h3 {
+  margin: 0 0 var(--spectrum-spacing-150);
+  font-size: 15px;
+}
+.aftersales-mail-attachment-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--spectrum-spacing-150);
+}
+.aftersales-mail-attachment-grid a {
+  display: grid;
+  gap: var(--spectrum-spacing-75);
+  color: var(--tj-text-muted);
+  font-size: 12px;
+  text-decoration: none;
+}
+.aftersales-mail-attachment-grid img {
+  width: 100%;
+  max-height: 520px;
+  object-fit: contain;
+  border: 1px solid var(--spectrum-border-default);
+  border-radius: var(--spectrum-control-radius);
+  background: var(--tj-page-bg);
+}
+.aftersales-mail-attachment-grid img.is-loading {
+  opacity: .55;
+}
+.aftersales-mail-attachment-grid img.is-error {
+  object-fit: contain;
+}
+.aftersales-mail-attachment-grid span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.aftersales-mail-ai-head,
+.aftersales-mail-reply-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spectrum-spacing-150);
+}
+.aftersales-mail-ai-head h3 {
+  margin: 0;
+  font-size: 15px;
+}
+.aftersales-mail-reply {
+  display: grid;
+  gap: var(--spectrum-spacing-150);
+  align-content: start;
+}
+.aftersales-mail-reply textarea,
+#aftersales-mail-ai-suggestion {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--spectrum-border-default);
+  border-radius: var(--spectrum-control-radius);
+  padding: var(--spectrum-spacing-150);
+  font: inherit;
+  resize: vertical;
+}
+.aftersales-mail-reply textarea:focus,
+#aftersales-mail-ai-suggestion:focus {
+  outline: 2px solid var(--spectrum-focus-ring-color);
+  outline-offset: 2px;
+}
+.aftersales-mail-replies {
+  display: grid;
+  gap: var(--spectrum-spacing-150);
+  color: var(--tj-text-muted);
+  font-size: 13px;
+}
+.aftersales-mail-replies article {
+  padding: var(--spectrum-spacing-150);
+  border: 1px solid var(--spectrum-border-default);
+  border-radius: var(--spectrum-control-radius);
+  background: var(--tj-page-bg);
+}
+.aftersales-mail-replies strong,
+.aftersales-mail-replies span {
+  display: block;
+}
+.aftersales-mail-replies p {
+  margin: var(--spectrum-spacing-75) 0 0;
+}
+@media (max-width: 1180px) {
+  .aftersales-mail-workspace {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+  .aftersales-mail-list-panel,
+  .aftersales-mail-message-panel {
+    border-right: 0 !important;
+    border-bottom: 1px solid var(--spectrum-border-default) !important;
+  }
+  .aftersales-mail-list {
+    max-height: 420px;
+  }
+}
+@media (max-width: 760px) {
+  #view-aftersales-mail > .module-hero,
+  body:not(.login-body) #view-aftersales-mail > .module-hero {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    align-items: stretch !important;
+  }
+  #view-aftersales-mail > .module-hero > div:first-child,
+  #view-aftersales-mail > .module-hero .hero-actions,
+  body:not(.login-body) #view-aftersales-mail > .module-hero > div:first-child,
+  body:not(.login-body) #view-aftersales-mail > .module-hero .hero-actions {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+  #view-aftersales-mail > .module-hero h2,
+  #view-aftersales-mail > .module-hero p,
+  body:not(.login-body) #view-aftersales-mail > .module-hero h2,
+  body:not(.login-body) #view-aftersales-mail > .module-hero p {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-wrap: anywhere;
+  }
+  #view-aftersales-mail > .module-hero .hero-actions,
+  body:not(.login-body) #view-aftersales-mail > .module-hero .hero-actions {
+    justify-content: flex-start !important;
+  }
+}

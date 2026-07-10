@@ -1,0 +1,31 @@
+/* Admin settings page */
+.admin-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.admin-account-panel {
+  grid-column: 1 / -1;
+}
+
+.admin-account-form {
+  align-items: end;
+  margin-bottom: 12px;
+}
+
+.admin-account-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.admin-account-actions .primary-button,
+.admin-account-actions .secondary-button {
+  height: 38px;
+}
+
+.admin-account-table-wrap {
+  max-height: 360px;
+}

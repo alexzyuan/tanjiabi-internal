@@ -1,0 +1,591 @@
+/* Temporary parity layer: keep generated CSS aligned with the locked sidebar/topbar baseline. */
+button,
+input,
+select {
+  font: inherit;
+}
+
+body:not(.login-body) {
+  min-height: 100vh;
+  background: var(--tj-page-bg) !important;
+  background-image: none !important;
+}
+
+body:not(.login-body) .app-shell,
+html.os-windows body:not(.login-body) .app-shell {
+  display: grid !important;
+  grid-template-columns: var(--sidebar-expanded-width-v1) minmax(0, 1fr) !important;
+  gap: 0 !important;
+  min-height: 100vh !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: var(--tj-shell-bg) !important;
+  background-image: none !important;
+  overflow: visible !important;
+  transition: grid-template-columns 0.2s ease !important;
+}
+
+body:not(.login-body) .app-shell.sidebar-collapsed,
+html.os-windows body:not(.login-body) .app-shell.sidebar-collapsed {
+  grid-template-columns: var(--sidebar-collapsed-width-v1) minmax(0, 1fr) !important;
+}
+
+body:not(.login-body) .dashboard {
+  display: block !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  padding: 0 12px 12px 0 !important;
+  gap: 12px !important;
+  background: var(--tj-shell-bg) !important;
+  background-image: none !important;
+  overflow: visible !important;
+}
+
+body:not(.login-body) .dashboard > :not(.topbar) {
+  margin-left: 12px !important;
+}
+
+body:not(.login-body) .sidebar,
+html.os-windows body:not(.login-body) .sidebar {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 1200 !important;
+  display: block !important;
+  width: var(--sidebar-expanded-width-v1) !important;
+  min-width: 0 !important;
+  max-width: var(--sidebar-expanded-width-v1) !important;
+  height: 100vh !important;
+  margin: 0 !important;
+  padding: 86px 10px 62px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: var(--tj-bar-bg) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  color: #222222 !important;
+  overflow: visible !important;
+}
+
+body:not(.login-body) .app-shell.sidebar-collapsed .sidebar,
+html.os-windows body:not(.login-body) .app-shell.sidebar-collapsed .sidebar {
+  width: var(--sidebar-collapsed-width-v1) !important;
+  max-width: var(--sidebar-collapsed-width-v1) !important;
+  padding: 86px 7px 62px !important;
+}
+
+body:not(.login-body) .brand,
+body:not(.login-body) .app-shell.sidebar-collapsed .brand {
+  position: fixed !important;
+  top: 12px !important;
+  left: 18px !important;
+  z-index: 5001 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 7px !important;
+  width: var(--tj-brand-lockup-width) !important;
+  max-width: var(--tj-brand-lockup-width) !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+  pointer-events: none !important;
+}
+
+body:not(.login-body) .brand .brand-logo-card,
+body:not(.login-body) .app-shell.sidebar-collapsed .brand .brand-logo-card {
+  display: grid !important;
+  flex: 0 0 30px !important;
+  place-items: center !important;
+  width: 30px !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 7px !important;
+  background: var(--tj-content-bg) !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+body:not(.login-body) .brand .brand-logo-card img,
+body:not(.login-body) .app-shell.sidebar-collapsed .brand .brand-logo-card img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+}
+
+body:not(.login-body) .brand-text,
+body:not(.login-body) .app-shell.sidebar-collapsed .brand-text {
+  display: block !important;
+  flex: 0 0 auto !important;
+  width: auto !important;
+  min-width: max-content !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  white-space: nowrap !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  transform: none !important;
+}
+
+body:not(.login-body) .brand-text strong,
+body:not(.login-body) .app-shell.sidebar-collapsed .brand-text strong {
+  display: block !important;
+  width: auto !important;
+  min-width: max-content !important;
+  max-width: none !important;
+  color: var(--tj-text-strong) !important;
+  font-size: 14px !important;
+  font-weight: 760 !important;
+  line-height: 1 !important;
+  letter-spacing: 0 !important;
+  white-space: nowrap !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+
+body:not(.login-body) .brand-text small,
+body:not(.login-body) .app-shell.sidebar-collapsed .brand-text small,
+body:not(.login-body) .brand-logos,
+body:not(.login-body) .brand-logo-x {
+  display: none !important;
+}
+
+body:not(.login-body) .nav,
+body:not(.login-body) .app-shell.sidebar-collapsed .nav {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  align-items: start !important;
+  gap: 7px !important;
+  width: 100% !important;
+  min-height: 0 !important;
+  max-height: calc(100vh - 104px) !important;
+  margin: 0 !important;
+  padding: 0 0 44px !important;
+  background: transparent !important;
+  overflow: visible !important;
+}
+
+body:not(.login-body) .app-shell.sidebar-collapsed .nav {
+  max-height: none !important;
+  padding-bottom: 0 !important;
+  gap: 9px !important;
+}
+
+body:not(.login-body) .nav-group {
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  overflow: visible !important;
+}
+
+body:not(.login-body) .nav-home-item,
+body:not(.login-body) .nav-group-title,
+html.os-windows body:not(.login-body) .nav-group-title {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: 34px !important;
+  min-height: 34px !important;
+  margin: 0 !important;
+  padding: 0 9px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  background-image: none !important;
+  color: var(--tj-text-strong) !important;
+  font-size: 14px !important;
+  font-weight: 760 !important;
+  line-height: 1.15 !important;
+  overflow: visible !important;
+  box-shadow: none !important;
+  cursor: pointer !important;
+}
+
+body:not(.login-body) .nav-home-item {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 6px !important;
+}
+
+body:not(.login-body) .nav-group-title,
+html.os-windows body:not(.login-body) .nav-group-title {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+}
+
+body:not(.login-body) .nav-group-title > span:nth-child(2),
+html.os-windows body:not(.login-body) .nav-group-title > span:nth-child(2) {
+  display: block !important;
+  overflow: visible !important;
+  color: inherit !important;
+  font-size: inherit !important;
+  font-weight: 720 !important;
+  line-height: 1.1 !important;
+  white-space: nowrap !important;
+}
+
+body:not(.login-body) .nav-home-item.active,
+body:not(.login-body) .nav-item.active,
+body:not(.login-body) .nav-group.is-active > .nav-group-title {
+  color: var(--tj-text-inverse) !important;
+  background: var(--tj-action-blue) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+body:not(.login-body) .nav-home-item .nav-icon,
+body:not(.login-body) .nav-item.active .nav-icon {
+  display: grid !important;
+  flex: 0 0 26px !important;
+  place-items: center !important;
+  width: 26px !important;
+  height: 26px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 9px !important;
+  background: rgba(255, 255, 255, 0.14) !important;
+  color: inherit !important;
+  overflow: visible !important;
+}
+
+body:not(.login-body) .nav-group-icon {
+  display: grid !important;
+  flex: 0 0 24px !important;
+  place-items: center !important;
+  width: 24px !important;
+  height: 24px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 7px !important;
+  background: transparent !important;
+  color: #1f2937 !important;
+  overflow: visible !important;
+}
+
+body:not(.login-body) .nav-home-item.active .nav-icon,
+body:not(.login-body) .nav-item.active .nav-icon,
+body:not(.login-body) .nav-group.is-active > .nav-group-title .nav-group-icon {
+  color: var(--tj-text-inverse) !important;
+  background: rgba(255, 255, 255, 0.14) !important;
+}
+
+body:not(.login-body) .nav-home-item.active .nav-label,
+body:not(.login-body) .nav-item.active .nav-label,
+body:not(.login-body) .nav-group.is-active > .nav-group-title > span:nth-child(2),
+body:not(.login-body) .nav-group.is-active > .nav-group-title .nav-group-caret {
+  color: var(--tj-text-inverse) !important;
+}
+
+body:not(.login-body) .nav-icon svg,
+body:not(.login-body) .nav-group-icon svg {
+  display: block !important;
+  width: 16px !important;
+  height: 16px !important;
+}
+
+body:not(.login-body) .nav-group-caret {
+  flex: 0 0 20px !important;
+  width: 20px !important;
+  height: 20px !important;
+  color: inherit !important;
+}
+
+body:not(.login-body) .app-shell.sidebar-collapsed .nav-home-item,
+body:not(.login-body) .app-shell.sidebar-collapsed .nav-group-title,
+html.os-windows body:not(.login-body) .app-shell.sidebar-collapsed .nav-group-title {
+  display: grid !important;
+  grid-template-columns: 28px !important;
+  place-items: center !important;
+  justify-content: center !important;
+  align-items: center !important;
+  width: 56px !important;
+  max-width: 56px !important;
+  height: 50px !important;
+  min-height: 50px !important;
+  padding: 0 !important;
+  gap: 0 !important;
+}
+
+body:not(.login-body) .app-shell.sidebar-collapsed .nav-home-item .nav-icon,
+body:not(.login-body) .app-shell.sidebar-collapsed .nav-item.active .nav-icon {
+  flex-basis: 22px !important;
+  width: 22px !important;
+  height: 22px !important;
+  border-radius: 0 !important;
+}
+
+body:not(.login-body) .app-shell.sidebar-collapsed .nav-group-icon {
+  flex-basis: 24px !important;
+  width: 24px !important;
+  height: 24px !important;
+}
+
+body:not(.login-body) .app-shell.sidebar-collapsed .nav-home-item .nav-label,
+body:not(.login-body) .app-shell.sidebar-collapsed .nav-group-title > span:nth-child(2),
+html.os-windows body:not(.login-body) .app-shell.sidebar-collapsed .nav-group-title > span:nth-child(2) {
+  display: block !important;
+  width: auto !important;
+  height: auto !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  color: inherit !important;
+  font-size: 14px !important;
+  font-weight: 720 !important;
+  line-height: 1.1 !important;
+  white-space: nowrap !important;
+}
+
+body:not(.login-body) .app-shell.sidebar-collapsed .nav-home-item {
+  grid-template-rows: 22px auto !important;
+  grid-template-columns: 1fr !important;
+  align-content: center !important;
+  gap: 4px !important;
+}
+
+body:not(.login-body) .app-shell.sidebar-collapsed .nav-group-title {
+  grid-template-rows: 24px auto !important;
+  grid-template-columns: 1fr !important;
+  align-content: center !important;
+  gap: 4px !important;
+}
+
+body:not(.login-body) .app-shell.sidebar-collapsed .nav-group-caret {
+  display: none !important;
+}
+
+body:not(.login-body) .topbar {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 980 !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: flex-end !important;
+  gap: 10px !important;
+  width: auto !important;
+  min-width: 0 !important;
+  height: var(--tj-topbar-fixed-height) !important;
+  min-height: var(--tj-topbar-fixed-height) !important;
+  margin: 0 calc(var(--tj-content-inline-gap) * -1 - 2px) 0 0 !important;
+  padding: 11px 18px 0 12px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: var(--tj-topbar-bg) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+body:not(.login-body) .topbar-breadcrumb.module-breadcrumb,
+body:not(.login-body) .app-shell.sidebar-collapsed .topbar-breadcrumb.module-breadcrumb {
+  position: absolute !important;
+  top: 47px !important;
+  left: var(--tj-content-inline-gap) !important;
+  order: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  flex: 1 1 auto !important;
+  width: auto !important;
+  max-width: min(520px, calc(100vw - 180px)) !important;
+  height: 24px !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  scrollbar-width: none !important;
+}
+
+body:not(.login-body) .topbar-breadcrumb.module-breadcrumb::-webkit-scrollbar {
+  display: none !important;
+}
+
+body:not(.login-body) .topbar-breadcrumb.module-breadcrumb ol {
+  display: flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+  min-width: max-content !important;
+  width: auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  list-style: none !important;
+}
+
+body:not(.login-body) .topbar-breadcrumb.module-breadcrumb button,
+body:not(.login-body) .topbar-breadcrumb.module-breadcrumb .module-breadcrumb-current {
+  display: inline-flex !important;
+  align-items: center !important;
+  height: 24px !important;
+  min-height: 24px !important;
+  padding: 0 2px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  color: #66758a !important;
+  font-size: 13px !important;
+  font-weight: 650 !important;
+  line-height: 1 !important;
+  letter-spacing: 0 !important;
+  white-space: nowrap !important;
+}
+
+body:not(.login-body) .topbar-breadcrumb.module-breadcrumb .module-breadcrumb-current {
+  color: var(--tj-text-strong) !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+}
+
+body:not(.login-body) .topbar-breadcrumb.module-breadcrumb .breadcrumb-home-dot {
+  flex: 0 0 7px !important;
+  width: 7px !important;
+  height: 7px !important;
+  margin-right: 5px !important;
+}
+
+body:not(.login-body) .topbar-breadcrumb.module-breadcrumb .module-breadcrumb-separator {
+  width: 14px !important;
+  height: 24px !important;
+  color: #aeb8c6 !important;
+}
+
+body:not(.login-body) .topbar .world-clock,
+body:not(.login-body) .world-clock {
+  position: relative !important;
+  z-index: 2 !important;
+  order: 1 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  flex: 0 1 auto !important;
+  min-width: 0 !important;
+  min-height: 18px !important;
+  margin: 0 2px 0 auto !important;
+  padding: 0 !important;
+  gap: 10px !important;
+  color: #6d6d6d !important;
+  font-size: 11px !important;
+  font-weight: 680 !important;
+  line-height: 1 !important;
+  text-align: right !important;
+  overflow: hidden !important;
+}
+
+body:not(.login-body) .world-clock span {
+  font-size: 11px !important;
+  line-height: 1 !important;
+}
+
+body:not(.login-body) .top-actions {
+  position: relative !important;
+  z-index: 2 !important;
+  order: 2 !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: flex-end !important;
+  flex: 0 0 auto !important;
+  gap: 6px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+body:not(.login-body) .account-trigger,
+body:not(.login-body) .account-trigger:hover,
+body:not(.login-body) .account-menu.is-open .account-trigger {
+  height: 30px !important;
+  min-height: 30px !important;
+  padding: 0 10px 0 8px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  background: var(--tj-user-blue-bg) !important;
+  background-image: none !important;
+  color: var(--tj-text-inverse) !important;
+  box-shadow: none !important;
+}
+
+body:not(.login-body) .account-logout {
+  top: 37px !important;
+}
+
+body:not(.login-body) #sidebar-toggle {
+  position: absolute !important;
+  left: 8px !important;
+  top: calc(100vh - 48px) !important;
+  z-index: auto !important;
+  display: block !important;
+  width: 34px !important;
+  height: 34px !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 1px 6px !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  background: #ffffff !important;
+  background-image: none !important;
+  color: #1f2937 !important;
+  box-shadow: none !important;
+  font-size: 22px !important;
+  font-weight: 400 !important;
+}
+
+/* Keep sidebar icons as line icons and remove native button outlines from child items. */
+body:not(.login-body) .sidebar .nav .nav-icon svg,
+body:not(.login-body) .sidebar .nav .nav-group-icon svg,
+body:not(.login-body) .sidebar .nav .nav-icon svg path,
+body:not(.login-body) .sidebar .nav .nav-group-icon svg path {
+  fill: none !important;
+  stroke: currentColor !important;
+  stroke-width: 2 !important;
+  stroke-linecap: round !important;
+  stroke-linejoin: round !important;
+}
+
+body:not(.login-body) .sidebar .nav .nav-group .nav-item,
+html.os-windows body:not(.login-body) .sidebar .nav .nav-group .nav-item {
+  appearance: none !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+}
+
+body:not(.login-body) .sidebar .nav .nav-group .nav-item:not(:hover):not(:focus-visible):not(.active),
+html.os-windows body:not(.login-body) .sidebar .nav .nav-group .nav-item:not(:hover):not(:focus-visible):not(.active) {
+  background: transparent !important;
+}
+
+body:not(.login-body) .app-shell:not(.sidebar-collapsed) .sidebar .nav .nav-group .nav-item.active .nav-icon,
+html.os-windows body:not(.login-body) .app-shell:not(.sidebar-collapsed) .sidebar .nav .nav-group .nav-item.active .nav-icon {
+  flex: 0 0 24px !important;
+  justify-self: center !important;
+  align-self: center !important;
+  width: 24px !important;
+  height: 24px !important;
+  margin: 0 !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+}
+
+body:not(.login-body) .app-shell:not(.sidebar-collapsed) .sidebar .nav .nav-group .nav-item.active .nav-icon svg,
+html.os-windows body:not(.login-body) .app-shell:not(.sidebar-collapsed) .sidebar .nav .nav-group .nav-item.active .nav-icon svg {
+  transform: none !important;
+  transform-box: fill-box !important;
+  transform-origin: center !important;
+}

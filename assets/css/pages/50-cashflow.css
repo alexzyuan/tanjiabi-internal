@@ -1,0 +1,14 @@
+/* Cashflow dashboard page */
+#view-cashflow .cashflow-stack {
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+#view-cashflow .cashflow-stack .table-wrap {
+  overflow-x: auto;
+}
+
+#view-cashflow .cashflow-stack table {
+  min-width: 1180px;
+}

@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>登录 · 探嘉 BI</title>
+    <link rel="icon" type="image/png" href="./assets/jm-favicon.png" />
+    <link rel="apple-touch-icon" href="./assets/jm-favicon.png" />
+    <link rel="stylesheet" href="./styles.css?v=20260705-frontend-refactor-v15" />
+  </head>
+  <body class="login-body">
+    <main class="login-shell">
+      <section class="login-hero" aria-label="探嘉 BI 登录">
+        <div class="login-visual">
+          <div class="login-brand-lockup" aria-label="Joi Mew x Max & Deril">
+            <img class="login-jm-logo" src="./assets/jm-logo.jpg" alt="Joi Mew" />
+            <span aria-hidden="true">x</span>
+            <img src="./assets/max-deril-logo.png" alt="Max & Deril" />
+          </div>
+          <div class="login-kicker">TANJIA BUSINESS INTELLIGENCE</div>
+          <h1>探嘉 BI</h1>
+          <div class="login-slogan" id="login-slogan" aria-label="数据分析决策系统">
+            <span>数据分析决策系统</span>
+          </div>
+          <p class="login-script">Work Smarter, Live Better.</p>
+        </div>
+
+        <div class="login-panel">
+          <section class="login-switch-card" id="login-switch-card" data-login-mode="qr">
+            <button class="login-corner-toggle" id="login-mode-toggle" type="button" aria-label="切换到账号密码登录" title="切换到账号密码登录">
+              <span class="login-toggle-icon login-toggle-computer" aria-hidden="true"></span>
+              <span class="login-toggle-icon login-toggle-qr" aria-hidden="true"></span>
+            </button>
+
+            <div class="login-pane login-pane-qr is-active" data-login-pane="qr">
+              <div class="login-card-head">
+                <div>
+                  <strong>钉钉登录</strong>
+                  <small>使用钉钉 APP 右上角扫码</small>
+                </div>
+              </div>
+              <div class="dingtalk-qr-frame">
+                <iframe id="dingtalk-login-frame" title="钉钉扫码登录" src="/api/auth/dingtalk/login?frame=1"></iframe>
+                <div class="dingtalk-qr-fallback">
+                  <span>钉钉二维码加载失败时使用按钮打开</span>
+                  <a class="primary-button login-button" id="dingtalk-login-link" href="/api/auth/dingtalk/login">打开钉钉扫码登录</a>
+                </div>
+              </div>
+            </div>
+
+            <div class="login-pane login-pane-password" data-login-pane="password" hidden>
+              <div class="login-card-head">
+                <div>
+                  <strong>账号密码登录</strong>
+                  <small>仅限管理员账号使用</small>
+                </div>
+              </div>
+              <form class="login-form" id="password-login-form">
+                <label>
+                  管理员账号
+                  <input id="login-username" name="username" type="text" autocomplete="username" placeholder="请输入管理员账号" required />
+                </label>
+                <label>
+                  管理员密码
+                  <input id="login-password" name="password" type="password" autocomplete="current-password" placeholder="请输入管理员密码" required />
+                </label>
+                <button class="primary-button login-button" id="password-login-button" type="submit">登录</button>
+              </form>
+            </div>
+          </section>
+          <p class="login-error" id="login-error"></p>
+        </div>
+      </section>
+    </main>
+    <script>
+      const canonicalLoginOrigin = "https://tanjiabi.cc";
+      if (["47.107.92.14", "www.tanjiabi.cc"].includes(window.location.hostname)) {
+        window.location.replace(`${canonicalLoginOrigin}/login${window.location.search || ""}`);
+      }
+
+      const params = new URLSearchParams(window.location.search);
+      const error = params.get("error");
+      if (error) document.querySelector("#login-error").textContent = decodeURIComponent(error);
+
+      const errorNode = document.querySelector("#login-error");
+      const dingtalkLink = document.querySelector("#dingtalk-login-link");
+      const dingtalkFrame = document.querySelector("#dingtalk-login-frame");
+      const sloganNode = document.querySelector("#login-slogan");
+      const loginSwitchCard = document.querySelector("#login-switch-card");
+      const loginModeToggle = document.querySelector("#login-mode-toggle");
+      const qrPane = document.querySelector('[data-login-pane="qr"]');
+      const passwordPane = document.querySelector('[data-login-pane="password"]');
+      const isSafariBrowser =
+        navigator.vendor === "Apple Computer, Inc." &&
+        !/(CriOS|FxiOS|EdgiOS|OPiOS|Chrome|Chromium|Android)/i.test(navigator.userAgent);
+      const setLoginMode = (mode) => {
+        const isPassword = mode === "password";
+        loginSwitchCard.dataset.loginMode = isPassword ? "password" : "qr";
+        loginSwitchCard.classList.toggle("is-password", isPassword);
+        qrPane.hidden = isPassword;
+        passwordPane.hidden = !isPassword;
+        qrPane.classList.toggle("is-active", !isPassword);
+        passwordPane.classList.toggle("is-active", isPassword);
+        loginModeToggle.setAttribute("aria-label", isPassword ? "切换到钉钉扫码登录" : "切换到账号密码登录");
+        loginModeToggle.title = isPassword ? "切换到钉钉扫码登录" : "切换到账号密码登录";
+          if (isPassword) document.querySelector("#login-username")?.focus();
+      };
+      const useTopLevelDingtalkLogin = () => {
+        document.body.classList.add("safari-dingtalk-login");
+        if (dingtalkFrame) {
+          dingtalkFrame.hidden = true;
+          dingtalkFrame.removeAttribute("src");
+        }
+        if (dingtalkLink) {
+          const fallback = dingtalkLink.closest(".dingtalk-qr-fallback");
+          const fallbackText = fallback?.querySelector("span");
+          if (fallbackText) fallbackText.textContent = "Safari 会限制嵌入式钉钉授权，请打开独立页面完成登录。";
+          dingtalkLink.textContent = "打开钉钉登录";
+          dingtalkLink.setAttribute("target", "_top");
+          dingtalkLink.addEventListener("click", () => {
+            flashSlogan();
+          });
+        }
+      };
+      const flashSlogan = () => {
+        if (!sloganNode) return;
+        sloganNode.classList.remove("is-flashing");
+        void sloganNode.offsetWidth;
+        sloganNode.classList.add("is-flashing");
+      };
+      loginModeToggle.addEventListener("click", () => {
+        setLoginMode(loginSwitchCard.dataset.loginMode === "password" ? "qr" : "password");
+      });
+      if (isSafariBrowser) useTopLevelDingtalkLogin();
+      fetch("/api/auth/me")
+        .then((response) => response.json())
+        .then((data) => {
+          if (data.authenticated) {
+            window.location.href = "/";
+            return;
+          }
+          if (!data.dingtalkConfigured && dingtalkLink) {
+            dingtalkLink.classList.add("is-disabled");
+            if (dingtalkFrame) dingtalkFrame.hidden = true;
+            dingtalkLink.addEventListener("click", (event) => {
+              event.preventDefault();
+              flashSlogan();
+              errorNode.textContent = "钉钉扫码登录还没有配置，请先在服务器 .env 设置钉钉应用参数。";
+            });
+          }
+        })
+        .catch(() => null);
+
+      setInterval(() => {
+        fetch("/api/auth/me", { cache: "no-store" })
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.authenticated) window.location.href = "/";
+          })
+          .catch(() => null);
+      }, 2500);
+
+      document.querySelector("#password-login-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        flashSlogan();
+        errorNode.textContent = "";
+        const button = document.querySelector("#password-login-button");
+        button.disabled = true;
+        button.textContent = "登录中";
+        try {
+          const response = await fetch("/api/auth/password/login", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              username: document.querySelector("#login-username").value,
+              password: document.querySelector("#login-password").value,
+            }),
+          });
+          const data = await response.json();
+          if (!response.ok || data.ok === false) throw new Error(data.error || "登录失败");
+          window.location.href = "/";
+        } catch (loginError) {
+          errorNode.textContent = loginError.message || "登录失败";
+        } finally {
+          button.disabled = false;
+          button.textContent = "登录";
+        }
+      });
+    </script>
+  </body>
+</html>

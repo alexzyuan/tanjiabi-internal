@@ -1,0 +1,22 @@
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 26px;
+  background: rgba(15, 23, 42, 0.38);
+}
+
+.modal-backdrop[hidden] {
+  display: none;
+}
+
+body:not(.login-body) .modal-backdrop {
+  z-index: 10000 !important;
+}
+
+@media (max-width: 720px) {
+  .modal-backdrop {
+    padding: 10px;
+  }
+}

@@ -1,0 +1,398 @@
+import { filterCoreSellers, getLingxingAdapter } from "../adapters/lingxingAdapter.js";
+import { lingxingShopMap } from "../data/lingxingShopMap.js";
+import { getFbaAddressProfile } from "../data/fbaAddressBook.js";
+import { getFbaBoxTemplate, hasCompleteBoxSpec } from "./fbaBoxTemplateService.js";
+
+const mskuCache = new Map();
+const CACHE_TTL_MS = 30 * 60 * 1000;
+const PRODUCT_INFO_BATCH_SIZE = 100;
+
+function normalizeRecordList(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  const data = payload?.data || payload || {};
+  const records = data.records || data.list || data.rows || data.data || [];
+  return Array.isArray(records) ? records : [];
+}
+
+function walkObject(value, visit, depth = 0) {
+  if (!value || depth > 3) return;
+  if (Array.isArray(value)) {
+    value.forEach((item) => walkObject(item, visit, depth + 1));
+    return;
+  }
+  if (typeof value !== "object") return;
+  Object.entries(value).forEach(([key, child]) => {
+    visit(key, child);
+    walkObject(child, visit, depth + 1);
+  });
+}
+
+function readFirst(record, keys) {
+  for (const key of keys) {
+    const value = record?.[key];
+    if (value !== undefined && value !== null && String(value).trim()) return String(value).trim();
+  }
+  const normalizedKeys = new Set(keys.map((key) => key.toLowerCase()));
+  let found = "";
+  walkObject(record, (key, value) => {
+    if (found) return;
+    if (!normalizedKeys.has(String(key).toLowerCase())) return;
+    if (value !== undefined && value !== null && String(value).trim()) found = String(value).trim();
+  });
+  if (found) return found;
+  return "";
+}
+
+function readNumber(record, keys) {
+  const value = readFirst(record, keys);
+  const number = Number(String(value || "").replace(/,/g, ""));
+  return Number.isFinite(number) && number > 0 ? number : 0;
+}
+
+function normalizeText(value) {
+  return String(value || "").trim();
+}
+
+function normalizeKey(value) {
+  return normalizeText(value).toLowerCase();
+}
+
+function chunkArray(items, size) {
+  const chunks = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+}
+
+function uniqueText(values) {
+  const seen = new Set();
+  return values.map(normalizeText).filter((value) => {
+    const key = normalizeKey(value);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function readPackQuantity(record) {
+  return readNumber(record, [
+    "cg_box_pcs",
+    "packQuantity",
+    "pack_quantity",
+    "packingQuantity",
+    "packing_quantity",
+    "boxQuantity",
+    "box_quantity",
+    "box_qty",
+    "cartonQuantity",
+    "carton_quantity",
+    "carton_qty",
+    "casePack",
+    "case_pack",
+    "packageQuantity",
+    "package_quantity",
+    "perBoxQty",
+    "per_box_qty",
+    "qtyPerBox",
+    "qty_per_box",
+    "fbaCartonQty",
+    "fba_carton_qty",
+    "装箱数量",
+    "每箱数量",
+    "单箱数量",
+    "整箱数量",
+    "箱规",
+  ]);
+}
+
+function readOuterBoxSpec(record) {
+  const dimensions = {
+    length: readNumber(record, ["cg_box_length", "outer_box_length", "outerBoxLength", "外箱长", "外箱长度", "外箱规格长"]),
+    width: readNumber(record, ["cg_box_width", "outer_box_width", "outerBoxWidth", "外箱宽", "外箱宽度", "外箱规格宽"]),
+    height: readNumber(record, ["cg_box_height", "outer_box_height", "outerBoxHeight", "外箱高", "外箱高度", "外箱规格高"]),
+    unitOfMeasurement: readFirst(record, ["cg_box_length_unit", "box_length_unit", "length_unit", "lengthUnit", "dimension_unit", "dimensionUnit", "unitOfMeasurement", "尺寸单位"]) || "CM",
+  };
+  const weight = {
+    value: readNumber(record, ["cg_box_weight", "outer_box_weight", "outerBoxWeight", "外箱实重", "外箱重量", "外箱重"]),
+    unit: readFirst(record, ["cg_box_weight_unit", "box_weight_unit", "weight_unit", "weightUnit", "重量单位"]) || "KG",
+  };
+  const boxSpec = { dimensions, weight };
+  return hasCompleteBoxSpec(boxSpec) ? boxSpec : null;
+}
+
+function normalizeMskuRecord(record, shop) {
+  const msku = readFirst(record, ["msku", "m_sku", "seller_sku", "sellerSku", "sellerSkuStr", "local_sku", "fnsku", "sku", "item_sku"]);
+  if (!msku) return null;
+
+  return {
+    msku,
+    asin: readFirst(record, ["asin", "ASIN"]),
+    sku: readFirst(record, ["sku", "localSku", "local_sku", "product_sku"]),
+    skuIdentifier: readFirst(record, ["sku_identifier", "skuIdentifier", "local_sku_identifier", "localSkuIdentifier"]),
+    productId: readFirst(record, ["product_id", "productId", "local_product_id", "localProductId"]),
+    title: readFirst(record, ["title", "item_name", "itemName", "product_name", "productName", "product_title", "name"]),
+    packQuantity: readPackQuantity(record),
+    boxSpec: null,
+    sid: shop.sid,
+    shopName: shop.name,
+    displayName: shop.displayName,
+    country: shop.country,
+  };
+}
+
+function normalizeProductRecord(record) {
+  const sku = readFirst(record, ["sku", "local_sku", "product_sku", "sku_identifier"]);
+  if (!sku) return null;
+  return {
+    sku,
+    skuIdentifier: readFirst(record, ["sku_identifier", "skuIdentifier"]),
+    productName: readFirst(record, ["product_name", "productName", "local_name", "name"]),
+    packQuantity: readPackQuantity(record),
+    boxSpec: readOuterBoxSpec(record),
+    raw: record,
+  };
+}
+
+function mergeProductRecords(target, records) {
+  records.map(normalizeProductRecord).filter(Boolean).forEach((product) => {
+    target.set(normalizeKey(product.sku), product);
+    if (product.skuIdentifier) target.set(normalizeKey(product.skuIdentifier), product);
+  });
+}
+
+async function safeFetchProductInfo(adapter, params, fallbackParams = null) {
+  try {
+    return normalizeRecordList(await adapter.fetchLocalProductInfos(params));
+  } catch (error) {
+    if (!fallbackParams) throw error;
+    return normalizeRecordList(await adapter.fetchLocalProducts(fallbackParams));
+  }
+}
+
+async function fetchProductInfoMap(adapter, items) {
+  const sourceItems = Array.isArray(items) ? items : [];
+  const skus = uniqueText(sourceItems.flatMap((item) => [item.sku, item.msku]));
+  const skuIdentifiers = uniqueText(sourceItems.flatMap((item) => [item.skuIdentifier, item.sku, item.msku]));
+  const productIds = uniqueText(sourceItems.map((item) => item.productId));
+  const productMap = new Map();
+  if (!skus.length && !skuIdentifiers.length && !productIds.length) return productMap;
+
+  for (const batch of chunkArray(skus, PRODUCT_INFO_BATCH_SIZE)) {
+    const records = await safeFetchProductInfo(adapter, { skus: batch }, { sku_list: batch });
+    mergeProductRecords(productMap, records);
+  }
+  for (const batch of chunkArray(skuIdentifiers, PRODUCT_INFO_BATCH_SIZE)) {
+    const records = await safeFetchProductInfo(adapter, { sku_identifiers: batch }, { sku_identifier_list: batch });
+    mergeProductRecords(productMap, records);
+  }
+  for (const batch of chunkArray(productIds, PRODUCT_INFO_BATCH_SIZE)) {
+    const records = await safeFetchProductInfo(adapter, { productIds: batch });
+    mergeProductRecords(productMap, records);
+  }
+
+  return productMap;
+}
+
+function mergeProductInfo(items, productMap) {
+  return items.map((item) => {
+    const product = productMap.get(normalizeKey(item.sku))
+      || productMap.get(normalizeKey(item.skuIdentifier))
+      || productMap.get(normalizeKey(item.msku));
+    if (!product) return item;
+    return {
+      ...item,
+      productName: product.productName || item.title || "",
+      title: item.title || product.productName || "",
+      packQuantity: product.packQuantity || item.packQuantity || 0,
+      boxSpec: product.boxSpec || item.boxSpec || null,
+      erpSku: product.sku,
+    };
+  });
+}
+
+async function applyBoxTemplates(items) {
+  return Promise.all(items.map(async (item) => {
+    if (hasCompleteBoxSpec(item.boxSpec)) {
+      return {
+        ...item,
+        boxDimensions: item.boxSpec.dimensions,
+        boxWeight: item.boxSpec.weight,
+        boxSource: "erp",
+      };
+    }
+    const template = await getFbaBoxTemplate({ sid: item.sid, msku: item.msku });
+    if (template && hasCompleteBoxSpec({ dimensions: template.dimensions, weight: template.weight })) {
+      return {
+        ...item,
+        boxDimensions: template.dimensions,
+        boxWeight: template.weight,
+        boxSource: "template",
+      };
+    }
+    return {
+      ...item,
+      boxDimensions: null,
+      boxWeight: null,
+      boxSource: "missing",
+    };
+  }));
+}
+
+function normalizeMskuText(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function filterMskus(items, keyword, matchMode) {
+  const value = String(keyword || "").trim().toLowerCase();
+  if (!value) return items;
+
+  return items.filter((item) => {
+    const fields = [item.msku, item.asin, item.sku, item.title, item.shopName, item.displayName].map((field) => String(field || "").toLowerCase());
+    if (matchMode === "exact") return fields.some((field) => field === value);
+    return fields.some((field) => field.includes(value));
+  });
+}
+
+function uniqueMskus(items) {
+  const seen = new Set();
+  return items.filter((item) => {
+    const key = `${item.sid}:${item.msku}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+async function fetchListingRecords(adapter, baseParams) {
+  const records = [];
+  let offset = 0;
+  let total = null;
+  while (offset < 5000) {
+    const payload = await adapter.fetchListings({ ...baseParams, offset, length: 1000 });
+    const pageRows = normalizeRecordList(payload);
+    records.push(...pageRows);
+    total = Number(payload.total ?? total);
+    if (!pageRows.length || pageRows.length < 1000 || (Number.isFinite(total) && records.length >= total)) break;
+    offset += 1000;
+  }
+  return records;
+}
+
+async function fetchMskusForShop(adapter, shop, { force = false, exactMsku = "" } = {}) {
+  const cacheKey = exactMsku ? `${shop.sid}:msku:${normalizeKey(exactMsku)}` : String(shop.sid);
+  const cached = mskuCache.get(cacheKey);
+  if (!force && cached && Date.now() - cached.updatedAt < CACHE_TTL_MS) return cached.items;
+
+  const baseParams = {
+    is_pair: 1,
+    is_delete: 0,
+  };
+  if (exactMsku) {
+    baseParams.search_field = "seller_sku";
+    baseParams.search_value = [exactMsku];
+    baseParams.exact_search = 1;
+  }
+  const variants = [
+    { sid: shop.sid },
+    { sids: [shop.sid] },
+    { seller_id: shop.sid },
+    { sellerId: shop.sid },
+  ];
+
+  let lastPayload = null;
+  let lastError = null;
+  let items = [];
+  for (const variant of variants) {
+    try {
+      const records = await fetchListingRecords(adapter, { ...baseParams, ...variant });
+      lastPayload = { code: 0, data: records };
+      items = uniqueMskus(records.map((record) => normalizeMskuRecord(record, shop)).filter(Boolean));
+      if (items.length || lastPayload?.code === 0 || lastPayload?.code === "0") break;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (lastError && !lastPayload) throw lastError;
+
+  const productMap = await fetchProductInfoMap(adapter, items);
+  items = mergeProductInfo(items, productMap);
+  items = await applyBoxTemplates(items);
+
+  mskuCache.set(cacheKey, { updatedAt: Date.now(), items });
+  return items;
+}
+
+export function getFbaShopOptions() {
+  return filterCoreSellers(lingxingShopMap).map((shop) => ({
+    ...shop,
+    addressProfile: getFbaAddressProfile(shop.name),
+  }));
+}
+
+export async function searchFbaMskus({ sids = [], q = "", matchMode = "fuzzy" } = {}) {
+  const coreShops = filterCoreSellers(lingxingShopMap);
+  const selectedSids = Array.isArray(sids) && sids.length ? sids.map(Number).filter(Boolean) : coreShops.map((shop) => shop.sid);
+  const shops = coreShops.filter((shop) => selectedSids.includes(Number(shop.sid)));
+  const adapter = getLingxingAdapter();
+  const settled = await Promise.allSettled(shops.map((shop) => fetchMskusForShop(adapter, shop)));
+  const errors = settled
+    .map((result, index) => (result.status === "rejected" ? `${shops[index].name}: ${result.reason.message}` : ""))
+    .filter(Boolean);
+  const items = uniqueMskus(settled.flatMap((result) => (result.status === "fulfilled" ? result.value : [])));
+  return {
+    ok: errors.length === 0,
+    errors,
+    count: items.length,
+    items: filterMskus(items, q, matchMode).slice(0, 200),
+  };
+}
+
+export async function resolveFbaMskuFromErp({ sid, msku } = {}) {
+  const normalizedSid = Number(sid);
+  const normalizedMsku = normalizeMskuText(msku);
+  if (!normalizedSid) throw new Error("请选择有效店铺。");
+  if (!normalizedMsku) throw new Error("MSKU 不能为空。");
+
+  const shop = filterCoreSellers(lingxingShopMap).find((item) => Number(item.sid) === normalizedSid);
+  if (!shop) throw new Error(`店铺 SID ${normalizedSid} 不在领星店铺映射中。`);
+
+  const adapter = getLingxingAdapter();
+  const items = await fetchMskusForShop(adapter, shop, { force: true, exactMsku: msku });
+  const matched = items.find((item) => normalizeMskuText(item.msku) === normalizedMsku);
+  if (!matched) {
+    throw new Error(`MSKU ${msku} 未在领星 ERP 店铺 ${shop.name} 中匹配到，请检查店铺和 MSKU。`);
+  }
+  if (!Number(matched.packQuantity || 0)) {
+    throw new Error(`MSKU ${matched.msku} 在领星 ERP 未返回装箱数量，请先维护产品管理装箱数量。`);
+  }
+
+  return (await applyBoxTemplates([matched]))[0];
+}
+
+export async function assertFbaMskuPackMatchesErp({ sid, msku, packQuantity, boxCount, quantity } = {}) {
+  const erpItem = await resolveFbaMskuFromErp({ sid, msku });
+  const erpPackQuantity = Number(erpItem.packQuantity || 0);
+  const providedPackQuantity = Number(packQuantity || 0);
+
+  const normalizedBoxCount = Number(boxCount || 0);
+  const expectedQuantity = normalizedBoxCount > 0 ? normalizedBoxCount * erpPackQuantity : Number(quantity || 0);
+  if (
+    normalizedBoxCount > 0
+    && Number(quantity || 0) > 0
+    && Number(quantity || 0) !== expectedQuantity
+    && providedPackQuantity === erpPackQuantity
+  ) {
+    throw new Error(`发货数量与箱数不一致：应为 ${normalizedBoxCount} × ${erpPackQuantity} = ${expectedQuantity}。`);
+  }
+
+  return {
+    erpItem,
+    packQuantity: erpPackQuantity,
+    quantity: expectedQuantity,
+    boxDimensions: erpItem.boxDimensions || null,
+    boxWeight: erpItem.boxWeight || null,
+    boxSource: erpItem.boxSource || "missing",
+  };
+}

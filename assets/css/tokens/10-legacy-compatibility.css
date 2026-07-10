@@ -1,0 +1,38 @@
+/* Temporary aliases for selectors that have not yet been tokenized. */
+:root {
+  --blue-950: #0b1b35;
+  --blue-900: #123b68;
+  --blue-800: #1d6ff2;
+  --blue-700: #1498ee;
+  --blue-500: #73b9ff;
+  --blue-100: #eef7ff;
+  --purple: #6c5cff;
+  --line: #e6edf7;
+  --text: #142033;
+  --muted: #66758a;
+  --bg: #f5f8fc;
+  --panel: #ffffff;
+  --orange: #f59f2f;
+  --teal: #13b6c8;
+  --red: #e4332a;
+  --green: #22a06b;
+  --cream: #fff7ed;
+  --shadow: 0 18px 44px rgba(20, 42, 78, 0.08);
+  --shadow-soft: 0 10px 28px rgba(20, 42, 78, 0.06);
+  --surface: rgba(255, 255, 255, 0.86);
+  --tj-brand: var(--tj-action-blue);
+  --tj-brand-dark: var(--tj-text-strong);
+  --tj-brand-deep: var(--tj-action-blue-hover);
+  --tj-blue: var(--tj-action-blue);
+  --tj-cyan: var(--spectrum-accent-visual);
+  --tj-orange: var(--tj-warning);
+  --tj-text: var(--tj-text-body);
+  --tj-muted: var(--tj-text-muted);
+  --tj-soft: var(--tj-action-blue-soft);
+  --tj-panel: var(--tj-content-bg);
+  --tj-line: var(--tj-border-subtle);
+  --tj-line-strong: var(--tj-border-control);
+  --tj-shadow: 0 10px 28px rgba(15, 45, 90, 0.08);
+  --tj-shadow-soft: 0 6px 18px rgba(51, 108, 255, 0.08);
+  --tj-grid: rgba(22, 119, 255, 0.055);
+}

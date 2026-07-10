@@ -1,0 +1,356 @@
+/* Sales forecast table and controls */
+.sales-forecast-filters {
+  grid-template-columns: minmax(160px, 220px) minmax(180px, 260px) minmax(280px, 1fr);
+}
+
+.sales-forecast-table-wrap {
+  --sales-forecast-border: var(--tj-border-subtle);
+  --sales-forecast-sticky-border: var(--tj-border-control);
+  --sales-forecast-product-bg: color-mix(in srgb, var(--tj-action-blue) 18%, var(--tj-content-bg));
+  --sales-forecast-inventory-bg: color-mix(in srgb, var(--tj-positive) 14%, var(--tj-content-bg));
+  --sales-forecast-action-bg: color-mix(in srgb, var(--tj-warning) 14%, var(--tj-content-bg));
+  --sales-forecast-sales-bg: color-mix(in srgb, var(--tj-action-blue) 10%, var(--tj-content-bg));
+  --sales-forecast-sticky-bg: color-mix(in srgb, var(--tj-action-blue) 3%, var(--tj-content-bg));
+  --sales-forecast-sticky-alt-bg: color-mix(in srgb, var(--tj-action-blue) 2%, var(--tj-content-bg));
+  --sales-forecast-sticky-hover-bg: color-mix(in srgb, var(--tj-action-blue) 5%, var(--tj-content-bg));
+  --sales-forecast-month-bg: color-mix(in srgb, var(--tj-warning) 13%, var(--tj-content-bg));
+  max-height: calc(100vh - 360px);
+  border: 1px solid var(--sales-forecast-border);
+  border-radius: 8px;
+  position: relative;
+  isolation: isolate;
+}
+
+.sales-forecast-table {
+  min-width: 2540px;
+  font-size: 12px;
+}
+
+.sales-forecast-table th,
+.sales-forecast-table td {
+  box-sizing: border-box;
+  padding: 5px 6px;
+  line-height: 1.25;
+}
+
+.sales-forecast-table thead tr:first-child th {
+  top: 0;
+  z-index: 5;
+  text-align: center;
+  font-size: 16px;
+}
+
+.sales-forecast-table thead tr:nth-child(2) th {
+  top: 34px;
+  z-index: 5;
+}
+
+.sales-forecast-table .group-head.product-group {
+  background: var(--sales-forecast-product-bg);
+}
+
+.sales-forecast-table .group-head.inventory-group {
+  background: var(--sales-forecast-inventory-bg);
+}
+
+.sales-forecast-table .group-head.action-group {
+  background: var(--sales-forecast-action-bg);
+}
+
+.sales-forecast-table .group-head.sales-group {
+  background: var(--sales-forecast-sales-bg);
+}
+
+.sales-forecast-table .sticky-col {
+  position: sticky;
+  z-index: 30;
+  box-shadow: 1px 0 0 var(--sales-forecast-sticky-border);
+}
+
+.sales-forecast-table thead .sticky-col {
+  z-index: 50;
+}
+
+.sales-forecast-table thead tr:nth-child(2) th.sticky-col {
+  z-index: 65;
+}
+
+.sales-forecast-table .sticky-product-group {
+  position: sticky;
+  left: 0;
+  min-width: 614px;
+  box-shadow: 1px 0 0 var(--sales-forecast-sticky-border);
+}
+
+.sales-forecast-table thead tr:first-child th.sticky-product-group {
+  z-index: 70;
+  background: var(--sales-forecast-product-bg);
+}
+
+.sales-forecast-table .sticky-focus {
+  left: 0;
+  width: 38px;
+  min-width: 38px;
+  text-align: center;
+}
+
+.sales-forecast-table .sticky-image {
+  left: 106px;
+  width: 52px;
+  min-width: 52px;
+  text-align: center;
+}
+
+.sales-forecast-table .sticky-hide {
+  left: 48px;
+  width: 54px;
+  min-width: 54px;
+  text-align: center;
+}
+
+.sales-forecast-table .sticky-store {
+  left: 162px;
+  width: 92px;
+  min-width: 92px;
+}
+
+.sales-forecast-table .sticky-country {
+  left: 254px;
+  width: 62px;
+  min-width: 62px;
+}
+
+.sales-forecast-table .sticky-product {
+  left: 316px;
+  width: 160px;
+  min-width: 160px;
+}
+
+.sales-forecast-table .sticky-msku {
+  left: 476px;
+  width: 128px;
+  min-width: 128px;
+}
+
+.sales-forecast-table th.sticky-col,
+.sales-forecast-table td.sticky-col {
+  background: var(--sales-forecast-sticky-bg);
+}
+
+.sales-forecast-table tbody tr:nth-child(even) td.sticky-col {
+  background: var(--sales-forecast-sticky-alt-bg);
+}
+
+.sales-forecast-table tbody tr:hover td.sticky-col {
+  background: var(--sales-forecast-sticky-hover-bg);
+}
+
+.sales-forecast-table .text-cell {
+  text-align: left;
+}
+
+.sales-forecast-table .sticky-focus,
+.sales-forecast-table .sticky-hide,
+.sales-forecast-table .sticky-image {
+  text-align: center;
+}
+
+.sales-forecast-table .forecast-emphasis {
+  font-weight: 800;
+  color: var(--tj-text-strong);
+}
+
+.sales-forecast-table .compact-number-col {
+  width: 64px;
+  min-width: 64px;
+}
+
+.sales-forecast-table .compact-date-col {
+  width: 86px;
+  min-width: 86px;
+}
+
+.sales-forecast-table .month-daily-col {
+  width: 48px;
+  min-width: 48px;
+}
+
+.sales-forecast-table .month-sales-col {
+  width: 54px;
+  min-width: 54px;
+  background: var(--sales-forecast-month-bg) !important;
+}
+
+.sales-forecast-table td.month-sales-col {
+  position: relative;
+  overflow: visible;
+}
+
+.sales-month-sales-value {
+  display: inline-block;
+  min-width: 100%;
+}
+
+.sales-month-sales-tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% - var(--spectrum-spacing-50));
+  z-index: 120;
+  display: block;
+  min-width: 132px;
+  max-width: 180px;
+  padding: var(--spectrum-spacing-75) var(--spectrum-spacing-100);
+  border: 1px solid var(--spectrum-border-hover);
+  border-radius: var(--spectrum-control-radius);
+  color: var(--tj-text-strong);
+  background: var(--tj-content-bg);
+  box-shadow: var(--shadow-soft);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+  text-align: left;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -4px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.sales-forecast-table td.month-sales-col:hover .sales-month-sales-tooltip,
+.sales-forecast-table td.month-sales-col.is-tooltip-open .sales-month-sales-tooltip,
+.sales-forecast-table td.month-sales-col:focus .sales-month-sales-tooltip,
+.sales-forecast-table td.month-sales-col:focus-within .sales-month-sales-tooltip {
+  opacity: 1;
+  transform: translate(-50%, -8px);
+}
+
+.sales-forecast-table td.month-sales-col:focus-visible {
+  outline: var(--spectrum-focus-ring-width) solid var(--spectrum-focus-ring-color);
+  outline-offset: -2px;
+}
+
+.sales-forecast-panel-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  min-width: 0;
+}
+
+.sales-forecast-view-toggle {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid var(--tj-border-control);
+  border-radius: 8px;
+  background: var(--tj-action-blue-soft);
+}
+
+.sales-forecast-view-toggle button {
+  height: 30px;
+  min-width: 58px;
+  border: 0;
+  border-radius: var(--spectrum-control-radius);
+  color: var(--tj-text-muted);
+  background: transparent;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.sales-forecast-view-toggle button.active {
+  color: var(--tj-content-bg);
+  background: var(--tj-action-blue);
+}
+
+.sales-focus-toggle {
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--tj-border-control);
+  border-radius: 4px;
+  color: var(--tj-tone-warning-text);
+  background: var(--tj-content-bg);
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sales-focus-toggle.is-focused {
+  border-color: var(--tj-warning);
+  color: var(--tj-tone-warning-text);
+  background: var(--tj-tone-warning-bg);
+}
+
+.sales-hide-toggle {
+  width: 38px;
+  height: 22px;
+  border: 1px solid var(--tj-border-control);
+  border-radius: 5px;
+  padding: 0;
+  color: var(--tj-text-muted);
+  background: var(--tj-content-bg);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 20px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.sales-hide-toggle.is-hidden {
+  color: var(--tj-tone-warning-text);
+  border-color: color-mix(in srgb, var(--tj-warning) 42%, var(--tj-border-control));
+  background: var(--tj-tone-warning-bg);
+}
+
+.sales-product-image-frame {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+}
+
+.sales-product-image {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  border: 1px solid var(--tj-border-subtle);
+  border-radius: var(--spectrum-control-radius);
+  background: var(--tj-content-bg);
+}
+
+.sales-product-image-frame.image-failed .sales-product-image {
+  display: none;
+}
+
+.sales-product-image-frame .sales-image-fallback {
+  display: none;
+}
+
+.sales-product-image-frame.image-failed .sales-image-fallback {
+  display: inline-grid;
+}
+
+.sales-daily-input {
+  width: 43px;
+  height: 24px;
+  border: 1px solid var(--tj-border-control);
+  border-radius: 5px;
+  padding: 0 5px;
+  text-align: right;
+  color: var(--tj-text-body);
+  background: color-mix(in srgb, var(--tj-warning) 5%, var(--tj-content-bg));
+}
+
+.sales-forecast-table .image-placeholder {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--spectrum-control-radius);
+}
+
+.sales-daily-input:focus {
+  outline: 0;
+  border-color: var(--tj-action-blue);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tj-action-blue) 16%, transparent);
+  background: var(--tj-content-bg);
+}

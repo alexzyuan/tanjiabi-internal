@@ -1,0 +1,26 @@
+/* Shared compact section heading. */
+.section-title {
+  position: relative;
+  margin-top: 12px;
+  padding: 6px 0 8px 16px;
+  background: transparent;
+  color: var(--tj-text-strong);
+  font-size: 16px;
+  font-weight: 850;
+  border-radius: 0;
+}
+
+body:not(.login-body) .section-title {
+  font-size: 15px;
+}
+
+.section-title::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 9px;
+  width: 4px;
+  height: 18px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--tj-action-blue), var(--spectrum-accent-visual));
+}

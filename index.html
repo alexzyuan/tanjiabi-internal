@@ -1,0 +1,2326 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>探嘉数据分析系统</title>
+    <link rel="icon" type="image/png" href="./assets/jm-favicon.png" />
+    <link rel="apple-touch-icon" href="./assets/jm-favicon.png" />
+    <script>
+      (function () {
+        var platform = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent || "";
+        if (/win/i.test(platform)) {
+          document.documentElement.classList.add("os-windows");
+        }
+      })();
+    </script>
+    <link rel="stylesheet" href="./styles.css?v=20260706-frontend-refactor-v32" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand" aria-label="Joi Mew 探嘉 BI">
+          <div class="brand-logo-card"><img src="./assets/jm-logo.jpg" alt="Joi Mew" /></div>
+          <div class="brand-text">
+            <strong>探嘉 BI</strong>
+            <small>数据分析决策系统</small>
+          </div>
+        </div>
+        <nav class="nav">
+          <button class="nav-item nav-home-item active" data-view="home">
+            <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20H5V11"/><path d="M9 20v-6h6v6"/></svg></span>
+            <span class="nav-label">首页</span>
+          </button>
+          <section class="nav-group" aria-label="销售">
+            <button class="nav-group-title" type="button" aria-expanded="false">
+              <span class="nav-group-icon sales-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M5 16l4-4 3 3 7-8"/><path d="M19 7v6h-6"/></svg>
+              </span>
+              <span>销售</span>
+              <span class="nav-group-caret" aria-hidden="true">⌄</span>
+            </button>
+            <button class="nav-item" data-view="sales"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 15l3-3 3 2 5-6"/></svg></span><span class="nav-label">销售复盘</span></button>
+            <button class="nav-item" data-view="pulse"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 13h4l2-7 4 14 2-7h4"/></svg></span><span class="nav-label">即时表现</span></button>
+            <button class="nav-item" data-view="store-inspection"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M8 4h8l2 3v13H6V7z"/><path d="M9 11l2 2 4-4"/><path d="M9 17h6"/></svg></span><span class="nav-label">店铺巡检</span></button>
+            <button class="nav-item" data-view="clearance"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M5 6h14v4H5z"/><path d="M7 10v8h10v-8"/><path d="M9 14h6"/><path d="M9 18 18 9"/></svg></span><span class="nav-label">动销预警</span></button>
+            <button class="nav-item" data-view="ads"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M5 11v7"/><path d="M9 8v10"/><path d="M13 13v5"/><path d="M17 6v12"/><path d="M3 18h18"/></svg></span><span class="nav-label">广告复盘</span></button>
+            <button class="nav-item" data-view="budget"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 3v18"/><path d="M17 7H9.5a3 3 0 0 0 0 6H14a3 3 0 0 1 0 6H6"/></svg></span><span class="nav-label">预算目标</span></button>
+            <button class="nav-item" data-view="purchase"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M6 7h12l-1 10H7z"/><path d="M9 7V5a3 3 0 0 1 6 0v2"/></svg></span><span class="nav-label">销售预估</span></button>
+          </section>
+          <section class="nav-group" aria-label="工具">
+            <button class="nav-group-title" type="button" aria-expanded="false">
+              <span class="nav-group-icon tools-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0-5 5L4 17v3h3l5.7-5.7a4 4 0 0 0 5-5l-2.8 2.8-3-3z"/><path d="M15 19h6"/><path d="M18 16v6"/></svg>
+              </span>
+              <span>工具</span>
+              <span class="nav-group-caret" aria-hidden="true">⌄</span>
+            </button>
+            <button class="nav-item" data-view="review-rating"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1L12 16.9 6.6 19.8l1-6.1-4.4-4.3 6.1-.9z"/></svg></span><span class="nav-label">review计算</span></button>
+            <button class="nav-item" data-view="ai-image-workflow"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 5h7v6H4z"/><path d="M13 13h7v6h-7z"/><path d="M14 4h6"/><path d="M17 4v6"/><path d="m6 18 2 2 4-5"/></svg></span><span class="nav-label">AI图片工作流</span></button>
+            <button class="nav-item" data-view="fba-freight"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 6h16v12H4z"/><path d="M7 10h10"/><path d="M7 14h6"/><path d="M17 18l3 3"/><path d="M20 18l-3 3"/></svg></span><span class="nav-label">货代表格</span></button>
+            <button class="nav-item" data-view="fba"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 8l8-4 8 4-8 4z"/><path d="M4 8v8l8 4 8-4V8"/></svg></span><span class="nav-label">FBA刷仓</span></button>
+          </section>
+          <section class="nav-group" aria-label="产品">
+            <button class="nav-group-title" type="button" aria-expanded="false">
+              <span class="nav-group-icon product-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5"/><path d="M12 12v9"/><path d="M12 12 4 7.5"/></svg>
+              </span>
+              <span>产品</span>
+              <span class="nav-group-caret" aria-hidden="true">⌄</span>
+            </button>
+            <button class="nav-item" data-view="product-progress"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 6h16"/><path d="M4 12h10"/><path d="M4 18h6"/><path d="M18 11l2 2 3-4"/></svg></span><span class="nav-label">产品进度</span></button>
+            <button class="nav-item" data-view="aftersales"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16v10H7l-3 3z"/><path d="M8 9h8"/><path d="M8 12h5"/></svg></span><span class="nav-label">售后数据</span></button>
+            <button class="nav-item" data-view="certificates"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M7 3h10l3 3v15H7z"/><path d="M17 3v4h4"/><path d="M10 13l2 2 4-5"/><path d="M10 18h7"/></svg></span><span class="nav-label">证书有效期</span></button>
+            <button class="nav-item" data-view="product-design"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M6 16l9-9 3 3-9 9H6z"/><path d="M14 8l3 3"/></svg></span><span class="nav-label">产品设计需求</span></button>
+          </section>
+          <section class="nav-group" aria-label="售后">
+            <button class="nav-group-title" type="button" aria-expanded="false">
+              <span class="nav-group-icon product-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M4 6h16v11H7l-3 3z"/><path d="M8 10h8"/><path d="M8 14h5"/></svg>
+              </span>
+              <span>售后</span>
+              <span class="nav-group-caret" aria-hidden="true">⌄</span>
+            </button>
+            <button class="nav-item" data-view="aftersales-mail"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 6h16v12H4z"/><path d="m4 7 8 6 8-6"/><path d="M8 17h8"/></svg></span><span class="nav-label">站外售后邮箱</span></button>
+          </section>
+          <section class="nav-group" aria-label="库存">
+            <button class="nav-group-title" type="button" aria-expanded="false">
+              <span class="nav-group-icon inventory-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M4 8l8-4 8 4-8 4z"/><path d="M4 8v8l8 4 8-4V8"/><path d="M12 12v8"/></svg>
+              </span>
+              <span>库存</span>
+              <span class="nav-group-caret" aria-hidden="true">⌄</span>
+            </button>
+            <button class="nav-item" data-view="lowfee"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 3v18"/><path d="M16 7H9.5a2.5 2.5 0 0 0 0 5H14a2.5 2.5 0 0 1 0 5H7"/></svg></span><span class="nav-label">低库存费</span></button>
+            <button class="nav-item" data-view="provision"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M6 3h12v18H6z"/><path d="M9 8h6"/><path d="M9 12h6"/><path d="M9 16h4"/></svg></span><span class="nav-label">库存计提</span></button>
+            <button class="nav-item" data-view="factory-inventory"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 8h16v10H4z"/><path d="M7 8V5h10v3"/><path d="M8 12h3"/><path d="M13 12h3"/><path d="M8 15h3"/></svg></span><span class="nav-label">工厂库存</span></button>
+          </section>
+          <section class="nav-group" aria-label="采购">
+            <button class="nav-group-title" type="button" aria-expanded="false">
+              <span class="nav-group-icon purchase-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M6 7h15l-2 8H8z"/><path d="M6 7 5 4H2"/><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/></svg>
+              </span>
+              <span>采购</span>
+              <span class="nav-group-caret" aria-hidden="true">⌄</span>
+	            </button>
+	            <button class="nav-item" data-view="supplier-board"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h10"/><path d="M17 15l3 3"/><path d="M20 15l-3 3"/></svg></span><span class="nav-label">供应商看板</span></button>
+	            <button class="nav-item" data-view="supplier-detail"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M6 5h12v14H6z"/><path d="M9 9h6"/><path d="M9 13h6"/><path d="M9 17h3"/></svg></span><span class="nav-label">供应商明细</span></button>
+	            <button class="nav-item" data-view="payables"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M6 3h12v18H6z"/><path d="M8 7h8"/><path d="M8 11h8"/><path d="M8 15h5"/></svg></span><span class="nav-label">应付账款</span></button>
+	          </section>
+          <section class="nav-group" aria-label="财务" data-permission="finance" hidden>
+            <button class="nav-group-title" type="button" aria-expanded="false">
+              <span class="nav-group-icon finance-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M4 7h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4z"/><path d="M4 7l3-4h11v4"/><path d="M15 13h5"/></svg>
+              </span>
+              <span>财务</span>
+              <span class="nav-group-caret" aria-hidden="true">⌄</span>
+            </button>
+            <button class="nav-item" data-view="cashflow"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16v11H4z"/><path d="M7 7V5h10v2"/><path d="M16 13h4"/></svg></span><span class="nav-label">平台回款</span></button>
+          </section>
+          <section class="nav-group" aria-label="知识库">
+            <button class="nav-group-title" type="button" aria-expanded="false">
+              <span class="nav-group-icon guide-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M5 4h10a4 4 0 0 1 4 4v12H9a4 4 0 0 0-4-4z"/><path d="M5 4v12"/><path d="M9 8h6"/><path d="M9 12h5"/></svg>
+              </span>
+              <span>知识库</span>
+              <span class="nav-group-caret" aria-hidden="true">⌄</span>
+            </button>
+            <button class="nav-item" data-view="guide"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M6 4h11a3 3 0 0 1 3 3v13H9a3 3 0 0 0-3-3z"/><path d="M6 4v13"/><path d="M10 8h6"/><path d="M10 12h5"/></svg></span><span class="nav-label">知识库</span></button>
+          </section>
+          <section class="nav-group" aria-label="设置">
+            <button class="nav-group-title" type="button" aria-expanded="false">
+              <span class="nav-group-icon settings-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M4 7h10"/><path d="M18 7h2"/><path d="M4 17h2"/><path d="M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>
+              </span>
+              <span>设置</span>
+              <span class="nav-group-caret" aria-hidden="true">⌄</span>
+            </button>
+            <button class="nav-item" data-view="admin" hidden><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.5-2.4 1a7 7 0 0 0-2-1.1L14 3h-4l-.5 2.7a7 7 0 0 0-2 1.1l-2.4-1-2 3.5 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.5 2.4-1a7 7 0 0 0 2 1.1L10 21h4l.5-2.7a7 7 0 0 0 2-1.1l2.4 1 2-3.5-2-1.5c.1-.4.1-.8.1-1.2z"/></svg></span><span class="nav-label">后台管理</span></button>
+            <button class="nav-item" data-view="sync"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M20 7h-9a4 4 0 0 0-4 4v1"/><path d="M16 3l4 4-4 4"/><path d="M4 17h9a4 4 0 0 0 4-4v-1"/><path d="M8 21l-4-4 4-4"/></svg></span><span class="nav-label">同步中心</span></button>
+          </section>
+        </nav>
+        <div class="sidebar-note sync-pending" id="sidebar-sync-card">
+          <span class="sync-dot" aria-hidden="true"></span>
+          <strong id="data-source">待同步</strong>
+          <small id="data-source-note">暂无记录</small>
+        </div>
+        <button class="sidebar-toggle" id="sidebar-toggle" aria-label="折叠侧边栏" title="折叠侧边栏" type="button">‹</button>
+      </aside>
+
+      <main class="dashboard">
+        <header class="topbar">
+          <nav class="topbar-breadcrumb module-breadcrumb" id="topbar-breadcrumb" aria-label="当前路径"></nav>
+          <div class="world-clock" id="world-clock" aria-label="世界时区">
+            <span>北京时间：--:--</span>
+            <span>美西时间：--:--</span>
+            <span>德国时间：--:--</span>
+            <span>澳洲时间：--:--</span>
+            <span class="topbar-sync sync-pending" id="topbar-sync-card"><i class="sync-dot" aria-hidden="true"></i><strong id="topbar-sync-state">待同步</strong><small id="topbar-sync-time">暂无记录</small></span>
+            <p id="period-text" hidden></p>
+          </div>
+          <div class="top-actions">
+            <div class="account-menu" id="account-menu" hidden>
+              <button class="status-chip muted account-trigger" id="auth-user-chip" type="button" aria-expanded="false"></button>
+              <button class="ghost-button account-logout" id="logout-button" type="button" hidden>退出登录</button>
+            </div>
+          </div>
+        </header>
+
+        <section class="view active" id="view-home">
+          <section class="home-dashboard" aria-label="BI 首页总览">
+            <div class="home-hero">
+              <div>
+                <span>首页</span>
+                <h1>BI 总览仪表盘</h1>
+                <p>聚合销售、库存、采购、财务与同步状态，快速进入核心经营看板。</p>
+              </div>
+              <div class="home-sync-pill" id="home-sync-pill">
+                <span class="sync-dot" aria-hidden="true"></span>
+                <strong id="home-sync-state">同步状态读取中</strong>
+                <small id="home-sync-time">最近同步：--</small>
+              </div>
+            </div>
+
+            <section class="home-kpi-grid" aria-label="核心指标">
+              <article class="home-kpi-card">
+                <span>销售收入</span>
+                <strong id="home-sales-income">--</strong>
+                <small>本期销售复盘</small>
+              </article>
+              <article class="home-kpi-card">
+                <span>库存健康</span>
+                <strong id="home-inventory-health">--</strong>
+                <small>库存风险与费用</small>
+              </article>
+              <article class="home-kpi-card">
+                <span>采购待处理</span>
+                <strong id="home-purchase-pending">--</strong>
+                <small>供应商与应付</small>
+              </article>
+              <article class="home-kpi-card home-finance-card" data-permission-card="finance">
+                <span>财务回款</span>
+                <strong id="home-finance-cashflow">--</strong>
+                <small>平台回款预测</small>
+              </article>
+            </section>
+
+            <section class="home-content-grid">
+              <article class="home-panel">
+                <div class="home-panel-head">
+                  <h2>快捷入口</h2>
+                  <div class="home-panel-actions">
+                    <span id="home-quick-summary">按业务场景快速进入</span>
+                    <button class="home-quick-config-toggle" id="home-quick-config-toggle" type="button" aria-expanded="false" aria-controls="home-quick-config">设置</button>
+                  </div>
+                </div>
+                <div class="home-quick-config" id="home-quick-config" hidden></div>
+                <div class="home-quick-grid" id="home-quick-grid"></div>
+              </article>
+
+              <article class="home-panel home-alert-panel">
+                <div class="home-panel-head">
+                  <h2>待处理提醒</h2>
+                  <span>优先处理经营异常</span>
+                </div>
+                <div class="home-alert-list">
+                  <div><i class="warning"></i><strong>低库存预警</strong><span>关注安全库存以下 SKU</span></div>
+                  <div><i class="info"></i><strong>广告效率复盘</strong><span>检查 ACOS 超目标活动</span></div>
+                  <div><i class="success"></i><strong>同步巡检</strong><span>确认自动同步最近结果</span></div>
+                </div>
+              </article>
+            </section>
+          </section>
+        </section>
+
+        <section class="filters" id="sales-global-filters" aria-label="筛选条件" hidden>
+          <label>
+            国家
+            <select id="front-country-filter" multiple size="3">
+              <option value="">全部国家</option>
+            </select>
+          </label>
+          <label>
+            店铺
+            <select id="front-shop-filter" multiple size="4">
+              <option value="">全部店铺</option>
+            </select>
+          </label>
+          <label>
+            日期
+            <div class="date-range-control">
+              <button id="front-date-range-button" class="date-range-button" type="button">本月</button>
+              <div class="date-range-popover" id="front-date-range-popover" hidden>
+                <div class="date-presets">
+                  <button type="button" data-range-preset="today">今日</button>
+                  <button type="button" data-range-preset="yesterday">昨日</button>
+                  <button type="button" data-range-preset="last7">近7天</button>
+                  <button type="button" data-range-preset="last30">近30天</button>
+                  <button type="button" data-range-preset="thisWeek">本周</button>
+                  <button type="button" data-range-preset="lastWeek">上周</button>
+                  <button type="button" data-range-preset="thisMonth">本月</button>
+                  <button type="button" data-range-preset="lastMonth">上月</button>
+                </div>
+                <div class="date-range-fields">
+                  <input id="front-date-start" type="date" />
+                  <span>至</span>
+                  <input id="front-date-end" type="date" />
+                  <button id="front-date-apply" class="primary-button" type="button">确定</button>
+                </div>
+              </div>
+            </div>
+          </label>
+          <label>
+            币种
+            <select id="front-currency-filter">
+              <option value="ORIGINAL">站点原币</option>
+              <option value="CNY">CNY</option>
+            </select>
+          </label>
+          <label>
+            Listing负责人
+            <select id="front-owner-filter">
+              <option value="">全部负责人</option>
+            </select>
+          </label>
+          <label>
+            品类
+            <select>
+              <option>无限制</option>
+              <option>高速车</option>
+              <option>直升机</option>
+              <option>固定翼</option>
+              <option>遥控船</option>
+            </select>
+          </label>
+          <label>
+            SKU | MSKU | ASIN
+            <input type="search" placeholder="输入关键词" />
+          </label>
+        </section>
+
+        <section class="view" id="view-sales">
+        <section class="module-hero">
+          <div>
+            <span>销售复盘</span>
+            <h2>销售复盘</h2>
+            <p>按国家、店铺、日期和负责人查看销售收入、利润、广告费率与核心达成率。</p>
+          </div>
+        </section>
+        <section class="overview-grid sales-overview-grid" aria-label="总体业绩达成情况（月初至筛选器最后一天）">
+          <div class="kpi-stack">
+            <article class="kpi-card">
+              <span class="card-title">时间进度</span>
+              <strong>-</strong>
+              <div class="target-line"><span>总天数：-</span><span>已过天数：-</span></div>
+            </article>
+            <article class="kpi-card">
+              <span class="card-title">总销售收入达成率</span>
+              <strong>-</strong>
+              <div class="target-line"><span>目标：-</span><span>实际：-</span></div>
+            </article>
+            <article class="kpi-card">
+              <span class="card-title">店铺利润达成率</span>
+              <strong>-</strong>
+              <div class="target-line"><span>目标：-</span><span>实际：-</span></div>
+            </article>
+            <article class="kpi-card">
+              <span class="card-title">广告费率达成率</span>
+              <strong>-</strong>
+              <div class="target-line"><span>目标费率：-</span><span>实际费率：-</span></div>
+            </article>
+          </div>
+
+          <article class="panel">
+            <div class="panel-head">
+              <h2>站点达成率</h2>
+              <span id="site-currency-note">销售收入、利润与达成率</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>站点</th>
+                    <th>币种</th>
+                    <th>销售收入目标</th>
+                    <th>销售收入</th>
+                    <th>达成率</th>
+                    <th>店铺利润目标</th>
+                    <th>店铺利润</th>
+                    <th>达成率</th>
+                    <th>广告费</th>
+                    <th>广告销售额</th>
+                    <th>ACOS</th>
+                    <th>广告费率</th>
+                  </tr>
+                </thead>
+                <tbody id="site-table"></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section class="summary-strip">
+          <div><span>销售净毛利</span><strong>-</strong></div>
+          <div><span>销售净毛利率</span><strong>-</strong></div>
+          <div><span>公司净利</span><strong>-</strong></div>
+          <div><span>公司净利率</span><strong>-</strong></div>
+          <div><span>销售额</span><strong>-</strong></div>
+          <div><span>广告花费</span><strong>-</strong></div>
+          <div><span>广告销售额</span><strong>-</strong></div>
+          <div><span>ACOS</span><strong>-</strong></div>
+          <div><span>退款率</span><strong>-</strong></div>
+        </section>
+
+        <section class="tabs" aria-label="明细维度">
+          <button class="active">MSKU明细</button>
+          <div class="store-tabs" id="msku-store-tabs" aria-label="店铺筛选">
+            <button class="active" type="button" data-msku-store="">全部店铺</button>
+          </div>
+        </section>
+
+        <article class="panel detail-panel">
+          <div class="panel-head">
+            <h2>销售复盘明细</h2>
+            <span id="msku-detail-status">随销售看板同步加载</span>
+          </div>
+          <div class="table-wrap sales-review-detail-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th><button class="sort-button" type="button" data-msku-sort="budgetStoreName">店铺</button></th>
+                  <th><button class="sort-button" type="button" data-msku-sort="msku">msku</button></th>
+                  <th><button class="sort-button" type="button" data-msku-sort="productName">产品名称</button></th>
+                  <th><button class="sort-button" type="button" data-msku-sort="budgetQuantity">销量目标</button></th>
+                  <th><button class="sort-button" type="button" data-msku-sort="actualQuantity">实际销量</button></th>
+                  <th><button class="sort-button" type="button" data-msku-sort="fbaInventory">FBA库存</button></th>
+                  <th><button class="sort-button" type="button" data-msku-sort="quantityAchievement">销量达成率</button></th>
+                  <th><button class="sort-button" type="button" data-msku-sort="orderProfit">订单利润</button></th>
+                  <th><button class="sort-button" type="button" data-msku-sort="grossRate">毛利率</button></th>
+                  <th><button class="sort-button" type="button" data-msku-sort="refundRate">退款率</button></th>
+                  <th><button class="sort-button" type="button" data-msku-sort="adFeeRate">广告费率</button></th>
+                  <th><button class="sort-button" type="button" data-msku-sort="promotionDiscountRate">促销折扣占比</button></th>
+                  <th><button class="sort-button" type="button" data-msku-sort="storageFeeRate">仓储费占比</button></th>
+                  <th><button class="sort-button" type="button" data-msku-sort="platformFeeRate">平台费占比</button></th>
+                  <th><button class="sort-button" type="button" data-msku-sort="fbaDeliveryFeeRate">FBA发货费占比</button></th>
+                  <th><button class="sort-button" type="button" data-msku-sort="purchaseCostRate">采购成本占比</button></th>
+                  <th><button class="sort-button" type="button" data-msku-sort="firstLegCostRate">头程成本占比</button></th>
+                </tr>
+              </thead>
+              <tbody id="detail-table"></tbody>
+            </table>
+          </div>
+        </article>
+        </section>
+
+        <section class="view" id="view-pulse">
+          <section class="module-hero">
+            <div>
+              <span>即时表现</span>
+              <h2>即时表现与异动 MSKU 雷达</h2>
+              <p>按你设定的规则监控销量、广告效率、利润、库存和排名，自动挑出需要优先关注的 10 个 MSKU。</p>
+            </div>
+            <div class="hero-actions">
+              <label class="inline-date">追踪日期<input id="pulse-date" type="date" /></label>
+              <button class="primary-button" id="pulse-refresh-button" type="button">刷新追踪</button>
+            </div>
+          </section>
+          <section class="module-grid">
+            <article class="metric-tile"><span>即时销量</span><strong id="pulse-sales-units">0</strong><small>当天 MSKU 合计</small></article>
+            <article class="metric-tile"><span>广告花费</span><strong id="pulse-ad-cost">0</strong><small>订单利润口径</small></article>
+            <article class="metric-tile"><span>ACOS / ACOAS</span><strong id="pulse-acos">0%</strong><small id="pulse-acoas">ACOAS 0%</small></article>
+            <article class="metric-tile"><span>重点异动</span><strong id="pulse-anomaly-count">0</strong><small>每日 Top 10</small></article>
+          </section>
+          <article class="panel">
+            <div class="panel-head">
+              <h2>规则异动筛选</h2>
+              <span id="pulse-status">等待加载</span>
+            </div>
+            <div class="anomaly-list" id="pulse-anomaly-list"></div>
+          </article>
+          <article class="panel detail-panel">
+            <div class="panel-head">
+              <h2>即时表现明细</h2>
+              <span>销量、库存、广告、效率与排名</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>MSKU</th>
+                    <th>店铺</th>
+                    <th>国家</th>
+                    <th>即时销量</th>
+                    <th>昨日销量</th>
+                    <th>14天日销</th>
+                    <th>FBA在库</th>
+                    <th>转库</th>
+                    <th>在途</th>
+                    <th>广告花费</th>
+                    <th>广告销售额</th>
+                    <th>ACOS</th>
+                    <th>ACOAS</th>
+                    <th>ASOAS</th>
+                    <th>排名</th>
+                    <th>异动</th>
+                  </tr>
+                </thead>
+                <tbody id="pulse-product-table"><tr><td colspan="16">等待加载</td></tr></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section class="view" id="view-store-inspection">
+          <section class="module-hero">
+            <div>
+              <span>店铺巡检</span>
+              <h2>亚马逊店铺自动巡检</h2>
+              <p>系统按计划检查 feedback、review、买家之声和 Performance - Account Health，聚合需要处理的店铺风险。</p>
+            </div>
+            <div class="hero-actions store-inspection-actions">
+              <small id="store-inspection-status-text">等待读取自动巡检结果</small>
+              <span class="store-inspection-status" id="store-inspection-overall-status" aria-live="polite">等待巡检</span>
+              <button class="secondary-button" id="store-inspection-refresh" type="button">刷新结果</button>
+              <button class="secondary-button" id="store-inspection-generate-report" type="button">生成日报</button>
+              <button class="primary-button" id="store-inspection-run" type="button">立即巡检</button>
+            </div>
+          </section>
+
+          <section class="module-grid store-inspection-kpis" aria-label="店铺巡检核心风险">
+            <article class="metric-tile"><span>低星 feedback</span><strong id="inspection-feedback-count">0</strong><small>1-3 星 seller feedback</small></article>
+            <article class="metric-tile"><span>新增 review</span><strong id="inspection-review-count">0</strong><small id="inspection-review-note">近 30 天新增</small></article>
+            <article class="metric-tile"><span>买家之声异常</span><strong id="inspection-voice-count">0</strong><small>极差 / 不合格 / 一般</small></article>
+            <article class="metric-tile"><span>Account Health</span><strong id="inspection-account-health-count">0</strong><small>政策合规与 AHR</small></article>
+          </section>
+
+          <article class="panel store-inspection-schedule-panel">
+            <div class="panel-head">
+              <h2>定时巡检</h2>
+              <span id="store-inspection-schedule-status">默认每日 08:30</span>
+            </div>
+            <form class="store-inspection-schedule-form" id="store-inspection-schedule-form">
+              <label class="toggle-row">
+                <input id="store-inspection-schedule-enabled" type="checkbox" checked />
+                <span>开启每日自动巡检</span>
+              </label>
+              <label class="store-inspection-time-field">
+                <span>日报发送时间</span>
+                <input id="store-inspection-send-time" type="time" value="08:30" required />
+              </label>
+              <button class="primary-button" id="store-inspection-save-schedule" type="submit">保存设置</button>
+            </form>
+          </article>
+
+          <section class="store-inspection-workspace store-inspection-auto-workspace">
+            <article class="panel store-inspection-preview">
+              <div class="panel-head"><h2>巡检概览</h2><span id="store-inspection-updated-at">等待巡检</span></div>
+              <div class="store-inspection-focus" id="store-inspection-focus"></div>
+            </article>
+
+            <article class="panel store-inspection-preview">
+              <div class="panel-head"><h2>模块状态</h2><span id="store-inspection-notify-status">通知状态</span></div>
+              <div class="store-inspection-check-summary" id="store-inspection-check-summary"></div>
+            </article>
+          </section>
+
+          <article class="panel detail-panel store-inspection-report-panel">
+            <div class="panel-head">
+              <h2>Markdown 日报</h2>
+              <div class="panel-actions">
+                <span id="store-inspection-report-status">基于最新巡检结果生成</span>
+                <button class="secondary-button" id="store-inspection-copy-report" type="button">复制 Markdown</button>
+              </div>
+            </div>
+            <textarea id="store-inspection-report-output" class="store-inspection-report-output" readonly placeholder="点击“生成日报”后，这里会显示可复制的店铺巡检日报。"></textarea>
+          </article>
+
+          <article class="panel detail-panel">
+            <div class="panel-head"><h2>待处理明细</h2><span id="store-inspection-table-count">暂无巡检结果</span></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>模块</th><th>店铺</th><th>对象</th><th>指标</th><th>内容</th><th>时间</th><th>状态</th></tr></thead>
+                <tbody id="store-inspection-table"><tr><td colspan="7">等待自动巡检结果。</td></tr></tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="panel detail-panel">
+            <div class="panel-head"><h2>最近巡检历史</h2><span id="store-inspection-history-count">暂无历史</span></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>时间</th><th>结论</th><th>店铺数</th><th>feedback</th><th>低星 review</th><th>买家之声</th><th>Account Health</th></tr></thead>
+                <tbody id="store-inspection-history"><tr><td colspan="7">暂无历史巡检。</td></tr></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section class="view" id="view-product-progress">
+          <section class="module-hero">
+            <div>
+              <span>产品进度</span>
+              <h2>新品立项、打样、采购与上架进度</h2>
+              <p>用于承接产品从需求提出到上线销售的全链路节点，后续可接入负责人、预计完成日期和延期提醒。</p>
+            </div>
+            <div class="hero-actions">
+              <button class="primary-button" type="button">新建进度</button>
+            </div>
+          </section>
+          <section class="module-grid">
+            <article class="metric-tile"><span>推进中</span><strong>-</strong><small>立项到上架</small></article>
+            <article class="metric-tile"><span>本周待完成</span><strong>-</strong><small>按计划日期</small></article>
+            <article class="metric-tile"><span>延期风险</span><strong>-</strong><small>需负责人确认</small></article>
+            <article class="metric-tile"><span>已上线</span><strong>-</strong><small>本月完成</small></article>
+          </section>
+          <article class="panel detail-panel">
+            <div class="panel-head"><h2>产品进度清单</h2><span>阶段、负责人、节点与状态</span></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>产品</th><th>阶段</th><th>负责人</th><th>计划完成</th><th>当前状态</th><th>下一步</th></tr></thead>
+                <tbody><tr><td colspan="6">产品进度框架已预留，等待接入数据。</td></tr></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section class="view" id="view-aftersales">
+          <section class="module-hero">
+            <div>
+              <span>售后数据</span>
+              <h2>退货分析、Review 与买家之声综合看板</h2>
+              <p>融合领星 ERP 的退货分析、评价管理 Review 和买家之声，按 MSKU / ASIN / 店铺归并共性问题，优先定位售后风险产品。</p>
+            </div>
+            <div class="hero-actions payable-update">
+              <small id="aftersales-status">等待加载售后数据</small>
+              <button class="primary-button" id="aftersales-refresh-button" type="button">刷新售后</button>
+            </div>
+          </section>
+          <section class="filters aftersales-filters" aria-label="售后数据筛选">
+            <label>开始日期<input id="aftersales-start-date" type="date" /></label>
+            <label>结束日期<input id="aftersales-end-date" type="date" /></label>
+            <label>退货口径<select id="aftersales-date-type"><option value="0">退货时间</option><option value="1">下单时间</option></select></label>
+            <label>关键词<input id="aftersales-keyword" type="search" placeholder="MSKU / ASIN / SKU / 品名" /></label>
+          </section>
+          <section class="module-grid aftersales-kpi-grid">
+            <article class="metric-tile"><span>退货量</span><strong id="aftersales-return-count">-</strong><small id="aftersales-return-note">退货分析口径</small></article>
+            <article class="metric-tile"><span>综合退货率</span><strong id="aftersales-return-rate">-</strong><small>退货量 / 销量</small></article>
+            <article class="metric-tile"><span>低星 Review</span><strong id="aftersales-low-review-count">-</strong><small id="aftersales-review-note">1-3星评价</small></article>
+            <article class="metric-tile"><span>买家之声风险</span><strong id="aftersales-voice-risk-count">-</strong><small>NCX / 满意度 / 退货标记</small></article>
+            <article class="metric-tile"><span>高风险产品</span><strong id="aftersales-high-risk-count">-</strong><small>三源综合评分</small></article>
+          </section>
+          <section class="module-grid aftersales-source-grid" id="aftersales-source-summary" aria-label="售后数据源概览"></section>
+          <article class="panel detail-panel">
+            <div class="panel-head"><h2>售后综合风险产品</h2><span id="aftersales-table-count">退货分析、Review、买家之声共性归并</span></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>产品 / MSKU</th><th>店铺 / 国家</th><th>退货量</th><th>退货率</th><th>低星 Review</th><th>买家之声</th><th>共性信号</th><th>风险</th><th>建议动作</th></tr></thead>
+                <tbody id="aftersales-risk-table"><tr><td colspan="9">等待加载售后数据。</td></tr></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section class="view" id="view-aftersales-mail">
+          <section class="module-hero">
+            <div>
+              <span>站外售后邮箱</span>
+              <h2>JM 售后邮箱收件、AI 建议与回复</h2>
+              <p>接入 jmcustomer@163.com，用于集中查看站外售后邮件、生成 AI 回复建议，并在 ERP 内发送回复。</p>
+            </div>
+            <div class="hero-actions payable-update">
+              <small id="aftersales-mail-status">等待读取邮箱</small>
+              <button class="secondary-button" id="aftersales-mail-refresh" type="button">刷新列表</button>
+              <button class="primary-button" id="aftersales-mail-sync" type="button">同步邮箱</button>
+            </div>
+          </section>
+          <section class="aftersales-mail-workspace">
+            <article class="panel detail-panel aftersales-mail-list-panel">
+              <div class="panel-head"><h2>收件箱</h2><span id="aftersales-mail-table-count">等待同步邮箱</span></div>
+              <section class="filters aftersales-mail-filters" aria-label="站外售后邮箱筛选">
+                <label>状态
+                  <select id="aftersales-mail-status-filter">
+                    <option value="">全部</option>
+                    <option value="new">新邮件</option>
+                    <option value="pending">待回复</option>
+                    <option value="replied">已回复</option>
+                  </select>
+                </label>
+                <label>搜索<input id="aftersales-mail-keyword" type="search" placeholder="发件人 / 主题 / 正文" /></label>
+              </section>
+              <section class="aftersales-mail-kpis" aria-label="站外售后邮箱概览">
+                <article><span>新邮件</span><strong id="aftersales-mail-new-count">-</strong></article>
+                <article><span>待回复</span><strong id="aftersales-mail-pending-count">-</strong></article>
+                <article><span>已回复</span><strong id="aftersales-mail-replied-count">-</strong></article>
+              </section>
+              <div class="aftersales-mail-list-meta">
+                <span>最近同步 <strong id="aftersales-mail-synced-at">-</strong></span>
+                <span id="aftersales-mail-account">JM售后邮箱</span>
+              </div>
+              <div class="aftersales-mail-list" id="aftersales-mail-table">
+                <div class="aftersales-mail-empty">等待读取邮箱。</div>
+              </div>
+            </article>
+            <article class="panel detail-panel aftersales-mail-detail-panel aftersales-mail-message-panel">
+              <div class="panel-head"><h2>邮件详情</h2><span id="aftersales-mail-detail-status">请选择一封邮件</span></div>
+              <section class="aftersales-mail-body">
+                <div class="aftersales-mail-meta" id="aftersales-mail-meta">未选择邮件</div>
+                <pre id="aftersales-mail-body">从左侧列表选择邮件后查看正文。</pre>
+                <div class="aftersales-mail-attachments" id="aftersales-mail-attachments"></div>
+              </section>
+            </article>
+            <aside class="panel detail-panel aftersales-mail-reply-panel">
+              <section class="aftersales-mail-reply">
+                <div class="aftersales-mail-ai-head">
+                  <h3>AI 回复建议</h3>
+                  <button class="secondary-button" id="aftersales-mail-ai-refresh" type="button">生成建议</button>
+                </div>
+                <textarea id="aftersales-mail-ai-suggestion" rows="9" readonly placeholder="点击左侧邮件后，基于邮件全文生成专业、简洁的英文回复建议。"></textarea>
+                <button class="secondary-button" id="aftersales-mail-use-ai" type="button">使用建议</button>
+                <label>回复正文<textarea id="aftersales-mail-reply-body" rows="11" placeholder="输入要发送给客户的英文回复。"></textarea></label>
+                <div class="aftersales-mail-reply-actions">
+                  <button class="secondary-button" id="aftersales-mail-mark-pending" type="button">标记待处理</button>
+                  <button class="secondary-button" id="aftersales-mail-mark-replied" type="button">标记已回复</button>
+                  <button class="primary-button" id="aftersales-mail-send-reply" type="button">发送回复</button>
+                </div>
+                <div class="aftersales-mail-replies" id="aftersales-mail-replies">暂无 ERP 回复记录。</div>
+              </section>
+            </aside>
+          </section>
+        </section>
+
+        <section class="view" id="view-certificates">
+          <section class="module-hero">
+            <div>
+              <span>证书有效期</span>
+              <h2>产品认证、检测报告与到期提醒</h2>
+              <p>用于管理 CE、FCC、CPC、MSDS 等证书有效期，提前识别即将过期和缺失资料。</p>
+            </div>
+            <div class="hero-actions">
+              <button class="primary-button" type="button">新增证书</button>
+            </div>
+          </section>
+          <section class="module-grid">
+            <article class="metric-tile"><span>有效证书</span><strong>-</strong><small>当前可用</small></article>
+            <article class="metric-tile"><span>90天内到期</span><strong>-</strong><small>需续证</small></article>
+            <article class="metric-tile"><span>已过期</span><strong>-</strong><small>需停用确认</small></article>
+            <article class="metric-tile"><span>资料缺失</span><strong>-</strong><small>待补齐</small></article>
+          </section>
+          <article class="panel detail-panel">
+            <div class="panel-head"><h2>证书有效期台账</h2><span>证书类型、适用产品、有效期与提醒状态</span></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>产品 / SKU</th><th>证书类型</th><th>证书编号</th><th>签发日期</th><th>到期日期</th><th>状态</th></tr></thead>
+                <tbody><tr><td colspan="6">证书有效期框架已预留，等待接入数据。</td></tr></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section class="view" id="view-product-design">
+          <section class="module-hero">
+            <div>
+              <span>产品设计需求</span>
+              <h2>设计需求、改版建议与落地排期</h2>
+              <p>用于收集销售、售后、供应链提出的产品设计需求，沉淀优先级、评审结论和交付节点。</p>
+            </div>
+            <div class="hero-actions">
+              <button class="primary-button" type="button">提交需求</button>
+            </div>
+          </section>
+          <section class="module-grid">
+            <article class="metric-tile"><span>待评审</span><strong>-</strong><small>新需求</small></article>
+            <article class="metric-tile"><span>设计中</span><strong>-</strong><small>已确认方案</small></article>
+            <article class="metric-tile"><span>打样中</span><strong>-</strong><small>供应商跟进</small></article>
+            <article class="metric-tile"><span>已完成</span><strong>-</strong><small>本月关闭</small></article>
+          </section>
+          <article class="panel detail-panel">
+            <div class="panel-head"><h2>设计需求池</h2><span>来源、优先级、评审结论与交付状态</span></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>需求名称</th><th>关联产品</th><th>来源</th><th>优先级</th><th>负责人</th><th>当前状态</th></tr></thead>
+                <tbody><tr><td colspan="6">产品设计需求框架已预留，等待接入数据。</td></tr></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section class="view" id="view-cashflow">
+          <section class="module-hero">
+            <div>
+              <span>平台回款预测</span>
+              <h2>结算汇总收入支出追踪</h2>
+              <p>接入领星财务结算汇总，每周二、周五自动留存快照，追踪待结算、收入、退款和支出变化。</p>
+            </div>
+            <div class="hero-actions">
+              <button class="ghost-button" id="cashflow-capture-button" type="button">手动留存</button>
+              <button class="primary-button" id="cashflow-refresh-button" type="button">刷新回款</button>
+            </div>
+          </section>
+          <section class="filters cashflow-filters" aria-label="平台回款筛选">
+            <label>开始日期<input id="cashflow-start-date" type="date" /></label>
+            <label>结束日期<input id="cashflow-end-date" type="date" /></label>
+            <label>日期类型<select id="cashflow-date-type"><option value="0">结算开始日</option><option value="estimatedTransferDate">预计转账日</option></select></label>
+            <label>币种<select id="cashflow-currency"><option value="ORIGINAL">站点原币</option><option value="CNY">人民币 CNY</option></select></label>
+            <label>状态<select id="cashflow-status"><option value="Open">待结算</option><option value="Closed">已结算</option></select></label>
+            <label>国家<select id="cashflow-country" multiple size="3"><option value="">全部国家</option></select></label>
+            <label>店铺<select id="cashflow-store" multiple size="4"><option value="">全部店铺</option></select></label>
+          </section>
+          <section class="module-grid cashflow-metrics">
+            <article class="metric-tile"><span>待回款金额</span><strong id="cashflow-pending">0</strong><small id="cashflow-status-text">等待加载</small></article>
+            <article class="metric-tile"><span>标准结算金额</span><strong id="cashflow-standard">0</strong><small>结算汇总口径</small></article>
+            <article class="metric-tile"><span>收入</span><strong id="cashflow-income">0</strong><small>平台收入</small></article>
+            <article class="metric-tile"><span>退款</span><strong id="cashflow-refund">0</strong><small>退款金额</small></article>
+            <article class="metric-tile"><span>支出</span><strong id="cashflow-expense">0</strong><small>平台费用支出</small></article>
+          </section>
+          <section class="dual-chart-grid cashflow-stack">
+            <article class="panel">
+              <div class="panel-head"><h2>待结算店铺</h2><span>收入、退款、支出与预计回款</span></div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>店铺</th><th>国家</th><th>状态</th><th>币种</th><th>待回款金额</th><th>延迟结算金额</th><th>标准结算金额</th><th>收入</th><th>退款</th><th>支出</th><th>结算开始日</th><th>预计转账日</th></tr></thead>
+                  <tbody id="cashflow-store-table"><tr><td colspan="12">等待加载</td></tr></tbody>
+                </table>
+              </div>
+            </article>
+            <article class="panel">
+              <div class="panel-head"><h2>留存记录</h2><span id="cashflow-next-capture">每周二、周五自动留存，用于后续回款预测</span></div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>抓取时间</th><th>周期</th><th>国家</th><th>店铺</th><th>币种</th><th>状态</th><th>待回款金额</th><th>延迟结算金额</th><th>标准结算金额</th><th>收入</th><th>退款</th><th>支出</th><th>结算开始日</th><th>预计转账日</th></tr></thead>
+                  <tbody id="cashflow-history-table"><tr><td colspan="14">暂无留存记录</td></tr></tbody>
+                </table>
+              </div>
+            </article>
+          </section>
+        </section>
+
+        <section class="view" id="view-payables">
+          <section class="module-hero payable-hero">
+            <div>
+              <span>应付账款管理</span>
+              <h2>总应付、供应商、承运商与其他应付</h2>
+              <p>供应商金额取领星 ERP 请款池「采购-现结货款」，承运商金额取「头程款」，其他应付金额取费用管理「其他应付款」。</p>
+            </div>
+            <div class="hero-actions payable-update">
+              <small id="payables-status-text">数据来源：领星 ERP 请款池</small>
+              <button class="primary-button" id="payables-refresh-button" type="button">刷新应付</button>
+            </div>
+          </section>
+          <section class="filters payable-filters" aria-label="应付账款筛选">
+            <label>开始月份<input id="payables-start-month" type="month" value="2025-04" /></label>
+            <label>结束月份<input id="payables-end-month" type="month" value="2026-05" /></label>
+            <label>供应商<input id="payables-supplier" type="search" placeholder="输入供应商关键词" /></label>
+            <label>承运商<input id="payables-carrier" type="search" placeholder="输入承运商关键词" /></label>
+          </section>
+
+          <section class="module-grid payable-kpi-grid" aria-label="应付账款压力指标">
+            <article class="metric-tile payable-pressure-card danger"><span>总应付金额</span><strong id="payables-kpi-payable">¥ 0</strong><small id="payables-kpi-total-note">合计应付</small></article>
+            <article class="metric-tile payable-pressure-card"><span>供应商金额</span><strong id="payables-kpi-supplier-payable">¥ 0</strong><small id="payables-kpi-supplier-note">采购-现结货款</small></article>
+            <article class="metric-tile payable-pressure-card"><span>承运商金额</span><strong id="payables-kpi-carrier-payable">¥ 0</strong><small id="payables-kpi-carrier-note">头程款</small></article>
+            <article class="metric-tile payable-pressure-card warning"><span>其他应付金额</span><strong id="payables-kpi-other-payable">¥ 0</strong><small id="payables-kpi-other-note">费用管理 · 其他应付款</small></article>
+          </section>
+
+          <section class="payable-visual-grid" aria-label="应付账款可视化概览">
+            <article class="panel payable-status-panel">
+              <div class="panel-head"><h2>资金状态分布</h2><span>应付 / 实付 / 未付</span></div>
+              <div class="payable-status-legend">
+                <span><i class="payable"></i>应付金额</span>
+                <span><i class="paid"></i>实付</span>
+                <span><i class="unapplied"></i>未付</span>
+              </div>
+              <div class="payable-status-rows" id="payables-status-rows"></div>
+            </article>
+          </section>
+
+          <section class="section-title">明细表</section>
+          <article class="panel">
+            <div class="panel-head"><h2 id="payables-detail-title">汇总 · 供应商</h2><span id="payables-detail-count">等待加载</span></div>
+            <div class="tabs payable-tabs detail-tabs" data-payable-tabs="detail">
+              <button class="active" type="button" data-detail="supplierSummary">汇总 · 供应商</button>
+              <button type="button" data-detail="supplierMonthly">月度汇总 · 供应商</button>
+              <button type="button" data-detail="supplierDetail">明细表 · 供应商</button>
+              <button type="button" data-detail="carrierSummary">汇总 · 承运商</button>
+              <button type="button" data-detail="carrierMonthly">月度汇总 · 承运商</button>
+              <button type="button" data-detail="carrierDetail">明细表 · 承运商</button>
+              <button type="button" data-detail="otherSummary">汇总 · 其他应付</button>
+              <button type="button" data-detail="otherDetail">明细表 · 其他应付</button>
+              <button type="button" data-detail="metricDoc">指标说明</button>
+            </div>
+            <div class="table-wrap payable-table-wrap">
+              <table id="payables-detail-table">
+                <thead><tr><th>类别</th><th>名称</th><th>请款维度</th><th>账单月份</th><th>应付金额</th><th>实付金额</th><th>未付金额</th><th>申请中</th><th>未申请</th></tr></thead>
+                <tbody><tr><td colspan="9">等待加载</td></tr></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section class="view" id="view-ads">
+          <section class="module-hero">
+            <div>
+              <span>广告复盘</span>
+              <h2>广告效率、花费结构与异常关键词</h2>
+              <p>这一页后续接入领星广告接口，先保留周会需要的指标和操作位。</p>
+            </div>
+            <div class="hero-actions">
+              <small id="ads-portfolio-source">等待读取广告组合</small>
+              <button class="primary-button" id="ads-portfolio-refresh" type="button">刷新广告组合</button>
+            </div>
+          </section>
+          <section class="module-grid">
+            <article class="metric-tile"><span>广告花费</span><strong>16.83万</strong><small>环比 -1.29%</small></article>
+            <article class="metric-tile"><span>广告销售额</span><strong>67.18万</strong><small>ASOAS 51.23%</small></article>
+            <article class="metric-tile"><span>ACOS</span><strong>25.04%</strong><small>目标 24.00%</small></article>
+            <article class="metric-tile"><span>待处理异常</span><strong>12</strong><small>高花费低转化</small></article>
+          </section>
+          <article class="panel">
+            <div class="panel-head"><h2>广告复盘任务</h2><span>先按规则沉淀动作，后续接数据自动生成</span></div>
+            <div class="action-list">
+              <div><strong>高 ACOS 活动</strong><span>筛出 ACOS 高于目标且花费前 20 的广告活动。</span></div>
+              <div><strong>低转化关键词</strong><span>点击高、订单低的词进入暂停或降价候选。</span></div>
+              <div><strong>预算复盘</strong><span>按店铺、品类、负责人查看预算消耗和销售贡献。</span></div>
+            </div>
+          </article>
+          <article class="panel ads-analysis-panel">
+            <div class="panel-head">
+              <h2>广告复盘分析</h2>
+              <span id="ads-review-source">等待选择时间段</span>
+            </div>
+            <section class="filters ads-analysis-filters" aria-label="广告复盘筛选">
+              <label>开始日期<input id="ads-review-start-date" type="date" /></label>
+              <label>结束日期<input id="ads-review-end-date" type="date" /></label>
+              <label>对比开始<input id="ads-review-compare-start-date" type="date" /></label>
+              <label>对比结束<input id="ads-review-compare-end-date" type="date" /></label>
+              <label>目标 ACoS<input id="ads-review-target-acos" type="number" min="1" max="100" step="0.1" value="25" /></label>
+              <label>平均出单点击<input id="ads-review-avg-clicks" type="number" min="1" max="200" step="1" value="7" /></label>
+              <label>店铺<input id="ads-review-store" type="search" placeholder="店铺名，可选" /></label>
+              <label>国家<input id="ads-review-country" type="search" placeholder="US / CA / AU / DE" /></label>
+              <label>ASIN<input id="ads-review-asin" type="search" placeholder="可选，接口有字段时生效" /></label>
+              <button class="primary-button" id="ads-review-refresh" type="button">生成复盘</button>
+            </section>
+            <section class="module-grid ads-analysis-kpis" aria-label="广告复盘概览">
+              <article class="metric-tile"><span>广告花费</span><strong id="ads-review-kpi-cost">0</strong><small id="ads-review-kpi-cost-note">对比 -</small></article>
+              <article class="metric-tile"><span>广告销售额</span><strong id="ads-review-kpi-sales">0</strong><small id="ads-review-kpi-sales-note">对比 -</small></article>
+              <article class="metric-tile warning"><span>ACoS</span><strong id="ads-review-kpi-acos">-</strong><small id="ads-review-kpi-acos-note">目标 25%</small></article>
+              <article class="metric-tile success"><span>订单</span><strong id="ads-review-kpi-orders">0</strong><small id="ads-review-kpi-orders-note">对比 -</small></article>
+              <article class="metric-tile danger"><span>高 ACoS Targeting</span><strong id="ads-review-kpi-high-acos">0</strong><small>优先控价</small></article>
+              <article class="metric-tile danger"><span>无转化流量</span><strong id="ads-review-kpi-negative">0</strong><small>建议否定/暂停</small></article>
+              <article class="metric-tile success"><span>核心保护</span><strong id="ads-review-kpi-protect">0</strong><small>出单流量</small></article>
+              <article class="metric-tile success"><span>可沉淀精准</span><strong id="ads-review-kpi-exact">0</strong><small>搜索词候选</small></article>
+            </section>
+            <div id="ads-review-list" class="ads-analysis-list">
+              <div class="empty-state">选择时间段后点击“生成复盘”，系统会从领星广告 API 拉取 Campaign、Targeting 和搜索词数据。</div>
+            </div>
+            <div class="form-field form-span-2">
+              <label for="ads-review-report">复盘报告</label>
+              <textarea id="ads-review-report" rows="10" readonly placeholder="生成后显示 Markdown 复盘报告"></textarea>
+            </div>
+          </article>
+          <article class="panel ads-keyword-panel">
+            <div class="panel-head">
+              <h2>关键词策略</h2>
+              <span id="ads-keyword-source">等待读取关键词</span>
+            </div>
+            <section class="filters ads-keyword-filters" aria-label="关键词策略筛选">
+              <label>结束日期<input id="ads-keyword-end-date" type="date" /></label>
+              <label>策略分类<select id="ads-keyword-category"><option value="">全部策略</option><option value="losing">亏钱词</option><option value="scale">该加预算</option><option value="pause">建议暂停</option><option value="rankDrop">排名在掉</option></select></label>
+              <label>搜索<input id="ads-keyword-search" type="search" placeholder="关键词 / 店铺 / Campaign" /></label>
+              <button class="secondary-button" id="ads-keyword-refresh" type="button">刷新关键词</button>
+            </section>
+            <section class="module-grid ads-keyword-kpis" aria-label="关键词策略概览">
+              <article class="metric-tile warning"><span>亏钱词</span><strong id="ads-keyword-kpi-losing">0</strong><small>花费超过销售或 ACoS 偏高</small></article>
+              <article class="metric-tile success"><span>该加预算</span><strong id="ads-keyword-kpi-scale">0</strong><small>有订单且 ACoS 可控</small></article>
+              <article class="metric-tile danger"><span>建议暂停</span><strong id="ads-keyword-kpi-pause">0</strong><small>点击/花费到止损线无订单</small></article>
+              <article class="metric-tile muted"><span>排名在掉</span><strong id="ads-keyword-kpi-rank-drop">0</strong><small>曝光或点击环比明显下降</small></article>
+            </section>
+            <div class="table-wrap ads-keyword-table-wrap">
+              <table id="ads-keyword-table">
+                <thead>
+                  <tr>
+                    <th>策略</th>
+                    <th>关键词</th>
+                    <th>近 7 天</th>
+                    <th>效率</th>
+                    <th>趋势</th>
+                    <th>建议动作</th>
+                  </tr>
+                </thead>
+                <tbody><tr><td colspan="6">点击“刷新关键词”读取领星关键词报表。</td></tr></tbody>
+              </table>
+            </div>
+          </article>
+          <section class="filters ads-portfolio-filters" aria-label="广告组合筛选">
+            <label>组合状态<select id="ads-portfolio-state"><option value="">全部状态</option><option value="启用">启用</option><option value="暂停">暂停</option><option value="归档">归档</option></select></label>
+            <label>报表日期<input id="ads-portfolio-report-date" type="date" /></label>
+            <label>搜索<input id="ads-portfolio-keyword" type="search" placeholder="组合名称 / 店铺 / Profile" /></label>
+          </section>
+          <article class="panel ads-column-panel">
+            <div class="panel-head"><h2>列配置</h2><span>勾选后即时更新广告组合表</span></div>
+            <div id="ads-portfolio-columns" class="column-picker"></div>
+          </article>
+          <article class="panel">
+            <div class="panel-head"><h2>广告组合</h2><span id="ads-portfolio-count">等待加载</span></div>
+            <div class="table-wrap ads-portfolio-table-wrap">
+              <table id="ads-portfolio-table">
+                <thead>
+                  <tr>
+                    <th>广告组合</th>
+                    <th>状态</th>
+                    <th>预算</th>
+                    <th>预算状态</th>
+                    <th>投放状态</th>
+                    <th>店铺</th>
+                    <th>站点</th>
+                    <th>Profile</th>
+                    <th>更新时间</th>
+                  </tr>
+                </thead>
+                <tbody><tr><td colspan="9">点击“刷新广告组合”读取领星广告组合。</td></tr></tbody>
+              </table>
+            </div>
+          </article>
+	        </section>
+	
+	        <section class="view" id="view-supplier-board">
+	          <div class="supplier-board-sticky">
+	          <section class="module-hero supplier-board-hero">
+	            <div>
+	              <span>采购 · 供应商看板</span>
+	              <h2>销量、供应商、税点与采购价</h2>
+	              <p>主表取领星 salesStat 销量统计，供应商和采购价取 ERP 产品管理，普票税点和专票税点来自工厂税点表并按供应商模糊匹配。</p>
+	            </div>
+	            <div class="hero-actions payable-update">
+	              <small id="supplier-board-status">等待读取 salesStat</small>
+	              <button class="secondary-button" id="supplier-board-export" type="button">导出 Excel</button>
+	              <button class="primary-button" id="supplier-board-refresh" type="button">刷新看板</button>
+	            </div>
+	          </section>
+	          <section class="filters supplier-board-filters" aria-label="供应商看板筛选">
+	            <label>统计维度<select id="supplier-board-dimension"><option value="month" selected>按月</option><option value="year">按年</option></select></label>
+	            <label><span id="supplier-board-start-label">开始月份</span><input id="supplier-board-start-date" type="text" inputmode="numeric" placeholder="2025-01" /></label>
+	            <label><span id="supplier-board-end-label">结束月份</span><input id="supplier-board-end-date" type="text" inputmode="numeric" placeholder="2025-12" /></label>
+	            <label>国家<select id="supplier-board-country" multiple size="3"><option value="">全部国家</option></select></label>
+	            <label>店铺<select id="supplier-board-store" multiple size="4"><option value="">全部店铺</option></select></label>
+	            <label>供应商<input id="supplier-board-supplier" type="search" placeholder="输入供应商关键词" /></label>
+	            <label>MSKU / SKU<input id="supplier-board-keyword" type="search" placeholder="输入 MSKU、SKU、品名" /></label>
+	          </section>
+	          <section class="module-grid supplier-board-kpi-grid" aria-label="供应商看板指标">
+	            <article class="metric-tile"><span>销量统计</span><strong id="supplier-board-quantity">0</strong><small>按筛选周期汇总</small></article>
+	            <article class="metric-tile"><span>采购成本小计</span><strong id="supplier-board-purchase-cost">¥ 0</strong><small>销量 × 采购价</small></article>
+	            <article class="metric-tile"><span>普票采购成本</span><strong id="supplier-board-ordinary-purchase-cost">¥ 0</strong><small>有普票税点才计入</small></article>
+	            <article class="metric-tile"><span>普票成本</span><strong id="supplier-board-ordinary-cost">¥ 0</strong><small>采购成本 × 普票税点</small></article>
+	            <article class="metric-tile"><span>供应商数</span><strong id="supplier-board-supplier-count">0</strong><small>产品管理匹配</small></article>
+	            <article class="metric-tile"><span>MSKU 数</span><strong id="supplier-board-sku-count">0</strong><small>按 MSKU 去重</small></article>
+	          </section>
+	          </div>
+	          <article class="panel supplier-board-panel">
+	            <div class="panel-head"><h2>供应商销售明细</h2><span id="supplier-board-count">等待加载</span></div>
+	            <div class="table-wrap supplier-board-table-wrap">
+	              <table id="supplier-board-table">
+	                <thead>
+	                  <tr>
+	                    <th data-supplier-sort="imageUrl"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="imageUrl">图片</button></th>
+	                    <th data-supplier-sort="storeName"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="storeName">店铺</button></th>
+	                    <th data-supplier-sort="country"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="country">国家</button></th>
+	                    <th data-supplier-sort="msku"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="msku">MSKU</button></th>
+	                    <th data-supplier-sort="productName"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="productName">品名/SKU</button></th>
+	                    <th data-supplier-sort="model"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="model">型号</button></th>
+	                    <th data-supplier-sort="quantity"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="quantity">销量统计</button></th>
+	                    <th data-supplier-sort="supplier"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="supplier">供应商</button></th>
+	                    <th data-supplier-sort="purchasePrice"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="purchasePrice">采购价</button></th>
+	                    <th data-supplier-sort="purchaseCostSubtotal"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="purchaseCostSubtotal">采购成本小计</button></th>
+	                    <th data-supplier-sort="ordinaryInvoicePurchaseCost"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="ordinaryInvoicePurchaseCost">普票采购成本</button></th>
+	                    <th data-supplier-sort="ordinaryInvoiceTaxRate"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="ordinaryInvoiceTaxRate">普票税点</button></th>
+	                    <th data-supplier-sort="ordinaryInvoiceCost"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="ordinaryInvoiceCost">普票成本</button></th>
+	                    <th data-supplier-sort="specialInvoiceTaxRate"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="specialInvoiceTaxRate">专票税点</button></th>
+	                  </tr>
+	                </thead>
+	                <tbody><tr><td colspan="14">等待加载</td></tr></tbody>
+	              </table>
+	            </div>
+	          </article>
+	        </section>
+
+	        <section class="view" id="view-factory-inventory">
+	          <div class="factory-inventory-sticky">
+	            <section class="module-hero factory-inventory-hero">
+	              <div>
+	                <span>库存 · 工厂库存</span>
+	                <h2>采购单工厂剩余库存与 FBA 库存关联</h2>
+	                <p>主表取领星 ERP purchaseOrder 采购单，按创建时间从 2026 年 3 月开始抓取；已发数量由人工维护并全员共享，FBA 库存复用销售预估里的 MSKU 库存。</p>
+	              </div>
+	              <div class="hero-actions payable-update">
+	                <small id="factory-inventory-status">等待加载采购单</small>
+	                <button class="secondary-button" id="factory-inventory-export" type="button">导出 Excel</button>
+	                <button class="primary-button" id="factory-inventory-refresh" type="button">刷新库存</button>
+	              </div>
+	            </section>
+	            <section class="filters factory-inventory-filters" aria-label="工厂库存筛选">
+	              <label>开始日期<input id="factory-inventory-start-date" type="date" value="2026-03-01" min="2026-03-01" /></label>
+	              <label>结束日期<input id="factory-inventory-end-date" type="date" /></label>
+	              <label>工厂<input id="factory-inventory-factory" type="search" list="factory-inventory-factory-options" placeholder="输入工厂关键词" /><datalist id="factory-inventory-factory-options"></datalist></label>
+	              <label>采购单 / SKU / MSKU<input id="factory-inventory-keyword" type="search" placeholder="输入采购单号、品名、SKU、MSKU" /></label>
+	              <label class="checkbox-label"><input id="factory-inventory-only-remaining" type="checkbox" />只看工厂剩余库存</label>
+	            </section>
+	            <section class="module-grid factory-inventory-kpi-grid" aria-label="工厂库存指标">
+	              <article class="metric-tile"><span>采购单商品行</span><strong id="factory-inventory-line-count">0</strong><small>当前筛选</small></article>
+	              <article class="metric-tile"><span>采购数量</span><strong id="factory-inventory-purchase-qty">0</strong><small>采购单数量汇总</small></article>
+	              <article class="metric-tile"><span>采购金额</span><strong id="factory-inventory-purchase-amount">¥ 0</strong><small>按采购单金额汇总</small></article>
+	              <article class="metric-tile"><span>已发数量</span><strong id="factory-inventory-shipped-qty">0</strong><small>已发 / 已入库口径</small></article>
+	              <article class="metric-tile"><span>工厂剩余库存</span><strong id="factory-inventory-remaining-qty">0</strong><small>采购数量 - 已发数量</small></article>
+	              <article class="metric-tile"><span>FBA 可售</span><strong id="factory-inventory-fba-available">0</strong><small>销售预估缓存</small></article>
+	              <article class="metric-tile"><span>FBA 转库</span><strong id="factory-inventory-fba-transfer">0</strong><small>销售预估缓存</small></article>
+	              <article class="metric-tile"><span>FBA 在途</span><strong id="factory-inventory-fba-inbound">0</strong><small>销售预估缓存</small></article>
+	            </section>
+	          </div>
+	          <article class="panel factory-inventory-panel">
+	            <div class="panel-head"><h2>工厂库存明细</h2><span id="factory-inventory-count">等待加载</span></div>
+	            <div class="table-wrap factory-inventory-table-wrap">
+	              <table id="factory-inventory-table">
+	                <thead>
+	                  <tr>
+	                    <th>图片</th>
+	                    <th data-factory-sort="productName"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="productName">品名 / SKU</button></th>
+	                    <th data-factory-sort="storeName"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="storeName">店铺</button></th>
+	                    <th data-factory-sort="unitPrice"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="unitPrice">单价</button></th>
+	                    <th data-factory-sort="purchaseQuantity"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="purchaseQuantity">采购量</button></th>
+	                    <th data-factory-sort="purchaseAmount"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="purchaseAmount">金额</button></th>
+	                    <th data-factory-sort="orderTime"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="orderTime">采购时间</button></th>
+	                    <th data-factory-sort="msku"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="msku">MSKU / FNSKU</button></th>
+	                    <th data-factory-sort="shippedQuantity"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="shippedQuantity">已发数量</button></th>
+	                    <th data-factory-sort="factoryRemainingQuantity"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="factoryRemainingQuantity">工厂剩余库存</button></th>
+	                    <th data-factory-sort="fbaAvailable"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="fbaAvailable">FBA 可售</button></th>
+	                    <th data-factory-sort="fbaTransfer"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="fbaTransfer">FBA 转库</button></th>
+	                    <th data-factory-sort="fbaInbound"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="fbaInbound">FBA 在途</button></th>
+	                  </tr>
+	                </thead>
+	                <tbody><tr><td colspan="13">等待加载工厂库存。</td></tr></tbody>
+	              </table>
+	            </div>
+	          </article>
+	        </section>
+	
+	        <section class="view" id="view-supplier-detail">
+	          <section class="module-hero supplier-detail-hero">
+	            <div>
+	              <span>采购 · 供应商明细</span>
+	              <h2>供应商资质、账期、开票类型与税率</h2>
+	              <p>维护供应商基础结算信息，支持手动填写、模板导入和按当前筛选导出。</p>
+	            </div>
+	            <div class="supplier-detail-actions">
+	              <button class="secondary-button" id="supplier-detail-download-template" type="button">下载模板</button>
+	              <label class="secondary-button file-button">导入表格<input id="supplier-detail-file-input" type="file" accept=".xlsx,.xls" /></label>
+	              <button class="secondary-button" id="supplier-detail-export" type="button">供应商明细导出</button>
+	              <button class="primary-button" id="supplier-detail-open-modal" type="button">手动填写</button>
+	            </div>
+	          </section>
+	          <section class="filters supplier-detail-filters" aria-label="供应商明细筛选">
+	            <label>供应商<input id="supplier-detail-keyword" type="search" placeholder="输入供应商关键词" /></label>
+	            <label>供应商资质<select id="supplier-detail-qualification-filter"><option value="">全部资质</option></select></label>
+	            <label>账期类型<select id="supplier-detail-payment-filter"><option value="">全部账期</option></select></label>
+	            <label>开票类型<select id="supplier-detail-invoice-filter"><option value="">全部开票类型</option></select></label>
+	            <button class="ghost-button" id="supplier-detail-reset" type="button">重置</button>
+	            <span class="upload-status" id="supplier-detail-status">等待加载</span>
+	          </section>
+	          <section class="module-grid supplier-detail-kpi-grid">
+	            <article class="metric-tile"><span>供应商数</span><strong id="supplier-detail-count">0</strong><small>当前筛选</small></article>
+	            <article class="metric-tile"><span>资质类型</span><strong id="supplier-detail-qualification-count">0</strong><small>已维护</small></article>
+	            <article class="metric-tile"><span>账期类型</span><strong id="supplier-detail-payment-count">0</strong><small>已维护</small></article>
+	            <article class="metric-tile"><span>开票类型</span><strong id="supplier-detail-invoice-count">0</strong><small>已维护</small></article>
+	          </section>
+	          <article class="panel supplier-detail-panel">
+	            <div class="panel-head"><h2>供应商明细</h2><span id="supplier-detail-table-count">共 0 条数据</span></div>
+	            <div class="table-wrap supplier-detail-table-wrap">
+	              <table id="supplier-detail-table">
+	                <thead>
+	                  <tr>
+	                    <th>供应商</th>
+	                    <th>供应商资质</th>
+	                    <th>账期类型</th>
+	                    <th>开票类型</th>
+	                    <th>税率</th>
+	                    <th>操作</th>
+	                  </tr>
+	                </thead>
+	                <tbody><tr><td colspan="6">等待加载</td></tr></tbody>
+	              </table>
+	            </div>
+	          </article>
+	          <div class="modal-backdrop" id="supplier-detail-modal" hidden>
+	            <article class="supplier-detail-modal" role="dialog" aria-modal="true" aria-labelledby="supplier-detail-modal-title">
+	              <div class="modal-head">
+	                <h2 id="supplier-detail-modal-title">新增供应商明细</h2>
+	                <button class="modal-close-button" id="supplier-detail-close-modal" type="button" aria-label="关闭供应商明细弹窗">×</button>
+	              </div>
+	              <form id="supplier-detail-form" class="modal-body">
+	                <input id="supplier-detail-id" type="hidden" />
+	                <div class="form-grid">
+	                  <label class="form-span-2">供应商<input id="supplier-detail-supplier" required placeholder="请输入供应商名称" /></label>
+	                  <label>供应商资质<select id="supplier-detail-qualification"><option>一般纳税人</option><option>小规模纳税人</option><option>个体工商户</option><option>境外供应商</option></select></label>
+	                  <label>账期类型<input id="supplier-detail-payment-term" list="supplier-detail-payment-options" placeholder="如：2月结、月结30天、预付" /><datalist id="supplier-detail-payment-options"><option value="2月结"></option><option value="月结30天"></option><option value="现结"></option><option value="预付"></option></datalist></label>
+	                  <label>开票类型<select id="supplier-detail-invoice-type"><option>专票</option><option>普票</option><option>不开票</option></select></label>
+	                  <label>税率<input id="supplier-detail-tax-rate" inputmode="decimal" placeholder="如：13% 或 0.13" /></label>
+	                </div>
+	              </form>
+	              <div class="modal-foot">
+	                <button class="secondary-button" id="supplier-detail-delete" type="button" hidden>删除</button>
+	                <button class="primary-button" id="supplier-detail-save" type="submit" form="supplier-detail-form">保存</button>
+	              </div>
+	            </article>
+	          </div>
+	        </section>
+	
+	        <section class="view" id="view-purchase">
+          <section class="module-hero">
+            <div>
+              <span>销售预估</span>
+              <h2>销售预测、库存天数与补货建议</h2>
+              <p>按销售与备货表结构读取领星补货建议，销量预测和 FBA 可售天数使用表格公式口径。</p>
+            </div>
+            <div class="hero-actions">
+              <button class="secondary-button" id="sales-forecast-export" type="button">导出表格</button>
+              <button class="primary-button" id="sales-forecast-refresh" type="button">刷新预估</button>
+            </div>
+          </section>
+	          <section class="filters sales-forecast-filters" aria-label="销售预估筛选">
+	            <label>国家<select id="sales-forecast-country" multiple size="3"><option value="">全部国家</option><option value="美国">美国</option><option value="加拿大">加拿大</option><option value="澳洲">澳洲</option></select></label>
+	            <label>店铺<select id="sales-forecast-store" multiple size="4"><option value="">全部店铺</option></select></label>
+	            <label>关键词<input id="sales-forecast-keyword" type="search" placeholder="产品 / MSKU" /></label>
+	          </section>
+          <section class="module-grid">
+            <article class="metric-tile"><span>销量预测</span><strong id="sales-forecast-total">0</strong><small>按当前月份公式汇总</small></article>
+            <article class="metric-tile"><span>FBA在途</span><strong id="sales-forecast-inbound">0</strong><small>补货建议库存口径</small></article>
+            <article class="metric-tile"><span>低库存 SKU</span><strong id="sales-forecast-low-stock">0</strong><small>FBA 可售小于 14 天</small></article>
+            <article class="metric-tile"><span>需补货 SKU</span><strong id="sales-forecast-replenishment">0</strong><small>补货建议大于 0</small></article>
+          </section>
+	          <article class="panel sales-forecast-panel">
+	            <div class="panel-head">
+	              <h2>销售预估明细</h2>
+	              <div class="sales-forecast-panel-actions">
+	                <div class="sales-forecast-view-toggle" role="tablist" aria-label="销售预估视图">
+	                  <button class="active" type="button" data-sales-forecast-view="default">默认</button>
+	                  <button type="button" data-sales-forecast-view="focus">关注</button>
+	                  <button type="button" data-sales-forecast-view="hidden">隐藏</button>
+	                </div>
+	                <span id="sales-forecast-status">等待读取补货建议</span>
+	              </div>
+	            </div>
+	            <div class="table-wrap sales-forecast-table-wrap">
+	              <table class="sales-forecast-table" id="sales-forecast-table">
+	                <thead>
+	                  <tr id="sales-forecast-group-row"></tr>
+	                  <tr id="sales-forecast-head-row"></tr>
+	                </thead>
+	                <tbody id="sales-forecast-table-body"><tr><td colspan="49">等待加载销售预估。</td></tr></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section class="view" id="view-provision">
+          <section class="module-hero">
+            <div>
+              <span>库存计提</span>
+              <h2>FBA在库库龄资产减值看板</h2>
+              <p>按店铺追踪 FBA 在库库龄金额，自动计算资产减值计提：91-180天 40%、181-270天 80%、271天及以上 100%。</p>
+            </div>
+            <div class="hero-actions">
+              <button class="secondary-button" id="inventory-provision-export" type="button">导出文件</button>
+              <button class="primary-button" id="inventory-provision-refresh" type="button">刷新计提</button>
+            </div>
+          </section>
+          <section class="filters inventory-filters" aria-label="库存计提筛选">
+            <label>月份<input id="inventory-provision-date" type="month" /></label>
+            <label>国家<select id="inventory-provision-country" multiple size="3"><option value="">全部国家</option></select></label>
+            <label>店铺<select id="inventory-provision-store" multiple size="4"><option value="">全部店铺</option></select></label>
+            <label>成本计算<select id="inventory-provision-cost-mode"><option value="purchase">采购成本</option><option value="landed">采购成本 + 单位头程费用</option></select></label>
+            <label>MSKU<input id="inventory-provision-keyword" type="search" placeholder="输入 MSKU 或商品名" /></label>
+            <label>Listing负责人<select id="inventory-provision-owner"><option value="">全部负责人</option></select></label>
+            <output class="inventory-snapshot-note" id="inventory-provision-date-note" role="status">当前月份显示实时库存；历史月份读取领星月末库存报表</output>
+          </section>
+          <section class="module-grid inventory-kpi-grid">
+            <article class="metric-tile"><span>FBA在库金额</span><strong id="inventory-total-amount">0</strong><small id="inventory-cost-mode-note">采购成本</small></article>
+            <article class="metric-tile"><span>期末计提余额</span><strong id="inventory-provision-amount">0</strong><small>期末库存计提余额（累计）</small></article>
+            <article class="metric-tile"><span>本月增加计提（当月）</span><strong id="inventory-monthly-provision-amount">0</strong><small>余额较上月增加部分</small></article>
+            <article class="metric-tile"><span>已计提冲回</span><strong id="inventory-reversal-amount">0</strong><small>本期销售/库存减少释放</small></article>
+            <article class="metric-tile"><span>本月计提金额</span><strong id="inventory-net-provision-amount">0</strong><small id="inventory-net-provision-note">利润扣减口径</small></article>
+            <article class="metric-tile inventory-age-kpi"><span>91-180天库存金额</span><strong id="inventory-age-91-180-amount">0</strong><small>40% 计提区间</small></article>
+            <article class="metric-tile inventory-age-kpi"><span>181-270天库存金额</span><strong id="inventory-age-181-270-amount">0</strong><small>80% 计提区间</small></article>
+            <article class="metric-tile inventory-age-kpi"><span>271天及以上库存金额</span><strong id="inventory-age-271-plus-amount">0</strong><small>100% 计提区间</small></article>
+          </section>
+          <output class="inventory-formula-note" id="inventory-net-provision-formula" role="status">
+            2026-04：本月计提金额 = 2026-03 期末库存计提余额 + 本月增加计提（当月） - 已计提冲回；2026-05 及以后：本月计提金额 = 本月增加计提（当月） - 已计提冲回
+          </output>
+          <output class="inventory-snapshot-note inventory-status-note" id="inventory-provision-status" role="status">等待加载</output>
+          <section class="inventory-chart-grid">
+            <article class="panel">
+              <div class="panel-head"><h2>总体库龄分布的时间趋势</h2><span>按月查看各库龄段金额</span></div>
+              <svg id="inventory-age-trend-chart" viewBox="0 0 720 340" role="img" aria-label="总体库龄分布的时间趋势"></svg>
+            </article>
+            <article class="panel">
+              <div class="panel-head"><h2>总体库龄分布</h2><span>按金额占比</span></div>
+              <svg id="inventory-age-donut-chart" viewBox="0 0 520 340" role="img" aria-label="总体库龄分布"></svg>
+            </article>
+            <article class="panel">
+              <div class="panel-head"><h2>各店铺库龄分布</h2><span>按店铺展示，不按 BU</span></div>
+              <svg id="inventory-store-chart" viewBox="0 0 720 340" role="img" aria-label="各店铺库龄分布"></svg>
+            </article>
+          </section>
+          <section class="dual-chart-grid inventory-table-stack">
+            <article class="panel">
+              <div class="panel-head"><h2>库龄明细表</h2><span>按库龄区间汇总金额和计提</span></div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>库龄</th><th>计提比例</th><th>库存金额</th><th>占比</th><th>期末计提余额</th><th>本月增加计提（当月）</th><th>已计提冲回</th><th>本月计提金额</th></tr></thead>
+                  <tbody id="inventory-bucket-table"><tr><td colspan="8">等待加载</td></tr></tbody>
+                </table>
+              </div>
+            </article>
+            <article class="panel">
+              <div class="panel-head"><h2>库存减值明细</h2><span>按 MSKU 展示高风险库存</span></div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>店铺</th><th>国家</th><th>MSKU</th><th>Listing负责人</th><th>库龄</th><th>数量</th><th>单位采购成本</th><th>单位头程费用</th><th id="inventory-unit-cost-head">成本计算单价</th><th>库存金额</th><th>计提比例</th><th>期末计提余额</th><th>本月增加计提（当月）</th><th>已计提冲回</th><th>本月计提金额</th></tr></thead>
+                  <tbody id="inventory-detail-table"><tr><td colspan="15">等待加载</td></tr></tbody>
+                </table>
+              </div>
+            </article>
+          </section>
+        </section>
+
+        <section class="view" id="view-lowfee">
+          <section class="module-hero">
+            <div>
+              <span>低库存费预警</span>
+              <h2>FBA低库存水平费用风险看板</h2>
+              <p>直接读取领星 FBA 库存明细中的亚马逊历史供货天数，低于 42 天开始提前预警，低于 28 天进入红色风险。</p>
+            </div>
+            <button class="primary-button" id="lowfee-refresh" type="button">刷新预警</button>
+          </section>
+          <section class="filters inventory-filters" aria-label="低库存费筛选">
+            <label>日期<input id="lowfee-date" type="date" /></label>
+            <label>国家<select id="lowfee-country" multiple size="3"><option value="">全部国家</option></select></label>
+            <label>店铺<select id="lowfee-store" multiple size="4"><option value="">全部店铺</option></select></label>
+            <label>显示范围<select id="lowfee-only-risk"><option value="1">只看预警</option><option value="0">全部MSKU</option></select></label>
+            <label>FNSKU/MSKU<input id="lowfee-keyword" type="search" placeholder="输入 FNSKU、MSKU 或商品名" /></label>
+          </section>
+          <section class="module-grid">
+            <article class="metric-tile"><span>监控FNSKU</span><strong id="lowfee-msku-count">0</strong><small>FBA库存明细商品</small></article>
+            <article class="metric-tile"><span>预警FNSKU</span><strong id="lowfee-risk-count">0</strong><small>历史供货天数低于42天</small></article>
+            <article class="metric-tile"><span>红色风险</span><strong id="lowfee-high-count">0</strong><small>历史供货天数低于28天</small></article>
+            <article class="metric-tile"><span>平均历史天数</span><strong id="lowfee-band-days">0</strong><small id="lowfee-status">等待加载</small></article>
+          </section>
+          <article class="panel detail-panel">
+            <div class="panel-head">
+              <h2>低库存费预警明细</h2>
+              <span id="lowfee-rule">低于28天红色，低于35天橙色，低于42天浅黄色</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>风险</th>
+                    <th>店铺</th>
+                    <th>国家</th>
+                    <th>FNSKU</th>
+                    <th>MSKU</th>
+                    <th>品名</th>
+                    <th>FBA在库</th>
+                    <th>转库</th>
+                    <th>在途</th>
+                    <th>亚马逊历史供货天数</th>
+                    <th>领星低库存费标记</th>
+                    <th>说明</th>
+                  </tr>
+                </thead>
+                <tbody id="lowfee-table"><tr><td colspan="12">等待加载</td></tr></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section class="view" id="view-guide">
+          <section class="knowledge-doc-shell" aria-label="知识库文档工作台">
+            <aside class="knowledge-doc-sidebar">
+              <div class="knowledge-doc-brand">
+                <span class="knowledge-doc-logo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="M7 8h10M7 12h7M7 16h9"/></svg></span>
+                <div><strong>知识库</strong><small>探嘉 BI 文档中心</small></div>
+              </div>
+              <button class="knowledge-upload-button" type="button" id="knowledge-refresh-button">刷新目录</button>
+              <div class="knowledge-sidebar-title">目录</div>
+              <div class="knowledge-doc-tree" id="knowledge-sidebar-tree">
+                <div class="knowledge-tree-loading">正在读取目录...</div>
+              </div>
+            </aside>
+            <main class="knowledge-doc-main">
+              <header class="knowledge-doc-toolbar">
+                <div class="knowledge-toolbar-title">
+                  <h1>知识库</h1>
+                  <p>目录 / 文件夹 / 文档</p>
+                </div>
+                <label class="knowledge-search-box">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.35-4.35"/><circle cx="11" cy="11" r="7"/></svg>
+                  <input id="knowledge-search" type="search" autocomplete="off" placeholder="搜索" />
+                </label>
+                <div class="knowledge-toolbar-actions">
+                  <button class="ghost-button" type="button" id="knowledge-toolbar-refresh">刷新</button>
+                  <button class="primary-button" type="button" id="knowledge-open-admin-upload">新增文档</button>
+                </div>
+              </header>
+              <section class="knowledge-file-board">
+                <div class="knowledge-file-titlebar">
+                  <div>
+                    <h2 id="knowledge-current-title">知识库目录</h2>
+                    <p id="knowledge-current-path">知识库 / 全部目录</p>
+                  </div>
+                  <span id="knowledge-library-status">正在读取外部文档...</span>
+                </div>
+                <div class="knowledge-file-table" role="table" aria-label="知识库文件列表">
+                  <div class="knowledge-file-row knowledge-file-header" role="row">
+                    <span role="columnheader">名称</span>
+                    <span role="columnheader">所有者</span>
+                    <span role="columnheader">更新时间</span>
+                    <span role="columnheader"></span>
+                  </div>
+                  <div id="knowledge-file-rows">
+                    <div class="knowledge-table-empty">正在读取知识库目录...</div>
+                  </div>
+                </div>
+              </section>
+              <section class="knowledge-embed-panel" id="knowledge-embed-panel" hidden>
+                <header>
+                  <div>
+                    <span>外部文档</span>
+                    <h2 id="knowledge-embed-title">文档预览</h2>
+                    <p id="knowledge-embed-url">等待打开文档</p>
+                  </div>
+                  <div class="knowledge-embed-actions">
+                    <a id="knowledge-embed-external" href="#" target="_blank" rel="noopener noreferrer">新窗口打开</a>
+                    <button type="button" id="knowledge-embed-close">关闭</button>
+                  </div>
+                </header>
+                <div class="knowledge-embed-frame-wrap">
+                  <div class="knowledge-embed-note">
+                    如果页面空白，通常是钉钉或外部网站禁止被嵌入 BI；可以点右上角“新窗口打开”查看原文。
+                  </div>
+                  <iframe id="knowledge-embed-frame" title="知识库外部文档预览" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+                </div>
+              </section>
+              <div class="modal-backdrop" id="knowledge-document-modal" hidden>
+                <article class="knowledge-document-modal" role="dialog" aria-modal="true" aria-labelledby="knowledge-document-modal-title" aria-describedby="knowledge-admin-status">
+                  <div class="modal-head">
+                    <h2 id="knowledge-document-modal-title">新增知识库文档</h2>
+                    <button class="modal-close-button" id="knowledge-document-close-modal" type="button" aria-label="关闭知识库文档弹窗">×</button>
+                  </div>
+                  <form class="modal-body knowledge-document-form" id="knowledge-document-form">
+                    <div class="modal-tip" id="knowledge-admin-status">录入标题、目录、文件夹和外部文档链接</div>
+                    <div class="knowledge-modal-grid">
+                      <label>文章标题
+                        <input id="knowledge-document-title" type="text" autocomplete="off" placeholder="例如 广告投放 SOP" required />
+                      </label>
+                      <label>上传目录
+                        <select id="knowledge-document-category">
+                          <option value="operations">运营</option>
+                          <option value="product">产品</option>
+                          <option value="enterprise">企业内部</option>
+                        </select>
+                      </label>
+                      <label>文件夹
+                        <input id="knowledge-document-folder" type="text" list="knowledge-folder-options" autocomplete="off" placeholder="例如 广告投放" required />
+                        <datalist id="knowledge-folder-options"></datalist>
+                      </label>
+                      <label>外部文档链接
+                        <input id="knowledge-document-url" type="url" autocomplete="off" placeholder="https://alidocs.dingtalk.com/..." required />
+                      </label>
+                    </div>
+                    <section class="knowledge-modal-list">
+                      <div class="panel-head"><h2>已录入文档</h2><span>删除只移除 BI 记录，不删除外部原文档</span></div>
+                      <div class="table-wrap knowledge-admin-table-wrap">
+                        <table>
+                          <thead><tr><th>目录</th><th>文件夹</th><th>标题</th><th>链接</th><th>更新时间</th><th>操作</th></tr></thead>
+                          <tbody id="knowledge-admin-table"><tr><td colspan="6">正在读取知识库文档...</td></tr></tbody>
+                        </table>
+                      </div>
+                    </section>
+                  </form>
+                  <div class="modal-foot">
+                    <button class="ghost-button" id="knowledge-document-reset" type="button">清空</button>
+                    <button class="primary-button" id="knowledge-document-save" type="submit" form="knowledge-document-form">上传文档</button>
+                  </div>
+                </article>
+              </div>
+            </main>
+          </section>
+        </section>
+
+        <section class="view" id="view-admin">
+          <section class="module-hero">
+            <div>
+              <span>后台管理</span>
+              <h2>账号密码、权限、目标与数据源配置</h2>
+              <p>可以在图形界面新增、修改、禁用和删除登录账号，环境变量账号保留为初始管理员入口。</p>
+            </div>
+          </section>
+          <section class="admin-grid">
+            <article class="panel admin-account-panel">
+              <div class="panel-head"><h2>账号密码管理</h2><span id="admin-account-status">新增、改密、启用/禁用、删除</span></div>
+              <form class="form-grid admin-account-form" id="admin-account-form">
+                <label>账号
+                  <input id="admin-account-username" type="text" autocomplete="off" placeholder="例如 sales01" required />
+                </label>
+                <label>显示名称
+                  <input id="admin-account-display-name" type="text" autocomplete="off" placeholder="例如 销售主管" />
+                </label>
+                <label>密码
+                  <input id="admin-account-password" type="password" autocomplete="new-password" placeholder="新增必填，修改可留空" />
+                </label>
+                <label>角色
+                  <select id="admin-account-role">
+                    <option value="子账号">子账号</option>
+                    <option value="主账号">主账号</option>
+                    <option value="系统管理员">系统管理员</option>
+                  </select>
+                </label>
+                <label>状态
+                  <select id="admin-account-status-select">
+                    <option value="active">启用</option>
+                    <option value="disabled">禁用</option>
+                  </select>
+                </label>
+                <div class="admin-account-actions">
+                  <button class="primary-button" id="admin-account-save" type="submit">新增账号</button>
+                  <button class="secondary-button" id="admin-account-reset" type="button">清空</button>
+                </div>
+              </form>
+              <div class="table-wrap admin-account-table-wrap">
+                <table class="data-table">
+                  <thead><tr><th>账号</th><th>显示名称</th><th>角色</th><th>状态</th><th>来源</th><th>操作</th></tr></thead>
+                  <tbody id="admin-account-table"><tr><td colspan="6">正在读取账号...</td></tr></tbody>
+                </table>
+              </div>
+            </article>
+            <article class="panel admin-account-panel">
+              <div class="panel-head"><h2>钉钉扫码授权</h2><span id="dingtalk-auth-status">新员工首次扫码后会进入待审核</span></div>
+              <div class="table-wrap admin-account-table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>钉钉用户</th>
+                      <th>手机号</th>
+                      <th>状态</th>
+                      <th>角色</th>
+                      <th>最近登录</th>
+                      <th>身份标识</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="dingtalk-auth-table"><tr><td colspan="7">正在读取钉钉授权...</td></tr></tbody>
+                </table>
+              </div>
+            </article>
+            <article class="panel admin-account-panel">
+              <div class="panel-head"><h2>AI API 管理</h2><span id="admin-ai-status">读取当前 AI 服务商</span></div>
+              <form class="form-grid admin-account-form" id="admin-ai-form">
+                <label>ModelScope 模型
+                  <input id="admin-ai-modelscope-model" type="text" placeholder="deepseek-ai/DeepSeek-V4-Flash" />
+                </label>
+                <div class="admin-account-actions">
+                  <button class="primary-button" id="admin-ai-save" type="submit">保存模型</button>
+                  <button class="secondary-button" id="admin-ai-test" type="button">测试连接</button>
+                </div>
+              </form>
+              <div class="config-list" id="admin-ai-provider-list"></div>
+            </article>
+            <article class="panel"><div class="panel-head"><h2>用户与角色</h2><span>角色规划与查看范围</span></div><div id="admin-users" class="config-list"></div></article>
+            <article class="panel"><div class="panel-head"><h2>店铺权限</h2><span>控制用户可查看的店铺和站点</span></div><div id="admin-shops" class="config-list"></div></article>
+            <article class="panel"><div class="panel-head"><h2>目标配置</h2><span>月目标、销售目标、利润目标</span></div><div id="admin-targets" class="config-list"></div></article>
+          </section>
+        </section>
+
+        <section class="view" id="view-budget">
+          <section class="module-hero">
+            <div>
+              <span>预算目标</span>
+              <h2>店铺维度预算导入与完成度看板</h2>
+              <p>上传月度预算模板后，系统会解析店铺目标，用于销售周会复盘的目标对比。</p>
+            </div>
+          </section>
+          <section class="filter-toolbar budget-toolbar">
+            <div class="month-multi-select">
+              <div class="month-picker-line">
+                <input id="budget-month-picker" type="month" />
+                <button class="ghost-button" id="budget-add-month-button" type="button">添加月份</button>
+              </div>
+              <div class="month-chip-list" id="budget-month-chip-list">
+                <span class="empty-chip">最多选择 12 个月</span>
+              </div>
+            </div>
+            <select id="budget-platform-filter"><option value="">销售平台</option><option>Amazon</option><option>Tik Tok</option></select>
+            <input id="budget-store-filter" type="search" placeholder="销售店铺" />
+            <select id="budget-status-filter"><option value="">状态</option><option value="已解析">已解析</option><option value="等待解析">等待解析</option></select>
+            <input id="budget-keyword-filter" type="search" placeholder="关键词" />
+            <button class="primary-button" id="budget-query-button" type="button">查询</button>
+            <button class="ghost-button" id="budget-reset-button" type="button">重置</button>
+          </section>
+          <article class="panel budget-upload-panel">
+            <div class="panel-head">
+              <h2>预算目标上传</h2>
+              <span>支持上传月度预算模板 .xlsx，自动汇总到店铺维度</span>
+            </div>
+            <div class="budget-upload-box">
+              <label class="budget-upload-month">
+                <span>预算月份</span>
+                <input id="budget-upload-month" type="month" />
+              </label>
+              <label class="file-picker">
+                <input id="budget-file-input" type="file" accept=".xlsx" />
+                <span id="budget-file-name"><strong>选择预算模板</strong><small>点击选择，或拖拽 .xlsx 文件到这里后点击上传预算</small></span>
+              </label>
+              <button class="primary-button" id="budget-upload-button" type="button">上传预算</button>
+              <span class="upload-status" id="budget-upload-status">未选择文件</span>
+            </div>
+            <div class="config-list budget-upload-list" id="budget-upload-list"></div>
+          </article>
+          <section class="module-grid budget-summary-grid">
+            <article class="metric-tile"><span>预算店铺</span><strong id="budget-store-count">0</strong><small>已解析模板</small></article>
+            <article class="metric-tile"><span>销售目标</span><strong id="budget-sales-total">0</strong><small>店铺维度汇总</small></article>
+            <article class="metric-tile"><span>广告预算</span><strong id="budget-ads-total">0</strong><small>ACOS 目标联动</small></article>
+            <article class="metric-tile"><span>利润目标</span><strong id="budget-profit-total">0</strong><small>按汇总页原币</small></article>
+          </section>
+          <article class="panel detail-panel">
+            <div class="panel-head">
+              <h2>店铺预算</h2>
+              <span id="budget-table-count">共 0 条数据</span>
+            </div>
+            <div class="table-scroll table-wrap budget-target-table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>月份</th>
+                    <th>平台</th>
+                    <th>店铺</th>
+                    <th>站点</th>
+                    <th>状态</th>
+                    <th>SKU数</th>
+                    <th>本月销量</th>
+                    <th>销售目标(原币)</th>
+                    <th>广告预算(原币)</th>
+                    <th>目标ACOS</th>
+                    <th>退款目标(原币)</th>
+                    <th>利润目标(原币)</th>
+                    <th>利润率目标</th>
+                  </tr>
+                </thead>
+                <tbody id="budget-target-table"></tbody>
+              </table>
+            </div>
+          </article>
+          <article class="panel detail-panel">
+            <div class="panel-head">
+              <h2>MSKU预算明细</h2>
+              <span id="budget-msku-table-count">共 0 条数据</span>
+            </div>
+            <div class="table-scroll table-wrap budget-target-table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>月份</th>
+                    <th>平台</th>
+                    <th>店铺</th>
+                    <th>站点</th>
+                    <th>状态</th>
+                    <th>负责人</th>
+                    <th>MSKU</th>
+                    <th>ASIN</th>
+                    <th>本月销量</th>
+                    <th>销售目标(原币)</th>
+                    <th>广告预算(原币)</th>
+                    <th>目标ACOS</th>
+                    <th>利润目标(原币)</th>
+                    <th>利润率目标</th>
+                  </tr>
+                </thead>
+                <tbody id="budget-msku-target-table"></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section class="view" id="view-ai-image-workflow">
+          <section class="module-hero ai-workflow-hero">
+            <div>
+              <span>AI 图片工作流</span>
+              <h2>产品信息与文案优化</h2>
+              <p>第一步先完成产品资料整理和亚马逊 Listing 文案，再继续后续图片方案。</p>
+            </div>
+            <span class="ai-copy-status" id="ai-workflow-status">等待生成文案</span>
+          </section>
+
+          <section class="ai-stage-nav" aria-label="AI 工作流步骤">
+            <div class="active"><i>1</i><span><strong>产品信息与文案</strong><small>当前步骤</small></span></div>
+            <b>›</b>
+            <div><i>2</i><span><strong>生成方案</strong><small>下一步</small></span></div>
+            <b>›</b>
+            <div><i>3</i><span><strong>图片生成</strong><small>待搭建</small></span></div>
+            <b>›</b>
+            <div><i>4</i><span><strong>视频 / A+ 设计</strong><small>待搭建</small></span></div>
+          </section>
+
+          <section class="ai-copy-workspace">
+            <article class="ai-copy-input-panel">
+              <div class="ai-copy-panel-head">
+                <div><span>1</span><section><h3>产品信息</h3><p>填写必填资料后生成优化文案。</p></section></div>
+                <button type="button" id="ai-load-example">恢复当前模板</button>
+              </div>
+              <div class="ai-copy-form">
+                <label><span>产品线 <em>*</em></span>
+                  <select id="ai-product-line" required>
+                    <option value="soccer-robots">双人对战遥控足球机器人</option>
+                    <option value="rc-car">遥控车</option>
+                    <option value="rc-boat">遥控船</option>
+                    <option value="bubble-machine">泡泡机玩具</option>
+                    <option value="water-table-sink">过家家水池玩具（Water Table Sink）</option>
+                  </select>
+                </label>
+                <label><span>产品名称 <em>*</em></span><input id="ai-product-name" type="text" required placeholder="例如：1:16 高速遥控越野车" /></label>
+                <div class="ai-product-images-field">
+                  <div class="ai-product-images-heading">
+                    <span>产品图片</span>
+                    <small id="ai-product-image-count">0 / 3 张</small>
+                  </div>
+                  <input id="ai-product-images" class="ai-product-image-input" type="file" accept="image/jpeg,image/png,image/webp" multiple />
+                  <button class="ai-product-image-upload" id="ai-product-image-upload" type="button">
+                    <span class="ai-product-image-upload-icon" aria-hidden="true">+</span>
+                    <strong>上传产品图片</strong>
+                    <small>选填，最多 3 张；AI 将读取外观、配件和颜色。</small>
+                  </button>
+                  <div class="ai-product-image-previews" id="ai-product-image-previews"></div>
+                  <p class="ai-product-image-note" id="ai-product-image-note">建议上传正面、侧面和配件图，单张图片不超过 10MB。</p>
+                </div>
+                <div class="ai-copy-form-row">
+                  <label><span>产品类目 <em>*</em></span><input id="ai-product-category" type="text" required placeholder="例如：Remote Control Cars" /></label>
+                  <label><span>目标站点 <em>*</em></span>
+                    <select id="ai-target-market" required>
+                      <option value="US">美国站 · 英文</option>
+                    </select>
+                  </label>
+                </div>
+                <label><span>目标人群 <em>*</em></span><input id="ai-target-audience" type="text" required placeholder="例如：6-12岁儿童、青少年和亲子遥控爱好者" /></label>
+                <label><span>使用场景 <em>*</em></span><textarea id="ai-use-scenes" rows="3" required placeholder="每行一个使用场景"></textarea></label>
+                <label><span>核心功能 <em>*</em></span><textarea id="ai-core-features" rows="5" required placeholder="每行一个核心功能"></textarea><small>建议填写 3-5 个最重要的购买理由。</small></label>
+                <label><span>产品参数 <em>*</em></span><textarea id="ai-product-parameters" rows="5" required placeholder="每行一个产品参数"></textarea><small id="ai-parameter-hint">建议填写比例、速度、遥控距离、电池和适用地形。</small></label>
+                <label><span>竞品链接 <em>*</em></span><textarea id="ai-competitor-reference" rows="2" required placeholder="每行一个 Amazon 竞品链接"></textarea></label>
+                <label><span>文案风格 <em>*</em></span>
+                  <select id="ai-visual-style" required>
+                    <option value="clear">清晰专业</option>
+                    <option value="energetic">活力玩具</option>
+                    <option value="premium">高级品牌</option>
+                    <option value="parent">亲子友好</option>
+                  </select>
+                </label>
+              </div>
+              <div class="ai-copy-form-actions">
+                <button class="primary-button" id="ai-generate-workflow" type="button">生成优化文案</button>
+                <button class="secondary-button" id="ai-reset-workflow" type="button">清空参数</button>
+              </div>
+            </article>
+
+            <article class="ai-listing-output-panel">
+              <div class="ai-copy-panel-head ai-output-head">
+                <div><span>2</span><section><h3>文案产出</h3><p>按亚马逊 Listing 结构生成，可逐项复制和修改。</p></section></div>
+                <button type="button" id="ai-copy-all-listing">复制全部</button>
+              </div>
+              <div class="ai-listing-results">
+                <div class="ai-title-policy">
+                  <strong>2026年7月27日起新规</strong>
+                  <span>非媒介类商品的新标题最多 75 个字符（含空格）；商品亮点最多 125 个字符，可搜索并显示在标题下方。</span>
+                </div>
+                <section class="ai-listing-block">
+                  <header><div><i>01</i><h4>旧标题</h4><span class="ai-policy-badge ai-policy-badge-old">当前规则</span><small id="ai-old-title-count">0 / 200</small></div><button type="button" data-ai-listing-copy="oldTitle">复制</button></header>
+                  <textarea id="ai-listing-old-title" rows="3" maxlength="200" placeholder="现行标题，最多 200 个字符"></textarea>
+                </section>
+                <section class="ai-listing-block">
+                  <header><div><i>02</i><h4>新标题</h4><span class="ai-policy-badge">7月27日起</span><small id="ai-title-count">0 / 75</small></div><button type="button" data-ai-listing-copy="title">复制</button></header>
+                  <textarea id="ai-listing-title" rows="2" maxlength="75" placeholder="最多 75 个字符（含空格）"></textarea>
+                </section>
+                <section class="ai-listing-block">
+                  <header><div><i>03</i><h4>商品亮点</h4><span class="ai-policy-badge">新增字段</span><small id="ai-highlights-count">0 / 125</small></div><button type="button" data-ai-listing-copy="highlights">复制</button></header>
+                  <textarea id="ai-listing-highlights" rows="3" maxlength="125" placeholder="补充材质、核心差异或建议使用场景，最多 125 个字符"></textarea>
+                </section>
+                <section class="ai-listing-block">
+                  <header><div><i>04</i><h4>五点描述</h4><small>5 条</small></div><button type="button" data-ai-listing-copy="bullets">复制</button></header>
+                  <div class="ai-bullet-results" id="ai-listing-bullets"><div class="ai-listing-empty">填写左侧产品信息后生成五点描述</div></div>
+                </section>
+                <section class="ai-listing-block">
+                  <header><div><i>05</i><h4>产品描述</h4><small id="ai-description-count">0 字符</small></div><button type="button" data-ai-listing-copy="description">复制</button></header>
+                  <textarea id="ai-listing-description" rows="10" placeholder="生成后可在这里继续修改"></textarea>
+                </section>
+                <section class="ai-listing-block">
+                  <header><div><i>06</i><h4>后台搜索关键词</h4><small id="ai-keywords-count">0 / 249 bytes</small></div><button type="button" data-ai-listing-copy="keywords">复制</button></header>
+                  <textarea id="ai-listing-keywords" rows="4" placeholder="生成后可在这里继续修改"></textarea>
+                </section>
+              </div>
+            </article>
+          </section>
+        </section>
+
+        <section class="view" id="view-review-rating">
+          <section class="module-hero">
+            <div>
+              <span>review计算</span>
+              <h2>亚马逊 review 计算</h2>
+              <p>按 review 总数、星级占比和目标分数计算当前评分与需补 5 星 review 数。</p>
+            </div>
+            <button class="secondary-button" id="review-rating-reset-button" type="button">清空参数</button>
+          </section>
+          <section class="review-rating-summary">
+            <article class="review-primary-result">
+              <span>核心结果</span>
+              <div class="review-primary-number">
+                <small>预计需要补几个5星</small>
+                <strong id="review-needed-rounded">--</strong>
+                <em id="review-needed-unit"></em>
+              </div>
+              <p id="review-needed-exact">等待计算</p>
+            </article>
+            <div class="review-support-metrics" aria-label="review计算辅助指标">
+              <article><span>当前评分</span><strong id="review-current-score">--</strong><small id="review-current-note">等待输入</small></article>
+              <article><span>目标评分</span><strong id="review-target-score">4.00</strong><small id="review-target-note">目标分</small></article>
+              <article><span>补后评分</span><strong id="review-after-score">--</strong><small id="review-after-note">等待计算</small></article>
+            </div>
+          </section>
+          <section class="review-rating-layout">
+            <article class="panel review-rating-panel">
+              <div class="panel-head"><h2>参数</h2><span class="review-percent-status" id="review-rating-status" aria-live="polite">等待输入</span></div>
+              <div class="form-grid review-rating-inputs">
+                <label>review总数<input id="review-total" type="number" min="0" step="1" placeholder="手填 review 总数" /></label>
+                <label>目标分数<input id="review-target" type="number" min="0" max="5" step="0.01" value="4" /></label>
+              </div>
+              <div class="table-scroll">
+                <table class="data-table review-rating-table">
+                  <thead>
+                    <tr><th>星级</th><th>占比</th><th>review数</th><th>分数贡献</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr data-review-star="5"><td><strong>5 stars</strong></td><td><input class="review-percent-input" data-review-percent="5" type="number" min="0" step="0.01" placeholder="手填" /></td><td id="review-count-5">--</td><td id="review-points-5">--</td></tr>
+                    <tr data-review-star="4"><td><strong>4 stars</strong></td><td><input class="review-percent-input" data-review-percent="4" type="number" min="0" step="0.01" placeholder="手填" /></td><td id="review-count-4">--</td><td id="review-points-4">--</td></tr>
+                    <tr data-review-star="3"><td><strong>3 stars</strong></td><td><input class="review-percent-input" data-review-percent="3" type="number" min="0" step="0.01" placeholder="手填" /></td><td id="review-count-3">--</td><td id="review-points-3">--</td></tr>
+                    <tr data-review-star="2"><td><strong>2 stars</strong></td><td><input class="review-percent-input" data-review-percent="2" type="number" min="0" step="0.01" placeholder="手填" /></td><td id="review-count-2">--</td><td id="review-points-2">--</td></tr>
+                    <tr data-review-star="1"><td><strong>1 stars</strong></td><td><input class="review-percent-input" data-review-percent="1" type="number" min="0" step="0.01" placeholder="手填" /></td><td id="review-count-1">--</td><td id="review-points-1">--</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </article>
+            <article class="panel review-rating-result-panel">
+              <div class="panel-head"><h2>结果</h2><span>Excel公式口径</span></div>
+              <div class="review-result-list">
+                <div><span>占比合计</span><strong id="review-percent-total">0%</strong></div>
+                <div><span>当前加权总分</span><strong id="review-weighted-points">0</strong></div>
+                <div><span>当前 review 总数</span><strong id="review-count-total">0</strong></div>
+                <div><span>补 5 星后总数</span><strong id="review-after-total">--</strong></div>
+              </div>
+              <div class="review-formula-note" id="review-formula-note">-</div>
+            </article>
+          </section>
+        </section>
+
+        <section class="view" id="view-clearance">
+          <section class="module-hero">
+            <div>
+              <span>动销预警</span>
+              <h2>动销毛利预警</h2>
+              <p>按 MSKU 的 FBA 总库存、订单利润里的近 30 天单只平均毛利润，以及采购加头程除以售出件数，筛选近 30 天均毛利为负且库存大于 10 的库存。</p>
+            </div>
+            <div class="hero-actions">
+              <small id="clearance-real-status">未读取真实库存</small>
+              <button class="secondary-button" id="clearance-load-real-button" type="button">刷新数据</button>
+            </div>
+          </section>
+          <section class="filters clearance-rate-panel" aria-label="动销预警筛选">
+            <label>国家<select id="clearance-country-filter" multiple size="3"><option value="">全部国家</option></select></label>
+            <label>店铺<select id="clearance-store-filter" multiple size="4"><option value="">全部店铺</option></select></label>
+            <label>运营<select id="clearance-owner-filter"><option value="">全部运营</option></select></label>
+          </section>
+          <section class="module-grid clearance-kpi-grid" aria-label="动销预警概览">
+            <article class="metric-tile"><span>预警 MSKU</span><strong id="clearance-msku-count">0</strong><small>均毛利为负，库存>10</small></article>
+            <article class="metric-tile"><span>建议清货 MSKU</span><strong id="clearance-daily-cost">0</strong><small id="clearance-daily-cost-cny">均毛利为负，库存>10</small></article>
+            <article class="metric-tile"><span>近30天单只均毛利</span><strong id="clearance-hold-cost">$0</strong><small>按销量加权</small></article>
+            <article class="metric-tile"><span>单只货值</span><strong id="clearance-loss">$0</strong><small>按近30天销量加权</small></article>
+            <article class="metric-tile"><span>库存差额</span><strong id="clearance-delta">$0</strong><small id="clearance-delta-note">按 |均毛利| - 单只货值 加权</small></article>
+          </section>
+          <article class="panel clearance-result-panel">
+            <div class="panel-head">
+              <h2>MSKU 明细对比</h2>
+              <span id="clearance-result-status">等待计算</span>
+            </div>
+            <div class="table-wrap clearance-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>风险</th>
+                    <th>国家</th>
+                    <th>店铺</th>
+                    <th>运营</th>
+                    <th>MSKU</th>
+                    <th>库存</th>
+                    <th>日销</th>
+                    <th>可售天数</th>
+                    <th>近30天均毛利</th>
+                    <th>近7天均毛利</th>
+                    <th>单只货值</th>
+                    <th>差额</th>
+                    <th>货值合计</th>
+                  </tr>
+                </thead>
+                <tbody id="clearance-table"><tr><td colspan="13">正在读取数据。</td></tr></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section class="view" id="view-fba-freight">
+          <section class="module-hero">
+            <div>
+              <span>货代表格</span>
+              <h2>FBA货代发货表格</h2>
+              <p>直接读取领星 FBA 货件 fbaCargo 数据，按货件汇总发货数量并生成货代表格。</p>
+            </div>
+          </section>
+          <article class="panel fba-freight-panel">
+            <div class="panel-head">
+              <h2>货件筛选</h2>
+              <span id="fba-freight-status">等待读取货件</span>
+            </div>
+            <section class="filter-toolbar fba-freight-toolbar">
+              <label>开始日期<input id="fba-freight-start-date" type="date" /></label>
+              <label>结束日期<input id="fba-freight-end-date" type="date" /></label>
+              <label>店铺
+                <select id="fba-freight-sid">
+                  <option value="">全部核心店铺</option>
+                </select>
+              </label>
+              <label>货件单号<input id="fba-freight-shipment-id" placeholder="支持精确搜索" /></label>
+              <label>货件状态
+                <select id="fba-freight-status-filter">
+                  <option value="">全部状态</option>
+                  <option value="WORKING">WORKING</option>
+                  <option value="READY_TO_SHIP">READY_TO_SHIP</option>
+                  <option value="SHIPPED">SHIPPED</option>
+                  <option value="IN_TRANSIT">IN_TRANSIT</option>
+                  <option value="DELIVERED">DELIVERED</option>
+                  <option value="CHECKED_IN">CHECKED_IN</option>
+                  <option value="RECEIVING">RECEIVING</option>
+                  <option value="CLOSED">CLOSED</option>
+                  <option value="CANCELLED">CANCELLED</option>
+                </select>
+              </label>
+              <button class="secondary-button" id="fba-freight-refresh" type="button">读取货件</button>
+              <button class="secondary-button" id="fba-freight-export" type="button">生成表格</button>
+              <button class="primary-button" id="fba-freight-batch-convert" type="button">批量转表格</button>
+            </section>
+            <section class="metric-grid fba-freight-summary">
+              <article class="metric-tile"><span>货件数</span><strong id="fba-freight-count">0</strong><small>当前筛选</small></article>
+              <article class="metric-tile"><span>发货数量</span><strong id="fba-freight-quantity">0</strong><small>按 item_list 汇总</small></article>
+              <article class="metric-tile"><span>店铺数</span><strong id="fba-freight-store-count">0</strong><small>去重 SID</small></article>
+            </section>
+            <div class="table-shell fba-freight-table-shell">
+              <table class="data-table fba-freight-table">
+                <thead>
+                  <tr>
+                    <th><input id="fba-freight-select-all" type="checkbox" aria-label="全选货件" /></th>
+                    <th>国家</th>
+                    <th>店铺</th>
+                    <th>发货产品图片</th>
+                    <th>货件名称</th>
+                    <th>货件单号</th>
+                    <th>发货数量</th>
+                    <th>货件状态</th>
+                    <th>物流中心编码</th>
+                    <th>创建时间</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="fba-freight-table"><tr><td colspan="11">请选择条件后读取货件。</td></tr></tbody>
+              </table>
+            </div>
+          </article>
+          <div class="modal-backdrop" id="fba-freight-detail-modal" hidden>
+            <article class="fba-freight-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="fba-freight-detail-title">
+              <div class="modal-title-row">
+                <h2 id="fba-freight-detail-title">货件详情</h2>
+                <button class="modal-close-button" id="fba-freight-detail-close" type="button" aria-label="关闭货件详情弹窗">×</button>
+              </div>
+              <div class="fba-freight-detail-content" id="fba-freight-detail-content"></div>
+            </article>
+          </div>
+          <div class="modal-backdrop" id="fba-freight-template-modal" hidden>
+            <article class="fba-forwarder-template-dialog" role="dialog" aria-modal="true" aria-labelledby="fba-freight-template-title" aria-describedby="fba-freight-template-hint">
+              <div class="modal-head">
+                <h2 id="fba-freight-template-title">选择货代模板</h2>
+                <button class="modal-close-button" id="fba-freight-template-close" type="button" aria-label="关闭货代模板弹窗">×</button>
+              </div>
+              <div class="modal-body">
+                <label class="fba-forwarder-template-field">货代模板
+                  <select id="fba-freight-template-select">
+                    <option value="">请选择货代模板</option>
+                  </select>
+                </label>
+                <p class="modal-tip" id="fba-freight-template-hint">请选择模板后生成货代表格。</p>
+              </div>
+              <div class="modal-foot">
+                <button class="secondary-button" id="fba-freight-template-cancel" type="button">取消</button>
+                <button class="primary-button" id="fba-freight-template-confirm" type="button" disabled>生成表格</button>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="view-fba">
+          <section class="module-hero">
+            <div>
+              <span>FBA刷仓</span>
+              <h2>刷仓任务看板</h2>
+              <p>按状态管理自动刷仓任务。命中目标仓后确认货件方案并发送钉钉提醒，未命中自动取消并等待下一轮。</p>
+            </div>
+          </section>
+          <article class="panel fba-task-board-panel">
+            <div class="fba-board-head">
+              <div><h2>任务列表</h2><span id="fba-board-count">0 个任务</span></div>
+              <div class="fba-board-actions">
+                <button class="primary-button" id="fba-open-task-modal-button" type="button">新建任务</button>
+                <input id="fba-task-search" placeholder="搜索店铺 / 仓库 / MSKU" />
+                <button class="secondary-button" id="fba-refresh-tasks-button" type="button">刷新</button>
+              </div>
+            </div>
+	            <div class="fba-status-tabs" id="fba-status-tabs">
+	              <button class="status-tab active" type="button" data-fba-filter="all">全部</button>
+	              <button class="status-tab" type="button" data-fba-filter="history">历史</button>
+	              <button class="status-tab" type="button" data-fba-filter="completed">已完成</button>
+	              <button class="status-tab" type="button" data-fba-filter="running">进行中</button>
+	              <button class="status-tab" type="button" data-fba-filter="pending">待启动</button>
+	              <button class="status-tab" type="button" data-fba-filter="failed">启动失败</button>
+	            </div>
+	            <div class="fba-queue-panel" id="fba-queue-panel" hidden></div>
+	            <div class="fba-board-groups" id="fba-board-groups"><div class="empty-state fba-loading-state">正在读取刷仓任务...</div></div>
+	          </article>
+	          <article class="panel fba-result-panel">
+	            <div class="panel-head"><h2>最近60次任务执行结果</h2><span id="fba-status">等待加载</span></div>
+	            <div class="table-scroll">
+	              <table class="data-table">
+	                <thead><tr><th>国家</th><th>店铺名</th><th>MSKU</th><th>FBA仓库代码</th><th>操作人</th><th>运行时间</th><th>货件名称</th><th>数量</th><th>状态</th></tr></thead>
+	                <tbody id="fba-warehouse-table"><tr><td colspan="9">正在读取最近任务执行结果...</td></tr></tbody>
+	              </table>
+	            </div>
+	            <div class="fba-result-pagination" id="fba-result-pagination"></div>
+	          </article>
+          <div class="modal-backdrop" id="fba-task-modal" hidden>
+            <article class="fba-task-modal" role="dialog" aria-modal="true" aria-labelledby="fba-task-modal-title">
+              <div class="modal-head">
+	                <h2 id="fba-task-modal-title">新建刷仓任务</h2>
+                <button class="modal-close-button" id="fba-close-task-modal-button" type="button" aria-label="关闭刷仓任务弹窗">×</button>
+              </div>
+              <div class="modal-body">
+                <div class="form-grid">
+                  <div class="form-field form-span-2">
+                    <span>店铺单选</span>
+                    <div class="multi-select" id="fba-shop-picker">
+                      <button class="multi-select-button" id="fba-shop-button" type="button">tandanbo-CA · 加拿大</button>
+                      <div class="multi-select-menu" id="fba-shop-menu" hidden>
+                        <input id="fba-shop-search" placeholder="搜索店铺 / 国家 / SID" />
+                        <div class="multi-select-options" id="fba-shop-options"></div>
+                      </div>
+                    </div>
+                  </div>
+                  <label>目标 FBA 仓库<input id="fba-target-warehouse" list="fba-target-warehouse-options" placeholder="可选择或手填仓库前缀，如 MIT / GEU / POC / TCY" /><datalist id="fba-target-warehouse-options"></datalist></label>
+                  <label>FBA货件名<input id="fba-plan-name" maxlength="35" required placeholder="请输入 FBA货件名，最多35个字符" /></label>
+                  <div class="form-field form-span-2">
+                    <span>MSKU搜索</span>
+                    <div class="search-row msku-search">
+                      <input id="fba-msku" value="CAMD-LEGBLUE-GM" autocomplete="off" placeholder="输入 MSKU / ASIN / SKU，可模糊搜索" />
+                      <div class="msku-suggest-panel" id="fba-msku-suggest" hidden></div>
+                      <select id="fba-msku-match"><option value="fuzzy">模糊搜索</option><option value="exact">精确搜索</option></select>
+                      <button class="secondary-button" id="fba-load-mskus-button" type="button">刷新MSKU</button>
+                    </div>
+                    <div class="search-results" id="fba-msku-results">选择店铺后加载 MSKU。</div>
+                  </div>
+                  <label>箱数<input id="fba-box-count" type="number" min="1" value="1" /></label>
+                  <label>装箱数量<input id="fba-pack-quantity" type="number" min="1" readonly placeholder="选择 MSKU 后自动带出" /></label>
+                  <label>发货数量<input id="fba-quantity" type="number" min="1" readonly placeholder="箱数 × 装箱数量" /></label>
+                  <label>外箱长(cm)<input id="fba-box-length" type="number" min="0" step="0.01" placeholder="ERP缺失时手填" /></label>
+                  <label>外箱宽(cm)<input id="fba-box-width" type="number" min="0" step="0.01" placeholder="ERP缺失时手填" /></label>
+                  <label>外箱高(cm)<input id="fba-box-height" type="number" min="0" step="0.01" placeholder="ERP缺失时手填" /></label>
+                  <label>外箱重量(kg)<input id="fba-box-weight" type="number" min="0" step="0.01" placeholder="ERP缺失时手填" /></label>
+                  <div class="form-field form-span-2"><small id="fba-box-spec-status">选择 MSKU 后自动读取 ERP 产品管理里的外箱规格和外箱实重；缺失时手填并保存为模板。</small></div>
+                  <label>分仓方式<select id="fba-position-type"><option value="1" selected>先装箱再分仓</option><option value="2">先分仓再装箱</option></select></label>
+                  <label>发货时间<input id="fba-ship-date" type="date" /></label>
+                  <label>送达时间<input id="fba-delivery-date" type="date" /></label>
+                  <label>配送模式<select id="fba-shipping-mode"><option value="FREIGHT_LTL" selected>零担/整车 LTL/FTL</option><option value="GROUND_SMALL_PARCEL">小包裹快递 SPD</option></select></label>
+                  <label>承运人类型<select id="fba-shipping-solution"><option value="USE_YOUR_OWN_CARRIER" selected>其他承运人</option><option value="AMAZON_PARTNERED_CARRIER">亚马逊合作承运人</option></select></label>
+                  <label class="form-span-2">运输方式<select id="fba-transportation-keyword"><option value="海运" selected>海运</option><option value="卡派">卡派</option><option value="UPS">UPS</option><option value="其他">其他</option></select></label>
+                  <div class="form-field form-span-2"><small>默认发货时间为今天起 10 天后，送达时间为发货日起 10 天后；系统会从领星返回的可选承运方式和送达窗口中按这些日期自动选择。</small></div>
+                  <div class="form-field form-span-2">
+                    <span>任务选项</span>
+                    <div class="task-schedule-options">
+                      <label class="toggle-row"><input id="fba-schedule-enabled" type="checkbox" checked /><span>是否定时</span></label>
+                      <div class="notification-policy-group" role="radiogroup" aria-label="钉钉通知">
+                        <span>钉钉通知</span>
+                        <label><input type="radio" name="fba-notification-policy" value="matched" checked />命中后通知</label>
+                        <label><input type="radio" name="fba-notification-policy" value="all" />全部通知</label>
+                        <label><input type="radio" name="fba-notification-policy" value="none" />不通知</label>
+                      </div>
+                      <label>任务间隔<select id="fba-task-interval"><option value="20">20分钟</option><option value="30">30分钟</option><option value="40">40分钟</option><option value="50">50分钟</option><option value="60">60分钟</option></select></label>
+                    </div>
+                    <div class="schedule-effective-row">
+                      <span>生效时间</span>
+                      <input id="fba-active-start-date" type="date" />
+                      <em>~</em>
+                      <input id="fba-active-end-date" type="date" />
+                    </div>
+                    <div class="schedule-time-row">
+                      <span>定时设置</span>
+                      <input id="fba-start-time" type="time" value="00:00" />
+                      <span>~</span>
+                      <input id="fba-end-time" type="time" value="23:59" />
+                      <small>默认全天运行，按任务间隔自动刷仓。</small>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="modal-foot">
+                <button class="secondary-button" id="fba-run-test-button" type="button">测试刷仓</button>
+                <button class="primary-button" id="fba-add-task-button" type="button">确认新建</button>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="view-sync">
+          <section class="module-hero">
+            <div>
+              <span>同步中心</span>
+              <h2>领星数据同步、日志与异常重试</h2>
+              <p>当前服务器 IP 已加入领星白名单，后续配置 AppId/AppSecret 后切换到真实同步。</p>
+            </div>
+            <button class="primary-button" id="manual-sync-button">手动同步</button>
+          </section>
+          <section class="module-grid">
+            <article class="metric-tile"><span>同步频率</span><strong id="sync-interval">12 小时</strong><small>半天同步一次</small></article>
+            <article class="metric-tile"><span>数据源</span><strong id="sync-provider">待检查</strong><small>应显示 lingxing</small></article>
+            <article class="metric-tile"><span>最近成功</span><strong id="sync-last-success">-</strong><small>同步完成时间</small></article>
+            <article class="metric-tile"><span>运行状态</span><strong id="sync-running">-</strong><small>任务是否运行中</small></article>
+          </section>
+          <article class="panel">
+            <div class="panel-head"><h2>同步日志</h2><span>接口、状态、错误信息</span></div>
+            <div class="config-list" id="sync-log"></div>
+          </article>
+          <article class="panel">
+            <div class="panel-head"><h2>领星店铺</h2><span id="lingxing-shop-count">等待同步</span></div>
+            <div class="table-scroll">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>领星店铺</th>
+                    <th>国家/站点</th>
+                    <th>SID</th>
+                    <th>状态</th>
+                    <th>BI 显示建议</th>
+                  </tr>
+                </thead>
+                <tbody id="lingxing-shop-table"></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+      </main>
+    </div>
+    <script>
+      window.__tanjiaBasicNavigationReady = true;
+      (function () {
+        var source = document.querySelector("#data-source");
+        var note = document.querySelector("#data-source-note");
+        var card = document.querySelector("#sidebar-sync-card");
+        var topbarState = document.querySelector("#topbar-sync-state");
+        var topbarTime = document.querySelector("#topbar-sync-time");
+        var topbarCard = document.querySelector("#topbar-sync-card");
+        var syncToneClasses = ["sync-success", "sync-error", "sync-running", "sync-pending"];
+        function shortSyncTime(value) {
+          if (!value) return "暂无记录";
+          var parsed = new Date(value);
+          if (!Number.isNaN(parsed.getTime())) {
+            return String(parsed.getMonth() + 1).padStart(2, "0") + "/" + String(parsed.getDate()).padStart(2, "0") + " " + String(parsed.getHours()).padStart(2, "0") + ":" + String(parsed.getMinutes()).padStart(2, "0");
+          }
+          return String(value).length > 12 ? String(value).slice(0, 12) : String(value);
+        }
+        function setSyncTone(element, tone) {
+          if (!element) return;
+          syncToneClasses.forEach(function (className) {
+            element.classList.remove(className);
+          });
+          element.classList.add(tone || "sync-pending");
+        }
+        function setSyncCard(status, time, tone) {
+          if (source) source.textContent = status;
+          if (note) note.textContent = shortSyncTime(time || "暂无记录");
+          if (topbarState) topbarState.textContent = status;
+          if (topbarTime) topbarTime.textContent = shortSyncTime(time || "暂无记录");
+          setSyncTone(card, tone);
+          setSyncTone(topbarCard, tone);
+        }
+        window.addEventListener("error", function (event) {
+          if (source && source.textContent !== "同步成功") setSyncCard("脚本异常", event.message || "前端脚本执行失败", "sync-error");
+        });
+        setSyncCard("检查中", "正在读取 /api/health", "sync-running");
+        fetch("/api/health", { cache: "no-store" })
+          .then(function (response) { return response.json(); })
+          .then(function (data) {
+            var sync = data && data.sync ? data.sync : {};
+            var failed = sync.lastError || String(sync.lastStatus || "").indexOf("失败") >= 0;
+            var running = sync.running;
+            var success = Boolean(sync.lastSuccessAt);
+            setSyncCard(
+              running ? "同步中" : failed ? "同步异常" : success ? "同步成功" : "待同步",
+              sync.lastSuccessAt || sync.lastFinishedAt || sync.lastStartedAt || "暂无记录",
+              running ? "sync-running" : failed ? "sync-error" : success ? "sync-success" : "sync-pending"
+            );
+            window.__tanjiaHealthLoaded = data;
+          })
+          .catch(function (error) {
+            setSyncCard("同步异常", error && error.message ? error.message : "无法读取 /api/health", "sync-error");
+          });
+      })();
+      document.addEventListener("click", function (event) {
+        if (window.__tanjiaAppNavigationReady) return;
+        var button = event.target.closest && event.target.closest(".nav-item[data-view]");
+        if (!button) return;
+        var view = button.getAttribute("data-view");
+        document.querySelectorAll(".nav-item").forEach(function (item) {
+          item.classList.toggle("active", item === button);
+        });
+        document.querySelectorAll(".nav-group").forEach(function (group) {
+          group.classList.toggle("is-active", Boolean(group.querySelector(".nav-item.active")));
+        });
+        document.querySelectorAll(".view").forEach(function (item) {
+          item.classList.toggle("active", item.id === "view-" + view);
+        });
+        var salesFilters = document.querySelector("#sales-global-filters");
+        if (salesFilters) salesFilters.hidden = view !== "sales";
+        if (window.__tanjiaHideSidebarFlyout) window.__tanjiaHideSidebarFlyout();
+        collapseSidebar();
+      });
+      function syncSidebarToggle(collapsed) {
+        var toggle = document.querySelector("#sidebar-toggle");
+        if (!toggle) return;
+        toggle.setAttribute("aria-expanded", String(!collapsed));
+        toggle.title = collapsed ? "展开侧边栏" : "折叠侧边栏";
+        toggle.textContent = collapsed ? "›" : "‹";
+      }
+      function collapseSidebar() {
+        var shell = document.querySelector(".app-shell");
+        if (!shell || shell.classList.contains("sidebar-collapsed")) return;
+        shell.classList.add("sidebar-collapsed");
+        if (window.__tanjiaHideSidebarFlyout) window.__tanjiaHideSidebarFlyout();
+        syncSidebarToggle(true);
+      }
+      function findOriginalNavButton(view) {
+        var buttons = document.querySelectorAll(".nav-item[data-view]");
+        for (var i = 0; i < buttons.length; i += 1) {
+          if (buttons[i].getAttribute("data-view") === view) return buttons[i];
+        }
+        return null;
+      }
+      function ensureSidebarFlyout() {
+        var flyout = document.querySelector("#sidebar-flyout");
+        if (flyout) return flyout;
+        flyout = document.createElement("div");
+        flyout.id = "sidebar-flyout";
+        flyout.className = "sidebar-flyout";
+        flyout.hidden = true;
+        flyout.addEventListener("click", function (event) {
+          var button = event.target.closest && event.target.closest("[data-flyout-view]");
+          if (!button) return;
+          event.stopPropagation();
+          var original = findOriginalNavButton(button.getAttribute("data-flyout-view"));
+          if (original) original.click();
+          hideSidebarFlyout();
+        });
+        document.body.appendChild(flyout);
+        return flyout;
+      }
+      function hideSidebarFlyout() {
+        var flyout = document.querySelector("#sidebar-flyout");
+        if (flyout) flyout.hidden = true;
+        document.querySelectorAll(".nav-group.is-flyout-open").forEach(function (group) {
+          group.classList.remove("is-flyout-open");
+          var title = group.querySelector(".nav-group-title");
+          if (title) title.setAttribute("aria-expanded", "false");
+        });
+      }
+      function showSidebarFlyout(group) {
+        var shell = document.querySelector(".app-shell");
+        if (!shell || !group) return false;
+        if (!shell.classList.contains("sidebar-collapsed")) return false;
+        var items = Array.prototype.filter.call(group.querySelectorAll(".nav-item[data-view]"), function (item) {
+          return !item.hidden && !item.closest("[hidden]");
+        });
+        if (!items.length) return false;
+        var title = group.querySelector(".nav-group-title");
+        var rect = (title || group).getBoundingClientRect();
+        var flyout = ensureSidebarFlyout();
+        flyout.innerHTML = "";
+        items.forEach(function (item) {
+          var button = document.createElement("button");
+          button.type = "button";
+          button.setAttribute("data-flyout-view", item.getAttribute("data-view") || "");
+          button.textContent = (item.querySelector(".nav-label") || item).textContent.trim();
+          if (item.classList.contains("active")) button.classList.add("active");
+          flyout.appendChild(button);
+        });
+        hideSidebarFlyout();
+        group.classList.add("is-flyout-open");
+        if (title) title.setAttribute("aria-expanded", "true");
+        flyout.hidden = false;
+        var top = Math.max(8, Math.min(rect.top - 4, window.innerHeight - flyout.offsetHeight - 8));
+        flyout.style.top = top + "px";
+        flyout.style.left = rect.right + 12 + "px";
+        return true;
+      }
+      window.__tanjiaShowSidebarFlyout = showSidebarFlyout;
+      window.__tanjiaHideSidebarFlyout = hideSidebarFlyout;
+      document.addEventListener("click", function (event) {
+        if (window.__tanjiaAppNavigationReady) return;
+        var groupButton = event.target.closest && event.target.closest(".nav-group-title");
+        if (!groupButton) return;
+        var group = groupButton.closest(".nav-group");
+        if (!group) return;
+        if (showSidebarFlyout(group)) {
+          event.stopPropagation();
+          return;
+        }
+        group.classList.toggle("is-open");
+        groupButton.setAttribute("aria-expanded", String(group.classList.contains("is-open")));
+      });
+      document.addEventListener("click", function (event) {
+        if (window.__tanjiaSidebarFlyoutReady) return;
+        var flyout = document.querySelector("#sidebar-flyout");
+        if (!flyout || flyout.hidden) return;
+        if (flyout.contains(event.target)) return;
+        if (event.target.closest && event.target.closest(".nav-group-title")) return;
+        hideSidebarFlyout();
+      });
+      document.addEventListener("keydown", function (event) {
+        if (window.__tanjiaSidebarFlyoutReady) return;
+        if (event.key === "Escape") hideSidebarFlyout();
+      });
+      document.addEventListener("click", function (event) {
+        if (window.__tanjiaSidebarOutsideCollapseReady) return;
+        var shell = document.querySelector(".app-shell");
+        var sidebar = document.querySelector(".sidebar");
+        if (!shell || !sidebar || shell.classList.contains("sidebar-collapsed")) return;
+        if (sidebar.contains(event.target)) return;
+        collapseSidebar();
+      });
+    </script>
+    <script type="module" src="./assets/js/ui-utils.js?v=20260706-frontend-refactor-v41" onerror="document.querySelector('#data-source').textContent='脚本未加载';document.querySelector('#data-source-note').textContent='ui-utils.js 请求失败，请检查服务器静态文件';"></script>
+    <script type="module" src="./app.js?v=20260706-frontend-refactor-v76" onerror="document.querySelector('#data-source').textContent='脚本未加载';document.querySelector('#data-source-note').textContent='app.js 请求失败，请检查服务器静态文件';document.querySelector('#topbar-sync-state').textContent='脚本未加载';document.querySelector('#topbar-sync-time').textContent='app.js 失败';"></script>
+  </body>
+</html>

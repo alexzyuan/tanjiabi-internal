@@ -1,0 +1,12 @@
+/* Low inventory fee page */
+#view-lowfee .lowfee-warning-row.risk-high {
+  background: var(--tj-tone-danger-row-bg);
+}
+
+#view-lowfee .lowfee-warning-row.risk-mid {
+  background: var(--tj-tone-warning-row-bg);
+}
+
+#view-lowfee .lowfee-warning-row.risk-low {
+  background: var(--tj-tone-caution-row-bg);
+}

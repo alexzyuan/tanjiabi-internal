@@ -1,0 +1,683 @@
+import { filterCoreSellers, getLingxingAdapter } from "../adapters/lingxingAdapter.js";
+import {
+  readLingxingSellersCache,
+  readSharedProductCatalogCache,
+  saveLingxingSellersCache,
+  saveSharedProductCatalogCache,
+} from "../utils/cacheStore.js";
+
+const PRODUCT_CATALOG_CACHE_VERSION = "shared-product-catalog-v1";
+const PRODUCT_CATALOG_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const LISTING_BATCH_SIZE = 50;
+const PRODUCT_BATCH_SIZE = 80;
+
+const productSupplierKeys = [
+  "supplier_name",
+  "supplierName",
+  "supplier",
+  "supplier_title",
+  "supplierTitle",
+  "supplierInfo",
+  "supplier_info",
+  "provider_name",
+  "providerName",
+  "factory_name",
+  "factoryName",
+  "vendor_name",
+  "vendorName",
+  "purchase_supplier_name",
+  "purchaseSupplierName",
+  "供应商",
+  "工厂名称",
+];
+
+const productPriceKeys = [
+  "purchase_price",
+  "purchasePrice",
+  "purchase_cost",
+  "purchaseCost",
+  "cg_price",
+  "unit_cg_price",
+  "unit_purchase_cost",
+  "product_purchase_cost",
+  "local_purchase_cost",
+  "cost_price",
+  "costPrice",
+  "price",
+  "采购价",
+  "采购价格",
+];
+
+const productModelKeys = [
+  "attribute",
+  "model",
+  "model_name",
+  "modelName",
+  "product_model",
+  "productModel",
+  "style",
+  "specification",
+  "specificationName",
+  "型号",
+];
+
+const productBrandKeys = [
+  "brand",
+  "brand_name",
+  "brandName",
+  "brand_title",
+  "brandTitle",
+  "product_brand",
+  "productBrand",
+  "品牌",
+];
+
+const productMaterialKeys = [
+  "material",
+  "material_name",
+  "materialName",
+  "product_material",
+  "productMaterial",
+  "declaration_material",
+  "declarationMaterial",
+  "材质",
+  "申报材质",
+];
+
+const productPurposeKeys = [
+  "purpose",
+  "usage",
+  "use",
+  "product_use",
+  "productUse",
+  "declaration_purpose",
+  "declarationPurpose",
+  "用途",
+  "申报用途",
+];
+
+const productCustomsCodeKeys = [
+  "customs_code",
+  "customsCode",
+  "clearance_code",
+  "clearanceCode",
+  "hs_code",
+  "hsCode",
+  "hscode",
+  "tariff_code",
+  "tariffCode",
+  "海关编码",
+  "清关编码",
+  "出口报关编码",
+  "中国报关编码",
+];
+
+const productBatteryKeys = [
+  "is_battery",
+  "isBattery",
+  "battery",
+  "battery_type",
+  "batteryType",
+  "has_battery",
+  "hasBattery",
+  "带电",
+  "是否带电",
+  "是否含电池",
+];
+
+const productUnitKeys = [
+  "unit",
+  "unit_name",
+  "unitName",
+  "declare_unit",
+  "declareUnit",
+  "declaration_unit",
+  "declarationUnit",
+  "单位",
+  "申报单位",
+];
+
+function hasReadableValue(value) {
+  if (value === undefined || value === null) return false;
+  if (Array.isArray(value)) return value.some((item) => hasReadableValue(item));
+  if (typeof value === "object") return false;
+  return String(value).trim() !== "";
+}
+
+function walkObject(value, visit, depth = 0) {
+  if (!value || depth > 4) return;
+  if (Array.isArray(value)) {
+    value.forEach((item) => walkObject(item, visit, depth + 1));
+    return;
+  }
+  if (typeof value !== "object") return;
+  Object.entries(value).forEach(([key, child]) => {
+    visit(key, child);
+    walkObject(child, visit, depth + 1);
+  });
+}
+
+function readFirst(item, keys) {
+  for (const key of keys) {
+    const value = item?.[key];
+    if (hasReadableValue(value)) return value;
+  }
+  const normalizedKeys = new Set(keys.map((key) => String(key).toLowerCase()));
+  let found = "";
+  walkObject(item, (key, value) => {
+    if (found || !normalizedKeys.has(String(key).toLowerCase()) || !hasReadableValue(value)) return;
+    found = value;
+  });
+  return found || "";
+}
+
+function readArrayText(value) {
+  if (Array.isArray(value)) return value.filter((item) => item !== undefined && item !== null && String(item).trim() !== "").map(String).join(" / ");
+  if (typeof value === "string") {
+    const text = value.trim();
+    if ((text.startsWith("[") && text.endsWith("]")) || (text.startsWith("{") && text.endsWith("}"))) {
+      try {
+        return readArrayText(JSON.parse(text));
+      } catch {
+        return text;
+      }
+    }
+    return text;
+  }
+  return value === undefined || value === null ? "" : String(value);
+}
+
+function toNumber(value) {
+  if (value === undefined || value === null || value === "") return 0;
+  const number = Number(String(value).replace(/,/g, "").replace(/¥/g, "").replace(/￥/g, "").replace(/%/g, ""));
+  return Number.isFinite(number) ? number : 0;
+}
+
+function uniqueText(values = []) {
+  const seen = new Set();
+  return values.map((value) => String(value || "").trim()).filter((value) => {
+    const key = value.toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function chunkArray(values, size) {
+  const chunks = [];
+  for (let index = 0; index < values.length; index += size) chunks.push(values.slice(index, index + size));
+  return chunks;
+}
+
+function normalizeRecordList(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  const data = payload?.data || payload || {};
+  const records = data.records || data.list || data.rows || data.data || data.items || data.result || data;
+  return Array.isArray(records) ? records : [];
+}
+
+function totalCountOf(payload, recordsLength = 0) {
+  const data = payload?.data || payload || {};
+  return Number(data.total ?? data.count ?? data.totalCount ?? payload?.total ?? recordsLength) || recordsLength;
+}
+
+function findImageUrl(source, depth = 0) {
+  if (!source || depth > 4) return "";
+  if (typeof source === "string") {
+    const text = source.trim();
+    if (!text) return "";
+    if ((text.startsWith("[") && text.endsWith("]")) || (text.startsWith("{") && text.endsWith("}"))) {
+      try {
+        return findImageUrl(JSON.parse(text), depth + 1);
+      } catch {
+        return /^https?:\/\//i.test(text) ? text : "";
+      }
+    }
+    return /^https?:\/\//i.test(text) ? text : "";
+  }
+  if (Array.isArray(source)) {
+    for (const item of source) {
+      const found = findImageUrl(item, depth + 1);
+      if (found) return found;
+    }
+    return "";
+  }
+  if (typeof source !== "object") return "";
+  const preferredKeys = [
+    "image_url",
+    "imageUrl",
+    "small_image_url",
+    "smallImageUrl",
+    "main_image",
+    "mainImage",
+    "main_image_url",
+    "mainImageUrl",
+    "large_image_url",
+    "largeImageUrl",
+    "medium_image_url",
+    "mediumImageUrl",
+    "thumbnail_url",
+    "thumbnailUrl",
+    "pic_url",
+    "picUrl",
+    "picture_url",
+    "pictureUrl",
+    "product_image",
+    "productImage",
+    "img",
+    "image",
+    "images",
+    "image_list",
+    "imageList",
+    "pic",
+    "picture",
+    "photo",
+    ...(depth > 0 ? ["url", "src", "href", "thumbnail"] : []),
+  ];
+  for (const key of preferredKeys) {
+    const found = findImageUrl(source[key], depth + 1);
+    if (found) return found;
+  }
+  return "";
+}
+
+export function productCatalogKey(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+export function listingMskuCatalogKey(sid, msku) {
+  const key = productCatalogKey(msku);
+  return key ? `sid:${Number(sid) || 0}:msku:${key}` : "";
+}
+
+function mergeProductCatalogInfo(existing = {}, incoming = {}) {
+  return {
+    ...existing,
+    ...incoming,
+    sku: incoming.sku || existing.sku || "",
+    skuIdentifier: incoming.skuIdentifier || existing.skuIdentifier || "",
+    productId: incoming.productId || existing.productId || "",
+    msku: incoming.msku || existing.msku || "",
+    sid: incoming.sid || existing.sid || 0,
+    productName: incoming.productName || existing.productName || "",
+    imageUrl: incoming.imageUrl || existing.imageUrl || "",
+    supplier: incoming.supplier || existing.supplier || "",
+    purchasePrice: incoming.purchasePrice || existing.purchasePrice || 0,
+    model: incoming.model || existing.model || "",
+    brand: incoming.brand || existing.brand || "",
+    material: incoming.material || existing.material || "",
+    purpose: incoming.purpose || existing.purpose || "",
+    customsCode: incoming.customsCode || existing.customsCode || "",
+    isBattery: incoming.isBattery || existing.isBattery || "",
+    unit: incoming.unit || existing.unit || "",
+    asin: incoming.asin || existing.asin || "",
+    raw: incoming.raw || existing.raw || null,
+  };
+}
+
+function putProductCatalog(map, product, extraKeys = []) {
+  if (!product) return;
+  [
+    product.sku,
+    product.skuIdentifier,
+    product.productId,
+    product.msku,
+    product.sid && product.msku ? listingMskuCatalogKey(product.sid, product.msku) : "",
+    ...extraKeys,
+  ].filter(Boolean).forEach((key) => {
+    const normalizedKey = productCatalogKey(key);
+    if (!normalizedKey) return;
+    map.set(normalizedKey, mergeProductCatalogInfo(map.get(normalizedKey), product));
+  });
+}
+
+export function productCatalogMapToRecords(map) {
+  const records = [];
+  const seen = new Set();
+  map.forEach((product, key) => {
+    const identity = [
+      key,
+      product.sku,
+      product.skuIdentifier,
+      product.productId,
+      product.msku,
+      product.sid,
+      product.productName,
+      product.imageUrl,
+      product.supplier,
+      product.purchasePrice,
+      product.model,
+      product.brand,
+      product.material,
+      product.purpose,
+      product.customsCode,
+      product.isBattery,
+      product.unit,
+      product.asin,
+    ].join("|");
+    if (seen.has(identity)) return;
+    seen.add(identity);
+    records.push({ key, product });
+  });
+  return records;
+}
+
+export function productCatalogRecordsToMap(records = []) {
+  const map = new Map();
+  (Array.isArray(records) ? records : []).forEach((item) => {
+    if (!item?.key || !item.product) return;
+    map.set(String(item.key), item.product);
+  });
+  return map;
+}
+
+function normalizeSharedListingRecord(record = {}, fallbackSid = 0) {
+  const msku = readArrayText(readFirst(record, ["msku", "m_sku", "seller_sku", "sellerSku", "sellerSkuStr", "local_sku", "item_sku", "fnsku"])).trim();
+  if (!msku) return null;
+  return {
+    sid: toNumber(readFirst(record, ["sid", "seller_id", "sellerId", "store_id", "storeId"])) || Number(fallbackSid || 0),
+    msku,
+    sku: readFirst(record, ["sku", "local_sku", "localSku", "product_sku", "sku_identifier", "skuIdentifier"]),
+    skuIdentifier: readFirst(record, ["sku_identifier", "skuIdentifier", "local_sku_identifier", "localSkuIdentifier"]),
+    productId: readFirst(record, ["product_id", "productId", "local_product_id", "localProductId"]),
+    productName: readArrayText(readFirst(record, ["local_name", "localName", "product_name", "productName", "item_name", "itemName", "title", "product_title", "name"])),
+    imageUrl: findImageUrl(record),
+    supplier: readFirst(record, productSupplierKeys),
+    purchasePrice: toNumber(readFirst(record, productPriceKeys)),
+    model: readFirst(record, productModelKeys),
+    brand: readFirst(record, productBrandKeys),
+    material: readFirst(record, productMaterialKeys),
+    purpose: readFirst(record, productPurposeKeys),
+    customsCode: readFirst(record, productCustomsCodeKeys),
+    isBattery: readFirst(record, productBatteryKeys),
+    unit: readFirst(record, productUnitKeys),
+    asin: readFirst(record, ["asin", "ASIN"]),
+    raw: record,
+  };
+}
+
+function normalizeSharedProductRecord(record = {}) {
+  return {
+    sku: String(readFirst(record, ["sku", "local_sku", "localSku", "product_sku", "sku_identifier", "skuIdentifier"]) || "").trim(),
+    skuIdentifier: readFirst(record, ["sku_identifier", "skuIdentifier", "local_sku_identifier", "localSkuIdentifier"]),
+    productId: readFirst(record, ["product_id", "productId", "local_product_id", "localProductId"]),
+    productName: readFirst(record, ["product_name", "productName", "local_name", "localName", "name", "item_name", "itemName"]),
+    imageUrl: findImageUrl(record),
+    supplier: readFirst(record, productSupplierKeys),
+    purchasePrice: toNumber(readFirst(record, productPriceKeys)),
+    model: readFirst(record, productModelKeys),
+    brand: readFirst(record, productBrandKeys),
+    material: readFirst(record, productMaterialKeys),
+    purpose: readFirst(record, productPurposeKeys),
+    customsCode: readFirst(record, productCustomsCodeKeys),
+    isBattery: readFirst(record, productBatteryKeys),
+    unit: readFirst(record, productUnitKeys),
+    asin: readFirst(record, ["asin", "ASIN"]),
+    raw: record,
+  };
+}
+
+export function buildSharedProductCatalogMap({ sourceRows = [], listingRecords = [], productRecords = [] } = {}) {
+  const map = new Map();
+  sourceRows.forEach((row) => {
+    const sid = Number(row.sid || 0);
+    const product = {
+      sid,
+      msku: String(row.msku || "").trim(),
+      sku: String(row.sku || "").trim(),
+      productName: String(row.productName || "").trim(),
+      imageUrl: String(row.imageUrl || "").trim(),
+      raw: null,
+    };
+    putProductCatalog(map, product, sid && product.msku ? [listingMskuCatalogKey(sid, product.msku)] : []);
+  });
+
+  listingRecords.map((record) => normalizeSharedListingRecord(record)).filter(Boolean).forEach((listing) => {
+    putProductCatalog(map, listing, [listingMskuCatalogKey(listing.sid, listing.msku)]);
+  });
+
+  productRecords.map(normalizeSharedProductRecord).forEach((product) => {
+    const keys = [product.sku, product.skuIdentifier, product.productId].map(productCatalogKey).filter(Boolean);
+    const linkedProducts = keys.map((key) => map.get(key)).filter(Boolean);
+    putProductCatalog(map, product);
+    linkedProducts.forEach((linked) => {
+      const merged = mergeProductCatalogInfo(linked, product);
+      putProductCatalog(map, { ...merged, msku: linked.msku, sid: linked.sid }, [
+        linked.sid && linked.msku ? listingMskuCatalogKey(linked.sid, linked.msku) : "",
+      ]);
+    });
+  });
+  return map;
+}
+
+function stableProductCatalogCacheKey(rows = []) {
+  const identities = uniqueText(rows.flatMap((row) => [
+    Number(row.sid || 0) && row.msku ? listingMskuCatalogKey(row.sid, row.msku) : "",
+    row.msku,
+    row.sku,
+  ]));
+  return JSON.stringify({
+    source: "shared-product-catalog",
+    version: PRODUCT_CATALOG_CACHE_VERSION,
+    identities: identities.sort(),
+  });
+}
+
+async function fetchListingRecords(adapter, baseParams) {
+  const records = [];
+  let offset = 0;
+  let total = null;
+  while (offset < 5000) {
+    const payload = await adapter.fetchListings({ ...baseParams, offset, length: 1000 });
+    const pageRows = normalizeRecordList(payload);
+    records.push(...pageRows);
+    total = totalCountOf(payload, records.length);
+    if (!pageRows.length || pageRows.length < 1000 || records.length >= total) break;
+    offset += 1000;
+  }
+  return records;
+}
+
+async function fetchListingItems(adapter, rows = [], { strict = false } = {}) {
+  const rowsBySid = new Map();
+  rows.forEach((row) => {
+    const sid = Number(row.sid || 0);
+    const mskus = String(row.msku || "").split("/").map((item) => item.trim()).filter(Boolean);
+    if (!sid || !mskus.length) return;
+    if (!rowsBySid.has(sid)) rowsBySid.set(sid, []);
+    rowsBySid.get(sid).push(...mskus);
+  });
+
+  const items = [];
+  for (const [sid, mskus] of rowsBySid.entries()) {
+    for (const batch of chunkArray(uniqueText(mskus), LISTING_BATCH_SIZE)) {
+      const baseParams = {
+        is_pair: 1,
+        is_delete: 0,
+        search_field: "seller_sku",
+        search_value: batch,
+        exact_search: 1,
+      };
+      const variants = [{ sid }, { sids: [sid] }, { seller_id: sid }, { sellerId: sid }];
+      let records = [];
+      let lastError = null;
+      for (const variant of variants) {
+        try {
+          records = await fetchListingRecords(adapter, { ...baseParams, ...variant });
+          if (!records.length) records = await fetchListingRecords(adapter, { ...baseParams, exact_search: 0, ...variant });
+          if (records.length) break;
+        } catch (error) {
+          lastError = error;
+          records = [];
+        }
+      }
+      if (!records.length && batch.length > 1) {
+        for (const msku of batch) {
+          const singleParams = { ...baseParams, search_value: [msku], exact_search: 1 };
+          for (const variant of variants) {
+            try {
+              const singleRecords = await fetchListingRecords(adapter, { ...singleParams, ...variant });
+              if (singleRecords.length) {
+                records.push(...singleRecords);
+                break;
+              }
+            } catch {
+              // Try the next Listing parameter variant for this MSKU.
+            }
+          }
+        }
+      }
+      if (strict && !records.length && lastError) {
+        throw new Error(`ERP Listing 查询失败，SID ${sid}，MSKU ${batch.join(", ")}：${lastError.message}`);
+      }
+      records.map((record) => normalizeSharedListingRecord(record, sid)).filter(Boolean).forEach((item) => items.push(item));
+    }
+  }
+  return items;
+}
+
+async function safeFetchProductRecords(adapter, params, fallbackParams = null, { strict = false } = {}) {
+  try {
+    return normalizeRecordList(await adapter.fetchLocalProductInfos(params));
+  } catch (error) {
+    if (!fallbackParams) {
+      if (strict) throw error;
+      return [];
+    }
+    try {
+      return normalizeRecordList(await adapter.fetchLocalProducts(fallbackParams));
+    } catch (fallbackError) {
+      if (strict) {
+        throw new Error(`ERP 产品管理查询失败：${error.message}; fallback: ${fallbackError.message}`);
+      }
+      return [];
+    }
+  }
+}
+
+async function fetchProductRecords(adapter, rows = [], listingItems = [], { strict = false } = {}) {
+  const lookupValues = uniqueText([...rows, ...listingItems].flatMap((row) => [row.sku, row.msku]));
+  const skuIdentifiers = uniqueText(listingItems.flatMap((row) => [row.skuIdentifier, row.sku, row.msku]));
+  const productIds = uniqueText(listingItems.map((row) => row.productId));
+  const records = [];
+
+  for (const batch of chunkArray(lookupValues, PRODUCT_BATCH_SIZE)) {
+    records.push(...await safeFetchProductRecords(adapter, { skus: batch }, { sku_list: batch }, { strict }));
+  }
+  for (const batch of chunkArray(skuIdentifiers, PRODUCT_BATCH_SIZE)) {
+    records.push(...await safeFetchProductRecords(adapter, { sku_identifiers: batch }, { sku_identifier_list: batch }, { strict }));
+  }
+  for (const batch of chunkArray(productIds, PRODUCT_BATCH_SIZE)) {
+    records.push(...await safeFetchProductRecords(adapter, { product_ids: batch }, { product_id_list: batch }, { strict }));
+  }
+  return records;
+}
+
+export async function getSharedSellers({
+  adapter = getLingxingAdapter(),
+  forceRefresh = false,
+  readCache = readLingxingSellersCache,
+  saveCache = saveLingxingSellersCache,
+} = {}) {
+  if (!forceRefresh) {
+    const cached = await readCache();
+    const sellers = filterCoreSellers(cached?.sellers || []);
+    if (sellers.length) {
+      return {
+        sellers,
+        updatedAt: cached?.updatedAt || "",
+        cacheHit: true,
+        source: "lingxing-sellers-cache",
+      };
+    }
+  }
+
+  const payload = await adapter.fetchSellers();
+  const sellers = filterCoreSellers(payload?.data || []);
+  if (sellers.length) await saveCache(sellers);
+  return {
+    sellers,
+    updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
+    cacheHit: false,
+    source: "lingxing-api",
+  };
+}
+
+export async function getCurrentFbaInventoryByMsku() {
+  const { getSalesForecastFbaInventoryByMsku } = await import("./salesForecastService.js");
+  const result = await getSalesForecastFbaInventoryByMsku();
+  return {
+    ...result,
+    source: "sales-forecast-cache",
+  };
+}
+
+export async function getSharedProductCatalogMap(adapter = getLingxingAdapter(), rows = [], {
+  forceRefresh = false,
+  ttlMs = PRODUCT_CATALOG_TTL_MS,
+  strict = false,
+} = {}) {
+  const cacheKey = stableProductCatalogCacheKey(rows);
+  if (!forceRefresh) {
+    const cached = await readSharedProductCatalogCache(cacheKey, ttlMs);
+    if (cached?.data?.records) {
+      return {
+        map: productCatalogRecordsToMap(cached.data.records),
+        cacheHit: true,
+        updatedAt: cached.updatedAt || "",
+        status: `复用共享商品目录 ${cached.data.records.length} 个索引`,
+      };
+    }
+  }
+
+  const listingItems = await fetchListingItems(adapter, rows, { strict });
+  const productRecords = await fetchProductRecords(adapter, rows, listingItems, { strict });
+  const map = buildSharedProductCatalogMap({ sourceRows: rows, listingRecords: listingItems, productRecords });
+  const records = productCatalogMapToRecords(map);
+  await saveSharedProductCatalogCache(cacheKey, { records });
+  return {
+    map,
+    cacheHit: false,
+    updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
+    status: `刷新共享商品目录 ${records.length} 个索引`,
+  };
+}
+
+function sameCode(left, right) {
+  const a = String(left || "").trim().toLowerCase();
+  const b = String(right || "").trim().toLowerCase();
+  return Boolean(a && b && a === b);
+}
+
+function catalogLookupKeys(row = {}) {
+  const mskus = String(row.msku || "").split("/").map((item) => item.trim()).filter(Boolean);
+  return uniqueText([
+    row.sid && mskus[0] ? listingMskuCatalogKey(row.sid, mskus[0]) : "",
+    ...mskus,
+    row.sku,
+  ]).map(productCatalogKey);
+}
+
+export function applySharedProductCatalogToRows(rows = [], catalogMap = new Map()) {
+  if (!catalogMap.size) return rows;
+  return rows.map((row) => {
+    const product = catalogLookupKeys(row).map((key) => catalogMap.get(key)).find(Boolean);
+    if (!product) return row;
+    const next = { ...row };
+    if (!next.imageUrl && product.imageUrl) next.imageUrl = product.imageUrl;
+    if ((!next.productName || sameCode(next.productName, next.sku) || sameCode(next.productName, next.msku)) && product.productName) {
+      next.productName = product.productName;
+    }
+    if (!next.supplier && product.supplier) next.supplier = product.supplier;
+    if (!next.purchasePrice && product.purchasePrice) next.purchasePrice = product.purchasePrice;
+    if (!next.brand && product.brand) next.brand = product.brand;
+    if (!next.material && product.material) next.material = product.material;
+    if (!next.purpose && product.purpose) next.purpose = product.purpose;
+    if (!next.customsCode && product.customsCode) next.customsCode = product.customsCode;
+    if (!next.isBattery && product.isBattery) next.isBattery = product.isBattery;
+    if (!next.unit && product.unit) next.unit = product.unit;
+    if (!next.asin && product.asin) next.asin = product.asin;
+    return next;
+  });
+}

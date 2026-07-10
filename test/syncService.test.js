@@ -1,0 +1,108 @@
+import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+import test from "node:test";
+
+const serviceUrl = pathToFileURL(path.resolve("src/services/syncService.js"));
+
+async function withTempService(fn) {
+  const originalCwd = process.cwd();
+  const originalProvider = process.env.DATA_PROVIDER;
+  const originalInterval = process.env.SYNC_INTERVAL_HOURS;
+  const dir = await mkdtemp(path.join(os.tmpdir(), "bi-sync-service-"));
+  process.chdir(dir);
+  process.env.DATA_PROVIDER = "mock";
+  process.env.SYNC_INTERVAL_HOURS = "6";
+  try {
+    const service = await import(`${serviceUrl.href}?case=${Date.now()}-${Math.random()}`);
+    await fn(service, dir);
+  } finally {
+    if (originalProvider === undefined) {
+      delete process.env.DATA_PROVIDER;
+    } else {
+      process.env.DATA_PROVIDER = originalProvider;
+    }
+    if (originalInterval === undefined) {
+      delete process.env.SYNC_INTERVAL_HOURS;
+    } else {
+      process.env.SYNC_INTERVAL_HOURS = originalInterval;
+    }
+    process.chdir(originalCwd);
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+test("getSyncState exposes initial provider and interval from configuration", async () => {
+  await withTempService(async ({ getSyncState }) => {
+    const state = getSyncState();
+
+    assert.equal(state.provider, "mock");
+    assert.equal(state.intervalHours, 6);
+    assert.equal(state.running, false);
+    assert.equal(state.lastStatus, "等待首次同步");
+    assert.equal(state.lastError, null);
+  });
+});
+
+test("runManualSync completes the mock sync path and updates state timestamps", async () => {
+  await withTempService(async ({ runManualSync, getSyncState, getSyncStatus }) => {
+    const result = await runManualSync();
+    const state = getSyncState();
+    const status = await getSyncStatus();
+
+    assert.equal(result.ok, true);
+    assert.equal(result.provider, "mock");
+    assert.equal(result.rows, 0);
+    assert.equal(result.message, "模拟同步完成，正式接入后这里会写入领星数据。");
+    assert.equal(state.running, false);
+    assert.equal(state.lastError, null);
+    assert.equal(state.lastStatus, result.message);
+    assert.ok(state.lastStartedAt);
+    assert.ok(state.lastFinishedAt);
+    assert.equal(state.lastSuccessAt, state.lastFinishedAt);
+    assert.equal(status.history.length, 1);
+    assert.equal(status.history[0].status, "success");
+    assert.equal(status.history[0].triggerType, "manual");
+  });
+});
+
+test("runManualSync rejects a duplicate trigger while a sync is already running", async () => {
+  await withTempService(async ({ runManualSync, getSyncState, getSyncStatus }) => {
+    const first = runManualSync();
+    const second = await runManualSync();
+    const firstResult = await first;
+    const finalState = getSyncState();
+    const status = await getSyncStatus();
+
+    assert.equal(second.ok, false);
+    assert.equal(second.message, "已有同步任务正在运行，请稍后再试。");
+    assert.equal(second.state.running, true);
+    assert.equal(firstResult.ok, true);
+    assert.equal(finalState.running, false);
+    assert.equal(finalState.lastError, null);
+    assert.equal(status.history.some((job) => job.status === "skipped" && job.triggerType === "manual"), true);
+  });
+});
+
+test("runSync records scheduled trigger type and failed error summaries", async () => {
+  await withTempService(async ({ runSync, getSyncStatus }) => {
+    const scheduled = await runSync({ triggerType: "scheduled", triggeredBy: "timer" });
+    const failed = await runSync({
+      triggerType: "startup",
+      triggeredBy: "boot",
+      executeSync: async () => {
+        throw new Error("access_token abc123 failed");
+      },
+    });
+    const status = await getSyncStatus();
+
+    assert.equal(scheduled.ok, true);
+    assert.equal(failed.ok, false);
+    assert.equal(status.history.some((job) => job.status === "success" && job.triggerType === "scheduled"), true);
+    const failedJob = status.history.find((job) => job.status === "failed" && job.triggerType === "startup");
+    assert.ok(failedJob);
+    assert.equal(failedJob.errorSummary.includes("abc123"), false);
+  });
+});

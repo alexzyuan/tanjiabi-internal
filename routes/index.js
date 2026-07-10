@@ -1,0 +1,27 @@
+import { createAuthRoutes } from "./auth.js";
+import { createCoreRoutes } from "./core.js";
+import { createSalesRoutes } from "./sales.js";
+import { createAdvertisingRoutes } from "./advertising.js";
+import { createAftersalesRoutes } from "./aftersales.js";
+import { createInventoryRoutes } from "./inventory.js";
+import { createFinancePurchaseRoutes } from "./finance-purchase.js";
+import { createFbaRoutes } from "./fba.js";
+import { createAdminRoutes } from "./admin.js";
+import { createSyncStoreInspectionRoutes } from "./sync-store-inspection.js";
+import { createDebugKnowledgeRoutes } from "./debug-knowledge.js";
+
+export function buildApiRoutes(deps) {
+  return [
+    ...createCoreRoutes(deps),
+    ...createAuthRoutes(deps),
+    ...createSalesRoutes(deps),
+    ...createAdvertisingRoutes(deps),
+    ...createAftersalesRoutes(deps),
+    ...createInventoryRoutes(deps),
+    ...createFinancePurchaseRoutes(deps),
+    ...createFbaRoutes(deps),
+    ...createAdminRoutes(deps),
+    ...createSyncStoreInspectionRoutes(deps),
+    ...createDebugKnowledgeRoutes(deps),
+  ];
+}

@@ -1,0 +1,74 @@
+/* Shared status badges. Use text plus tone color; never color alone. */
+.status-pill {
+  display: inline-flex;
+  width: fit-content;
+  min-width: 46px;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  border-radius: 999px;
+  color: var(--tj-tone-neutral-text);
+  background: var(--tj-tone-neutral-bg);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.status-pill.active,
+.status-pill.status-active {
+  color: var(--tj-tone-success-text);
+  background: var(--tj-tone-success-bg);
+}
+
+.status-pill.pending,
+.status-pill.warning,
+.status-pill.status-paused {
+  color: var(--tj-tone-warning-text);
+  background: var(--tj-tone-warning-bg);
+}
+
+.status-pill.disabled,
+.status-pill.muted,
+.status-pill.status-archived {
+  color: var(--tj-tone-neutral-text);
+  background: var(--tj-tone-neutral-bg);
+}
+
+.status-pill.rejected,
+.status-pill.danger {
+  color: var(--tj-tone-danger-text);
+  background: var(--tj-tone-danger-bg);
+}
+
+.status-pill.info,
+.status-pill.success {
+  color: var(--tj-tone-info-text);
+  background: var(--tj-tone-info-bg);
+}
+
+.risk-badge {
+  display: inline-flex;
+  min-width: 44px;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  color: var(--tj-tone-neutral-text);
+  background: var(--tj-tone-neutral-bg);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.risk-high {
+  color: var(--tj-tone-danger-text);
+  background: var(--tj-tone-danger-bg);
+}
+
+.risk-mid {
+  color: var(--tj-tone-warning-text);
+  background: var(--tj-tone-warning-bg);
+}
+
+.risk-low {
+  color: var(--tj-tone-info-text);
+  background: var(--tj-tone-info-bg);
+}

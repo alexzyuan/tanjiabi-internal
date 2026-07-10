@@ -1,0 +1,723 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>探嘉 BI Dub 风格预览</title>
+    <style>
+      :root {
+        --bg: #f4f4f5;
+        --surface: #ffffff;
+        --surface-soft: #fafafa;
+        --border: #e5e7eb;
+        --border-strong: #d8dee8;
+        --text: #111827;
+        --muted: #667085;
+        --faint: #98a2b3;
+        --blue: #1677ff;
+        --blue-2: #2563eb;
+        --blue-soft: #eef6ff;
+        --green: #16a34a;
+        --orange: #f97316;
+        --red: #ef4444;
+        --radius: 12px;
+        --sidebar: 180px;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        color: var(--text);
+        background: var(--bg);
+        letter-spacing: 0;
+      }
+
+      .app {
+        display: grid;
+        grid-template-columns: var(--sidebar) minmax(0, 1fr);
+        min-height: 100vh;
+        background: var(--bg);
+      }
+
+      .sidebar {
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        padding: 18px 14px 14px;
+        background: var(--bg);
+        border-right: 0;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: 38px;
+        margin-bottom: 28px;
+      }
+
+      .brand img {
+        width: 34px;
+        height: 34px;
+        object-fit: contain;
+        border-radius: 8px;
+        background: #fff;
+      }
+
+      .brand strong {
+        font-size: 15px;
+        font-weight: 760;
+      }
+
+      .nav {
+        display: grid;
+        gap: 6px;
+      }
+
+      .nav-group {
+        display: grid;
+        gap: 4px;
+      }
+
+      .nav-main,
+      .nav-sub {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        border: 0;
+        background: transparent;
+        color: #1f2937;
+        font: inherit;
+        text-align: left;
+      }
+
+      .nav-main {
+        min-height: 38px;
+        padding: 7px 10px;
+        border-radius: 10px;
+        font-size: 15px;
+        font-weight: 650;
+      }
+
+      .nav-main.is-active {
+        color: #fff;
+        background: var(--blue);
+      }
+
+      .nav-main.is-soft {
+        color: var(--blue);
+        background: var(--blue-soft);
+      }
+
+      .nav-sub {
+        min-height: 34px;
+        margin-left: 8px;
+        padding: 6px 8px 6px 20px;
+        border-radius: 9px;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 500;
+      }
+
+      .nav-sub.is-active {
+        color: #fff;
+        background: var(--blue);
+      }
+
+      .icon {
+        display: inline-grid;
+        flex: 0 0 24px;
+        width: 24px;
+        height: 24px;
+        place-items: center;
+        border-radius: 8px;
+        color: currentColor;
+      }
+
+      .is-active .icon {
+        background: rgba(255, 255, 255, 0.14);
+      }
+
+      .nav-spacer {
+        height: 8px;
+      }
+
+      .collapse {
+        position: absolute;
+        right: 14px;
+        bottom: 16px;
+        left: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 36px;
+        padding: 0 10px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        color: var(--muted);
+        background: #fff;
+        font-size: 12px;
+      }
+
+      .main {
+        min-width: 0;
+        background: var(--bg);
+      }
+
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px 18px;
+        min-height: 76px;
+        padding: 12px 22px 10px 20px;
+        background: var(--bg);
+      }
+
+      .crumbs {
+        display: inline-flex;
+        align-items: center;
+        align-self: end;
+        gap: 12px;
+        min-width: 0;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 620;
+      }
+
+      .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 99px;
+        background: var(--blue);
+        box-shadow: 0 0 0 7px rgba(22, 119, 255, 0.1);
+      }
+
+      .crumbs b {
+        color: var(--blue);
+        font-weight: 720;
+      }
+
+      .crumbs strong {
+        color: var(--text);
+        font-weight: 760;
+      }
+
+      .top-right {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 12px;
+        grid-column: 2;
+        grid-row: 1 / span 2;
+      }
+
+      .clock {
+        display: flex;
+        gap: 12px;
+        color: var(--muted);
+        font-size: 11px;
+        white-space: nowrap;
+      }
+
+      .sync {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 26px;
+        padding: 0 9px;
+        border: 1px solid #bbf7d0;
+        border-radius: 999px;
+        color: #15803d;
+        background: #f0fdf4;
+        font-size: 11px;
+        font-weight: 650;
+      }
+
+      .user {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 34px;
+        padding: 0 10px 0 6px;
+        border: 1px solid #cfe3ff;
+        border-radius: 10px;
+        color: #0b4f94;
+        background: #dceeff;
+        font-size: 13px;
+        font-weight: 680;
+      }
+
+      .avatar {
+        width: 24px;
+        height: 24px;
+        border-radius: 8px;
+        background: #fff;
+      }
+
+      .content {
+        display: grid;
+        gap: 14px;
+        padding: 0 22px 24px 20px;
+      }
+
+      .banner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        min-height: 88px;
+        padding: 18px 22px;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: var(--surface);
+      }
+
+      .banner h1 {
+        margin: 0 0 6px;
+        font-size: 24px;
+        line-height: 1.2;
+        font-weight: 780;
+      }
+
+      .banner p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .quick-actions {
+        display: flex;
+        gap: 8px;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 34px;
+        padding: 0 12px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--text);
+        background: #fff;
+        font-size: 13px;
+        font-weight: 650;
+      }
+
+      .btn.primary {
+        border-color: var(--blue);
+        color: #fff;
+        background: var(--blue);
+      }
+
+      .filters {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
+        gap: 10px;
+        padding: 12px;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: var(--surface);
+      }
+
+      .field {
+        display: grid;
+        gap: 5px;
+      }
+
+      .field span {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 650;
+      }
+
+      .select {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 34px;
+        padding: 0 10px;
+        border: 1px solid var(--border-strong);
+        border-radius: 8px;
+        background: #fff;
+        color: var(--text);
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .card {
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+
+      .metric {
+        display: grid;
+        gap: 12px;
+        min-height: 122px;
+        padding: 14px;
+      }
+
+      .metric header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 680;
+      }
+
+      .metric strong {
+        font-size: 24px;
+        line-height: 1;
+        font-weight: 780;
+      }
+
+      .trend {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .up {
+        color: var(--green);
+        font-weight: 720;
+      }
+
+      .spark {
+        width: 68px;
+        height: 22px;
+      }
+
+      .work-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.5fr) minmax(360px, 0.9fr);
+        gap: 14px;
+      }
+
+      .panel {
+        padding: 16px;
+      }
+
+      .panel-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+      }
+
+      .panel h2 {
+        margin: 0;
+        font-size: 17px;
+        font-weight: 760;
+      }
+
+      .panel small {
+        color: var(--muted);
+      }
+
+      .chart {
+        height: 240px;
+        border-radius: 10px;
+        background:
+          linear-gradient(#eef2f7 1px, transparent 1px) 0 0 / 100% 48px,
+          linear-gradient(90deg, #f4f6f9 1px, transparent 1px) 0 0 / 92px 100%,
+          #fff;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .chart svg {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+      }
+
+      .status-list,
+      .todo-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        min-height: 42px;
+        padding: 9px 10px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: #fff;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .row b {
+        color: var(--text);
+        font-weight: 650;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        min-height: 22px;
+        padding: 0 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .badge.green {
+        color: #15803d;
+        background: #dcfce7;
+      }
+
+      .badge.orange {
+        color: #c2410c;
+        background: #ffedd5;
+      }
+
+      .badge.blue {
+        color: var(--blue-2);
+        background: #dbeafe;
+      }
+
+      .table-panel {
+        padding: 0;
+        overflow: hidden;
+      }
+
+      .table-panel .panel-head {
+        padding: 15px 16px 8px;
+        margin: 0;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+
+      th {
+        height: 34px;
+        padding: 0 14px;
+        color: var(--muted);
+        background: #f9fafb;
+        text-align: left;
+        font-weight: 680;
+        border-top: 1px solid var(--border);
+        border-bottom: 1px solid var(--border);
+      }
+
+      td {
+        height: 38px;
+        padding: 0 14px;
+        color: #344054;
+        border-bottom: 1px solid #f1f5f9;
+      }
+
+      td.num {
+        color: #111827;
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+      }
+
+      .right {
+        text-align: right;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand">
+          <img src="./assets/jm-favicon.png" alt="Joi Mew" />
+          <strong>探嘉 BI</strong>
+        </div>
+        <nav class="nav" aria-label="主导航">
+          <button class="nav-main is-soft"><span class="icon">⌂</span>首页</button>
+          <div class="nav-group">
+            <button class="nav-main is-active"><span class="icon">⌁</span>销售</button>
+            <button class="nav-sub is-active">销售复盘</button>
+            <button class="nav-sub">即时表现</button>
+            <button class="nav-sub">广告复盘</button>
+            <button class="nav-sub">预算目标</button>
+            <button class="nav-sub">FBA刷仓</button>
+            <button class="nav-sub">销售预估</button>
+          </div>
+          <div class="nav-spacer"></div>
+          <button class="nav-main"><span class="icon">□</span>产品</button>
+          <button class="nav-main"><span class="icon">▣</span>库存</button>
+          <button class="nav-main"><span class="icon">⌗</span>采购</button>
+          <button class="nav-main"><span class="icon">▤</span>财务</button>
+          <button class="nav-main"><span class="icon">≛</span>设置</button>
+        </nav>
+        <div class="collapse"><span>折叠菜单</span><b>‹</b></div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div class="crumbs">
+            <span class="dot"></span>
+            <span>首页</span>
+            <span>›</span>
+            <b>销售</b>
+            <span>›</span>
+            <strong>销售复盘</strong>
+          </div>
+          <div class="top-right">
+            <div class="clock">
+              <span>北京时间：07/05 16:30</span>
+              <span>美西时间：07/05 01:30</span>
+              <span>德国时间：07/05 10:30</span>
+            </div>
+            <div class="sync">● 同步正常 · 8分钟前</div>
+            <div class="user"><span class="avatar"></span>alex ▾</div>
+          </div>
+        </header>
+
+        <section class="content">
+          <div class="banner">
+            <div>
+              <h1>销售经营复盘</h1>
+              <p>按站点、店铺与周期汇总收入、利润、广告效率和履约状态，优先暴露需要运营处理的问题。</p>
+            </div>
+            <div class="quick-actions">
+              <button class="btn">导出报表</button>
+              <button class="btn primary">手动同步</button>
+            </div>
+          </div>
+
+          <div class="filters">
+            <label class="field"><span>国家 / 地区</span><div class="select">全部国家 ▾</div></label>
+            <label class="field"><span>店铺</span><div class="select">全部店铺 ▾</div></label>
+            <label class="field"><span>日期范围</span><div class="select">2026-06-29 ~ 2026-07-05 ▾</div></label>
+            <label class="field"><span>运营团队</span><div class="select">全部团队 ▾</div></label>
+            <label class="field"><span>SKU / ASIN</span><div class="select">请输入搜索内容</div></label>
+            <button class="btn primary">查询</button>
+          </div>
+
+          <section class="metric-grid">
+            <article class="card metric">
+              <header><span>销售收入</span><span class="badge blue">USD</span></header>
+              <strong>259,469.74</strong>
+              <div class="trend"><span class="up">▲ 12.35%</span><svg class="spark" viewBox="0 0 68 22"><path d="M2 18 L12 14 L21 15 L31 7 L41 13 L52 8 L66 11" fill="none" stroke="#1677ff" stroke-width="2"/></svg></div>
+            </article>
+            <article class="card metric">
+              <header><span>毛利润</span><span class="badge blue">USD</span></header>
+              <strong>65,921.36</strong>
+              <div class="trend"><span style="color:var(--orange);font-weight:720;">▼ 8.41%</span><svg class="spark" viewBox="0 0 68 22"><path d="M2 17 L13 16 L22 10 L32 18 L44 12 L55 14 L66 9" fill="none" stroke="#f97316" stroke-width="2"/></svg></div>
+            </article>
+            <article class="card metric">
+              <header><span>广告费用占比</span><span class="badge green">健康</span></header>
+              <strong>24.86%</strong>
+              <div class="trend"><span class="up">▲ 1.23pp</span><svg class="spark" viewBox="0 0 68 22"><path d="M2 16 L13 15 L22 11 L32 12 L44 8 L55 13 L66 10" fill="none" stroke="#1677ff" stroke-width="2"/></svg></div>
+            </article>
+            <article class="card metric">
+              <header><span>订单履约率</span><span class="badge green">正常</span></header>
+              <strong>97.35%</strong>
+              <div class="trend"><span class="up">▲ 2.41pp</span><svg class="spark" viewBox="0 0 68 22"><path d="M2 18 L14 13 L25 15 L36 8 L48 14 L58 10 L66 7" fill="none" stroke="#16a34a" stroke-width="2"/></svg></div>
+            </article>
+            <article class="card metric">
+              <header><span>库存健康度</span><span class="badge orange">关注</span></header>
+              <strong>84.62%</strong>
+              <div class="trend"><span class="up">▲ 5.18pp</span><svg class="spark" viewBox="0 0 68 22"><path d="M2 18 L12 16 L24 10 L34 15 L45 11 L56 13 L66 8" fill="none" stroke="#1677ff" stroke-width="2"/></svg></div>
+            </article>
+            <article class="card metric">
+              <header><span>净利率</span><span class="badge green">达标</span></header>
+              <strong>25.41%</strong>
+              <div class="trend"><span class="up">▲ 1.92pp</span><svg class="spark" viewBox="0 0 68 22"><path d="M2 17 L14 15 L25 8 L36 14 L47 9 L58 12 L66 7" fill="none" stroke="#f97316" stroke-width="2"/></svg></div>
+            </article>
+          </section>
+
+          <section class="work-grid">
+            <article class="card panel">
+              <div class="panel-head">
+                <h2>销售收入趋势</h2>
+                <small>本周收入 / 上期收入</small>
+              </div>
+              <div class="chart">
+                <svg viewBox="0 0 760 240" preserveAspectRatio="none">
+                  <path d="M20 198 C110 174 142 132 210 125 C282 118 310 62 382 83 C452 104 470 166 552 154 C630 142 674 96 740 68" fill="none" stroke="#1677ff" stroke-width="4"/>
+                  <path d="M20 214 C112 196 142 166 210 154 C282 142 322 122 382 132 C456 144 484 180 552 176 C630 172 684 136 740 116" fill="none" stroke="#b7c3d5" stroke-width="3" stroke-dasharray="8 8"/>
+                  <path d="M20 198 C110 174 142 132 210 125 C282 118 310 62 382 83 C452 104 470 166 552 154 C630 142 674 96 740 68 L740 240 L20 240 Z" fill="rgba(22,119,255,.08)"/>
+                </svg>
+              </div>
+            </article>
+
+            <div class="status-list">
+              <article class="card panel">
+                <div class="panel-head">
+                  <h2>待处理提醒</h2>
+                  <small>查看全部</small>
+                </div>
+                <div class="todo-list">
+                  <div class="row"><b>低库存预警</b><span class="badge orange">32</span></div>
+                  <div class="row"><b>待确认采购单</b><span class="badge orange">12</span></div>
+                  <div class="row"><b>广告 ACOS 超目标</b><span class="badge orange">3</span></div>
+                  <div class="row"><b>海外仓到期提醒</b><span class="badge blue">7</span></div>
+                </div>
+              </article>
+              <article class="card panel">
+                <div class="panel-head">
+                  <h2>系统状态</h2>
+                  <small>同步中心</small>
+                </div>
+                <div class="todo-list">
+                  <div class="row"><b>订单同步</b><span class="badge green">正常</span></div>
+                  <div class="row"><b>库存同步</b><span class="badge green">正常</span></div>
+                  <div class="row"><b>广告数据</b><span class="badge green">正常</span></div>
+                </div>
+              </article>
+            </div>
+          </section>
+
+          <article class="card table-panel">
+            <div class="panel-head">
+              <h2>近期订单</h2>
+              <small>高密度表格保持白色容器和轻量边框</small>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>订单号</th>
+                  <th>店铺</th>
+                  <th>国家 / 地区</th>
+                  <th class="right">SKU 数量</th>
+                  <th class="right">订单金额</th>
+                  <th>订单状态</th>
+                  <th class="right">履约率</th>
+                  <th>预计发货</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>JM-US-250705-1001</td><td>Amazon-US</td><td>美国</td><td class="num">8</td><td class="num">2,145.69</td><td><span class="badge blue">待发货</span></td><td class="num">98.12%</td><td>2026-07-06</td></tr>
+                <tr><td>JM-US-250705-1002</td><td>Walmart-US</td><td>美国</td><td class="num">5</td><td class="num">1,298.43</td><td><span class="badge green">已发货</span></td><td class="num">96.47%</td><td>2026-07-05</td></tr>
+                <tr><td>JM-CA-250705-1003</td><td>Amazon-CA</td><td>加拿大</td><td class="num">12</td><td class="num">3,520.10</td><td><span class="badge blue">待发货</span></td><td class="num">97.44%</td><td>2026-07-06</td></tr>
+                <tr><td>JM-UK-250705-1004</td><td>TikTok Shop-UK</td><td>英国</td><td class="num">3</td><td class="num">689.99</td><td><span class="badge green">已完成</span></td><td class="num">100.00%</td><td>2026-07-04</td></tr>
+              </tbody>
+            </table>
+          </article>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

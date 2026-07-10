@@ -1,0 +1,114 @@
+/* Shared dashboard module primitives. Keep feature-specific variants in pages/. */
+.module-hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+  margin-top: 14px;
+  padding: 14px 16px;
+  background: var(--tj-content-bg);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--blue-800);
+  border-radius: 8px;
+  box-shadow: var(--shadow-soft);
+}
+
+.module-hero span {
+  color: var(--tj-text-muted);
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.module-hero h2 {
+  margin: 4px 0;
+  font-size: 20px;
+  line-height: 1.2;
+  color: var(--blue-950);
+}
+
+.module-hero p {
+  margin: 0;
+  color: var(--tj-text-muted);
+  line-height: 1.5;
+  font-size: 14px;
+}
+
+.hero-actions {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.inline-date {
+  display: grid;
+  gap: 6px;
+  color: var(--tj-text-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.inline-date input {
+  min-width: 160px;
+  height: 40px;
+  border: 1px solid var(--tj-border-control);
+  border-radius: 8px;
+  padding: 0 10px;
+  color: var(--text);
+  background: var(--tj-content-bg);
+  font: inherit;
+}
+
+.module-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.cashflow-metrics {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.inventory-kpi-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.inventory-kpi-grid .inventory-age-kpi {
+  grid-column: span 1;
+}
+
+.metric-tile {
+  min-height: 96px;
+  padding: 14px 16px;
+  background: var(--tj-content-bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow-soft);
+  position: relative;
+  overflow: hidden;
+}
+
+.metric-tile::before {
+  content: "";
+  position: absolute;
+  left: 18px;
+  top: 0;
+  width: 34px;
+  height: 3px;
+  border-radius: 0 0 4px 4px;
+  background: linear-gradient(90deg, var(--blue-800), var(--teal));
+}
+
+.metric-tile span,
+.metric-tile small {
+  display: block;
+  color: var(--tj-text-muted);
+}
+
+.metric-tile strong {
+  display: block;
+  margin: 9px 0 6px;
+  font-size: 24px;
+  color: var(--blue-900);
+}
