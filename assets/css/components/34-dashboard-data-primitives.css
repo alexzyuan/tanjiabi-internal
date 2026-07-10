@@ -1,0 +1,132 @@
+/* Shared dashboard grids, lists, chart labels, and table affordances. */
+.metric-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, 1.3fr) 420px minmax(360px, 1.3fr);
+  gap: 10px;
+  margin-top: 0;
+}
+
+.chart-panel {
+  min-height: 345px;
+}
+
+svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.mini-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.dual-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 0;
+}
+
+.summary-strip {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  overflow: auto;
+  background: var(--tj-content-bg);
+  border: 1px solid var(--tj-border-subtle);
+  border-radius: var(--spectrum-control-radius);
+  box-shadow: var(--shadow-soft);
+}
+
+.summary-strip div {
+  min-width: 120px;
+  border-right: 1px solid var(--tj-content-bg);
+  text-align: center;
+}
+
+.summary-strip span {
+  display: block;
+  padding: 9px 6px;
+  background: var(--tj-action-blue-soft);
+  color: var(--tj-text-muted);
+  font-weight: 800;
+}
+
+.summary-strip strong {
+  display: block;
+  padding: 11px 6px;
+}
+
+.action-list,
+.config-list,
+.anomaly-list {
+  display: grid;
+  gap: 10px;
+}
+
+.action-list div,
+.config-list div,
+.anomaly-list div {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  background: var(--tj-surface-muted);
+  border: 1px solid var(--tj-border-subtle);
+  border-radius: var(--spectrum-control-radius);
+}
+
+.anomaly-list div {
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.anomaly-list strong {
+  color: var(--tj-text-strong);
+}
+
+.anomaly-list span {
+  color: var(--tj-text-muted);
+  line-height: 1.45;
+}
+
+.sort-button {
+  width: 100%;
+  min-height: 0;
+  height: auto;
+  padding: 0 18px 0 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  cursor: pointer;
+  box-shadow: none;
+  position: relative;
+}
+
+.sort-button::after {
+  content: "↓";
+  position: absolute;
+  right: 0;
+  color: var(--tj-text-muted);
+  opacity: 0.45;
+}
+
+.sort-button[data-direction="asc"]::after {
+  content: "↑";
+  opacity: 1;
+}
+
+.sort-button[data-direction="desc"]::after {
+  content: "↓";
+  opacity: 1;
+}
+
+.image-placeholder {
+  display: grid;
+  place-items: center;
+  color: var(--tj-text-muted);
+  background: var(--tj-surface-muted);
+}

@@ -60,11 +60,11 @@ Results:
   - fail: 14
   - skipped: 1
 
-## Known Test Debt
+## Resolved CSS Structure Test Debt
 
-The remaining failures are all in `test/stylesStructure.test.js` and predate the Git baseline task. They are not caused by the Git initialization or GitHub push.
+At the initial Git baseline, the remaining failures were all in `test/stylesStructure.test.js` and predated the Git baseline task. They were not caused by the Git initialization or GitHub push.
 
-Known CSS structure failures include:
+Those historical CSS structure failures included:
 
 - `styles.css` has 4 token roots where the target test expects 2.
 - Brand blue values still appear outside the expected semantic-token path.
@@ -76,6 +76,58 @@ Known CSS structure failures include:
   - `assets/css/pages/21-home-quick-links.css`
   - `assets/css/pages/51-payables.css`
   - `assets/css/pages/54-supplier-detail.css`
-- Some rules still remain in legacy CSS or do not yet match the target layer comments.
+- Some rules still remained in legacy CSS or did not yet match the target layer comments.
+
+Status: resolved by the CSS structure baseline update below. `test/stylesStructure.test.js` now passes with 43 passed, 0 failed, and 1 skipped.
 
 This task intentionally did not change UI, CSS visuals, business metrics, API response structures, database/storage choices, or Lingxing business endpoint behavior.
+
+## CSS Structure Baseline Update
+
+Date: 2026-07-10
+
+The CSS structure baseline has been brought back to green without changing backend business logic, API response contracts, or the native HTML/CSS/JS technology direction.
+
+Verification for the CSS structure baseline:
+
+```bash
+npm run check:js
+node scripts/build-styles.js --check
+node --test test/stylesStructure.test.js
+npm test
+git diff --check
+```
+
+Results:
+
+- `npm run check:js`: passed.
+- `node scripts/build-styles.js --check`: passed.
+- `node --test test/stylesStructure.test.js`: 43 passed, 0 failed, 1 skipped.
+- `npm test`: 266 passed, 0 failed, 1 skipped.
+- `git diff --check`: passed.
+
+## Current CI Baseline
+
+GitHub Actions intentionally runs the stable engineering baseline only:
+
+```bash
+npm ci
+npm run check:js
+node scripts/build-styles.js --check
+npm test
+```
+
+CI uses Node.js versions within the supported project range declared in `package.json`: `>=22.19.0 <25`.
+
+`npm run check` is not a blocking CI command yet because it includes the broader CSS standards gate described below. That gate is valuable, but it still reports historical CSS standards debt outside the current CSS structure baseline scope.
+
+## Known CSS Standards Debt
+
+`npm run check` still fails because `scripts/check-css-standards.js` reports existing CSS standards debt. The known categories are:
+
+- Old `!important` rules that still need to be removed through layer order or selector ownership fixes.
+- Hardcoded colors that still need to move behind semantic tokens.
+- Decorative gradients that still need to be replaced with approved semantic solids or surfaces.
+- Legacy token/color compatibility rules that still expose old visual language tokens.
+
+These are tracked as follow-up CSS standards work. They should not be hidden or bypassed, but they are not part of the current blocking CI baseline until the remaining CSS standards debt is deliberately paid down.

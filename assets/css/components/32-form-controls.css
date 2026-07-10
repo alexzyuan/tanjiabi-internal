@@ -1,0 +1,152 @@
+/* Shared native form layouts, secondary actions, and multi-select controls. */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.form-grid label,
+.form-field {
+  display: grid;
+  gap: 6px;
+  color: var(--tj-text-muted);
+  font-size: 13px;
+}
+
+.form-grid input,
+.form-grid select,
+.fba-schedule-bar input,
+.fba-schedule-bar select,
+.multi-select-button {
+  width: 100%;
+  height: 38px;
+  border: 1px solid var(--tj-border-control);
+  border-radius: var(--spectrum-control-radius);
+  padding: 0 10px;
+  color: var(--tj-text-body);
+  background: var(--tj-content-bg);
+}
+
+.multi-select {
+  position: relative;
+}
+
+.multi-select-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  text-align: left;
+}
+
+.multi-select-button::after {
+  content: "▾";
+  color: var(--tj-text-muted);
+  font-size: 12px;
+}
+
+.multi-select-menu {
+  position: absolute;
+  top: 44px;
+  left: 0;
+  right: 0;
+  z-index: 35;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  background: var(--tj-content-bg);
+  border: 1px solid var(--tj-border-control);
+  border-radius: var(--spectrum-control-radius);
+  box-shadow: 0 26px 60px rgba(22, 35, 58, 0.16);
+}
+
+.multi-select-menu[hidden] {
+  display: none;
+}
+
+.multi-select-tools {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.multi-select-tools button,
+.secondary-button {
+  height: 34px;
+  border: 1px solid var(--tj-border-control);
+  border-radius: var(--spectrum-control-radius);
+  color: var(--tj-text-body);
+  background: var(--tj-surface-muted);
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.compact-button {
+  white-space: nowrap;
+}
+
+.multi-select-options {
+  max-height: 210px;
+  overflow: auto;
+  display: grid;
+  gap: 2px;
+}
+
+.multi-select-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  color: var(--tj-text-body);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.form-grid .multi-select-option {
+  display: flex;
+  grid-template-columns: none;
+  align-items: center;
+  gap: 12px;
+}
+
+.multi-select-option:hover {
+  background: var(--tj-action-blue-soft);
+}
+
+.multi-select-option input[type="checkbox"],
+.multi-select-option input[type="radio"] {
+  width: 14px;
+  height: 14px;
+  min-width: 14px;
+  flex: 0 0 14px;
+  margin: 0;
+  padding: 0;
+  border-radius: 4px;
+  appearance: auto;
+}
+
+.form-grid .multi-select-option input[type="checkbox"],
+.form-grid .multi-select-option input[type="radio"] {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+}
+
+.multi-select-option span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.multi-select-option small {
+  color: var(--tj-text-muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.shop-option-name {
+  font-weight: 700;
+}

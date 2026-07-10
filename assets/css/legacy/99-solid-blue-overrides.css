@@ -1,9 +1,4 @@
 /* Temporary visual-lock override: flatten blue gradients without changing layout. */
-:root {
-  --tj-solid-blue: #1677ff;
-  --tj-solid-blue-hover: #0f66dd;
-}
-
 body:not(.login-body) .brand-mark,
 body:not(.login-body) .primary-button,
 body:not(.login-body) .button-primary,
@@ -23,7 +18,7 @@ body:not(.login-body) .tabs .store-tabs button.active,
 body:not(.login-body) .knowledge-doc-logo,
 body:not(.login-body) .account-trigger,
 body:not(.login-body) .breadcrumb-home-icon {
-  background: var(--tj-solid-blue) !important;
+  background: var(--tj-action-blue) !important;
   background-image: none !important;
 }
 
@@ -40,7 +35,7 @@ body:not(.login-body) #lowfee-refresh:hover,
 body:not(.login-body) #pulse-refresh-button:hover,
 body:not(.login-body) .account-trigger:hover,
 body:not(.login-body) .account-menu.is-open .account-trigger {
-  background: var(--tj-solid-blue-hover) !important;
+  background: var(--tj-action-blue-hover) !important;
   background-image: none !important;
 }
 
@@ -50,18 +45,18 @@ body:not(.login-body) .section-title::before,
 body:not(.login-body) .panel-title::before,
 body:not(.login-body) .review-primary-result::before,
 body:not(.login-body) .kpi-card:not(.kpi-green):not(.kpi-orange):not(.kpi-red) .kpi-progress span {
-  background: var(--tj-solid-blue) !important;
+  background: var(--tj-action-blue) !important;
   background-image: none !important;
 }
 
 .login-body .admin-login-logo,
 .login-body .login-corner-toggle,
 .login-body .login-button:not(.is-disabled) {
-  background: var(--tj-solid-blue) !important;
+  background: var(--tj-action-blue) !important;
   background-image: none !important;
 }
 
 .login-body .login-button:not(.is-disabled):hover {
-  background: var(--tj-solid-blue-hover) !important;
+  background: var(--tj-action-blue-hover) !important;
   background-image: none !important;
 }

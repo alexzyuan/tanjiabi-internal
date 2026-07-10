@@ -22,5 +22,5 @@ body:not(.login-body) .section-title {
   width: 4px;
   height: 18px;
   border-radius: 999px;
-  background: linear-gradient(180deg, var(--tj-action-blue), var(--spectrum-accent-visual));
+  background: var(--tj-action-blue);
 }

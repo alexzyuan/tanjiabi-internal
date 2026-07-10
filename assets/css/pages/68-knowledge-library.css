@@ -467,11 +467,6 @@ body:not(.login-body) .knowledge-table-empty {
   font-size: 13px;
 }
 
-body:not(.login-body) .knowledge-doc-main .operations-course-panel {
-  margin: 18px;
-  border: 1px solid var(--tj-border-subtle);
-  box-shadow: none;
-}
 
 body:not(.login-body) .knowledge-document-modal {
   display: grid;

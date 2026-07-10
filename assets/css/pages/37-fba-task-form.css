@@ -1,4 +1,212 @@
-/* FBA task form MSKU search. */
+/* FBA task form schedule controls and MSKU search. */
+.fba-schedule-bar {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.1fr) repeat(5, minmax(110px, 0.7fr)) minmax(180px, 1fr);
+  gap: 10px;
+  align-items: end;
+}
+
+.fba-schedule-bar label,
+.toggle-row {
+  display: grid;
+  gap: 6px;
+  color: var(--tj-text-muted);
+  font-size: 13px;
+}
+
+.toggle-row {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 8px;
+  color: var(--tj-text-body);
+  font-weight: 800;
+}
+
+.toggle-row input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--blue-700);
+}
+
+.task-schedule-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.form-grid .task-schedule-options label {
+  min-width: 0;
+}
+
+.form-grid .task-schedule-options .toggle-row {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid var(--tj-border-control);
+  border-radius: var(--spectrum-control-radius);
+  background: var(--tj-content-bg);
+  color: var(--tj-text-body);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.form-grid .task-schedule-options .toggle-row input {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  accent-color: var(--tj-action-blue);
+}
+
+.notification-policy-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  min-height: 40px;
+  padding: 10px 12px;
+  border: 1px solid var(--tj-border-control);
+  border-radius: var(--spectrum-control-radius);
+  background: var(--tj-content-bg);
+}
+
+.notification-policy-group > span {
+  grid-column: 1 / -1;
+  color: #667085;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.form-grid .notification-policy-group label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: auto;
+  color: var(--tj-text-body);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.notification-policy-group input[type="radio"] {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  accent-color: var(--tj-action-blue);
+}
+
+.schedule-effective-row,
+.schedule-mode-row {
+  display: grid;
+  align-items: center;
+  margin-top: 14px;
+}
+
+.schedule-effective-row {
+  grid-template-columns: 100px minmax(180px, 1fr) 24px minmax(180px, 1fr);
+  gap: 12px;
+}
+
+.schedule-effective-row span,
+.schedule-mode-row > span {
+  color: #667085;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.schedule-effective-row em {
+  color: var(--tj-text-strong);
+  font-style: normal;
+  text-align: center;
+}
+
+.form-grid .schedule-effective-row input {
+  height: 44px;
+  border-color: var(--tj-border-control);
+  border-radius: 7px;
+  font-size: 14px;
+}
+
+.schedule-mode-row {
+  grid-template-columns: 100px repeat(3, max-content);
+  gap: 26px;
+}
+
+.form-grid .schedule-radio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--tj-text-strong);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.form-grid .schedule-radio input {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  accent-color: var(--tj-action-blue);
+}
+
+.schedule-time-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 140px) minmax(150px, 200px) 20px minmax(150px, 200px) minmax(180px, 1fr);
+  gap: 12px;
+  align-items: center;
+  margin-top: 14px;
+}
+
+.schedule-time-row > span {
+  color: var(--tj-text-strong);
+  text-align: center;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.schedule-time-row small {
+  color: #ff8a00;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.form-grid .schedule-time-row select,
+.form-grid .schedule-time-row input {
+  height: 44px;
+  border-color: var(--tj-border-control);
+  border-radius: 7px;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.schedule-add-button {
+  width: fit-content;
+  min-height: 40px;
+  margin-top: 12px;
+  border: 1px solid var(--tj-action-blue);
+  border-radius: 7px;
+  padding: 0 18px;
+  background: var(--tj-content-bg);
+  color: var(--tj-action-blue-hover);
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+@media (max-width: 1200px) {
+  .fba-schedule-bar {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .task-schedule-options,
+  .schedule-effective-row,
+  .schedule-mode-row,
+  .schedule-time-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 .search-row {
   display: flex;
   gap: 8px;
@@ -28,7 +236,7 @@
   overflow: auto;
   padding: 6px;
   border: 1px solid var(--tj-border-subtle);
-  border-radius: 8px;
+  border-radius: var(--spectrum-control-radius);
   background: var(--tj-content-bg);
   box-shadow: var(--tj-shadow);
 }
@@ -43,7 +251,7 @@
   overflow: auto;
   padding: 8px;
   border: 1px solid var(--tj-border-subtle);
-  border-radius: 8px;
+  border-radius: var(--spectrum-control-radius);
   color: var(--tj-text-muted);
   background: var(--tj-surface-muted);
   line-height: 1.6;
@@ -54,7 +262,7 @@
   width: 100%;
   padding: 6px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--spectrum-control-radius);
   color: var(--tj-text-body);
   background: transparent;
   text-align: left;

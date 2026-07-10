@@ -1,0 +1,198 @@
+/* Home quick links and sync summary. */
+body:not(.login-body) .home-sync-pill {
+  display: grid;
+  grid-template-columns: 8px auto;
+  column-gap: 8px;
+  row-gap: 2px;
+  align-items: center;
+  min-width: 150px;
+  padding: 10px 12px;
+  border: 1px solid rgba(202, 219, 238, 0.94);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+body:not(.login-body) .home-sync-pill .sync-dot {
+  grid-row: 1 / span 2;
+}
+
+body:not(.login-body) .home-sync-pill strong {
+  color: var(--tj-text-strong);
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+body:not(.login-body) .home-sync-pill small {
+  color: var(--tj-text-muted);
+  font-size: 11px;
+}
+
+body:not(.login-body) .home-quick-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+body:not(.login-body) .home-quick-grid button {
+  display: grid;
+  gap: 5px;
+  min-height: 94px;
+  padding: 13px;
+  border: 1px solid rgba(204, 222, 242, 0.88);
+  border-radius: 14px;
+  background: var(--tj-surface-muted);
+  text-align: left;
+  cursor: pointer;
+}
+
+body:not(.login-body) .home-quick-grid button:hover {
+  border-color: rgba(35, 125, 255, 0.38);
+  background: var(--tj-action-blue-soft);
+}
+
+body:not(.login-body) .home-quick-grid button span {
+  color: var(--tj-action-blue);
+  font-size: 12px;
+  font-weight: 820;
+}
+
+body:not(.login-body) .home-quick-grid button strong {
+  color: var(--tj-text-strong);
+  font-size: 16px;
+}
+
+body:not(.login-body) .home-quick-config-toggle {
+  min-height: 28px;
+  padding: 0 var(--spectrum-spacing-150);
+  border: 1px solid var(--spectrum-border-default);
+  border-radius: var(--spectrum-control-radius);
+  color: var(--spectrum-text-primary);
+  background: var(--spectrum-background-layer-1);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+body:not(.login-body) .home-quick-config-toggle:hover {
+  border-color: var(--spectrum-border-hover);
+  background: var(--spectrum-background-layer-2);
+}
+
+body:not(.login-body) .home-quick-config[hidden] {
+  display: none !important;
+}
+
+body:not(.login-body) .home-quick-config {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(176px, 1fr));
+  gap: var(--spectrum-spacing-75);
+  max-height: 232px;
+  overflow: auto;
+  margin-bottom: var(--spectrum-spacing-100);
+  padding: var(--spectrum-spacing-100);
+  border: 1px solid var(--spectrum-border-default);
+  border-radius: var(--spectrum-card-radius);
+  background: var(--spectrum-background-layer-2);
+}
+
+body:not(.login-body) .home-quick-config-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spectrum-spacing-75);
+  min-height: 32px;
+  padding: var(--spectrum-spacing-50) var(--spectrum-spacing-75);
+  border: 1px solid var(--spectrum-border-default);
+  border-radius: var(--spectrum-control-radius);
+  background: var(--spectrum-background-layer-1);
+}
+
+body:not(.login-body) .home-quick-config-row label {
+  display: flex;
+  align-items: center;
+  gap: var(--spectrum-spacing-75);
+  min-width: 0;
+  color: var(--spectrum-text-primary);
+  cursor: pointer;
+}
+
+body:not(.login-body) .home-quick-config-row input {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+}
+
+body:not(.login-body) .home-quick-config-row label > span {
+  display: grid;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+body:not(.login-body) .home-quick-config-row strong,
+body:not(.login-body) .home-quick-config-row small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  var(--tj-content-bg)-space: nowrap;
+}
+
+body:not(.login-body) .home-quick-config-row strong {
+  color: var(--spectrum-text-primary);
+  font-size: 12px;
+}
+
+body:not(.login-body) .home-quick-config-row small {
+  color: var(--spectrum-text-secondary);
+  font-size: 11px;
+}
+
+body:not(.login-body) .home-quick-order-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: var(--spectrum-spacing-50);
+}
+
+body:not(.login-body) .home-quick-order-actions button {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--spectrum-border-default);
+  border-radius: var(--spectrum-control-radius);
+  color: var(--spectrum-text-primary);
+  background: var(--spectrum-background-layer-1);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+body:not(.login-body) .home-quick-grid {
+  grid-template-columns: repeat(auto-fit, minmax(154px, 1fr));
+  gap: var(--spectrum-spacing-100);
+}
+
+body:not(.login-body) .home-quick-grid button {
+  min-height: 70px;
+  padding: var(--spectrum-spacing-100) var(--spectrum-spacing-150);
+  border-color: var(--spectrum-border-default);
+  border-radius: var(--spectrum-control-radius);
+  background: var(--spectrum-background-layer-2);
+}
+
+body:not(.login-body) .home-quick-grid button strong {
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+body:not(.login-body) .home-quick-grid small {
+  line-height: 1.25;
+}
+
+body:not(.login-body) .home-quick-empty {
+  grid-column: 1 / -1;
+  min-height: 70px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--spectrum-border-default);
+  border-radius: var(--spectrum-control-radius);
+  color: var(--spectrum-text-secondary);
+  background: var(--spectrum-background-layer-2);
+  font-size: 13px;
+}

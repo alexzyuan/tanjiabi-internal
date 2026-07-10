@@ -381,7 +381,7 @@ body:not(.login-body) .topbar {
   min-width: 0 !important;
   height: var(--tj-topbar-fixed-height) !important;
   min-height: var(--tj-topbar-fixed-height) !important;
-  margin: 0 calc(var(--tj-content-inline-gap) * -1 - 2px) 0 0 !important;
+  margin: 0 calc(var(--tj-content-inline-gap) * -1) 0 0 !important;
   padding: 11px 18px 0 12px !important;
   border: 0 !important;
   border-radius: 0 !important;

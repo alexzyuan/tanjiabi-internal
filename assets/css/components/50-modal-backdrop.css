@@ -12,7 +12,7 @@
 }
 
 body:not(.login-body) .modal-backdrop {
-  z-index: 10000 !important;
+  z-index: 10000;
 }
 
 @media (max-width: 720px) {
