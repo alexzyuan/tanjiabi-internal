@@ -496,6 +496,45 @@ export class LingxingAdapter {
     });
   }
 
+  fetchFbaShipmentBoxInfo(params = {}) {
+    return this.signedRequest("/erp/sc/routing/fba/shipment/boxInfo", {
+      method: "POST",
+      params,
+    });
+  }
+
+  fetchLocalWarehouses(params = {}) {
+    return this.signedRequest("/erp/sc/data/local_inventory/warehouse", {
+      method: "POST",
+      params: {
+        type: 1,
+        is_delete: 0,
+        offset: 0,
+        length: 1000,
+        ...params,
+      },
+    });
+  }
+
+  fetchFbaInboundShipmentOrders(params = {}) {
+    return this.signedRequest("/erp/sc/routing/storage/shipment/getInboundShipmentList", {
+      method: "POST",
+      params: {
+        offset: 0,
+        length: 20,
+        is_delete: 0,
+        ...params,
+      },
+    });
+  }
+
+  createReadySendFbaShipmentOrder(params = {}) {
+    return this.signedRequest("/erp/sc/routing/storage/shipment/createReadySendOrder", {
+      method: "POST",
+      params,
+    });
+  }
+
   async fetchAllFbaInventoryDetails(sids = [], { length = 200, maxRows = 2000, params = {} } = {}) {
     const rows = [];
     for (let offset = 0; offset < maxRows; offset += length) {
