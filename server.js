@@ -74,6 +74,11 @@ import {
   getFbaFreightShipments,
   listFbaForwarderTemplates,
 } from "./src/services/fbaFreightSheetService.js";
+import { getFbaShipmentCandidates } from "./src/services/fbaShipmentCandidateService.js";
+import {
+  createReadySendFbaShipmentOrders,
+  listFbaShipmentOrderWarehouses,
+} from "./src/services/fbaShipmentOrderService.js";
 import {
   createFbaStaTasks,
   deleteFbaStaTask,
@@ -788,9 +793,12 @@ const apiRoutes = createApiRoutes(buildApiRoutes({
   getFbaShopOptions,
   searchFbaMskus,
   getFbaFreightShipments,
+  getFbaShipmentCandidates,
   listFbaForwarderTemplates,
   exportFbaFreightShipments,
   convertFbaFreightShipmentsToForwarderTemplate,
+  listFbaShipmentOrderWarehouses,
+  createReadySendFbaShipmentOrders,
   saveFbaBoxTemplate,
   getFbaStaAutomationState,
   updateFbaStaAutomation,

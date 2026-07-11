@@ -8,9 +8,12 @@ export function createFbaRoutes(deps = {}) {
     getFbaShopOptions,
     searchFbaMskus,
     getFbaFreightShipments,
+    getFbaShipmentCandidates,
     listFbaForwarderTemplates,
     exportFbaFreightShipments,
     convertFbaFreightShipmentsToForwarderTemplate,
+    listFbaShipmentOrderWarehouses,
+    createReadySendFbaShipmentOrders,
     saveFbaBoxTemplate,
     getFbaStaAutomationState,
     updateFbaStaAutomation,
@@ -47,6 +50,35 @@ export function createFbaRoutes(deps = {}) {
       auth: "session",
       errorStatusCode: 502,
       handler: async ({ res, url }) => sendJson(res, 200, await getFbaFreightShipments(readFbaFreightFilters(url))),
+    },
+    {
+      method: "GET",
+      path: "/api/fba/shipment-candidates",
+      auth: "session",
+      errorStatusCode: 502,
+      handler: async ({ res, url }) => sendJson(res, 200, await getFbaShipmentCandidates(readFbaFreightFilters(url))),
+    },
+    {
+      method: "GET",
+      path: "/api/fba/warehouses",
+      auth: "session",
+      errorStatusCode: 502,
+      handler: async ({ res }) => sendJson(res, 200, await listFbaShipmentOrderWarehouses()),
+    },
+    {
+      method: "POST",
+      path: "/api/fba/shipment-orders/create",
+      auth: "session",
+      errorStatusCode: 400,
+      handler: async ({ req, res }) => {
+        const body = await readJsonBody(req);
+        const result = await createReadySendFbaShipmentOrders({
+          filters: body.filters || {},
+          shipmentIds: Array.isArray(body.shipmentIds) ? body.shipmentIds : [],
+          warehouse: body.warehouse || {},
+        });
+        sendJson(res, result.ok ? 200 : 207, result);
+      },
     },
     {
       method: "GET",
