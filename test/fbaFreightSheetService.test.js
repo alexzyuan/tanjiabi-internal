@@ -316,3 +316,33 @@ test("buildFbaForwarderWorkbookBuffer preserves the source template package part
     assert.deepEqual(outputNames, sourceNames, templateId);
   }
 });
+
+test("getFbaFreightShipments uses shared candidate cache for identical filters", async () => {
+  const { clearFbaShipmentCandidateCache } = await import("../src/services/fbaShipmentCandidateService.js");
+  const { getFbaFreightShipments } = await import("../src/services/fbaFreightSheetService.js");
+  clearFbaShipmentCandidateCache();
+  let shipmentCalls = 0;
+  const adapter = {
+    async fetchFbaCargoShipments() {
+      shipmentCalls += 1;
+      return shipmentPayload;
+    },
+    async fetchListings() {
+      return { data: { list: [] } };
+    },
+    async fetchLocalProductInfos() {
+      return { data: [] };
+    },
+  };
+
+  await getFbaFreightShipments({ startDate: "2026-07-01", endDate: "2026-07-10", sid: "8708" }, {
+    adapter,
+    sellers: [{ sid: 8708, name: "xiamentanjia-US", country: "美国", seller_id: "A1SELLERUS", marketplace_id: "ATVPDKIKX0DER" }],
+  });
+  await getFbaFreightShipments({ startDate: "2026-07-01", endDate: "2026-07-10", sid: "8708" }, {
+    adapter,
+    sellers: [{ sid: 8708, name: "xiamentanjia-US", country: "美国", seller_id: "A1SELLERUS", marketplace_id: "ATVPDKIKX0DER" }],
+  });
+
+  assert.equal(shipmentCalls, 1);
+});

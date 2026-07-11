@@ -9,6 +9,7 @@ import {
   applySharedProductCatalogToRows,
   getSharedProductCatalogMap,
 } from "./sharedDataService.js";
+import { getFbaShipmentCandidates } from "./fbaShipmentCandidateService.js";
 import { readZipEntries, writeZipEntries } from "../utils/zipArchive.js";
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -809,49 +810,19 @@ export async function getFbaFreightShipments(filters = {}, {
   productCatalogRequired = false,
   forceProductCatalogRefresh = false,
 } = {}) {
-  const normalizedFilters = normalizeFbaFreightFilters(filters);
-  const payload = await adapter.fetchFbaCargoShipments(buildLingxingShipmentParams(normalizedFilters));
-  const normalizedShipments = normalizeFbaFreightShipments(payload, { sellers });
-  const catalogSeedRows = normalizedShipments.flatMap((shipment) =>
-    (shipment.items || []).map((item) => ({
-      sid: shipment.sid,
-      msku: item.msku,
-      sku: item.sku,
-      productName: item.productName || item.title,
-      imageUrl: item.imageUrl,
-    })),
-  );
-  let catalogResult = { map: new Map(), status: "" };
-  if (catalogSeedRows.length) {
-    try {
-      catalogResult = await getSharedProductCatalogMap(adapter, catalogSeedRows, {
-        forceRefresh: forceProductCatalogRefresh,
-        strict: productCatalogRequired,
-      });
-    } catch (error) {
-      console.error("[fba-freight] product catalog lookup failed", {
-        shipmentCount: normalizedShipments.length,
-        itemCount: catalogSeedRows.length,
-        required: productCatalogRequired,
-        error: error.message,
-      });
-      if (productCatalogRequired) throw error;
-    }
-  }
-  const shipments = applyProductCatalogToFbaFreightShipments(normalizedShipments, catalogResult.map);
-  console.info("[fba-freight] normalized shipments", {
-    shipmentCount: shipments.length,
-    itemCount: shipments.reduce((total, shipment) => total + (shipment.items || []).length, 0),
-    imageCatalogStatus: catalogResult.status || "",
+  const result = await getFbaShipmentCandidates(filters, {
+    adapter,
+    sellers,
+    productCatalogRequired,
+    forceProductCatalogRefresh,
   });
-  return {
-    ok: true,
-    filters: normalizedFilters,
-    total: Number(payload?.total || payload?.data?.total || shipments.length || 0),
-    rows: shipments,
-    imageCatalogStatus: catalogResult.status || "",
-    raw: payload,
-  };
+  console.info("[fba-freight] normalized shipments", {
+    shipmentCount: result.rows.length,
+    itemCount: result.rows.reduce((total, shipment) => total + (shipment.items || []).length, 0),
+    imageCatalogStatus: result.imageCatalogStatus || "",
+    cacheHit: Boolean(result.cache?.hit),
+  });
+  return result;
 }
 
 export async function exportFbaFreightShipments(filters = {}, options = {}) {
