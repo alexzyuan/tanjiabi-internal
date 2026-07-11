@@ -43,6 +43,17 @@ test("frontend module cache-bust versions stay aligned", async () => {
   assert.equal(dashboardLoaderUiUtilsVersion, indexUiUtilsVersion);
 });
 
+test("FBA logistics views stay grouped under logistics metadata", async () => {
+  const breadcrumbShellSource = await readFile(new URL("../assets/js/features/breadcrumb-shell.js", import.meta.url), "utf8");
+  const homeQuickLinksSource = await readFile(new URL("../assets/js/features/home-quick-links.js", import.meta.url), "utf8");
+
+  assert.match(breadcrumbShellSource, /"fba-freight": \["首页", "物流", "货代表格"\]/);
+  assert.match(breadcrumbShellSource, /"fba-shipment-order": \["首页", "物流", "FBA转发货单"\]/);
+  assert.match(breadcrumbShellSource, /breadcrumbGroups = new Set\(\[[^\]]*"物流"/);
+  assert.match(homeQuickLinksSource, /target: "fba-freight", group: "物流"/);
+  assert.match(homeQuickLinksSource, /target: "fba-shipment-order", group: "物流"/);
+});
+
 test("ui-utils.js exposes ES module exports while keeping the legacy global", async () => {
   const source = await readFile(new URL("../assets/js/ui-utils.js", import.meta.url), "utf8");
 
