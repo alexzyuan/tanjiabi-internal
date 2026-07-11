@@ -379,8 +379,8 @@ body:not(.login-body) .topbar {
   gap: 10px !important;
   width: auto !important;
   min-width: 0 !important;
-  height: var(--tj-topbar-fixed-height) !important;
-  min-height: var(--tj-topbar-fixed-height) !important;
+  height: max(var(--tj-topbar-fixed-height), calc(132px - 8vw)) !important;
+  min-height: max(var(--tj-topbar-fixed-height), calc(132px - 8vw)) !important;
   margin: 0 calc(var(--tj-content-inline-gap) * -1) 0 0 !important;
   padding: 11px 18px 0 12px !important;
   border: 0 !important;
