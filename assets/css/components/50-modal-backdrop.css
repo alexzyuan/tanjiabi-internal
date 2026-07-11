@@ -4,7 +4,7 @@
   display: grid;
   place-items: center;
   padding: 26px;
-  background: rgba(15, 23, 42, 0.38);
+  background: var(--tj-overlay-backdrop);
 }
 
 .modal-backdrop[hidden] {

@@ -8,8 +8,8 @@
 
 body {
   margin: 0;
-  color: var(--text);
-  background: #f6f8fc;
+  color: var(--tj-text-strong);
+  background: var(--tj-body-bg);
   font-family: "PingFang SC", "Hiragino Sans GB", Inter, Arial, "Microsoft YaHei", sans-serif;
   letter-spacing: 0;
 }

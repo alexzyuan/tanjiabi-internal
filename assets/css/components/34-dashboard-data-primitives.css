@@ -37,7 +37,7 @@ svg {
   background: var(--tj-content-bg);
   border: 1px solid var(--tj-border-subtle);
   border-radius: var(--spectrum-control-radius);
-  box-shadow: var(--shadow-soft);
+  box-shadow: var(--tj-shadow-soft);
 }
 
 .summary-strip div {

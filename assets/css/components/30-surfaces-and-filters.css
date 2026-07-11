@@ -5,8 +5,8 @@
   gap: 10px;
   background: var(--tj-content-bg);
   padding: 12px;
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow-soft);
+  border: 1px solid var(--tj-border-subtle);
+  box-shadow: var(--tj-shadow-soft);
   border-radius: 8px;
   margin-top: 14px;
 }
@@ -16,7 +16,7 @@
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 8px;
-  color: var(--text);
+  color: var(--tj-text-body);
   white-space: nowrap;
   font-size: 14px;
 }
@@ -27,7 +27,7 @@
   min-width: 0;
   height: 38px;
   border: 1px solid var(--tj-border-control);
-  color: var(--text);
+  color: var(--tj-text-body);
   background: var(--tj-content-bg);
   padding: 0 10px;
   border-radius: 8px;
@@ -43,7 +43,7 @@
 .filter-toolbar select:focus {
   outline: 0;
   border-color: var(--tj-action-blue);
-  box-shadow: 0 0 0 3px rgba(29, 111, 242, 0.1);
+  box-shadow: 0 0 0 3px var(--tj-focus-ring-soft);
 }
 
 .form-span-2 {
@@ -52,9 +52,9 @@
 
 .panel {
   background: var(--tj-content-bg);
-  border: 1px solid var(--line);
+  border: 1px solid var(--tj-border-subtle);
   border-radius: 8px;
-  box-shadow: var(--shadow-soft);
+  box-shadow: var(--tj-shadow-soft);
   padding: 18px;
   min-width: 0;
 }
@@ -81,7 +81,7 @@
   height: 16px;
   margin-right: 9px;
   vertical-align: -3px;
-  background: var(--blue-700);
+  background: var(--tj-action-blue);
   border-radius: 3px;
 }
 

@@ -26,7 +26,7 @@
 .toggle-row input {
   width: 18px;
   height: 18px;
-  accent-color: var(--blue-700);
+  accent-color: var(--tj-action-blue);
 }
 
 .task-schedule-options {
@@ -73,7 +73,7 @@
 
 .notification-policy-group > span {
   grid-column: 1 / -1;
-  color: #667085;
+  color: var(--tj-text-muted);
   font-size: 13px;
   font-weight: 800;
 }
@@ -109,7 +109,7 @@
 
 .schedule-effective-row span,
 .schedule-mode-row > span {
-  color: #667085;
+  color: var(--tj-text-muted);
   font-size: 14px;
   font-weight: 800;
 }
@@ -164,7 +164,7 @@
 }
 
 .schedule-time-row small {
-  color: #ff8a00;
+  color: var(--tj-warning-emphasis);
   font-size: 13px;
   white-space: nowrap;
 }

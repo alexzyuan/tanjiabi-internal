@@ -119,15 +119,16 @@ npm test
 
 CI uses Node.js versions within the supported project range declared in `package.json`: `>=22.19.0 <25`.
 
-`npm run check` is not a blocking CI command yet because it includes the broader CSS standards gate described below. That gate is valuable, but it still reports historical CSS standards debt outside the current CSS structure baseline scope.
+`npm run check` includes the broader CSS standards gate described below. The gate is now baseline-aware: current historical standards debt is recorded as a ceiling, and new or increased debt fails the check.
 
 ## Known CSS Standards Debt
 
-`npm run check` still fails because `scripts/check-css-standards.js` reports existing CSS standards debt. The known categories are:
+`scripts/check-css-standards.js` reports existing CSS standards debt against `scripts/css-standards-baseline.json`. The known categories are:
 
 - Old `!important` rules that still need to be removed through layer order or selector ownership fixes.
 - Hardcoded colors that still need to move behind semantic tokens.
 - Decorative gradients that still need to be replaced with approved semantic solids or surfaces.
 - Legacy token/color compatibility rules that still expose old visual language tokens.
+- Legacy CSS selectors that still need to move into layout, component, or page ownership.
 
-These are tracked as follow-up CSS standards work. They should not be hidden or bypassed, but they are not part of the current blocking CI baseline until the remaining CSS standards debt is deliberately paid down.
+These are tracked as follow-up CSS standards work in `CSS_STANDARDS_DEBT.md`. They should not be hidden or bypassed. The current baseline prevents new debt while allowing existing debt to be reduced in small reviewed steps.

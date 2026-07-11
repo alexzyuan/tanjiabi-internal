@@ -1,0 +1,568 @@
+{
+  "generatedAt": "2026-07-11T00:50:37.028Z",
+  "policy": [
+    "This file is a ceiling for known CSS standards debt.",
+    "The standards check fails when any category/file count exceeds this baseline.",
+    "When debt is intentionally reduced, regenerate this file with node scripts/check-css-standards.js --update-baseline."
+  ],
+  "allowlist": {
+    "important": [
+      "[hidden] display:none accessibility/visibility utility",
+      ".visually-hidden display:none accessibility utility",
+      ".sr-only display:none accessibility utility",
+      ".screen-reader-only display:none accessibility utility",
+      ".sr-only-focusable display:none accessibility utility"
+    ]
+  },
+  "totals": {
+    "gradient": 84,
+    "hardcoded-color": 193,
+    "important": 618,
+    "legacy-selector": 123,
+    "legacy-token": 76
+  },
+  "entries": [
+    {
+      "category": "gradient",
+      "file": "assets/css/components/20-module-primitives.css",
+      "count": 1,
+      "sampleLines": [
+        100
+      ],
+      "message": "avoid decorative gradients; use a semantic solid color or tokenized surface"
+    },
+    {
+      "category": "gradient",
+      "file": "assets/css/layout/10-shell.css",
+      "count": 5,
+      "sampleLines": [
+        51,
+        197,
+        486,
+        746,
+        1107
+      ],
+      "message": "avoid decorative gradients; use a semantic solid color or tokenized surface"
+    },
+    {
+      "category": "gradient",
+      "file": "assets/css/legacy/current.css",
+      "count": 2,
+      "sampleLines": [
+        129,
+        174
+      ],
+      "message": "avoid decorative gradients; use a semantic solid color or tokenized surface"
+    },
+    {
+      "category": "gradient",
+      "file": "assets/css/pages/20-login.css",
+      "count": 26,
+      "sampleLines": [
+        10,
+        11,
+        12,
+        13,
+        29,
+        30,
+        41,
+        42
+      ],
+      "message": "avoid decorative gradients; use a semantic solid color or tokenized surface"
+    },
+    {
+      "category": "gradient",
+      "file": "assets/css/pages/22-sales-dashboard.css",
+      "count": 6,
+      "sampleLines": [
+        110,
+        263,
+        268,
+        272,
+        276,
+        296
+      ],
+      "message": "avoid decorative gradients; use a semantic solid color or tokenized surface"
+    },
+    {
+      "category": "gradient",
+      "file": "assets/css/pages/36-fba-automation.css",
+      "count": 1,
+      "sampleLines": [
+        199
+      ],
+      "message": "avoid decorative gradients; use a semantic solid color or tokenized surface"
+    },
+    {
+      "category": "gradient",
+      "file": "assets/css/pages/40-ai-image-workflow.css",
+      "count": 3,
+      "sampleLines": [
+        481,
+        487,
+        492
+      ],
+      "message": "avoid decorative gradients; use a semantic solid color or tokenized surface"
+    },
+    {
+      "category": "gradient",
+      "file": "assets/css/pages/51-payables.css",
+      "count": 1,
+      "sampleLines": [
+        120
+      ],
+      "message": "avoid decorative gradients; use a semantic solid color or tokenized surface"
+    },
+    {
+      "category": "gradient",
+      "file": "assets/css/pages/52-factory-inventory.css",
+      "count": 1,
+      "sampleLines": [
+        15
+      ],
+      "message": "avoid decorative gradients; use a semantic solid color or tokenized surface"
+    },
+    {
+      "category": "gradient",
+      "file": "assets/css/pages/53-supplier-board.css",
+      "count": 1,
+      "sampleLines": [
+        15
+      ],
+      "message": "avoid decorative gradients; use a semantic solid color or tokenized surface"
+    },
+    {
+      "category": "gradient",
+      "file": "styles.css",
+      "count": 37,
+      "sampleLines": [
+        14,
+        34,
+        87,
+        126,
+        179,
+        441,
+        542,
+        544
+      ],
+      "message": "avoid decorative gradients; use a semantic solid color or tokenized surface"
+    },
+    {
+      "category": "hardcoded-color",
+      "file": "assets/css/layout/10-shell.css",
+      "count": 86,
+      "sampleLines": [
+        52,
+        84,
+        196,
+        197,
+        249,
+        265,
+        280,
+        416
+      ],
+      "message": "replace hardcoded colors with semantic tokens"
+    },
+    {
+      "category": "hardcoded-color",
+      "file": "assets/css/legacy/98-shell-topbar-parity.css",
+      "count": 9,
+      "sampleLines": [
+        65,
+        261,
+        277,
+        285,
+        443,
+        467,
+        484,
+        541
+      ],
+      "message": "replace hardcoded colors with semantic tokens"
+    },
+    {
+      "category": "hardcoded-color",
+      "file": "assets/css/legacy/current.css",
+      "count": 20,
+      "sampleLines": [
+        16,
+        27,
+        44,
+        48,
+        52,
+        60,
+        64,
+        77
+      ],
+      "message": "replace hardcoded colors with semantic tokens"
+    },
+    {
+      "category": "hardcoded-color",
+      "file": "assets/css/pages/20-login.css",
+      "count": 58,
+      "sampleLines": [
+        10,
+        12,
+        13,
+        29,
+        30,
+        41,
+        42,
+        62
+      ],
+      "message": "replace hardcoded colors with semantic tokens"
+    },
+    {
+      "category": "hardcoded-color",
+      "file": "assets/css/pages/22-sales-dashboard.css",
+      "count": 1,
+      "sampleLines": [
+        52
+      ],
+      "message": "replace hardcoded colors with semantic tokens"
+    },
+    {
+      "category": "hardcoded-color",
+      "file": "assets/css/pages/24-review-rating.css",
+      "count": 2,
+      "sampleLines": [
+        58,
+        121
+      ],
+      "message": "replace hardcoded colors with semantic tokens"
+    },
+    {
+      "category": "hardcoded-color",
+      "file": "assets/css/pages/35-fba-freight.css",
+      "count": 2,
+      "sampleLines": [
+        54,
+        62
+      ],
+      "message": "replace hardcoded colors with semantic tokens"
+    },
+    {
+      "category": "hardcoded-color",
+      "file": "assets/css/pages/36-fba-automation.css",
+      "count": 1,
+      "sampleLines": [
+        17
+      ],
+      "message": "replace hardcoded colors with semantic tokens"
+    },
+    {
+      "category": "hardcoded-color",
+      "file": "assets/css/pages/40-ai-image-workflow.css",
+      "count": 6,
+      "sampleLines": [
+        308,
+        1027,
+        1176,
+        1179,
+        1386,
+        1393
+      ],
+      "message": "replace hardcoded colors with semantic tokens"
+    },
+    {
+      "category": "hardcoded-color",
+      "file": "assets/css/pages/68-knowledge-library.css",
+      "count": 8,
+      "sampleLines": [
+        18,
+        95,
+        190,
+        287,
+        301,
+        480,
+        645,
+        769
+      ],
+      "message": "replace hardcoded colors with semantic tokens"
+    },
+    {
+      "category": "important",
+      "file": "assets/css/base/00-reset.css",
+      "count": 1,
+      "sampleLines": [
+        6
+      ],
+      "message": "remove !important; use layer order or selector ownership instead"
+    },
+    {
+      "category": "important",
+      "file": "assets/css/legacy/98-shell-topbar-parity.css",
+      "count": 381,
+      "sampleLines": [
+        10,
+        11,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21
+      ],
+      "message": "remove !important; use layer order or selector ownership instead"
+    },
+    {
+      "category": "important",
+      "file": "assets/css/legacy/99-solid-blue-overrides.css",
+      "count": 10,
+      "sampleLines": [
+        21,
+        22,
+        38,
+        39,
+        48,
+        49,
+        55,
+        56
+      ],
+      "message": "remove !important; use layer order or selector ownership instead"
+    },
+    {
+      "category": "important",
+      "file": "assets/css/legacy/current.css",
+      "count": 11,
+      "sampleLines": [
+        81,
+        92,
+        97,
+        102,
+        107,
+        113,
+        128,
+        129
+      ],
+      "message": "remove !important; use layer order or selector ownership instead"
+    },
+    {
+      "category": "important",
+      "file": "assets/css/pages/20-login.css",
+      "count": 70,
+      "sampleLines": [
+        576,
+        577,
+        916,
+        920,
+        921,
+        922,
+        923,
+        927
+      ],
+      "message": "remove !important; use layer order or selector ownership instead"
+    },
+    {
+      "category": "important",
+      "file": "assets/css/pages/21-home-quick-links.css",
+      "count": 1,
+      "sampleLines": [
+        82
+      ],
+      "message": "remove !important; use layer order or selector ownership instead"
+    },
+    {
+      "category": "important",
+      "file": "assets/css/pages/22-sales-dashboard.css",
+      "count": 3,
+      "sampleLines": [
+        3,
+        7,
+        11
+      ],
+      "message": "remove !important; use layer order or selector ownership instead"
+    },
+    {
+      "category": "important",
+      "file": "assets/css/pages/25-sales-forecast.css",
+      "count": 1,
+      "sampleLines": [
+        181
+      ],
+      "message": "remove !important; use layer order or selector ownership instead"
+    },
+    {
+      "category": "important",
+      "file": "assets/css/pages/26-clearance-calculator.css",
+      "count": 5,
+      "sampleLines": [
+        93,
+        94,
+        95,
+        98,
+        101
+      ],
+      "message": "remove !important; use layer order or selector ownership instead"
+    },
+    {
+      "category": "important",
+      "file": "assets/css/pages/40-ai-image-workflow.css",
+      "count": 8,
+      "sampleLines": [
+        713,
+        714,
+        715,
+        716,
+        720,
+        721,
+        725,
+        726
+      ],
+      "message": "remove !important; use layer order or selector ownership instead"
+    },
+    {
+      "category": "important",
+      "file": "assets/css/pages/52-factory-inventory.css",
+      "count": 2,
+      "sampleLines": [
+        140,
+        141
+      ],
+      "message": "remove !important; use layer order or selector ownership instead"
+    },
+    {
+      "category": "important",
+      "file": "assets/css/pages/67-aftersales-mail.css",
+      "count": 13,
+      "sampleLines": [
+        22,
+        273,
+        274,
+        283,
+        284,
+        285,
+        291,
+        292
+      ],
+      "message": "remove !important; use layer order or selector ownership instead"
+    },
+    {
+      "category": "important",
+      "file": "styles.css",
+      "count": 112,
+      "sampleLines": [
+        4,
+        607,
+        679,
+        680,
+        681,
+        692,
+        703,
+        704
+      ],
+      "message": "remove !important; use layer order or selector ownership instead"
+    },
+    {
+      "category": "legacy-selector",
+      "file": "assets/css/legacy/98-shell-topbar-parity.css",
+      "count": 54,
+      "sampleLines": [],
+      "message": "move legacy CSS selector ownership into layout, component, or page layers"
+    },
+    {
+      "category": "legacy-selector",
+      "file": "assets/css/legacy/99-solid-blue-overrides.css",
+      "count": 5,
+      "sampleLines": [],
+      "message": "move legacy CSS selector ownership into layout, component, or page layers"
+    },
+    {
+      "category": "legacy-selector",
+      "file": "assets/css/legacy/current.css",
+      "count": 64,
+      "sampleLines": [],
+      "message": "move legacy CSS selector ownership into layout, component, or page layers"
+    },
+    {
+      "category": "legacy-token",
+      "file": "assets/css/components/20-module-primitives.css",
+      "count": 9,
+      "sampleLines": [
+        10,
+        11,
+        13,
+        26,
+        57,
+        85,
+        87,
+        100
+      ],
+      "message": "replace legacy visual language tokens with semantic tokens"
+    },
+    {
+      "category": "legacy-token",
+      "file": "assets/css/layout/10-shell.css",
+      "count": 4,
+      "sampleLines": [
+        2749,
+        2750,
+        2759,
+        2763
+      ],
+      "message": "replace legacy visual language tokens with semantic tokens"
+    },
+    {
+      "category": "legacy-token",
+      "file": "assets/css/legacy/current.css",
+      "count": 11,
+      "sampleLines": [
+        17,
+        165,
+        167,
+        174,
+        227,
+        240,
+        263,
+        305
+      ],
+      "message": "replace legacy visual language tokens with semantic tokens"
+    },
+    {
+      "category": "legacy-token",
+      "file": "assets/css/pages/20-login.css",
+      "count": 7,
+      "sampleLines": [
+        451,
+        458,
+        501,
+        527,
+        539,
+        564,
+        572
+      ],
+      "message": "replace legacy visual language tokens with semantic tokens"
+    },
+    {
+      "category": "legacy-token",
+      "file": "assets/css/tokens/10-legacy-compatibility.css",
+      "count": 20,
+      "sampleLines": [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "message": "replace legacy visual language tokens with semantic tokens"
+    },
+    {
+      "category": "legacy-token",
+      "file": "styles.css",
+      "count": 25,
+      "sampleLines": [
+        2,
+        406,
+        408,
+        409,
+        429,
+        431,
+        435,
+        440
+      ],
+      "message": "replace legacy visual language tokens with semantic tokens"
+    }
+  ]
+}

@@ -144,7 +144,7 @@
   overflow: hidden;
   border-radius: 7px;
   background: var(--tj-surface-muted);
-  box-shadow: inset 0 0 0 1px rgba(130, 160, 195, 0.22);
+  box-shadow: var(--tj-shadow-inset-control);
 }
 
 .payable-stack span {
@@ -206,7 +206,7 @@
   overflow: hidden;
   border-radius: 999px;
   background: var(--tj-surface-muted);
-  box-shadow: inset 0 0 0 1px rgba(130, 160, 195, 0.18);
+  box-shadow: var(--tj-shadow-inset-control-soft);
 }
 
 .payable-comparison-line i {
@@ -247,7 +247,7 @@
   padding: 10px 12px;
   border: 1px solid var(--tj-border-subtle);
   border-radius: var(--spectrum-control-radius);
-  background: linear-gradient(180deg, var(--tj-content-bg), var(--tj-surface-muted));
+  background: var(--tj-surface-muted);
 }
 
 .payable-flow-main span,
@@ -278,13 +278,13 @@
   top: 18px;
   bottom: 18px;
   width: 8px;
-  border: 2px solid #7e9cc2;
+  border: 2px solid var(--tj-border-accent-muted);
   border-right: 0;
   border-radius: var(--spectrum-control-radius) 0 0 8px;
 }
 
 .payable-flow-branch.danger strong {
-  color: #c8442d;
+  color: var(--tj-danger-text-strong);
 }
 
 .payable-flow-branch.compact {

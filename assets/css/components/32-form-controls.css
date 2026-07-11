@@ -57,7 +57,7 @@
   background: var(--tj-content-bg);
   border: 1px solid var(--tj-border-control);
   border-radius: var(--spectrum-control-radius);
-  box-shadow: 0 26px 60px rgba(22, 35, 58, 0.16);
+  box-shadow: var(--tj-shadow-floating);
 }
 
 .multi-select-menu[hidden] {

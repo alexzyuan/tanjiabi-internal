@@ -55,7 +55,7 @@
   border: 1px solid var(--tj-border-subtle);
   border-radius: 12px;
   background: var(--tj-content-bg);
-  box-shadow: 0 28px 80px rgba(20, 62, 110, 0.22);
+  box-shadow: var(--tj-shadow-modal);
 }
 
 @media (max-width:1180px) {
