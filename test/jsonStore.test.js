@@ -89,3 +89,34 @@ test("updateJsonAtomic applies sequential updates through the same store path", 
     assert.deepEqual(await readJson(file, { count: 0 }), { count: 2 });
   });
 });
+
+test("updateJsonAtomic preserves concurrent updates through the same store path", async () => {
+  await withTempDir(async (dir) => {
+    const file = path.join(dir, "history.json");
+    let releaseFirst;
+    const firstCanFinish = new Promise((resolve) => {
+      releaseFirst = resolve;
+    });
+    let firstStarted;
+    const firstStartedPromise = new Promise((resolve) => {
+      firstStarted = resolve;
+    });
+
+    const first = updateJsonAtomic(file, async (current) => {
+      firstStarted();
+      await firstCanFinish;
+      return { entries: [...(current?.entries || []), "first"] };
+    }, { entries: [] });
+
+    await firstStartedPromise;
+    const second = updateJsonAtomic(file, (current) => ({
+      entries: [...(current?.entries || []), "second"],
+    }), { entries: [] });
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    releaseFirst();
+    await Promise.all([first, second]);
+
+    assert.deepEqual((await readJson(file, { entries: [] })).entries.sort(), ["first", "second"]);
+  });
+});

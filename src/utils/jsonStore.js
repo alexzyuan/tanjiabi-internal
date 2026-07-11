@@ -1,6 +1,8 @@
 import { copyFile, mkdir, open, readFile, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+const fileUpdateQueues = new Map();
+
 export class JsonStoreError extends Error {
   constructor(message, fields = {}) {
     super(message);
@@ -68,10 +70,24 @@ export async function writeJsonAtomic(filePath, data) {
 
 export async function updateJsonAtomic(filePath, updater, fallback) {
   if (typeof updater !== "function") throw new Error("updateJsonAtomic requires an updater function.");
-  const current = await readJson(filePath, fallback);
-  const next = await updater(current);
-  await writeJsonAtomic(filePath, next);
-  return next;
+  const queueKey = path.resolve(filePath);
+  const previous = fileUpdateQueues.get(queueKey) || Promise.resolve();
+  const run = previous
+    .catch(() => undefined)
+    .then(async () => {
+      const current = await readJson(filePath, fallback);
+      const next = await updater(current);
+      await writeJsonAtomic(filePath, next);
+      return next;
+    });
+  fileUpdateQueues.set(queueKey, run);
+  try {
+    return await run;
+  } finally {
+    if (fileUpdateQueues.get(queueKey) === run) {
+      fileUpdateQueues.delete(queueKey);
+    }
+  }
 }
 
 export async function backupJson(filePath) {
