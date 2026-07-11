@@ -1,0 +1,50 @@
+.fba-shipment-order-panel {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.fba-shipment-order-toolbar {
+  align-items: end;
+}
+
+.fba-shipment-order-toolbar label {
+  min-width: 150px;
+}
+
+.fba-shipment-order-toolbar select,
+.fba-shipment-order-toolbar input {
+  min-width: 0;
+}
+
+.fba-shipment-order-summary {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.fba-shipment-order-table-shell {
+  overflow-x: auto;
+}
+
+.fba-shipment-order-table {
+  min-width: 980px;
+}
+
+.fba-shipment-order-table th:first-child,
+.fba-shipment-order-table td:first-child {
+  width: 44px;
+  text-align: center;
+}
+
+.fba-shipment-order-table td[data-fba-shipment-order-result] {
+  min-width: 180px;
+  white-space: normal;
+}
+
+@media (max-width: 760px) {
+  .fba-shipment-order-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .fba-shipment-order-toolbar label {
+    min-width: 100%;
+  }
+}
