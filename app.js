@@ -47,7 +47,6 @@ import { createAdminSettingsFeature } from "./assets/js/features/admin-settings.
 import { createBudgetTargetsFeature } from "./assets/js/features/budget-targets.js?v=20260706-frontend-refactor-v1";
 import { createSyncCenterFeature } from "./assets/js/features/sync-center.js?v=20260706-frontend-refactor-v1";
 import { createFbaFreightFeature } from "./assets/js/features/fba-freight.js?v=20260706-frontend-refactor-v1";
-import { createFbaShipmentOrderFeature } from "./assets/js/features/fba-shipment-order.js?v=20260711-fba-logistics-v1";
 import { createFbaShopsFeature } from "./assets/js/features/fba-shops.js?v=20260706-frontend-refactor-v1";
 import { createFbaMskuFeature } from "./assets/js/features/fba-msku.js?v=20260707-frontend-refactor-v1";
 import { createFbaAutomationFeature } from "./assets/js/features/fba-automation.js?v=20260707-frontend-refactor-v1";
@@ -237,13 +236,11 @@ let loadLingxingShops = async () => {};
 let loadSyncStatus = async () => {};
 let loadSalesForecast = async () => {};
 let loadFbaFreightInitial = async () => {};
-let loadFbaShipmentOrderInitial = async () => {};
 let openSupplierDetailModal = () => {};
 let renderPayableDetail = () => {};
 let renderSyncStatus = () => {};
 let renderSalesForecastHeader = () => {};
 let renderFbaFreightShopOptions = () => {};
-let renderFbaShipmentOrderShopOptions = () => {};
 let renderHomeQuickLinks = () => {};
 let renderStoreInspectionPreview = () => {};
 let renderStoreInspectionRecords = () => {};
@@ -263,7 +260,6 @@ let setupAdminSettings = () => {};
 let setupBreadcrumbNavigation = () => {};
 let setupBudgetTargets = () => {};
 let setupFbaFreight = () => {};
-let setupFbaShipmentOrder = () => {};
 let setupFbaShopPicker = () => {};
 let setupReviewRatingCalculator = () => {};
 let setupSalesDashboard = () => {};
@@ -764,7 +760,6 @@ async function refreshDashboardFromFilters() {
   onShopChange: (...args) => handleFbaShopSelectionChange(...args),
   onShopListChange: () => {
     renderFbaFreightShopOptions();
-    renderFbaShipmentOrderShopOptions();
   },
   pickSellerCountry,
   pickSellerName,
@@ -880,22 +875,6 @@ async function refreshDashboardFromFilters() {
   renderTableMessage,
   setModalOpenState,
   setText,
-}));
-
-({ loadFbaShipmentOrderInitial, renderFbaShipmentOrderShopOptions, setupFbaShipmentOrder } = createFbaShipmentOrderFeature({
-  root: document,
-  bind,
-  closestTarget,
-  escapeHtml,
-  fallbackFbaShops: getFallbackFbaShops(),
-  fbaValue,
-  fetchImpl: fetch.bind(window),
-  formatNumber,
-  getFbaShops,
-  loadFbaShops,
-  renderTableMessage,
-  setText,
-  confirmImpl: confirm.bind(window),
 }));
 
 ({ applyAuthVisibility, getCurrentAuthUser, loadAuthStatus, setupAuthShell } = createAuthShellFeature({
@@ -1137,9 +1116,6 @@ function setupNavigation() {
     if (view === "fba-freight") {
       await loadFbaFreightInitial();
     }
-    if (view === "fba-shipment-order") {
-      await loadFbaShipmentOrderInitial();
-    }
     if (view === "sync") loadSyncStatus();
     if (view === "sync") loadLingxingShops();
     window.__tanjiaHideSidebarFlyout?.();
@@ -1183,7 +1159,6 @@ function setupNavigation() {
 
   setupSyncCenter();
   setupFbaFreight();
-  setupFbaShipmentOrder();
   setupFbaShopPicker();
   setupFbaMskuPicker();
   setupFbaAutomationBoard();

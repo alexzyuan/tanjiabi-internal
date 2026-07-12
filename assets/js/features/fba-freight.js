@@ -24,8 +24,11 @@ export function createFbaFreightFeature({
   let fbaFreightRows = [];
   let fbaFreightLoaded = false;
   let fbaFreightTemplates = [];
+  let fbaFreightWarehouses = [];
   let selectedFbaFreightShipmentIds = new Set();
   let pendingFbaFreightConvertShipmentIds = [];
+  let fbaFreightOrderCreating = false;
+  const fbaFreightOrderResults = new Map();
 
   function query(selector) {
     return root?.querySelector?.(selector) || null;
@@ -91,6 +94,11 @@ export function createFbaFreightFeature({
     return fbaValue("#fba-freight-template-select");
   }
 
+  function selectedFbaFreightWarehouse() {
+    const value = fbaValue("#fba-freight-warehouse");
+    return value ? { wid: Number(value) } : {};
+  }
+
   function renderFbaFreightTemplateOptions() {
     const select = query("#fba-freight-template-select");
     if (!select) return;
@@ -99,6 +107,17 @@ export function createFbaFreightFeature({
       .map((template) => `<option value="${escapeHtml(template.id)}">${escapeHtml(template.name)}</option>`)
       .join("")}`;
     if (previous && fbaFreightTemplates.some((template) => template.id === previous)) select.value = previous;
+  }
+
+  function renderFbaFreightWarehouseOptions() {
+    const select = query("#fba-freight-warehouse");
+    if (!select) return;
+    const previous = select.value;
+    select.innerHTML = `<option value="">请选择发货仓库</option>${fbaFreightWarehouses
+      .map((warehouse) => `<option value="${escapeHtml(warehouse.wid)}">${escapeHtml(warehouse.name)}</option>`)
+      .join("")}`;
+    if (previous && [...select.options].some((option) => option.value === previous)) select.value = previous;
+    else if (!previous && fbaFreightWarehouses.length === 1) select.value = String(fbaFreightWarehouses[0].wid);
   }
 
   async function loadFbaFreightTemplates() {
@@ -116,6 +135,15 @@ export function createFbaFreightFeature({
     renderFbaFreightTemplateOptions();
   }
 
+  async function loadFbaFreightWarehouses() {
+    const response = await fetchImpl("/api/fba/warehouses");
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data.ok === false) throw new Error(data.error || "读取发货仓库失败");
+    fbaFreightWarehouses = data.warehouses || [];
+    renderFbaFreightWarehouseOptions();
+    updateFbaFreightSelectionState();
+  }
+
   function fbaFreightImageHtml(row) {
     const imageUrl = cachedSalesImageUrl(row.productImageUrl);
     if (!imageUrl) return `<span class="image-placeholder fba-freight-image-placeholder" aria-hidden="true">-</span>`;
@@ -130,7 +158,7 @@ export function createFbaFreightFeature({
     setText("#fba-freight-quantity", formatNumber(rows.reduce((sum, row) => sum + Number(row.shippedQuantity || 0), 0)), root);
     setText("#fba-freight-store-count", formatNumber(new Set(rows.map((row) => row.sid || row.storeName).filter(Boolean)).size), root);
     if (!rows.length) {
-      renderTableMessage(table, 11, "当前筛选没有货件。");
+      renderTableMessage(table, 12, "当前筛选没有货件。");
       updateFbaFreightSelectionState();
       return;
     }
@@ -149,6 +177,7 @@ export function createFbaFreightFeature({
           <td><span class="risk-badge">${escapeHtml(row.shipmentStatus || "-")}</span></td>
           <td>${escapeHtml(row.fulfillmentCenterCode || "-")}</td>
           <td>${escapeHtml(row.createdAt || "-")}</td>
+          <td data-fba-freight-order-result="${escapeHtml(rowId)}">${escapeHtml(fbaFreightOrderResults.get(rowId) || "-")}</td>
           <td class="table-actions">
             <button class="secondary-button compact-button" type="button" data-fba-freight-detail-index="${index}">预览</button>
             <button class="primary-button compact-button" type="button" data-fba-freight-convert="${escapeHtml(rowId)}">转表格</button>
@@ -162,7 +191,11 @@ export function createFbaFreightFeature({
 
   async function loadFbaFreightInitial() {
     setDefaultFbaFreightDates();
-    await Promise.allSettled([loadFbaShops(), loadFbaFreightTemplates()]);
+    const [, , warehouseResult] = await Promise.allSettled([loadFbaShops(), loadFbaFreightTemplates(), loadFbaFreightWarehouses()]);
+    if (warehouseResult.status === "rejected") {
+      console.error("[fba-freight] load shipment order warehouses failed", { error: warehouseResult.reason?.message || String(warehouseResult.reason) });
+      setFbaFreightStatus(`发货仓库读取失败：${warehouseResult.reason?.message || warehouseResult.reason}`);
+    }
     renderFbaFreightShopOptions();
     if (!fbaFreightLoaded) await loadFbaFreightShipments();
     else renderFbaFreightRows();
@@ -177,6 +210,7 @@ export function createFbaFreightFeature({
       if (!response.ok || data.ok === false) throw new Error(data.error || `API ${response.status}`);
       fbaFreightRows = data.rows || data.shipments || [];
       selectedFbaFreightShipmentIds = new Set();
+      fbaFreightOrderResults.clear();
       fbaFreightLoaded = true;
       renderFbaFreightRows();
       setFbaFreightStatus(`已读取 ${formatNumber(fbaFreightRows.length)} 个货件`);
@@ -197,6 +231,8 @@ export function createFbaFreightFeature({
     }
     const batchButton = query("#fba-freight-batch-convert");
     if (batchButton) batchButton.disabled = selectedCount === 0;
+    const orderButton = query("#fba-freight-create-order");
+    if (orderButton) orderButton.disabled = fbaFreightOrderCreating || selectedCount === 0 || !selectedFbaFreightWarehouse().wid;
   }
 
   function setFbaFreightRowSelection(rowId, selected) {
@@ -342,9 +378,84 @@ export function createFbaFreightFeature({
     }
   }
 
+  function setFbaFreightOrderResultCell(shipmentId, message) {
+    if (!shipmentId) return;
+    fbaFreightOrderResults.set(shipmentId, message);
+    const cell = query(`[data-fba-freight-order-result="${CSS.escape(shipmentId)}"]`);
+    if (cell) cell.textContent = message;
+  }
+
+  function setFbaFreightOrderResults(shipmentIds = [], message) {
+    shipmentIds.forEach((shipmentId) => setFbaFreightOrderResultCell(shipmentId, message));
+  }
+
+  function renderFbaFreightOrderResult(result = {}) {
+    if (result.status === "created") return `完成 ${result.orderSn || ""}`.trim();
+    if (result.status === "skipped") return `完成：${result.reason || "已存在"} ${result.orderSn || ""}`.trim();
+    return `失败：${result.error || "未知错误"}`;
+  }
+
+  async function createFbaFreightShipmentOrders() {
+    if (fbaFreightOrderCreating) {
+      setFbaFreightStatus("发货单创建中，请稍候。");
+      return;
+    }
+    const ids = [...selectedFbaFreightShipmentIds].filter(Boolean);
+    if (!ids.length) {
+      setFbaFreightStatus("请先勾选要转发货单的货件。");
+      return;
+    }
+    const warehouse = selectedFbaFreightWarehouse();
+    if (!warehouse.wid) {
+      setFbaFreightStatus("请先选择发货仓库。");
+      updateFbaFreightSelectionState();
+      return;
+    }
+    fbaFreightOrderCreating = true;
+    updateFbaFreightSelectionState();
+    setFbaFreightStatus(`发货单创建中：${formatNumber(ids.length)} 个货件`);
+    setFbaFreightOrderResults(ids, "进行中");
+    try {
+      const response = await fetchImpl("/api/fba/shipment-orders/create", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          filters: fbaFreightFiltersObject(),
+          shipmentIds: ids,
+          warehouse,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      const results = Array.isArray(data.results) ? data.results : null;
+      if (!results) throw new Error(data.error || "接口没有返回创建结果");
+      if (!response.ok && !results.length) throw new Error(data.error || `API ${response.status}`);
+      const resultShipmentIds = new Set();
+      results.forEach((result) => {
+        if (result.shipmentId) resultShipmentIds.add(String(result.shipmentId));
+        setFbaFreightOrderResultCell(result.shipmentId, renderFbaFreightOrderResult(result));
+      });
+      const missingResultIds = ids.filter((id) => !resultShipmentIds.has(String(id)));
+      missingResultIds.forEach((id) => setFbaFreightOrderResultCell(id, "失败：接口没有返回创建结果"));
+      if (missingResultIds.length) {
+        console.error("[fba-freight] missing shipment order create results", { shipmentIds: missingResultIds });
+      }
+      setFbaFreightStatus(
+        `发货单创建完成：完成 ${formatNumber((data.createdCount || 0) + (data.skippedCount || 0))}，失败 ${formatNumber((data.failedCount || 0) + missingResultIds.length)}`,
+      );
+    } catch (error) {
+      const message = `失败：${error.message || error}`;
+      setFbaFreightOrderResults(ids, message);
+      setFbaFreightStatus(`发货单创建失败：${error.message || error}`);
+    } finally {
+      fbaFreightOrderCreating = false;
+      updateFbaFreightSelectionState();
+    }
+  }
+
   function setupFbaFreight() {
     bind(root, "#fba-freight-refresh", "click", loadFbaFreightShipments);
     bind(root, "#fba-freight-export", "click", exportFbaFreightWorkbook);
+    bind(root, "#fba-freight-warehouse", "change", updateFbaFreightSelectionState);
     bind(root, "#fba-freight-template-select", "change", updateFbaFreightTemplateConfirmState);
     bind(root, "#fba-freight-select-all", "change", (event) => {
       setAllFbaFreightRowSelection(event.target.checked);
@@ -352,6 +463,7 @@ export function createFbaFreightFeature({
     bind(root, "#fba-freight-batch-convert", "click", () => {
       openFbaFreightTemplateModal([...selectedFbaFreightShipmentIds]);
     });
+    bind(root, "#fba-freight-create-order", "click", createFbaFreightShipmentOrders);
     bind(root, "#fba-freight-detail-close", "click", closeFbaFreightDetail);
     bindBackdropClose(root, "#fba-freight-detail-modal", closeFbaFreightDetail);
     bind(root, "#fba-freight-template-close", "click", closeFbaFreightTemplateModal);

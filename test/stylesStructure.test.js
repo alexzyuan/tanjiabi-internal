@@ -761,7 +761,7 @@ test("FBA freight status wrapping lives in the page layer", async () => {
   assert.match(pageSource, /^#view-fba-freight \.fba-freight-summary\s*\{/m);
   assert.match(pageSource, /^#view-fba-freight \.panel-head\s*\{/m);
   assert.match(pageSource, /^#fba-freight-status\s*\{/m);
-  assert.match(pageSource, /min-width:\s*1120px/);
+  assert.match(pageSource, /min-width:\s*1240px/);
   assert.match(pageSource, /overflow-wrap:\s*anywhere/);
   assert.match(pageSource, /var\(--tj-content-bg\)/);
   assert.equal(/#(?:1677ff|2563eb|0b66d8|2457d5)\b/i.test(pageSource), false);

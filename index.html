@@ -67,8 +67,7 @@
               <span>物流</span>
               <span class="nav-group-caret" aria-hidden="true">⌄</span>
             </button>
-            <button class="nav-item" data-view="fba-freight"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 6h16v12H4z"/><path d="M7 10h10"/><path d="M7 14h6"/><path d="M17 18l3 3"/><path d="M20 18l-3 3"/></svg></span><span class="nav-label">FBA转货代表格</span></button>
-            <button class="nav-item" data-view="fba-shipment-order"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16v10H4z"/><path d="M8 7V5h8v2"/><path d="M8 12h5"/><path d="M15 12l2 2 4-5"/></svg></span><span class="nav-label">FBA转发货单</span></button>
+            <button class="nav-item" data-view="fba-freight"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 6h16v12H4z"/><path d="M7 10h10"/><path d="M7 14h6"/><path d="M17 18l3 3"/><path d="M20 18l-3 3"/></svg></span><span class="nav-label">FBA货件处理</span></button>
           </section>
           <section class="nav-group" aria-label="产品">
             <button class="nav-group-title" type="button" aria-expanded="false">
@@ -1891,9 +1890,9 @@
         <section class="view" id="view-fba-freight">
           <section class="module-hero">
             <div>
-              <span>货代表格</span>
-              <h2>FBA货代发货表格</h2>
-              <p>直接读取领星 FBA 货件 fbaCargo 数据，按货件汇总发货数量并生成货代表格。</p>
+              <span>FBA货件处理</span>
+              <h2>FBA货件处理</h2>
+              <p>读取领星 FBA 货件，同一批货件可批量转货代表格，也可直接创建领星待发货发货单。</p>
             </div>
           </section>
           <article class="panel fba-freight-panel">
@@ -1924,9 +1923,15 @@
                   <option value="CANCELLED">CANCELLED</option>
                 </select>
               </label>
+              <label>发货仓库
+                <select id="fba-freight-warehouse">
+                  <option value="">请选择发货仓库</option>
+                </select>
+              </label>
               <button class="secondary-button" id="fba-freight-refresh" type="button">读取货件</button>
               <button class="secondary-button" id="fba-freight-export" type="button">生成表格</button>
               <button class="primary-button" id="fba-freight-batch-convert" type="button">批量转表格</button>
+              <button class="primary-button" id="fba-freight-create-order" type="button" disabled>转发货单</button>
             </section>
             <section class="metric-grid fba-freight-summary">
               <article class="metric-tile"><span>货件数</span><strong id="fba-freight-count">0</strong><small>当前筛选</small></article>
@@ -1947,10 +1952,11 @@
                     <th>货件状态</th>
                     <th>物流中心编码</th>
                     <th>创建时间</th>
+                    <th>发货单结果</th>
                     <th>操作</th>
                   </tr>
                 </thead>
-                <tbody id="fba-freight-table"><tr><td colspan="11">请选择条件后读取货件。</td></tr></tbody>
+                <tbody id="fba-freight-table"><tr><td colspan="12">请选择条件后读取货件。</td></tr></tbody>
               </table>
             </div>
           </article>
@@ -1983,64 +1989,6 @@
               </div>
             </article>
           </div>
-        </section>
-
-        <section class="view" id="view-fba-shipment-order">
-          <section class="module-hero">
-            <div>
-              <span>FBA发货单</span>
-              <h2>FBA货件转发货单</h2>
-              <p>读取领星 FBA 货件，批量创建领星待发货发货单；第一版不扣减本地仓库存。</p>
-            </div>
-          </section>
-          <article class="panel fba-shipment-order-panel">
-            <div class="panel-head">
-              <h2>货件筛选</h2>
-              <span id="fba-shipment-order-status">等待读取货件</span>
-            </div>
-            <section class="filter-toolbar fba-shipment-order-toolbar">
-              <label>开始日期<input id="fba-shipment-order-start-date" type="date" /></label>
-              <label>结束日期<input id="fba-shipment-order-end-date" type="date" /></label>
-              <label>店铺<select id="fba-shipment-order-sid"><option value="">全部核心店铺</option></select></label>
-              <label>货件单号<input id="fba-shipment-order-shipment-id" placeholder="支持精确搜索" /></label>
-              <label>货件状态<select id="fba-shipment-order-status-filter">
-                <option value="">全部状态</option>
-                <option value="WORKING">WORKING</option>
-                <option value="READY_TO_SHIP">READY_TO_SHIP</option>
-                <option value="SHIPPED">SHIPPED</option>
-                <option value="IN_TRANSIT">IN_TRANSIT</option>
-                <option value="DELIVERED">DELIVERED</option>
-                <option value="RECEIVING">RECEIVING</option>
-                <option value="CLOSED">CLOSED</option>
-              </select></label>
-              <label>发货仓库<select id="fba-shipment-order-warehouse"><option value="">请选择发货仓库</option></select></label>
-              <button class="secondary-button" id="fba-shipment-order-refresh" type="button">读取货件</button>
-              <button class="primary-button" id="fba-shipment-order-create" type="button" disabled>批量创建待发货单</button>
-            </section>
-            <section class="metric-grid fba-shipment-order-summary">
-              <article class="metric-tile"><span>货件数</span><strong id="fba-shipment-order-count">0</strong><small>当前筛选</small></article>
-              <article class="metric-tile"><span>已选择</span><strong id="fba-shipment-order-selected-count">0</strong><small>准备创建</small></article>
-              <article class="metric-tile"><span>发货数量</span><strong id="fba-shipment-order-quantity">0</strong><small>按商品明细汇总</small></article>
-            </section>
-            <div class="table-shell fba-shipment-order-table-shell">
-              <table class="data-table fba-shipment-order-table">
-                <thead>
-                  <tr>
-                    <th><input id="fba-shipment-order-select-all" type="checkbox" aria-label="全选货件" /></th>
-                    <th>店铺</th>
-                    <th>货件单号</th>
-                    <th>货件名称</th>
-                    <th>状态</th>
-                    <th>SKU数</th>
-                    <th>发货数量</th>
-                    <th>映射</th>
-                    <th>结果</th>
-                  </tr>
-                </thead>
-                <tbody id="fba-shipment-order-table"><tr><td colspan="9">请选择条件后读取货件。</td></tr></tbody>
-              </table>
-            </div>
-          </article>
         </section>
 
         <section class="view" id="view-fba">

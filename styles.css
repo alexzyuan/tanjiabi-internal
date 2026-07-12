@@ -1026,7 +1026,8 @@ body:not(.login-body) #view-clearance>.module-hero .hero-actions{justify-content
 #view-fba-freight .fba-freight-toolbar{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
 #view-fba-freight .fba-freight-toolbar button{width:100%;min-width:0;height:38px;white-space:nowrap}
 #view-fba-freight .fba-freight-table-shell{max-width:100%;overflow-x:auto}
-#view-fba-freight .fba-freight-table{min-width:1120px}
+#view-fba-freight .fba-freight-table{min-width:1240px}
+#view-fba-freight .fba-freight-table td[data-fba-freight-order-result]{min-width:150px;white-space:normal}
 #view-fba-freight .fba-freight-summary{grid-template-columns:repeat(3,minmax(0,1fr))}
 #view-fba-freight .fba-freight-summary .metric-tile{min-width:0}
 #view-fba-freight .fba-freight-product-image-frame,#view-fba-freight .fba-freight-image-placeholder{display:inline-grid;width:44px;height:44px;place-items:center}

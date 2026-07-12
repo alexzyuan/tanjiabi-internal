@@ -46,12 +46,26 @@ test("frontend module cache-bust versions stay aligned", async () => {
 test("FBA logistics views stay grouped under logistics metadata", async () => {
   const breadcrumbShellSource = await readFile(new URL("../assets/js/features/breadcrumb-shell.js", import.meta.url), "utf8");
   const homeQuickLinksSource = await readFile(new URL("../assets/js/features/home-quick-links.js", import.meta.url), "utf8");
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const appSource = await readFile(new URL("../app.js", import.meta.url), "utf8");
+  const fbaFreightSource = await readFile(new URL("../assets/js/features/fba-freight.js", import.meta.url), "utf8");
 
-  assert.match(breadcrumbShellSource, /"fba-freight": \["首页", "物流", "货代表格"\]/);
-  assert.match(breadcrumbShellSource, /"fba-shipment-order": \["首页", "物流", "FBA转发货单"\]/);
+  assert.match(breadcrumbShellSource, /"fba-freight": \["首页", "物流", "FBA货件处理"\]/);
+  assert.equal(breadcrumbShellSource.includes('"fba-shipment-order"'), false);
   assert.match(breadcrumbShellSource, /breadcrumbGroups = new Set\(\[[^\]]*"物流"/);
-  assert.match(homeQuickLinksSource, /target: "fba-freight", group: "物流"/);
-  assert.match(homeQuickLinksSource, /target: "fba-shipment-order", group: "物流"/);
+  assert.match(homeQuickLinksSource, /target: "fba-freight", group: "物流", title: "FBA货件处理"/);
+  assert.equal(homeQuickLinksSource.includes('target: "fba-shipment-order"'), false);
+  assert.match(indexSource, /data-view="fba-freight"[\s\S]*<span class="nav-label">FBA货件处理<\/span>/);
+  assert.equal(indexSource.includes('data-view="fba-shipment-order"'), false);
+  assert.match(indexSource, /id="fba-freight-warehouse"/);
+  assert.match(indexSource, /id="fba-freight-create-order"/);
+  assert.equal(appSource.includes("createFbaShipmentOrderFeature"), false);
+  assert.equal(appSource.includes("loadFbaShipmentOrderInitial"), false);
+  assert.match(fbaFreightSource, /fetchImpl\("\/api\/fba\/warehouses"\)/);
+  assert.match(fbaFreightSource, /fetchImpl\("\/api\/fba\/shipment-orders\/create"/);
+  assert.match(fbaFreightSource, /data-fba-freight-order-result/);
+  assert.match(fbaFreightSource, /fbaFreightOrderCreating/);
+  assert.match(fbaFreightSource, /接口没有返回创建结果/);
 });
 
 test("ui-utils.js exposes ES module exports while keeping the legacy global", async () => {

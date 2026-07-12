@@ -15,7 +15,12 @@
 }
 
 #view-fba-freight .fba-freight-table {
-  min-width: 1120px;
+  min-width: 1240px;
+}
+
+#view-fba-freight .fba-freight-table td[data-fba-freight-order-result] {
+  min-width: 150px;
+  white-space: normal;
 }
 
 #view-fba-freight .fba-freight-summary {
