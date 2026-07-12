@@ -96,7 +96,7 @@ export function createFbaFreightFeature({
 
   function selectedFbaFreightWarehouse() {
     const value = fbaValue("#fba-freight-warehouse");
-    return value ? { wid: Number(value) } : {};
+    return value ? { sysWid: Number(value) } : {};
   }
 
   function renderFbaFreightTemplateOptions() {
@@ -114,10 +114,10 @@ export function createFbaFreightFeature({
     if (!select) return;
     const previous = select.value;
     select.innerHTML = `<option value="">请选择发货仓库</option>${fbaFreightWarehouses
-      .map((warehouse) => `<option value="${escapeHtml(warehouse.wid)}">${escapeHtml(warehouse.name)}</option>`)
+      .map((warehouse) => `<option value="${escapeHtml(warehouse.sysWid || warehouse.wid)}">${escapeHtml(warehouse.name)}</option>`)
       .join("")}`;
     if (previous && [...select.options].some((option) => option.value === previous)) select.value = previous;
-    else if (!previous && fbaFreightWarehouses.length === 1) select.value = String(fbaFreightWarehouses[0].wid);
+    else if (!previous && fbaFreightWarehouses.length === 1) select.value = String(fbaFreightWarehouses[0].sysWid || fbaFreightWarehouses[0].wid);
   }
 
   async function loadFbaFreightTemplates() {
@@ -181,6 +181,7 @@ export function createFbaFreightFeature({
           <td class="table-actions">
             <button class="secondary-button compact-button" type="button" data-fba-freight-detail-index="${index}">预览</button>
             <button class="primary-button compact-button" type="button" data-fba-freight-convert="${escapeHtml(rowId)}">转表格</button>
+            <button class="primary-button compact-button" type="button" data-fba-freight-create-order="${escapeHtml(rowId)}">转发货单</button>
           </td>
         </tr>
       `;
@@ -231,8 +232,9 @@ export function createFbaFreightFeature({
     }
     const batchButton = query("#fba-freight-batch-convert");
     if (batchButton) batchButton.disabled = selectedCount === 0;
-    const orderButton = query("#fba-freight-create-order");
-    if (orderButton) orderButton.disabled = fbaFreightOrderCreating || selectedCount === 0 || !selectedFbaFreightWarehouse().wid;
+    root.querySelectorAll?.("[data-fba-freight-create-order]")?.forEach((button) => {
+      button.disabled = fbaFreightOrderCreating || !selectedFbaFreightWarehouse().sysWid;
+    });
   }
 
   function setFbaFreightRowSelection(rowId, selected) {
@@ -395,18 +397,18 @@ export function createFbaFreightFeature({
     return `失败：${result.error || "未知错误"}`;
   }
 
-  async function createFbaFreightShipmentOrders() {
+  async function createFbaFreightShipmentOrders(shipmentIds = [...selectedFbaFreightShipmentIds]) {
     if (fbaFreightOrderCreating) {
       setFbaFreightStatus("发货单创建中，请稍候。");
       return;
     }
-    const ids = [...selectedFbaFreightShipmentIds].filter(Boolean);
+    const ids = [...shipmentIds].filter(Boolean);
     if (!ids.length) {
-      setFbaFreightStatus("请先勾选要转发货单的货件。");
+      setFbaFreightStatus("请先选择要转发货单的货件。");
       return;
     }
     const warehouse = selectedFbaFreightWarehouse();
-    if (!warehouse.wid) {
+    if (!warehouse.sysWid && !warehouse.wid) {
       setFbaFreightStatus("请先选择发货仓库。");
       updateFbaFreightSelectionState();
       return;
@@ -463,7 +465,6 @@ export function createFbaFreightFeature({
     bind(root, "#fba-freight-batch-convert", "click", () => {
       openFbaFreightTemplateModal([...selectedFbaFreightShipmentIds]);
     });
-    bind(root, "#fba-freight-create-order", "click", createFbaFreightShipmentOrders);
     bind(root, "#fba-freight-detail-close", "click", closeFbaFreightDetail);
     bindBackdropClose(root, "#fba-freight-detail-modal", closeFbaFreightDetail);
     bind(root, "#fba-freight-template-close", "click", closeFbaFreightTemplateModal);
@@ -484,8 +485,13 @@ export function createFbaFreightFeature({
         return;
       }
       const convertButton = closestTarget(event, "[data-fba-freight-convert]");
-      if (!convertButton) return;
-      openFbaFreightTemplateModal([convertButton.dataset.fbaFreightConvert]);
+      if (convertButton) {
+        openFbaFreightTemplateModal([convertButton.dataset.fbaFreightConvert]);
+        return;
+      }
+      const createOrderButton = closestTarget(event, "[data-fba-freight-create-order]");
+      if (!createOrderButton) return;
+      createFbaFreightShipmentOrders([createOrderButton.dataset.fbaFreightCreateOrder]);
     });
   }
 

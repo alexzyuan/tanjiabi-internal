@@ -58,12 +58,14 @@ test("FBA logistics views stay grouped under logistics metadata", async () => {
   assert.match(indexSource, /data-view="fba-freight"[\s\S]*<span class="nav-label">FBA货件处理<\/span>/);
   assert.equal(indexSource.includes('data-view="fba-shipment-order"'), false);
   assert.match(indexSource, /id="fba-freight-warehouse"/);
-  assert.match(indexSource, /id="fba-freight-create-order"/);
+  assert.equal(indexSource.includes('id="fba-freight-create-order"'), false);
   assert.equal(appSource.includes("createFbaShipmentOrderFeature"), false);
   assert.equal(appSource.includes("loadFbaShipmentOrderInitial"), false);
   assert.match(fbaFreightSource, /fetchImpl\("\/api\/fba\/warehouses"\)/);
   assert.match(fbaFreightSource, /fetchImpl\("\/api\/fba\/shipment-orders\/create"/);
+  assert.match(fbaFreightSource, /data-fba-freight-create-order/);
   assert.match(fbaFreightSource, /data-fba-freight-order-result/);
+  assert.match(fbaFreightSource, /return value \? \{ sysWid: Number\(value\) \} : \{\}/);
   assert.match(fbaFreightSource, /fbaFreightOrderCreating/);
   assert.match(fbaFreightSource, /接口没有返回创建结果/);
 });

@@ -32,7 +32,7 @@ test("listFbaShipmentOrderWarehouses normalizes Lingxing local warehouse rows", 
 
   const result = await listFbaShipmentOrderWarehouses({ adapter });
 
-  assert.deepEqual(result.warehouses, [{ wid: 1, name: "深圳仓", type: 1, countryCode: "" }]);
+  assert.deepEqual(result.warehouses, [{ wid: 1, sysWid: 1, name: "深圳仓", type: 1, countryCode: "" }]);
 });
 
 test("buildReadySendOrderPayload maps shipment items to Lingxing required fields", () => {
@@ -57,6 +57,24 @@ test("buildReadySendOrderPayload maps shipment items to Lingxing required fields
   assert.equal(payload.list[0].num, 18);
   assert.equal(payload.list[0].sku, "TJ-DGC-BLUE");
   assert.equal(payload.list[0].quantity_in_case, 6);
+});
+
+test("buildReadySendOrderPayload omits zero optional box fields and prefers sys_wid", () => {
+  const payload = buildReadySendOrderPayload({
+    warehouse: { wid: 12201, sysWid: 12201 },
+    shipment: {
+      shipmentId: "FBA19HVSTZK4",
+      sellerId: "A312WYKLAPYHY1",
+      marketplaceId: "A2EUQ1WTGCTBG2",
+      items: [{ fnsku: "X00444QO63", sku: "TJ001", shippedQuantity: 200, boxCount: 0, quantityInCase: 0 }],
+    },
+    nowText: "2026-07-12T08:00:00.000Z",
+  });
+
+  assert.equal(payload.sys_wid, 12201);
+  assert.equal("wid" in payload, false);
+  assert.equal("box_num" in payload.list[0], false);
+  assert.equal("quantity_in_case" in payload.list[0], false);
 });
 
 test("createReadySendFbaShipmentOrders skips existing shipment orders and creates missing ones serially", async () => {

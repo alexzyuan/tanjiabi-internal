@@ -69,6 +69,7 @@ export async function listFbaShipmentOrderWarehouses({ adapter = getLingxingAdap
   const warehouses = records(payload)
     .map((row) => ({
       wid: numberValue(row.wid),
+      sysWid: numberValue(row.sys_wid ?? row.sysWid ?? row.wid),
       name: firstText(row.name),
       type: numberValue(row.type),
       countryCode: firstText(row.country_code, row.countryCode),
@@ -106,22 +107,45 @@ export function buildReadySendOrderPayload({ warehouse, shipment, nowText = new 
     remark: `探嘉BI自动创建: ${shipment.shipmentId} ${nowText}`,
     list: (shipment.items || [])
       .filter((item) => firstText(item.sku) && firstText(item.fnsku) && numberValue(item.shippedQuantity) > 0)
-      .map((item) => ({
-        seller_id: shipment.sellerId,
-        marketplace_id: shipment.marketplaceId,
-        shipment_id: shipment.shipmentId,
-        fulfillment_network_sku: item.fnsku,
-        fnsku: "",
-        num: numberValue(item.shippedQuantity),
-        box_num: numberValue(item.boxCount),
-        sku: item.sku,
-        quantity_in_case: numberValue(item.quantityInCase),
-        remark: `探嘉BI自动创建: ${shipment.shipmentId}`,
-      })),
+      .map((item) => {
+        const line = {
+          seller_id: shipment.sellerId,
+          marketplace_id: shipment.marketplaceId,
+          shipment_id: shipment.shipmentId,
+          fulfillment_network_sku: item.fnsku,
+          fnsku: "",
+          num: numberValue(item.shippedQuantity),
+          sku: item.sku,
+          remark: `探嘉BI自动创建: ${shipment.shipmentId}`,
+        };
+        const boxCount = numberValue(item.boxCount);
+        const quantityInCase = numberValue(item.quantityInCase);
+        if (boxCount > 0) line.box_num = boxCount;
+        if (quantityInCase > 0) line.quantity_in_case = quantityInCase;
+        return line;
+      }),
   };
-  if (normalizedWarehouse.wid) payload.wid = normalizedWarehouse.wid;
-  else payload.sys_wid = normalizedWarehouse.sysWid;
+  if (normalizedWarehouse.sysWid) payload.sys_wid = normalizedWarehouse.sysWid;
+  else payload.wid = normalizedWarehouse.wid;
   return payload;
+}
+
+function summarizeReadySendOrderPayload(payload = {}) {
+  const firstLine = payload.list?.[0] || {};
+  return {
+    warehouseField: payload.sys_wid ? "sys_wid" : (payload.wid ? "wid" : ""),
+    lineCount: Array.isArray(payload.list) ? payload.list.length : 0,
+    firstLine: {
+      shipmentId: firstText(firstLine.shipment_id),
+      hasSellerId: Boolean(firstText(firstLine.seller_id)),
+      hasMarketplaceId: Boolean(firstText(firstLine.marketplace_id)),
+      hasSku: Boolean(firstText(firstLine.sku)),
+      hasFnsku: Boolean(firstText(firstLine.fulfillment_network_sku)),
+      num: numberValue(firstLine.num),
+      hasBoxNum: firstLine.box_num !== undefined,
+      hasQuantityInCase: firstLine.quantity_in_case !== undefined,
+    },
+  };
 }
 
 async function findExistingShipmentOrder(adapter, shipmentId) {
@@ -167,6 +191,7 @@ export async function createReadySendFbaShipmentOrders({
   const results = [];
   for (const shipment of rows) {
     const shipmentId = shipment.shipmentId;
+    let createPayload = null;
     try {
       const errors = validateShipmentForReadySendOrder(shipment);
       if (errors.length) throw new Error(errors.join("；"));
@@ -176,7 +201,7 @@ export async function createReadySendFbaShipmentOrders({
         console.info("[fba-shipment-order] skipped existing order", { shipmentId, sid: shipment.sid, orderSn: existing.shipment_sn });
         continue;
       }
-      const createPayload = buildReadySendOrderPayload({
+      createPayload = buildReadySendOrderPayload({
         warehouse: normalizedWarehouse,
         shipment,
         nowText: now().toISOString(),
@@ -207,6 +232,9 @@ export async function createReadySendFbaShipmentOrders({
         shipmentId,
         sid: shipment.sid,
         error: error.message,
+        code: error.code,
+        details: error.details,
+        payloadSummary: createPayload ? summarizeReadySendOrderPayload(createPayload) : null,
       });
     }
   }
