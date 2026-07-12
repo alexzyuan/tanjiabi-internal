@@ -95,6 +95,45 @@ test("createReadySendFbaShipmentOrders skips existing shipment orders and create
   assert.deepEqual(events, ["fetch-shipments", "lookup:FBA18QJFDCWJ", "create:FBA18QJFDCWJ"]);
 });
 
+test("createReadySendFbaShipmentOrders loads seller mappings from Lingxing when not provided", async () => {
+  clearFbaShipmentCandidateCache();
+  const events = [];
+  const adapter = {
+    async fetchSellers() {
+      events.push("fetch-sellers");
+      return { data: sellers };
+    },
+    async fetchFbaCargoShipments() {
+      events.push("fetch-shipments");
+      return shipmentPayload;
+    },
+    async fetchListings() {
+      return { data: { list: [] } };
+    },
+    async fetchLocalProductInfos() {
+      return { data: [] };
+    },
+    async fetchFbaInboundShipmentOrders() {
+      events.push("lookup");
+      return { data: { list: [] } };
+    },
+    async createReadySendFbaShipmentOrder(params) {
+      events.push(`create:${params.list[0].seller_id}:${params.list[0].marketplace_id}`);
+      return { code: 0, message: "success", data: { order_sn: "SP260711003" } };
+    },
+  };
+
+  const result = await createReadySendFbaShipmentOrders({
+    filters: { startDate: "2026-07-01", endDate: "2026-07-11", sid: "8708" },
+    shipmentIds: ["FBA18QJFDCWJ"],
+    warehouse: { sysWid: 1 },
+  }, { adapter });
+
+  assert.equal(result.createdCount, 1);
+  assert.equal(result.results[0].status, "created");
+  assert.deepEqual(events, ["fetch-sellers", "fetch-shipments", "lookup", "create:A1SELLERUS:ATVPDKIKX0DER"]);
+});
+
 test("createReadySendFbaShipmentOrders skips creation when shipment order already exists", async () => {
   clearFbaShipmentCandidateCache();
   const events = [];
