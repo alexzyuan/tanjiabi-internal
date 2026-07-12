@@ -19,6 +19,22 @@ function firstText(...values) {
   return "";
 }
 
+function records(payload) {
+  const data = payload?.data !== undefined ? payload.data : (payload || {});
+  if (Array.isArray(data)) return data;
+  return data.list || data.records || data.rows || [];
+}
+
+async function resolveSellerMappings(adapter, sellers = [], { autoLoadSellerMappings = false } = {}) {
+  if (Array.isArray(sellers) && sellers.length) return sellers;
+  if (!autoLoadSellerMappings) return [];
+  if (typeof adapter.fetchSellers !== "function") throw new Error("FBA 货件候选缺少领星店铺映射接口 fetchSellers。");
+  const payload = await adapter.fetchSellers();
+  const sellerRows = records(payload);
+  console.info("[fba-shipment-candidates] loaded seller mappings", { sellerCount: sellerRows.length });
+  return sellerRows;
+}
+
 function uniqueNumbers(values) {
   return [...new Set((values || []).map(Number).filter(Boolean))];
 }
@@ -89,6 +105,10 @@ export function clearFbaShipmentCandidateCache() {
   candidateCache.clear();
 }
 
+function rowsHaveSellerMappings(rows = []) {
+  return rows.every((row) => firstText(row.sellerId) && firstText(row.marketplaceId));
+}
+
 function enrichShipmentWithSeller(row = {}, sellerMap = new Map()) {
   const seller = sellerMap.get(Number(row.sid)) || {};
   return {
@@ -137,6 +157,7 @@ async function enrichProductCatalog(adapter, shipments, {
 export async function getFbaShipmentCandidates(filters = {}, {
   adapter = getLingxingAdapter(),
   sellers = [],
+  autoLoadSellerMappings = false,
   now = Date.now(),
   ttlMs = DEFAULT_CACHE_TTL_MS,
   productCatalogRequired = false,
@@ -145,16 +166,24 @@ export async function getFbaShipmentCandidates(filters = {}, {
   const normalizedFilters = normalizeFbaShipmentCandidateFilters(filters);
   const cacheKey = buildFbaShipmentCandidateCacheKey(normalizedFilters);
   const cached = candidateCache.get(cacheKey);
-  if (!normalizedFilters.forceRefresh && cached && now - cached.fetchedAtMs < ttlMs) {
+  const needsSellerMappings = autoLoadSellerMappings || (Array.isArray(sellers) && sellers.length > 0);
+  const cachedCanSatisfy = !needsSellerMappings || rowsHaveSellerMappings(cached?.result?.rows || []);
+  if (!normalizedFilters.forceRefresh && cached && now - cached.fetchedAtMs < ttlMs && cachedCanSatisfy) {
     return {
       ...cached.result,
       cache: { hit: true, key: cacheKey, fetchedAt: cached.result.fetchedAt },
     };
   }
+  if (!normalizedFilters.forceRefresh && cached && !cachedCanSatisfy) {
+    console.info("[fba-shipment-candidates] bypassed cache without seller mappings", { cacheKey });
+  }
 
   const params = fbaFreightSheetTestUtils.buildLingxingShipmentParams(normalizedFilters);
-  const payload = await adapter.fetchFbaCargoShipments(params);
-  const sellerMap = buildSellerMap(sellers);
+  const [payload, sellerMappings] = await Promise.all([
+    adapter.fetchFbaCargoShipments(params),
+    resolveSellerMappings(adapter, sellers, { autoLoadSellerMappings }),
+  ]);
+  const sellerMap = buildSellerMap(sellerMappings);
   const baseRows = normalizeFbaFreightShipments(payload, { sellersBySid: sellerMap })
     .map((row) => enrichShipmentWithSeller(row, sellerMap));
   const catalog = await enrichProductCatalog(adapter, baseRows, { productCatalogRequired, forceProductCatalogRefresh });

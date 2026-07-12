@@ -56,7 +56,9 @@ export function createFbaRoutes(deps = {}) {
       path: "/api/fba/shipment-candidates",
       auth: "session",
       errorStatusCode: 502,
-      handler: async ({ res, url }) => sendJson(res, 200, await getFbaShipmentCandidates(readFbaFreightFilters(url))),
+      handler: async ({ res, url }) => sendJson(res, 200, await getFbaShipmentCandidates(readFbaFreightFilters(url), {
+        autoLoadSellerMappings: true,
+      })),
     },
     {
       method: "GET",

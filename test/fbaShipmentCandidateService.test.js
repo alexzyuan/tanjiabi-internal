@@ -101,3 +101,34 @@ test("getFbaShipmentCandidates forceRefresh bypasses cache", async () => {
 
   assert.equal(adapter.calls.length, 2);
 });
+
+test("getFbaShipmentCandidates reloads stale cache when seller mappings are required", async () => {
+  clearFbaShipmentCandidateCache();
+  const events = [];
+  const adapter = {
+    async fetchFbaCargoShipments() {
+      events.push("fetch-shipments");
+      return payload;
+    },
+    async fetchSellers() {
+      events.push("fetch-sellers");
+      return { data: [{ sid: 8708, seller_id: "A1SELLERUS", marketplace_id: "ATVPDKIKX0DER" }] };
+    },
+    async fetchListings() {
+      return { data: { list: [] } };
+    },
+    async fetchLocalProductInfos() {
+      return { data: [] };
+    },
+  };
+  const filters = { startDate: "2026-07-01", endDate: "2026-07-11", sid: "8708" };
+
+  const stale = await getFbaShipmentCandidates(filters, { adapter });
+  const mapped = await getFbaShipmentCandidates(filters, { adapter, autoLoadSellerMappings: true });
+
+  assert.equal(stale.rows[0].sellerId, "");
+  assert.equal(mapped.cache.hit, false);
+  assert.equal(mapped.rows[0].sellerId, "A1SELLERUS");
+  assert.equal(mapped.rows[0].marketplaceId, "ATVPDKIKX0DER");
+  assert.deepEqual(events, ["fetch-shipments", "fetch-shipments", "fetch-sellers"]);
+});
