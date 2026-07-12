@@ -104,6 +104,7 @@ export function buildReadySendOrderPayload({ warehouse, shipment, nowText = new 
     head_fee_type: 0,
     tax_fee_type: 0,
     is_pick: 0,
+    logistics_list_type: 1,
     remark: `探嘉BI自动创建: ${shipment.shipmentId} ${nowText}`,
     list: (shipment.items || [])
       .filter((item) => firstText(item.sku) && firstText(item.fnsku) && numberValue(item.shippedQuantity) > 0)
@@ -146,6 +147,16 @@ function summarizeReadySendOrderPayload(payload = {}) {
       hasQuantityInCase: firstLine.quantity_in_case !== undefined,
     },
   };
+}
+
+function orderErrorMessage(error = {}) {
+  const details = error.details || {};
+  const detailItems = [
+    ...(Array.isArray(details.error_details) ? details.error_details : []),
+    ...(Array.isArray(details.errorDetails) ? details.errorDetails : []),
+  ].map((item) => String(item || "").trim()).filter(Boolean);
+  const message = error.message || String(error);
+  return detailItems.length ? `${message}：${detailItems.join("；")}` : message;
 }
 
 async function findExistingShipmentOrder(adapter, shipmentId) {
@@ -226,7 +237,7 @@ export async function createReadySendFbaShipmentOrders({
         shipmentId,
         sid: shipment.sid,
         status: "failed",
-        error: error.message || String(error),
+        error: orderErrorMessage(error),
       });
       console.error("[fba-shipment-order] create ready-send order failed", {
         shipmentId,

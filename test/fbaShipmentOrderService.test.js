@@ -50,6 +50,7 @@ test("buildReadySendOrderPayload maps shipment items to Lingxing required fields
   assert.equal(payload.sys_wid, 1);
   assert.equal(payload.head_fee_type, 0);
   assert.equal(payload.tax_fee_type, 0);
+  assert.equal(payload.logistics_list_type, 1);
   assert.equal(payload.list[0].seller_id, "A1SELLERUS");
   assert.equal(payload.list[0].marketplace_id, "ATVPDKIKX0DER");
   assert.equal(payload.list[0].shipment_id, "FBA18QJFDCWJ");
@@ -212,4 +213,37 @@ test("createReadySendFbaShipmentOrders returns per-shipment failure when require
   assert.equal(result.failedCount, 1);
   assert.equal(result.results[0].status, "failed");
   assert.match(result.results[0].error, /缺少店铺映射|缺少 FNSKU|缺少 SKU|发货数量/);
+});
+
+test("createReadySendFbaShipmentOrders returns Lingxing error details to the row result", async () => {
+  clearFbaShipmentCandidateCache();
+  const adapter = {
+    async fetchFbaCargoShipments() {
+      return shipmentPayload;
+    },
+    async fetchListings() {
+      return { data: { list: [] } };
+    },
+    async fetchLocalProductInfos() {
+      return { data: [] };
+    },
+    async fetchFbaInboundShipmentOrders() {
+      return { data: { list: [] } };
+    },
+    async createReadySendFbaShipmentOrder() {
+      const error = new Error("参数错误");
+      error.code = "102";
+      error.details = { error_details: ["请使用新版费用物流轨迹(logistics_list_type必须为1)"] };
+      throw error;
+    },
+  };
+
+  const result = await createReadySendFbaShipmentOrders({
+    filters: { startDate: "2026-07-01", endDate: "2026-07-11", sid: "8708" },
+    shipmentIds: ["FBA18QJFDCWJ"],
+    warehouse: { sysWid: 1 },
+  }, { adapter, sellers });
+
+  assert.equal(result.failedCount, 1);
+  assert.match(result.results[0].error, /logistics_list_type必须为1/);
 });
