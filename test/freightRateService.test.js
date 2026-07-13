@@ -108,6 +108,71 @@ test("saveFreightRate restricts warehouse choices for US Canada and Australia on
   });
 });
 
+test("saveFreightRate records operator and create update logs", async () => {
+  await withTempStore(async (storeFile) => {
+    const created = await saveFreightRate({
+      date: "2026-07-13",
+      country: "加拿大",
+      warehouseCode: "YOW",
+      carrier: "九方通逊",
+      transportMethod: "快船",
+      price: 1,
+    }, { storeFile, now: () => new Date("2026-07-13T08:00:00.000Z"), operator: "Alice" });
+    const updated = await saveFreightRate({
+      id: created.id,
+      price: 2,
+    }, { storeFile, now: () => new Date("2026-07-14T08:00:00.000Z"), operator: "Bob" });
+
+    assert.equal(created.operator, "Alice");
+    assert.equal(created.createdBy, "Alice");
+    assert.equal(updated.operator, "Bob");
+    assert.equal(updated.updatedBy, "Bob");
+
+    const result = await listFreightRates({}, { storeFile, now: () => new Date("2026-07-14T09:00:00.000Z") });
+    assert.deepEqual(result.logs.map((item) => `${item.action}:${item.operator}:${item.rowId}`), [
+      `update:Bob:${created.id}`,
+      `create:Alice:${created.id}`,
+    ]);
+    assert.equal(result.logs[0].before.price, 1);
+    assert.equal(result.logs[0].after.price, 2);
+  });
+});
+
+test("deleteFreightRate records operator and listFreightRates returns only recent half-year logs", async () => {
+  await withTempStore(async (storeFile) => {
+    await saveFreightRate({
+      date: "2025-12-01",
+      country: "德国",
+      warehouseCode: "OLD",
+      carrier: "九方通逊",
+      transportMethod: "普船",
+      price: 1,
+    }, { storeFile, now: () => new Date("2025-12-01T08:00:00.000Z"), operator: "Old User" });
+    const recent = await saveFreightRate({
+      date: "2026-07-13",
+      country: "美国",
+      warehouseCode: "MIT",
+      carrier: "同袍",
+      transportMethod: "空运",
+      price: 3,
+    }, { storeFile, now: () => new Date("2026-07-13T08:00:00.000Z"), operator: "Alice" });
+
+    await deleteFreightRate(recent.id, {
+      storeFile,
+      now: () => new Date("2026-07-13T09:00:00.000Z"),
+      operator: "Bob",
+    });
+
+    const result = await listFreightRates({}, { storeFile, now: () => new Date("2026-07-13T10:00:00.000Z") });
+    assert.deepEqual(result.logs.map((item) => `${item.action}:${item.operator}`), [
+      "delete:Bob",
+      "create:Alice",
+    ]);
+    assert.equal(result.logs[0].before.id, recent.id);
+    assert.equal(result.logs.some((item) => item.operator === "Old User"), false);
+  });
+});
+
 test("listFreightRates returns rows sorted by week and date descending", async () => {
   await withTempStore(async (storeFile) => {
     await saveFreightRate({ date: "2026-07-06", country: "美国", warehouseCode: "MIT", carrier: "同袍", transportMethod: "空运", price: 20 }, { storeFile });

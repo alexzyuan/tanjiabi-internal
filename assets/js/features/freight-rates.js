@@ -5,7 +5,6 @@ export function createFreightRatesFeature({
   escapeHtml,
   fetchImpl = globalThis.fetch,
   renderTableMessage,
-  setModalOpenState,
   setText,
   windowApi = globalThis.window,
 } = {}) {
@@ -24,6 +23,7 @@ export function createFreightRatesFeature({
     transportMethods: ["普船", "快船", "空运", "快递"],
   };
   let editingFreightRateId = "";
+  let freightRateLogs = [];
   let freightRatesLoaded = false;
 
   function query(selector) {
@@ -74,6 +74,10 @@ export function createFreightRatesFeature({
   function renderSelectOptions(selector, values = [], placeholder = "") {
     const select = query(selector);
     if (!select) return;
+    renderSelectOptionsElement(select, values, placeholder);
+  }
+
+  function renderSelectOptionsElement(select, values = [], placeholder = "") {
     const previous = select.value;
     select.innerHTML = `${placeholder ? `<option value="">${escapeHtml(placeholder)}</option>` : ""}${values
       .map((item) => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`)
@@ -83,11 +87,8 @@ export function createFreightRatesFeature({
 
   function renderFreightRateOptions() {
     renderSelectOptions("#freight-rate-inline-country", freightRateOptions.countries);
-    renderSelectOptions("#freight-rate-country", freightRateOptions.countries);
     renderSelectOptions("#freight-rate-inline-carrier", freightRateOptions.carriers);
-    renderSelectOptions("#freight-rate-carrier", freightRateOptions.carriers);
     renderSelectOptions("#freight-rate-inline-transport-method", freightRateOptions.transportMethods);
-    renderSelectOptions("#freight-rate-transport-method", freightRateOptions.transportMethods);
   }
 
   function warehouseOptionsForCountry(country) {
@@ -96,12 +97,16 @@ export function createFreightRatesFeature({
 
   function syncWarehouseControl({ countrySelector, selectSelector, inputSelector, warehouseCode = "" } = {}) {
     const country = value(countrySelector);
-    const options = warehouseOptionsForCountry(country);
     const select = query(selectSelector);
     const input = query(inputSelector);
+    syncWarehouseElements({ country, select, input, warehouseCode });
+  }
+
+  function syncWarehouseElements({ country = "", select, input, warehouseCode = "" } = {}) {
+    const options = warehouseOptionsForCountry(country);
     if (!select || !input) return;
     if (options.length > 0) {
-      renderSelectOptions(selectSelector, options);
+      renderSelectOptionsElement(select, options);
       const normalizedWarehouse = String(warehouseCode || input.value || select.value || "").trim().toUpperCase();
       select.value = options.includes(normalizedWarehouse) ? normalizedWarehouse : options[0];
       select.hidden = false;
@@ -126,15 +131,6 @@ export function createFreightRatesFeature({
     });
   }
 
-  function syncModalWarehouseControl(warehouseCode = "") {
-    syncWarehouseControl({
-      countrySelector: "#freight-rate-country",
-      selectSelector: "#freight-rate-warehouse-select",
-      inputSelector: "#freight-rate-warehouse-code",
-      warehouseCode,
-    });
-  }
-
   function resetInlineFreightRateEntry({ keepSelections = true } = {}) {
     const date = todayText();
     setOutput("#freight-rate-inline-date", date);
@@ -154,6 +150,49 @@ export function createFreightRatesFeature({
     if (price) price.value = "";
   }
 
+  function optionsHtml(values = [], selected = "", placeholder = "") {
+    const selectedText = String(selected || "");
+    return `${placeholder ? `<option value="">${escapeHtml(placeholder)}</option>` : ""}${values
+      .map((item) => `<option value="${escapeHtml(item)}"${item === selectedText ? " selected" : ""}>${escapeHtml(item)}</option>`)
+      .join("")}`;
+  }
+
+  function warehouseEditCellHtml(row = {}) {
+    const options = warehouseOptionsForCountry(row.country);
+    const warehouseCode = String(row.warehouseCode || "").trim().toUpperCase();
+    const selectHidden = options.length > 0 ? "" : " hidden disabled";
+    const inputHidden = options.length > 0 ? " hidden disabled" : "";
+    return `
+      <select class="table-select" aria-label="仓库代码选项" data-freight-rate-field="warehouseSelect"${selectHidden}>
+        ${optionsHtml(options, warehouseCode)}
+      </select>
+      <input class="table-select" aria-label="仓库代码" placeholder="手填仓库" data-freight-rate-field="warehouseCode" value="${escapeHtml(options.length > 0 ? "" : warehouseCode)}"${inputHidden} />
+    `;
+  }
+
+  function rowOperator(row = {}) {
+    return row.operator || row.updatedBy || row.createdBy || "-";
+  }
+
+  function editRowHtml(row = {}) {
+    return `
+      <tr data-freight-rate-edit-row="${escapeHtml(row.id || "")}">
+        <td><output class="table-select" style="display: inline-flex; align-items: center; white-space: nowrap; width: 92px" data-freight-rate-field="week">${escapeHtml(row.week || "-")}</output></td>
+        <td><input class="table-select" type="date" data-freight-rate-field="date" value="${escapeHtml(row.date || todayText())}" /></td>
+        <td><select class="table-select" aria-label="国家" data-freight-rate-field="country">${optionsHtml(freightRateOptions.countries, row.country)}</select></td>
+        <td>${warehouseEditCellHtml(row)}</td>
+        <td><select class="table-select" aria-label="承运商" data-freight-rate-field="carrier">${optionsHtml(freightRateOptions.carriers, row.carrier || "九方通逊")}</select></td>
+        <td><select class="table-select" aria-label="运输方式" data-freight-rate-field="transportMethod">${optionsHtml(freightRateOptions.transportMethods, row.transportMethod || "普船")}</select></td>
+        <td><input class="table-select" type="number" min="0" step="0.0001" aria-label="价格" data-freight-rate-field="price" value="${escapeHtml(row.price ?? "")}" /></td>
+        <td>${escapeHtml(rowOperator(row))}</td>
+        <td class="table-actions">
+          <button class="primary-button compact-button" type="button" data-freight-rate-edit-save="${escapeHtml(row.id || "")}">保存</button>
+          <button class="secondary-button compact-button" type="button" data-freight-rate-edit-cancel>取消</button>
+          <button class="secondary-button compact-button" type="button" data-freight-rate-delete="${escapeHtml(row.id || "")}">删除</button>
+        </td>
+      </tr>`;
+  }
+
   function groupedRowsHtml(rows = []) {
     let currentWeek = "";
     return rows.map((row) => {
@@ -161,9 +200,10 @@ export function createFreightRatesFeature({
         ? (() => {
             currentWeek = row.week;
             const count = rows.filter((item) => item.week === row.week).length;
-            return `<tr class="freight-rate-week-divider"><td colspan="8"><strong>${escapeHtml(row.week)}</strong><small> ${count} 条</small></td></tr>`;
+            return `<tr class="freight-rate-week-divider"><td colspan="9"><strong>${escapeHtml(row.week)}</strong><small> ${count} 条</small></td></tr>`;
           })()
         : "";
+      if (editingFreightRateId && row.id === editingFreightRateId) return `${group}${editRowHtml(row)}`;
       return `${group}
         <tr>
           <td><strong>${escapeHtml(row.week || "-")}</strong></td>
@@ -173,6 +213,7 @@ export function createFreightRatesFeature({
           <td>${escapeHtml(row.carrier || "-")}</td>
           <td>${escapeHtml(row.transportMethod || "-")}</td>
           <td>${escapeHtml(row.price ?? "-")}</td>
+          <td>${escapeHtml(rowOperator(row))}</td>
           <td class="table-actions">
             <button class="secondary-button compact-button" type="button" data-freight-rate-edit="${escapeHtml(row.id)}">编辑</button>
             <button class="secondary-button compact-button" type="button" data-freight-rate-delete="${escapeHtml(row.id)}">删除</button>
@@ -186,10 +227,56 @@ export function createFreightRatesFeature({
     if (!table) return;
     setText("#freight-rates-count", `共 ${freightRateRows.length} 条`, root);
     if (!freightRateRows.length) {
-      renderTableMessage(table, 8, "暂无运费记录，可直接在第一行录入。");
+      renderTableMessage(table, 9, "暂无运费记录，可直接在第一行录入。");
       return;
     }
     table.innerHTML = groupedRowsHtml(freightRateRows);
+  }
+
+  function actionLabel(action) {
+    return ({ create: "新增", update: "修改", delete: "删除" })[action] || action || "-";
+  }
+
+  function logRow(log = {}) {
+    return log.after || log.before || {};
+  }
+
+  function logPrice(log = {}) {
+    if (log.action === "update" && log.before && log.after && log.before.price !== log.after.price) {
+      return `${log.before.price ?? "-"} -> ${log.after.price ?? "-"}`;
+    }
+    return logRow(log).price ?? "-";
+  }
+
+  function formatLogTime(value) {
+    if (!value) return "-";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleString("zh-CN", { hour12: false });
+  }
+
+  function renderFreightRateLogs() {
+    const table = query("#freight-rates-log-table");
+    if (!table) return;
+    setText("#freight-rates-log-count", `共 ${freightRateLogs.length} 条`, root);
+    if (!freightRateLogs.length) {
+      renderTableMessage(table, 9, "最近半年暂无操作记录。");
+      return;
+    }
+    table.innerHTML = freightRateLogs.map((log) => {
+      const row = logRow(log);
+      return `<tr>
+        <td>${escapeHtml(formatLogTime(log.at))}</td>
+        <td>${escapeHtml(actionLabel(log.action))}</td>
+        <td>${escapeHtml(log.operator || "-")}</td>
+        <td>${escapeHtml(row.week || "-")}</td>
+        <td>${escapeHtml(row.country || "-")}</td>
+        <td>${escapeHtml(row.warehouseCode || "-")}</td>
+        <td>${escapeHtml(row.carrier || "-")}</td>
+        <td>${escapeHtml(row.transportMethod || "-")}</td>
+        <td>${escapeHtml(logPrice(log))}</td>
+      </tr>`;
+    }).join("");
   }
 
   function buildFreightRateQuery() {
@@ -205,58 +292,22 @@ export function createFreightRatesFeature({
       const data = await response.json().catch(() => ({}));
       if (!response.ok || data.ok === false) throw new Error(data.error || `API ${response.status}`);
       freightRateRows = Array.isArray(data.rows) ? data.rows : [];
+      freightRateLogs = Array.isArray(data.logs) ? data.logs : [];
       freightRateOptions = data.options || freightRateOptions;
+      editingFreightRateId = "";
       freightRatesLoaded = true;
       renderFreightRateOptions();
       resetInlineFreightRateEntry();
       renderFreightRateRows();
+      renderFreightRateLogs();
       setFreightRateStatus(`已读取 ${freightRateRows.length} 条运费记录`);
     } catch (error) {
       freightRateRows = [];
+      freightRateLogs = [];
       renderFreightRateRows();
+      renderFreightRateLogs();
       setFreightRateStatus(`读取失败：${error.message || error}`);
     }
-  }
-
-  function updateWeekPreview() {
-    setText("#freight-rate-week-preview", isoWeekFromDate(value("#freight-rate-date")) || "-", root);
-  }
-
-  function openFreightRateModal(row = {}) {
-    editingFreightRateId = String(row.id || "");
-    setText("#freight-rate-modal-title", editingFreightRateId ? "编辑运费" : "新增运费", root);
-    const fields = {
-      "#freight-rate-date": row.date || todayText(),
-      "#freight-rate-country": row.country || "",
-      "#freight-rate-carrier": row.carrier || "九方通逊",
-      "#freight-rate-transport-method": row.transportMethod || "普船",
-      "#freight-rate-price": row.price ?? "",
-    };
-    Object.entries(fields).forEach(([selector, fieldValue]) => {
-      const element = query(selector);
-      if (element) element.value = fieldValue;
-    });
-    syncModalWarehouseControl(row.warehouseCode || "");
-    updateWeekPreview();
-    const deleteButton = query("#freight-rate-delete");
-    if (deleteButton) deleteButton.hidden = !editingFreightRateId;
-    setModalOpenState(query("#freight-rate-modal"), true);
-  }
-
-  function closeFreightRateModal() {
-    setModalOpenState(query("#freight-rate-modal"), false);
-    editingFreightRateId = "";
-  }
-
-  function freightRatePayload() {
-    return {
-      date: value("#freight-rate-date"),
-      country: value("#freight-rate-country"),
-      warehouseCode: warehouseControlValue("#freight-rate-warehouse-select", "#freight-rate-warehouse-code"),
-      carrier: value("#freight-rate-carrier"),
-      transportMethod: value("#freight-rate-transport-method"),
-      price: value("#freight-rate-price"),
-    };
   }
 
   function inlineFreightRatePayload() {
@@ -276,25 +327,6 @@ export function createFreightRatesFeature({
     return value(inputSelector);
   }
 
-  async function saveFreightRateForm(event) {
-    event.preventDefault();
-    const url = editingFreightRateId ? `/api/fba/freight-rates/${encodeURIComponent(editingFreightRateId)}` : "/api/fba/freight-rates";
-    const method = editingFreightRateId ? "PUT" : "POST";
-    try {
-      const response = await fetchImpl(url, {
-        method,
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(freightRatePayload()),
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || result.ok === false) throw new Error(result.error || `API ${response.status}`);
-      closeFreightRateModal();
-      await loadFreightRatesDashboard();
-    } catch (error) {
-      setFreightRateStatus(`保存失败：${error.message || error}`);
-    }
-  }
-
   async function saveInlineFreightRate() {
     setFreightRateStatus("正在保存运费记录");
     try {
@@ -312,6 +344,71 @@ export function createFreightRatesFeature({
     }
   }
 
+  function editFieldValue(rowElement, field) {
+    const element = rowElement?.querySelector?.(`[data-freight-rate-field="${field}"]`);
+    if (!element) throw new Error(`编辑行缺少字段：${field}`);
+    return String(element.value || element.textContent || "").trim();
+  }
+
+  function editWarehouseValue(rowElement) {
+    const select = rowElement?.querySelector?.('[data-freight-rate-field="warehouseSelect"]');
+    const input = rowElement?.querySelector?.('[data-freight-rate-field="warehouseCode"]');
+    if (select && !select.disabled && !select.hidden) return String(select.value || "").trim();
+    if (!input) throw new Error("编辑行缺少字段：warehouseCode");
+    return String(input.value || "").trim();
+  }
+
+  function editFreightRatePayload(rowElement) {
+    return {
+      date: editFieldValue(rowElement, "date"),
+      country: editFieldValue(rowElement, "country"),
+      warehouseCode: editWarehouseValue(rowElement),
+      carrier: editFieldValue(rowElement, "carrier"),
+      transportMethod: editFieldValue(rowElement, "transportMethod"),
+      price: editFieldValue(rowElement, "price"),
+    };
+  }
+
+  function startInlineEdit(id) {
+    editingFreightRateId = String(id || "").trim();
+    renderFreightRateRows();
+    setFreightRateStatus(editingFreightRateId ? "正在编辑运费记录" : `已读取 ${freightRateRows.length} 条运费记录`);
+  }
+
+  function syncEditWarehouseControl(rowElement, warehouseCode = "") {
+    const country = rowElement?.querySelector?.('[data-freight-rate-field="country"]')?.value || "";
+    const select = rowElement?.querySelector?.('[data-freight-rate-field="warehouseSelect"]');
+    const input = rowElement?.querySelector?.('[data-freight-rate-field="warehouseCode"]');
+    syncWarehouseElements({ country, select, input, warehouseCode });
+  }
+
+  function updateEditWeekPreview(rowElement) {
+    const week = rowElement?.querySelector?.('[data-freight-rate-field="week"]');
+    const date = rowElement?.querySelector?.('[data-freight-rate-field="date"]');
+    if (!week || !date) return;
+    week.textContent = isoWeekFromDate(date.value) || "-";
+    if ("value" in week) week.value = week.textContent;
+  }
+
+  async function saveInlineEdit(id, rowElement) {
+    const targetId = String(id || "").trim();
+    if (!targetId) throw new Error("运费记录 ID 不能为空。");
+    setFreightRateStatus("正在保存运费记录");
+    try {
+      const response = await fetchImpl(`/api/fba/freight-rates/${encodeURIComponent(targetId)}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(editFreightRatePayload(rowElement)),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result.ok === false) throw new Error(result.error || `API ${response.status}`);
+      editingFreightRateId = "";
+      await loadFreightRatesDashboard();
+    } catch (error) {
+      setFreightRateStatus(`保存失败：${error.message || error}`);
+    }
+  }
+
   async function deleteFreightRateById(id) {
     const targetId = String(id || "").trim();
     if (!targetId || !windowApi?.confirm?.("确定删除这条运费记录？")) return;
@@ -319,7 +416,7 @@ export function createFreightRatesFeature({
       const response = await fetchImpl(`/api/fba/freight-rates/${encodeURIComponent(targetId)}`, { method: "DELETE" });
       const result = await response.json().catch(() => ({}));
       if (!response.ok || result.ok === false) throw new Error(result.error || `API ${response.status}`);
-      closeFreightRateModal();
+      editingFreightRateId = "";
       await loadFreightRatesDashboard();
     } catch (error) {
       setFreightRateStatus(`删除失败：${error.message || error}`);
@@ -330,22 +427,33 @@ export function createFreightRatesFeature({
     bind(root, "#freight-rates-refresh", "click", loadFreightRatesDashboard);
     bind(root, "#freight-rate-inline-save", "click", saveInlineFreightRate);
     bind(root, "#freight-rate-inline-country", "change", syncInlineWarehouseControl);
-    bind(root, "#freight-rate-form", "submit", saveFreightRateForm);
-    bind(root, "#freight-rate-date", "change", updateWeekPreview);
-    bind(root, "#freight-rate-country", "change", () => syncModalWarehouseControl());
-    bind(root, "#freight-rate-close", "click", closeFreightRateModal);
-    bind(root, "#freight-rate-cancel", "click", closeFreightRateModal);
-    bind(root, "#freight-rate-delete", "click", () => deleteFreightRateById(editingFreightRateId));
     bind(root, "#freight-rates-table", "click", (event) => {
       const editButton = closestTarget(event, "[data-freight-rate-edit]");
       if (editButton) {
-        const row = freightRateRows.find((item) => item.id === editButton.dataset.freightRateEdit);
-        if (row) openFreightRateModal(row);
+        startInlineEdit(editButton.dataset.freightRateEdit);
+        return;
+      }
+      const saveButton = closestTarget(event, "[data-freight-rate-edit-save]");
+      if (saveButton) {
+        saveInlineEdit(saveButton.dataset.freightRateEditSave, closestTarget(event, "[data-freight-rate-edit-row]"));
+        return;
+      }
+      const cancelButton = closestTarget(event, "[data-freight-rate-edit-cancel]");
+      if (cancelButton) {
+        editingFreightRateId = "";
+        renderFreightRateRows();
+        setFreightRateStatus(`已读取 ${freightRateRows.length} 条运费记录`);
         return;
       }
       const deleteButton = closestTarget(event, "[data-freight-rate-delete]");
       if (!deleteButton) return;
       deleteFreightRateById(deleteButton.dataset.freightRateDelete);
+    });
+    bind(root, "#freight-rates-table", "change", (event) => {
+      const rowElement = closestTarget(event, "[data-freight-rate-edit-row]");
+      if (!rowElement) return;
+      if (closestTarget(event, '[data-freight-rate-field="country"]')) syncEditWarehouseControl(rowElement);
+      if (closestTarget(event, '[data-freight-rate-field="date"]')) updateEditWeekPreview(rowElement);
     });
   }
 
@@ -353,7 +461,10 @@ export function createFreightRatesFeature({
     renderFreightRateOptions();
     resetInlineFreightRateEntry({ keepSelections: false });
     if (!freightRatesLoaded) await loadFreightRatesDashboard();
-    else renderFreightRateRows();
+    else {
+      renderFreightRateRows();
+      renderFreightRateLogs();
+    }
   }
 
   return {

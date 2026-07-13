@@ -80,7 +80,7 @@ test("freight rates dashboard is grouped under logistics metadata", async () => 
   assert.match(homeQuickLinksSource, /target: "freight-rates", group: "物流", title: "运费看板"/);
   assert.match(indexSource, /data-view="freight-rates"[\s\S]*<span class="nav-label">运费看板<\/span>/);
   assert.match(indexSource, /<section class="view" id="view-freight-rates">/);
-  assert.match(indexSource, /<th>周数<\/th>[\s\S]*<th>日期<\/th>[\s\S]*<th>国家<\/th>[\s\S]*<th>仓库代码<\/th>[\s\S]*<th>承运商<\/th>[\s\S]*<th>运输方式<\/th>[\s\S]*<th>价格<\/th>/);
+  assert.match(indexSource, /<th>周数<\/th>[\s\S]*<th>日期<\/th>[\s\S]*<th>国家<\/th>[\s\S]*<th>仓库代码<\/th>[\s\S]*<th>承运商<\/th>[\s\S]*<th>运输方式<\/th>[\s\S]*<th>价格<\/th>[\s\S]*<th>操作人<\/th>/);
   assert.match(indexSource, /id="freight-rates-create-row"[\s\S]*id="freight-rate-inline-week"[\s\S]*id="freight-rate-inline-date"/);
   assert.match(indexSource, /<select id="freight-rate-inline-country"[\s\S]*<option value="美国">美国<\/option>[\s\S]*<option value="加拿大">加拿大<\/option>[\s\S]*<option value="澳洲">澳洲<\/option>[\s\S]*<option value="德国">德国<\/option>[\s\S]*<option value="英国">英国<\/option>/);
   assert.match(indexSource, /<select id="freight-rate-inline-warehouse-select"[\s\S]*aria-label="仓库代码选项"/);
@@ -94,6 +94,11 @@ test("freight rates dashboard is grouped under logistics metadata", async () => 
   assert.match(freightRatesFeatureSource, /warehouseCodesByCountry/);
   assert.match(freightRatesFeatureSource, /syncWarehouseControl/);
   assert.match(freightRatesFeatureSource, /"#freight-rate-inline-country", "change", syncInlineWarehouseControl/);
+  assert.match(indexSource, /id="freight-rates-log-table"/);
+  assert.match(indexSource, /最近半年操作记录/);
+  assert.match(freightRatesFeatureSource, /renderFreightRateLogs/);
+  assert.match(freightRatesFeatureSource, /startInlineEdit/);
+  assert.equal(freightRatesFeatureSource.includes("openFreightRateModal(row)"), false);
   assert.match(appSource, /createFreightRatesFeature/);
   assert.match(appSource, /loadFreightRatesDashboard/);
 });

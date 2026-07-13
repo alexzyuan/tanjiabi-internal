@@ -3,7 +3,7 @@ import path from "node:path";
 import { readJson, updateJsonAtomic } from "../utils/jsonStore.js";
 
 const defaultStoreFile = path.join(process.cwd(), "data-cache", "freight-rates.json");
-const fallbackStore = { rows: [] };
+const fallbackStore = { rows: [], logs: [] };
 
 export const freightRateOptions = {
   countries: ["美国", "加拿大", "澳洲", "德国", "英国"],
@@ -26,6 +26,14 @@ function makeId() {
 
 function cleanText(value) {
   return String(value ?? "").trim();
+}
+
+function operatorText(value) {
+  return cleanText(value) || "系统";
+}
+
+function cloneJson(value) {
+  return JSON.parse(JSON.stringify(value ?? null));
 }
 
 function normalizeKey(value) {
@@ -87,7 +95,9 @@ function routeKey(row = {}) {
   ].join("|");
 }
 
-function normalizeFreightRateRow(input = {}, existing = {}, { now = () => new Date() } = {}) {
+function normalizeFreightRateRow(input = {}, existing = {}, { now = () => new Date(), operator = "系统" } = {}) {
+  const timestamp = nowIso(now);
+  const normalizedOperator = operatorText(operator);
   const date = assertDateText(input.date ?? existing.date);
   const country = cleanText(input.country ?? existing.country);
   const warehouseCode = normalizeWarehouseCode(input.warehouseCode ?? existing.warehouseCode);
@@ -111,8 +121,11 @@ function normalizeFreightRateRow(input = {}, existing = {}, { now = () => new Da
     carrier,
     transportMethod,
     price: parsePrice(input.price ?? existing.price),
-    createdAt: existing.createdAt || nowIso(now),
-    updatedAt: nowIso(now),
+    createdAt: existing.createdAt || timestamp,
+    updatedAt: timestamp,
+    createdBy: existing.createdBy || existing.operator || normalizedOperator,
+    updatedBy: normalizedOperator,
+    operator: normalizedOperator,
   };
 }
 
@@ -154,50 +167,97 @@ function buildWeekGroups(rows = []) {
   return [...counts.entries()].map(([week, count]) => ({ week, count }));
 }
 
-export async function listFreightRates(filters = {}, { storeFile = defaultStoreFile } = {}) {
+function appendFreightRateLog(logs = [], log = {}) {
+  return [...logs, {
+    id: makeId(),
+    ...log,
+  }];
+}
+
+function recentHalfYearCutoff(now = () => new Date()) {
+  const cutoff = now();
+  cutoff.setUTCMonth(cutoff.getUTCMonth() - 6);
+  return cutoff;
+}
+
+function sortFreightRateLogs(logs = []) {
+  return [...logs].sort((left, right) => String(right.at || "").localeCompare(String(left.at || "")));
+}
+
+function filterRecentFreightRateLogs(logs = [], now = () => new Date()) {
+  const cutoff = recentHalfYearCutoff(now).getTime();
+  return sortFreightRateLogs(logs.filter((log) => {
+    const time = Date.parse(log.at);
+    return Number.isFinite(time) && time >= cutoff;
+  }));
+}
+
+export async function listFreightRates(filters = {}, { storeFile = defaultStoreFile, now = () => new Date() } = {}) {
   const store = await readJson(storeFile, fallbackStore);
   const allRows = Array.isArray(store.rows) ? store.rows : [];
+  const allLogs = Array.isArray(store.logs) ? store.logs : [];
   const rows = sortFreightRateRows(filterRows(allRows, filters));
   return {
     ok: true,
     meta: {
       source: "BI手填运费看板",
       total: allRows.length,
-      updatedAt: nowIso(),
+      updatedAt: nowIso(now),
     },
     rows,
     weekGroups: buildWeekGroups(rows),
+    logs: filterRecentFreightRateLogs(allLogs, now),
     options: freightRateOptions,
   };
 }
 
-export async function saveFreightRate(payload = {}, { storeFile = defaultStoreFile, now = () => new Date() } = {}) {
+export async function saveFreightRate(payload = {}, { storeFile = defaultStoreFile, now = () => new Date(), operator = "系统" } = {}) {
   let saved = null;
   await updateJsonAtomic(storeFile, async (store = fallbackStore) => {
     const rows = Array.isArray(store.rows) ? [...store.rows] : [];
+    const logs = Array.isArray(store.logs) ? [...store.logs] : [];
     const id = cleanText(payload.id);
     const index = id ? rows.findIndex((row) => row.id === id) : -1;
     const existing = index >= 0 ? rows[index] : {};
-    const normalized = normalizeFreightRateRow(payload, existing, { now });
+    const before = index >= 0 ? cloneJson(existing) : null;
+    const normalized = normalizeFreightRateRow(payload, existing, { now, operator });
     const duplicate = rows.find((row) => row.id !== normalized.id && routeKey(row) === routeKey(normalized));
     if (duplicate) throw new Error("同一周、国家、仓库、承运商和运输方式已存在运费记录。");
 
     if (index >= 0) rows[index] = normalized;
     else rows.push(normalized);
     saved = normalized;
-    return { rows: sortFreightRateRows(rows) };
+    const action = index >= 0 ? "update" : "create";
+    const nextLogs = appendFreightRateLog(logs, {
+      rowId: normalized.id,
+      action,
+      operator: normalized.operator,
+      at: normalized.updatedAt,
+      ...(before ? { before } : {}),
+      after: cloneJson(normalized),
+    });
+    return { rows: sortFreightRateRows(rows), logs: nextLogs };
   }, fallbackStore);
   return saved;
 }
 
-export async function deleteFreightRate(id, { storeFile = defaultStoreFile } = {}) {
+export async function deleteFreightRate(id, { storeFile = defaultStoreFile, now = () => new Date(), operator = "系统" } = {}) {
   const targetId = cleanText(id);
   if (!targetId) throw new Error("运费记录 ID 不能为空。");
   await updateJsonAtomic(storeFile, async (store = fallbackStore) => {
     const rows = Array.isArray(store.rows) ? store.rows : [];
+    const logs = Array.isArray(store.logs) ? [...store.logs] : [];
+    const existing = rows.find((row) => row.id === targetId);
     const nextRows = rows.filter((row) => row.id !== targetId);
     if (nextRows.length === rows.length) throw new Error("运费记录不存在。");
-    return { rows: nextRows };
+    const nextLogs = appendFreightRateLog(logs, {
+      rowId: targetId,
+      action: "delete",
+      operator: operatorText(operator),
+      at: nowIso(now),
+      before: cloneJson(existing),
+    });
+    return { rows: nextRows, logs: nextLogs };
   }, fallbackStore);
   return { id: targetId };
 }

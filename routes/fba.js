@@ -27,6 +27,8 @@ export function createFbaRoutes(deps = {}) {
     runStaWarehouseProbe,
   } = deps;
 
+  const requestOperator = (req) => req.user?.displayName || req.user?.nick || req.user?.username || "系统";
+
   return [
     {
       method: "GET",
@@ -110,7 +112,7 @@ export function createFbaRoutes(deps = {}) {
       path: "/api/fba/freight-rates",
       auth: "session",
       errorStatusCode: 400,
-      handler: async ({ req, res }) => sendJson(res, 200, { ok: true, row: await saveFreightRate(await readJsonBody(req)) }),
+      handler: async ({ req, res }) => sendJson(res, 200, { ok: true, row: await saveFreightRate(await readJsonBody(req), { operator: requestOperator(req) }) }),
     },
     {
       method: "PUT",
@@ -119,7 +121,7 @@ export function createFbaRoutes(deps = {}) {
       errorStatusCode: 400,
       handler: async ({ req, res, params }) => {
         const body = await readJsonBody(req);
-        sendJson(res, 200, { ok: true, row: await saveFreightRate({ ...body, id: decodeURIComponent(params.id) }) });
+        sendJson(res, 200, { ok: true, row: await saveFreightRate({ ...body, id: decodeURIComponent(params.id) }, { operator: requestOperator(req) }) });
       },
     },
     {
@@ -127,7 +129,7 @@ export function createFbaRoutes(deps = {}) {
       pattern: /^\/api\/fba\/freight-rates\/(?<id>[^/]+)$/,
       auth: "session",
       errorStatusCode: 400,
-      handler: async ({ res, params }) => sendJson(res, 200, { ok: true, ...(await deleteFreightRate(decodeURIComponent(params.id))) }),
+      handler: async ({ req, res, params }) => sendJson(res, 200, { ok: true, ...(await deleteFreightRate(decodeURIComponent(params.id), { operator: requestOperator(req) })) }),
     },
     {
       method: "GET",
