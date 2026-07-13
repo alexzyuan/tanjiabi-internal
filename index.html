@@ -2004,19 +2004,22 @@
               <h2>运费数据</h2>
               <span id="freight-rates-status">等待加载</span>
             </div>
-            <section class="filter-toolbar">
-              <label>关键词<input id="freight-rates-keyword" placeholder="国家 / 仓库 / 周数" /></label>
-              <label>承运商<select id="freight-rates-carrier-filter"><option value="">全部承运商</option></select></label>
-              <label>运输方式<select id="freight-rates-transport-filter"><option value="">全部方式</option></select></label>
-              <button class="secondary-button" id="freight-rates-refresh" type="button">刷新</button>
-              <button class="primary-button" id="freight-rates-add" type="button">新增运费</button>
-            </section>
             <div class="panel-head">
               <h2>每周运价</h2>
-              <span id="freight-rates-count">共 0 条</span>
+              <span><button class="secondary-button compact-button" id="freight-rates-refresh" type="button">刷新</button> <span id="freight-rates-count">共 0 条</span></span>
             </div>
             <div class="table-shell">
-              <table class="data-table">
+              <table class="data-table" style="min-width: 0; table-layout: fixed; width: 100%">
+                <colgroup>
+                  <col style="width: 116px" />
+                  <col style="width: 126px" />
+                  <col style="width: 116px" />
+                  <col style="width: 190px" />
+                  <col style="width: 126px" />
+                  <col style="width: 116px" />
+                  <col style="width: 170px" />
+                  <col style="width: 96px" />
+                </colgroup>
                 <thead>
                   <tr>
                     <th>周数</th>
@@ -2029,6 +2032,38 @@
                     <th>操作</th>
                   </tr>
                 </thead>
+                <tbody id="freight-rates-create-row">
+                  <tr>
+                    <td><output id="freight-rate-inline-week" class="table-select" style="display: inline-flex; align-items: center; white-space: nowrap; width: 106px">-</output></td>
+                    <td><output id="freight-rate-inline-date" class="table-select" style="display: inline-flex; align-items: center; white-space: nowrap; width: 116px">-</output></td>
+                    <td>
+                      <select id="freight-rate-inline-country" class="table-select" aria-label="国家" required>
+                        <option value="美国">美国</option>
+                        <option value="加拿大">加拿大</option>
+                        <option value="澳洲">澳洲</option>
+                        <option value="德国">德国</option>
+                        <option value="英国">英国</option>
+                      </select>
+                    </td>
+                    <td><input id="freight-rate-inline-warehouse-code" class="table-select" aria-label="仓库代码" placeholder="留空填写" required /></td>
+                    <td>
+                      <select id="freight-rate-inline-carrier" class="table-select" aria-label="承运商" required>
+                        <option value="九方通逊">九方通逊</option>
+                        <option value="同袍">同袍</option>
+                      </select>
+                    </td>
+                    <td>
+                      <select id="freight-rate-inline-transport-method" class="table-select" aria-label="运输方式" required>
+                        <option value="普船">普船</option>
+                        <option value="快船">快船</option>
+                        <option value="空运">空运</option>
+                        <option value="快递">快递</option>
+                      </select>
+                    </td>
+                    <td><input id="freight-rate-inline-price" type="number" class="table-select" min="0" step="0.0001" aria-label="价格" placeholder="手填价格" required /></td>
+                    <td class="table-actions"><button class="primary-button compact-button" id="freight-rate-inline-save" type="button">保存</button></td>
+                  </tr>
+                </tbody>
                 <tbody id="freight-rates-table"><tr><td colspan="8">正在读取运费记录。</td></tr></tbody>
               </table>
             </div>
@@ -2042,7 +2077,7 @@
               <form id="freight-rate-form" class="modal-body">
                 <label>周数<output id="freight-rate-week-preview">-</output></label>
                 <label>日期<input id="freight-rate-date" type="date" required /></label>
-                <label>国家<input id="freight-rate-country" placeholder="例如 CA / 美国 / 加拿大" required /></label>
+                <label>国家<select id="freight-rate-country" required><option value="美国">美国</option><option value="加拿大">加拿大</option><option value="澳洲">澳洲</option><option value="德国">德国</option><option value="英国">英国</option></select></label>
                 <label>仓库代码<input id="freight-rate-warehouse-code" placeholder="例如 YOW3" required /></label>
                 <label>承运商<select id="freight-rate-carrier" required><option value="九方通逊">九方通逊</option><option value="同袍">同袍</option></select></label>
                 <label>运输方式<select id="freight-rate-transport-method" required><option value="普船">普船</option><option value="快船">快船</option><option value="空运">空运</option><option value="快递">快递</option></select></label>

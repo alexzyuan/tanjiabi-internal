@@ -13,7 +13,11 @@ export function createFreightRatesFeature({
   if (typeof fetchImpl !== "function") throw new Error("createFreightRatesFeature requires fetch.");
 
   let freightRateRows = [];
-  let freightRateOptions = { carriers: ["九方通逊", "同袍"], transportMethods: ["普船", "快船", "空运", "快递"] };
+  let freightRateOptions = {
+    countries: ["美国", "加拿大", "澳洲", "德国", "英国"],
+    carriers: ["九方通逊", "同袍"],
+    transportMethods: ["普船", "快船", "空运", "快递"],
+  };
   let editingFreightRateId = "";
   let freightRatesLoaded = false;
 
@@ -23,6 +27,11 @@ export function createFreightRatesFeature({
 
   function value(selector) {
     return String(query(selector)?.value || "").trim();
+  }
+
+  function outputValue(selector) {
+    const element = query(selector);
+    return String(element?.value || element?.textContent || "").trim();
   }
 
   function todayText() {
@@ -50,6 +59,13 @@ export function createFreightRatesFeature({
     setText("#freight-rates-status", message, root);
   }
 
+  function setOutput(selector, text) {
+    const element = query(selector);
+    if (!element) return;
+    element.textContent = text;
+    if ("value" in element) element.value = text;
+  }
+
   function renderSelectOptions(selector, values = [], placeholder = "") {
     const select = query(selector);
     if (!select) return;
@@ -61,10 +77,30 @@ export function createFreightRatesFeature({
   }
 
   function renderFreightRateOptions() {
+    renderSelectOptions("#freight-rate-inline-country", freightRateOptions.countries);
+    renderSelectOptions("#freight-rate-country", freightRateOptions.countries);
+    renderSelectOptions("#freight-rate-inline-carrier", freightRateOptions.carriers);
     renderSelectOptions("#freight-rate-carrier", freightRateOptions.carriers);
+    renderSelectOptions("#freight-rate-inline-transport-method", freightRateOptions.transportMethods);
     renderSelectOptions("#freight-rate-transport-method", freightRateOptions.transportMethods);
-    renderSelectOptions("#freight-rates-carrier-filter", freightRateOptions.carriers, "全部承运商");
-    renderSelectOptions("#freight-rates-transport-filter", freightRateOptions.transportMethods, "全部方式");
+  }
+
+  function resetInlineFreightRateEntry({ keepSelections = true } = {}) {
+    const date = todayText();
+    setOutput("#freight-rate-inline-date", date);
+    setOutput("#freight-rate-inline-week", isoWeekFromDate(date) || "-");
+    if (!keepSelections) {
+      const country = query("#freight-rate-inline-country");
+      if (country) country.value = freightRateOptions.countries[0] || "";
+      const carrier = query("#freight-rate-inline-carrier");
+      if (carrier) carrier.value = "九方通逊";
+      const transportMethod = query("#freight-rate-inline-transport-method");
+      if (transportMethod) transportMethod.value = "普船";
+    }
+    const warehouseCode = query("#freight-rate-inline-warehouse-code");
+    if (warehouseCode) warehouseCode.value = "";
+    const price = query("#freight-rate-inline-price");
+    if (price) price.value = "";
   }
 
   function groupedRowsHtml(rows = []) {
@@ -99,7 +135,7 @@ export function createFreightRatesFeature({
     if (!table) return;
     setText("#freight-rates-count", `共 ${freightRateRows.length} 条`, root);
     if (!freightRateRows.length) {
-      renderTableMessage(table, 8, "暂无运费记录，请点击“新增运费”。");
+      renderTableMessage(table, 8, "暂无运费记录，可直接在第一行录入。");
       return;
     }
     table.innerHTML = groupedRowsHtml(freightRateRows);
@@ -107,12 +143,6 @@ export function createFreightRatesFeature({
 
   function buildFreightRateQuery() {
     const params = new URLSearchParams();
-    const keyword = value("#freight-rates-keyword");
-    const carrier = value("#freight-rates-carrier-filter");
-    const transportMethod = value("#freight-rates-transport-filter");
-    if (keyword) params.set("keyword", keyword);
-    if (carrier) params.set("carrier", carrier);
-    if (transportMethod) params.set("transportMethod", transportMethod);
     return params;
   }
 
@@ -127,6 +157,7 @@ export function createFreightRatesFeature({
       freightRateOptions = data.options || freightRateOptions;
       freightRatesLoaded = true;
       renderFreightRateOptions();
+      resetInlineFreightRateEntry();
       renderFreightRateRows();
       setFreightRateStatus(`已读取 ${freightRateRows.length} 条运费记录`);
     } catch (error) {
@@ -177,6 +208,17 @@ export function createFreightRatesFeature({
     };
   }
 
+  function inlineFreightRatePayload() {
+    return {
+      date: outputValue("#freight-rate-inline-date"),
+      country: value("#freight-rate-inline-country"),
+      warehouseCode: value("#freight-rate-inline-warehouse-code"),
+      carrier: value("#freight-rate-inline-carrier"),
+      transportMethod: value("#freight-rate-inline-transport-method"),
+      price: value("#freight-rate-inline-price"),
+    };
+  }
+
   async function saveFreightRateForm(event) {
     event.preventDefault();
     const url = editingFreightRateId ? `/api/fba/freight-rates/${encodeURIComponent(editingFreightRateId)}` : "/api/fba/freight-rates";
@@ -190,6 +232,23 @@ export function createFreightRatesFeature({
       const result = await response.json().catch(() => ({}));
       if (!response.ok || result.ok === false) throw new Error(result.error || `API ${response.status}`);
       closeFreightRateModal();
+      await loadFreightRatesDashboard();
+    } catch (error) {
+      setFreightRateStatus(`保存失败：${error.message || error}`);
+    }
+  }
+
+  async function saveInlineFreightRate() {
+    setFreightRateStatus("正在保存运费记录");
+    try {
+      const response = await fetchImpl("/api/fba/freight-rates", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(inlineFreightRatePayload()),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || result.ok === false) throw new Error(result.error || `API ${response.status}`);
+      resetInlineFreightRateEntry();
       await loadFreightRatesDashboard();
     } catch (error) {
       setFreightRateStatus(`保存失败：${error.message || error}`);
@@ -212,10 +271,7 @@ export function createFreightRatesFeature({
 
   function setupFreightRatesDashboard() {
     bind(root, "#freight-rates-refresh", "click", loadFreightRatesDashboard);
-    bind(root, "#freight-rates-add", "click", () => openFreightRateModal());
-    bind(root, "#freight-rates-keyword", "input", loadFreightRatesDashboard);
-    bind(root, "#freight-rates-carrier-filter", "change", loadFreightRatesDashboard);
-    bind(root, "#freight-rates-transport-filter", "change", loadFreightRatesDashboard);
+    bind(root, "#freight-rate-inline-save", "click", saveInlineFreightRate);
     bind(root, "#freight-rate-form", "submit", saveFreightRateForm);
     bind(root, "#freight-rate-date", "change", updateWeekPreview);
     bind(root, "#freight-rate-close", "click", closeFreightRateModal);
@@ -236,6 +292,7 @@ export function createFreightRatesFeature({
 
   async function loadFreightRatesInitial() {
     renderFreightRateOptions();
+    resetInlineFreightRateEntry({ keepSelections: false });
     if (!freightRatesLoaded) await loadFreightRatesDashboard();
     else renderFreightRateRows();
   }

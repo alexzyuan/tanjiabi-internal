@@ -32,7 +32,7 @@ test("saveFreightRate derives week from date and ignores supplied week", async (
     const row = await saveFreightRate({
       week: "2099-W99",
       date: "2026-07-13",
-      country: "CA",
+      country: "加拿大",
       warehouseCode: "YOW3",
       carrier: "九方通逊",
       transportMethod: "快船",
@@ -70,25 +70,29 @@ test("saveFreightRate rejects duplicate weekly route keys", async () => {
 test("saveFreightRate validates required fields and allowed options", async () => {
   await withTempStore(async (storeFile) => {
     await assert.rejects(
-      () => saveFreightRate({ date: "2026-07-13", country: "CA", warehouseCode: "YOW3", carrier: "未知", transportMethod: "快船", price: 1 }, { storeFile }),
+      () => saveFreightRate({ date: "2026-07-13", country: "加拿大", warehouseCode: "YOW3", carrier: "未知", transportMethod: "快船", price: 1 }, { storeFile }),
       /承运商必须是/,
     );
     await assert.rejects(
-      () => saveFreightRate({ date: "2026-07-13", country: "CA", warehouseCode: "YOW3", carrier: "九方通逊", transportMethod: "铁路", price: 1 }, { storeFile }),
+      () => saveFreightRate({ date: "2026-07-13", country: "加拿大", warehouseCode: "YOW3", carrier: "九方通逊", transportMethod: "铁路", price: 1 }, { storeFile }),
       /运输方式必须是/,
     );
     await assert.rejects(
-      () => saveFreightRate({ date: "2026-07-13", country: "CA", warehouseCode: "YOW3", carrier: "九方通逊", transportMethod: "快船", price: -1 }, { storeFile }),
+      () => saveFreightRate({ date: "2026-07-13", country: "加拿大", warehouseCode: "YOW3", carrier: "九方通逊", transportMethod: "快船", price: -1 }, { storeFile }),
       /价格必须是非负数字/,
+    );
+    await assert.rejects(
+      () => saveFreightRate({ date: "2026-07-13", country: "日本", warehouseCode: "YOW3", carrier: "九方通逊", transportMethod: "快船", price: 1 }, { storeFile }),
+      /国家必须是：美国、加拿大、澳洲、德国、英国/,
     );
   });
 });
 
 test("listFreightRates returns rows sorted by week and date descending", async () => {
   await withTempStore(async (storeFile) => {
-    await saveFreightRate({ date: "2026-07-06", country: "US", warehouseCode: "LAX9", carrier: "同袍", transportMethod: "空运", price: 20 }, { storeFile });
-    await saveFreightRate({ date: "2026-07-13", country: "CA", warehouseCode: "YOW3", carrier: "九方通逊", transportMethod: "普船", price: 10 }, { storeFile });
-    await saveFreightRate({ date: "2026-07-14", country: "CA", warehouseCode: "YVR4", carrier: "同袍", transportMethod: "快递", price: 30 }, { storeFile });
+    await saveFreightRate({ date: "2026-07-06", country: "美国", warehouseCode: "LAX9", carrier: "同袍", transportMethod: "空运", price: 20 }, { storeFile });
+    await saveFreightRate({ date: "2026-07-13", country: "加拿大", warehouseCode: "YOW3", carrier: "九方通逊", transportMethod: "普船", price: 10 }, { storeFile });
+    await saveFreightRate({ date: "2026-07-14", country: "加拿大", warehouseCode: "YVR4", carrier: "同袍", transportMethod: "快递", price: 30 }, { storeFile });
 
     const result = await listFreightRates({}, { storeFile });
 
@@ -107,7 +111,7 @@ test("listFreightRates returns rows sorted by week and date descending", async (
 
 test("deleteFreightRate removes an existing row and fails for unknown ids", async () => {
   await withTempStore(async (storeFile) => {
-    const row = await saveFreightRate({ date: "2026-07-13", country: "CA", warehouseCode: "YOW3", carrier: "九方通逊", transportMethod: "普船", price: 10 }, { storeFile });
+    const row = await saveFreightRate({ date: "2026-07-13", country: "加拿大", warehouseCode: "YOW3", carrier: "九方通逊", transportMethod: "普船", price: 10 }, { storeFile });
     assert.deepEqual(await deleteFreightRate(row.id, { storeFile }), { id: row.id });
     assert.equal((await listFreightRates({}, { storeFile })).rows.length, 0);
     await assert.rejects(() => deleteFreightRate(row.id, { storeFile }), /运费记录不存在/);

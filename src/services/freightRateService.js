@@ -6,6 +6,7 @@ const defaultStoreFile = path.join(process.cwd(), "data-cache", "freight-rates.j
 const fallbackStore = { rows: [] };
 
 export const freightRateOptions = {
+  countries: ["美国", "加拿大", "澳洲", "德国", "英国"],
   carriers: ["九方通逊", "同袍"],
   transportMethods: ["普船", "快船", "空运", "快递"],
 };
@@ -90,6 +91,7 @@ function normalizeFreightRateRow(input = {}, existing = {}, { now = () => new Da
 
   if (!country) throw new Error("国家不能为空。");
   if (!warehouseCode) throw new Error("仓库代码不能为空。");
+  assertAllowed(country, freightRateOptions.countries, "国家");
   assertAllowed(carrier, freightRateOptions.carriers, "承运商");
   assertAllowed(transportMethod, freightRateOptions.transportMethods, "运输方式");
 
