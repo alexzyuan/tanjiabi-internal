@@ -83,10 +83,17 @@ test("freight rates dashboard is grouped under logistics metadata", async () => 
   assert.match(indexSource, /<th>周数<\/th>[\s\S]*<th>日期<\/th>[\s\S]*<th>国家<\/th>[\s\S]*<th>仓库代码<\/th>[\s\S]*<th>承运商<\/th>[\s\S]*<th>运输方式<\/th>[\s\S]*<th>价格<\/th>/);
   assert.match(indexSource, /id="freight-rates-create-row"[\s\S]*id="freight-rate-inline-week"[\s\S]*id="freight-rate-inline-date"/);
   assert.match(indexSource, /<select id="freight-rate-inline-country"[\s\S]*<option value="美国">美国<\/option>[\s\S]*<option value="加拿大">加拿大<\/option>[\s\S]*<option value="澳洲">澳洲<\/option>[\s\S]*<option value="德国">德国<\/option>[\s\S]*<option value="英国">英国<\/option>/);
-  assert.match(indexSource, /<input id="freight-rate-inline-warehouse-code"[\s\S]*placeholder="留空填写"/);
+  assert.match(indexSource, /<select id="freight-rate-inline-warehouse-select"[\s\S]*aria-label="仓库代码选项"/);
+  assert.match(indexSource, /<input id="freight-rate-inline-warehouse-code"[\s\S]*placeholder="手填仓库"/);
+  assert.match(indexSource, /<select id="freight-rate-warehouse-select"[\s\S]*aria-label="仓库代码选项"/);
+  assert.match(indexSource, /<input id="freight-rate-warehouse-code"[\s\S]*placeholder="手填仓库"/);
   assert.match(indexSource, /<select id="freight-rate-inline-carrier"[\s\S]*<option value="九方通逊">九方通逊<\/option>[\s\S]*<option value="同袍">同袍<\/option>/);
   assert.match(indexSource, /<select id="freight-rate-inline-transport-method"[\s\S]*<option value="普船">普船<\/option>[\s\S]*<option value="快船">快船<\/option>[\s\S]*<option value="空运">空运<\/option>[\s\S]*<option value="快递">快递<\/option>/);
   assert.match(indexSource, /<input id="freight-rate-inline-price" type="number"/);
+  const freightRatesFeatureSource = await readFile(new URL("../assets/js/features/freight-rates.js", import.meta.url), "utf8");
+  assert.match(freightRatesFeatureSource, /warehouseCodesByCountry/);
+  assert.match(freightRatesFeatureSource, /syncWarehouseControl/);
+  assert.match(freightRatesFeatureSource, /"#freight-rate-inline-country", "change", syncInlineWarehouseControl/);
   assert.match(appSource, /createFreightRatesFeature/);
   assert.match(appSource, /loadFreightRatesDashboard/);
 });

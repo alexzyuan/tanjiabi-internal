@@ -2045,7 +2045,10 @@
                         <option value="英国">英国</option>
                       </select>
                     </td>
-                    <td><input id="freight-rate-inline-warehouse-code" class="table-select" aria-label="仓库代码" placeholder="留空填写" required /></td>
+                    <td>
+                      <select id="freight-rate-inline-warehouse-select" class="table-select" aria-label="仓库代码选项"></select>
+                      <input id="freight-rate-inline-warehouse-code" class="table-select" aria-label="仓库代码" placeholder="手填仓库" required hidden disabled />
+                    </td>
                     <td>
                       <select id="freight-rate-inline-carrier" class="table-select" aria-label="承运商" required>
                         <option value="九方通逊">九方通逊</option>
@@ -2078,7 +2081,7 @@
                 <label>周数<output id="freight-rate-week-preview">-</output></label>
                 <label>日期<input id="freight-rate-date" type="date" required /></label>
                 <label>国家<select id="freight-rate-country" required><option value="美国">美国</option><option value="加拿大">加拿大</option><option value="澳洲">澳洲</option><option value="德国">德国</option><option value="英国">英国</option></select></label>
-                <label>仓库代码<input id="freight-rate-warehouse-code" placeholder="例如 YOW3" required /></label>
+                <label>仓库代码<select id="freight-rate-warehouse-select" aria-label="仓库代码选项"></select><input id="freight-rate-warehouse-code" placeholder="手填仓库" required hidden disabled /></label>
                 <label>承运商<select id="freight-rate-carrier" required><option value="九方通逊">九方通逊</option><option value="同袍">同袍</option></select></label>
                 <label>运输方式<select id="freight-rate-transport-method" required><option value="普船">普船</option><option value="快船">快船</option><option value="空运">空运</option><option value="快递">快递</option></select></label>
                 <label>价格<input id="freight-rate-price" type="number" min="0" step="0.0001" required /></label>

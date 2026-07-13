@@ -15,6 +15,11 @@ export function createFreightRatesFeature({
   let freightRateRows = [];
   let freightRateOptions = {
     countries: ["美国", "加拿大", "澳洲", "德国", "英国"],
+    warehouseCodesByCountry: {
+      美国: ["MIT", "GEU", "POC", "TCY", "ONT", "GYR"],
+      加拿大: ["YYZ", "YUX", "YOW", "YYC", "YVR", "YEG"],
+      澳洲: ["BWU", "XAU", "XBW"],
+    },
     carriers: ["九方通逊", "同袍"],
     transportMethods: ["普船", "快船", "空运", "快递"],
   };
@@ -85,6 +90,51 @@ export function createFreightRatesFeature({
     renderSelectOptions("#freight-rate-transport-method", freightRateOptions.transportMethods);
   }
 
+  function warehouseOptionsForCountry(country) {
+    return freightRateOptions.warehouseCodesByCountry?.[country] || [];
+  }
+
+  function syncWarehouseControl({ countrySelector, selectSelector, inputSelector, warehouseCode = "" } = {}) {
+    const country = value(countrySelector);
+    const options = warehouseOptionsForCountry(country);
+    const select = query(selectSelector);
+    const input = query(inputSelector);
+    if (!select || !input) return;
+    if (options.length > 0) {
+      renderSelectOptions(selectSelector, options);
+      const normalizedWarehouse = String(warehouseCode || input.value || select.value || "").trim().toUpperCase();
+      select.value = options.includes(normalizedWarehouse) ? normalizedWarehouse : options[0];
+      select.hidden = false;
+      select.disabled = false;
+      input.hidden = true;
+      input.disabled = true;
+      input.value = "";
+      return;
+    }
+    select.hidden = true;
+    select.disabled = true;
+    input.hidden = false;
+    input.disabled = false;
+    input.value = warehouseCode || "";
+  }
+
+  function syncInlineWarehouseControl() {
+    syncWarehouseControl({
+      countrySelector: "#freight-rate-inline-country",
+      selectSelector: "#freight-rate-inline-warehouse-select",
+      inputSelector: "#freight-rate-inline-warehouse-code",
+    });
+  }
+
+  function syncModalWarehouseControl(warehouseCode = "") {
+    syncWarehouseControl({
+      countrySelector: "#freight-rate-country",
+      selectSelector: "#freight-rate-warehouse-select",
+      inputSelector: "#freight-rate-warehouse-code",
+      warehouseCode,
+    });
+  }
+
   function resetInlineFreightRateEntry({ keepSelections = true } = {}) {
     const date = todayText();
     setOutput("#freight-rate-inline-date", date);
@@ -99,6 +149,7 @@ export function createFreightRatesFeature({
     }
     const warehouseCode = query("#freight-rate-inline-warehouse-code");
     if (warehouseCode) warehouseCode.value = "";
+    syncInlineWarehouseControl();
     const price = query("#freight-rate-inline-price");
     if (price) price.value = "";
   }
@@ -177,7 +228,6 @@ export function createFreightRatesFeature({
     const fields = {
       "#freight-rate-date": row.date || todayText(),
       "#freight-rate-country": row.country || "",
-      "#freight-rate-warehouse-code": row.warehouseCode || "",
       "#freight-rate-carrier": row.carrier || "九方通逊",
       "#freight-rate-transport-method": row.transportMethod || "普船",
       "#freight-rate-price": row.price ?? "",
@@ -186,6 +236,7 @@ export function createFreightRatesFeature({
       const element = query(selector);
       if (element) element.value = fieldValue;
     });
+    syncModalWarehouseControl(row.warehouseCode || "");
     updateWeekPreview();
     const deleteButton = query("#freight-rate-delete");
     if (deleteButton) deleteButton.hidden = !editingFreightRateId;
@@ -201,7 +252,7 @@ export function createFreightRatesFeature({
     return {
       date: value("#freight-rate-date"),
       country: value("#freight-rate-country"),
-      warehouseCode: value("#freight-rate-warehouse-code"),
+      warehouseCode: warehouseControlValue("#freight-rate-warehouse-select", "#freight-rate-warehouse-code"),
       carrier: value("#freight-rate-carrier"),
       transportMethod: value("#freight-rate-transport-method"),
       price: value("#freight-rate-price"),
@@ -212,11 +263,17 @@ export function createFreightRatesFeature({
     return {
       date: outputValue("#freight-rate-inline-date"),
       country: value("#freight-rate-inline-country"),
-      warehouseCode: value("#freight-rate-inline-warehouse-code"),
+      warehouseCode: warehouseControlValue("#freight-rate-inline-warehouse-select", "#freight-rate-inline-warehouse-code"),
       carrier: value("#freight-rate-inline-carrier"),
       transportMethod: value("#freight-rate-inline-transport-method"),
       price: value("#freight-rate-inline-price"),
     };
+  }
+
+  function warehouseControlValue(selectSelector, inputSelector) {
+    const select = query(selectSelector);
+    if (select && !select.disabled && !select.hidden) return String(select.value || "").trim();
+    return value(inputSelector);
   }
 
   async function saveFreightRateForm(event) {
@@ -272,8 +329,10 @@ export function createFreightRatesFeature({
   function setupFreightRatesDashboard() {
     bind(root, "#freight-rates-refresh", "click", loadFreightRatesDashboard);
     bind(root, "#freight-rate-inline-save", "click", saveInlineFreightRate);
+    bind(root, "#freight-rate-inline-country", "change", syncInlineWarehouseControl);
     bind(root, "#freight-rate-form", "submit", saveFreightRateForm);
     bind(root, "#freight-rate-date", "change", updateWeekPreview);
+    bind(root, "#freight-rate-country", "change", () => syncModalWarehouseControl());
     bind(root, "#freight-rate-close", "click", closeFreightRateModal);
     bind(root, "#freight-rate-cancel", "click", closeFreightRateModal);
     bind(root, "#freight-rate-delete", "click", () => deleteFreightRateById(editingFreightRateId));

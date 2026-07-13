@@ -7,6 +7,11 @@ const fallbackStore = { rows: [] };
 
 export const freightRateOptions = {
   countries: ["美国", "加拿大", "澳洲", "德国", "英国"],
+  warehouseCodesByCountry: {
+    美国: ["MIT", "GEU", "POC", "TCY", "ONT", "GYR"],
+    加拿大: ["YYZ", "YUX", "YOW", "YYC", "YVR", "YEG"],
+    澳洲: ["BWU", "XAU", "XBW"],
+  },
   carriers: ["九方通逊", "同袍"],
   transportMethods: ["普船", "快船", "空运", "快递"],
 };
@@ -92,6 +97,8 @@ function normalizeFreightRateRow(input = {}, existing = {}, { now = () => new Da
   if (!country) throw new Error("国家不能为空。");
   if (!warehouseCode) throw new Error("仓库代码不能为空。");
   assertAllowed(country, freightRateOptions.countries, "国家");
+  const countryWarehouseCodes = freightRateOptions.warehouseCodesByCountry[country] || [];
+  if (countryWarehouseCodes.length > 0) assertAllowed(warehouseCode, countryWarehouseCodes, `${country}仓库代码`);
   assertAllowed(carrier, freightRateOptions.carriers, "承运商");
   assertAllowed(transportMethod, freightRateOptions.transportMethods, "运输方式");
 
