@@ -15,6 +15,7 @@ export function createFbaRoutes(deps = {}) {
     listFreightRates,
     saveFreightRate,
     deleteFreightRate,
+    exportFreightRateLogsCsv,
     listFbaShipmentOrderWarehouses,
     createReadySendFbaShipmentOrders,
     saveFbaBoxTemplate,
@@ -130,6 +131,20 @@ export function createFbaRoutes(deps = {}) {
       auth: "session",
       errorStatusCode: 400,
       handler: async ({ req, res, params }) => sendJson(res, 200, { ok: true, ...(await deleteFreightRate(decodeURIComponent(params.id), { operator: requestOperator(req) })) }),
+    },
+    {
+      method: "GET",
+      path: "/api/fba/freight-rates/logs/export",
+      auth: "session",
+      errorStatusCode: 400,
+      handler: async ({ res }) => {
+        const result = await exportFreightRateLogsCsv();
+        res.writeHead(200, {
+          "content-type": result.contentType,
+          "content-disposition": contentDispositionAttachment(result.filename),
+        });
+        res.end(result.buffer);
+      },
     },
     {
       method: "GET",

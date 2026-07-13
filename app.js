@@ -885,6 +885,7 @@ async function refreshDashboardFromFilters() {
   root: document,
   bind,
   closestTarget,
+  downloadBlob,
   escapeHtml,
   fetchImpl: fetch.bind(window),
   renderTableMessage,

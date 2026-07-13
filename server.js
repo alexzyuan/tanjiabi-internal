@@ -76,6 +76,7 @@ import {
 } from "./src/services/fbaFreightSheetService.js";
 import {
   deleteFreightRate,
+  exportFreightRateLogsCsv,
   listFreightRates,
   saveFreightRate,
 } from "./src/services/freightRateService.js";
@@ -805,6 +806,7 @@ const apiRoutes = createApiRoutes(buildApiRoutes({
   listFreightRates,
   saveFreightRate,
   deleteFreightRate,
+  exportFreightRateLogsCsv,
   listFbaShipmentOrderWarehouses,
   createReadySendFbaShipmentOrders,
   saveFbaBoxTemplate,

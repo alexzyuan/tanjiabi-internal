@@ -2,6 +2,7 @@ export function createFreightRatesFeature({
   root = globalThis.document,
   bind,
   closestTarget,
+  downloadBlob,
   escapeHtml,
   fetchImpl = globalThis.fetch,
   renderTableMessage,
@@ -9,6 +10,7 @@ export function createFreightRatesFeature({
   windowApi = globalThis.window,
 } = {}) {
   if (typeof bind !== "function") throw new Error("createFreightRatesFeature requires bind.");
+  if (typeof downloadBlob !== "function") throw new Error("createFreightRatesFeature requires downloadBlob.");
   if (typeof fetchImpl !== "function") throw new Error("createFreightRatesFeature requires fetch.");
 
   let freightRateRows = [];
@@ -23,7 +25,6 @@ export function createFreightRatesFeature({
     transportMethods: ["普船", "快船", "空运", "快递"],
   };
   let editingFreightRateId = "";
-  let freightRateLogs = [];
   let freightRatesLoaded = false;
 
   function query(selector) {
@@ -233,55 +234,17 @@ export function createFreightRatesFeature({
     table.innerHTML = groupedRowsHtml(freightRateRows);
   }
 
-  function actionLabel(action) {
-    return ({ create: "新增", update: "修改", delete: "删除" })[action] || action || "-";
-  }
-
-  function logRow(log = {}) {
-    return log.after || log.before || {};
-  }
-
-  function logPrice(log = {}) {
-    if (log.action === "update" && log.before && log.after && log.before.price !== log.after.price) {
-      return `${log.before.price ?? "-"} -> ${log.after.price ?? "-"}`;
-    }
-    return logRow(log).price ?? "-";
-  }
-
-  function formatLogTime(value) {
-    if (!value) return "-";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
-    return date.toLocaleString("zh-CN", { hour12: false });
-  }
-
-  function renderFreightRateLogs() {
-    const table = query("#freight-rates-log-table");
-    if (!table) return;
-    setText("#freight-rates-log-count", `共 ${freightRateLogs.length} 条`, root);
-    if (!freightRateLogs.length) {
-      renderTableMessage(table, 9, "最近半年暂无操作记录。");
-      return;
-    }
-    table.innerHTML = freightRateLogs.map((log) => {
-      const row = logRow(log);
-      return `<tr>
-        <td>${escapeHtml(formatLogTime(log.at))}</td>
-        <td>${escapeHtml(actionLabel(log.action))}</td>
-        <td>${escapeHtml(log.operator || "-")}</td>
-        <td>${escapeHtml(row.week || "-")}</td>
-        <td>${escapeHtml(row.country || "-")}</td>
-        <td>${escapeHtml(row.warehouseCode || "-")}</td>
-        <td>${escapeHtml(row.carrier || "-")}</td>
-        <td>${escapeHtml(row.transportMethod || "-")}</td>
-        <td>${escapeHtml(logPrice(log))}</td>
-      </tr>`;
-    }).join("");
-  }
-
   function buildFreightRateQuery() {
     const params = new URLSearchParams();
     return params;
+  }
+
+  function filenameFromDisposition(response, fallback) {
+    const disposition = response.headers?.get?.("content-disposition") || "";
+    const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+    if (utf8Match) return decodeURIComponent(utf8Match[1]);
+    const plainMatch = disposition.match(/filename="?([^";]+)"?/i);
+    return plainMatch ? plainMatch[1] : fallback;
   }
 
   async function loadFreightRatesDashboard() {
@@ -292,21 +255,33 @@ export function createFreightRatesFeature({
       const data = await response.json().catch(() => ({}));
       if (!response.ok || data.ok === false) throw new Error(data.error || `API ${response.status}`);
       freightRateRows = Array.isArray(data.rows) ? data.rows : [];
-      freightRateLogs = Array.isArray(data.logs) ? data.logs : [];
       freightRateOptions = data.options || freightRateOptions;
       editingFreightRateId = "";
       freightRatesLoaded = true;
       renderFreightRateOptions();
       resetInlineFreightRateEntry();
       renderFreightRateRows();
-      renderFreightRateLogs();
       setFreightRateStatus(`已读取 ${freightRateRows.length} 条运费记录`);
     } catch (error) {
       freightRateRows = [];
-      freightRateLogs = [];
       renderFreightRateRows();
-      renderFreightRateLogs();
       setFreightRateStatus(`读取失败：${error.message || error}`);
+    }
+  }
+
+  async function exportFreightRateLogs() {
+    setFreightRateStatus("正在导出操作日志");
+    try {
+      const response = await fetchImpl("/api/fba/freight-rates/logs/export");
+      const blob = await response.blob();
+      if (!response.ok) {
+        const message = await blob.text().catch(() => "");
+        throw new Error(message || `API ${response.status}`);
+      }
+      downloadBlob(blob, filenameFromDisposition(response, `运费看板操作日志-${todayText()}.csv`), root);
+      setFreightRateStatus("操作日志已导出");
+    } catch (error) {
+      setFreightRateStatus(`导出日志失败：${error.message || error}`);
     }
   }
 
@@ -425,6 +400,7 @@ export function createFreightRatesFeature({
 
   function setupFreightRatesDashboard() {
     bind(root, "#freight-rates-refresh", "click", loadFreightRatesDashboard);
+    bind(root, "#freight-rates-export-logs", "click", exportFreightRateLogs);
     bind(root, "#freight-rate-inline-save", "click", saveInlineFreightRate);
     bind(root, "#freight-rate-inline-country", "change", syncInlineWarehouseControl);
     bind(root, "#freight-rates-table", "click", (event) => {
@@ -461,10 +437,7 @@ export function createFreightRatesFeature({
     renderFreightRateOptions();
     resetInlineFreightRateEntry({ keepSelections: false });
     if (!freightRatesLoaded) await loadFreightRatesDashboard();
-    else {
-      renderFreightRateRows();
-      renderFreightRateLogs();
-    }
+    else renderFreightRateRows();
   }
 
   return {

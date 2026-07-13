@@ -192,6 +192,24 @@ function filterRecentFreightRateLogs(logs = [], now = () => new Date()) {
   }));
 }
 
+function freightRateLogActionLabel(action) {
+  return ({ create: "新增", update: "修改", delete: "删除" })[action] || action || "";
+}
+
+function freightRateLogRow(log = {}) {
+  return log.after || log.before || {};
+}
+
+function csvCell(value) {
+  const text = String(value ?? "");
+  if (!/[",\n\r]/.test(text)) return text;
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function buildCsv(rows = []) {
+  return rows.map((row) => row.map(csvCell).join(",")).join("\n");
+}
+
 export async function listFreightRates(filters = {}, { storeFile = defaultStoreFile, now = () => new Date() } = {}) {
   const store = await readJson(storeFile, fallbackStore);
   const allRows = Array.isArray(store.rows) ? store.rows : [];
@@ -208,6 +226,40 @@ export async function listFreightRates(filters = {}, { storeFile = defaultStoreF
     weekGroups: buildWeekGroups(rows),
     logs: filterRecentFreightRateLogs(allLogs, now),
     options: freightRateOptions,
+  };
+}
+
+export async function exportFreightRateLogsCsv({ storeFile = defaultStoreFile, now = () => new Date() } = {}) {
+  const store = await readJson(storeFile, fallbackStore);
+  const logs = filterRecentFreightRateLogs(Array.isArray(store.logs) ? store.logs : [], now);
+  const rows = [
+    ["操作时间", "操作", "操作人", "周数", "日期", "国家", "仓库代码", "承运商", "运输方式", "价格", "变更前价格", "变更后价格", "记录ID"],
+    ...logs.map((log) => {
+      const row = freightRateLogRow(log);
+      const beforePrice = log.before?.price ?? "";
+      const afterPrice = log.after?.price ?? "";
+      return [
+        log.at || "",
+        freightRateLogActionLabel(log.action),
+        log.operator || "",
+        row.week || "",
+        row.date || "",
+        row.country || "",
+        row.warehouseCode || "",
+        row.carrier || "",
+        row.transportMethod || "",
+        row.price ?? "",
+        beforePrice,
+        afterPrice,
+        log.rowId || "",
+      ];
+    }),
+  ];
+  const dateText = now().toISOString().slice(0, 10);
+  return {
+    filename: `运费看板操作日志-${dateText}.csv`,
+    contentType: "text/csv; charset=utf-8",
+    buffer: Buffer.from(`\uFEFF${buildCsv(rows)}\n`, "utf8"),
   };
 }
 

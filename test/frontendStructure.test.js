@@ -94,12 +94,17 @@ test("freight rates dashboard is grouped under logistics metadata", async () => 
   assert.match(freightRatesFeatureSource, /warehouseCodesByCountry/);
   assert.match(freightRatesFeatureSource, /syncWarehouseControl/);
   assert.match(freightRatesFeatureSource, /"#freight-rate-inline-country", "change", syncInlineWarehouseControl/);
-  assert.match(indexSource, /id="freight-rates-log-table"/);
-  assert.match(indexSource, /最近半年操作记录/);
-  assert.match(freightRatesFeatureSource, /renderFreightRateLogs/);
+  assert.match(indexSource, /id="freight-rates-export-logs"/);
+  assert.match(indexSource, /导出日志/);
+  assert.equal(indexSource.includes('id="freight-rates-log-table"'), false);
+  assert.equal(indexSource.includes("最近半年操作记录"), false);
+  assert.equal(freightRatesFeatureSource.includes("renderFreightRateLogs"), false);
+  assert.match(freightRatesFeatureSource, /exportFreightRateLogs/);
+  assert.match(freightRatesFeatureSource, /\/api\/fba\/freight-rates\/logs\/export/);
   assert.match(freightRatesFeatureSource, /startInlineEdit/);
   assert.equal(freightRatesFeatureSource.includes("openFreightRateModal(row)"), false);
   assert.match(appSource, /createFreightRatesFeature/);
+  assert.match(appSource, /downloadBlob,/);
   assert.match(appSource, /loadFreightRatesDashboard/);
 });
 

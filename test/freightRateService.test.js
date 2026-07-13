@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import {
   deleteFreightRate,
+  exportFreightRateLogsCsv,
   freightRateOptions,
   isoWeekFromDate,
   listFreightRates,
@@ -170,6 +171,41 @@ test("deleteFreightRate records operator and listFreightRates returns only recen
     ]);
     assert.equal(result.logs[0].before.id, recent.id);
     assert.equal(result.logs.some((item) => item.operator === "Old User"), false);
+  });
+});
+
+test("exportFreightRateLogsCsv exports recent half-year operation logs for backend audit", async () => {
+  await withTempStore(async (storeFile) => {
+    await saveFreightRate({
+      date: "2025-12-01",
+      country: "德国",
+      warehouseCode: "OLD",
+      carrier: "九方通逊",
+      transportMethod: "普船",
+      price: 1,
+    }, { storeFile, now: () => new Date("2025-12-01T08:00:00.000Z"), operator: "Old User" });
+    const created = await saveFreightRate({
+      date: "2026-07-13",
+      country: "加拿大",
+      warehouseCode: "YUX",
+      carrier: "同袍",
+      transportMethod: "快递",
+      price: 3.5,
+    }, { storeFile, now: () => new Date("2026-07-13T08:00:00.000Z"), operator: "Alice" });
+    await saveFreightRate({
+      id: created.id,
+      price: 4.25,
+    }, { storeFile, now: () => new Date("2026-07-13T09:00:00.000Z"), operator: "Bob" });
+
+    const result = await exportFreightRateLogsCsv({ storeFile, now: () => new Date("2026-07-13T10:00:00.000Z") });
+    const csv = result.buffer.toString("utf8");
+
+    assert.equal(result.contentType, "text/csv; charset=utf-8");
+    assert.equal(result.filename, "运费看板操作日志-2026-07-13.csv");
+    assert.match(csv, /^﻿操作时间,操作,操作人,周数,日期,国家,仓库代码,承运商,运输方式,价格,变更前价格,变更后价格,记录ID/m);
+    assert.match(csv, /2026-07-13T09:00:00.000Z,修改,Bob,2026-W29,2026-07-13,加拿大,YUX,同袍,快递,4.25,3.5,4.25,/);
+    assert.match(csv, /2026-07-13T08:00:00.000Z,新增,Alice,2026-W29,2026-07-13,加拿大,YUX,同袍,快递,3.5,,3.5,/);
+    assert.equal(csv.includes("Old User"), false);
   });
 });
 
