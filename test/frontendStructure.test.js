@@ -70,6 +70,21 @@ test("FBA logistics views stay grouped under logistics metadata", async () => {
   assert.match(fbaFreightSource, /接口没有返回创建结果/);
 });
 
+test("freight rates dashboard is grouped under logistics metadata", async () => {
+  const breadcrumbShellSource = await readFile(new URL("../assets/js/features/breadcrumb-shell.js", import.meta.url), "utf8");
+  const homeQuickLinksSource = await readFile(new URL("../assets/js/features/home-quick-links.js", import.meta.url), "utf8");
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const appSource = await readFile(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.match(breadcrumbShellSource, /"freight-rates": \["首页", "物流", "运费看板"\]/);
+  assert.match(homeQuickLinksSource, /target: "freight-rates", group: "物流", title: "运费看板"/);
+  assert.match(indexSource, /data-view="freight-rates"[\s\S]*<span class="nav-label">运费看板<\/span>/);
+  assert.match(indexSource, /<section class="view" id="view-freight-rates">/);
+  assert.match(indexSource, /<th>周数<\/th>[\s\S]*<th>日期<\/th>[\s\S]*<th>国家<\/th>[\s\S]*<th>仓库代码<\/th>[\s\S]*<th>承运商<\/th>[\s\S]*<th>运输方式<\/th>[\s\S]*<th>价格<\/th>/);
+  assert.match(appSource, /createFreightRatesFeature/);
+  assert.match(appSource, /loadFreightRatesDashboard/);
+});
+
 test("ui-utils.js exposes ES module exports while keeping the legacy global", async () => {
   const source = await readFile(new URL("../assets/js/ui-utils.js", import.meta.url), "utf8");
 

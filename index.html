@@ -68,6 +68,7 @@
               <span class="nav-group-caret" aria-hidden="true">⌄</span>
             </button>
             <button class="nav-item" data-view="fba-freight"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 6h16v12H4z"/><path d="M7 10h10"/><path d="M7 14h6"/><path d="M17 18l3 3"/><path d="M20 18l-3 3"/></svg></span><span class="nav-label">FBA货件处理</span></button>
+            <button class="nav-item" data-view="freight-rates"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h10"/><path d="M17 14l3 3-3 3"/></svg></span><span class="nav-label">运费看板</span></button>
           </section>
           <section class="nav-group" aria-label="产品">
             <button class="nav-group-title" type="button" aria-expanded="false">
@@ -1986,6 +1987,72 @@
                 <button class="secondary-button" id="fba-freight-template-cancel" type="button">取消</button>
                 <button class="primary-button" id="fba-freight-template-confirm" type="button" disabled>生成表格</button>
               </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="view-freight-rates">
+          <section class="module-hero">
+            <div>
+              <span>运费看板</span>
+              <h2>运费看板</h2>
+              <p>维护每周国家、仓库、承运商和运输方式对应的运费价格，作为 FBA 货件转发货单的物流费用数据源。</p>
+            </div>
+          </section>
+          <article class="panel">
+            <div class="panel-head">
+              <h2>运费数据</h2>
+              <span id="freight-rates-status">等待加载</span>
+            </div>
+            <section class="filter-toolbar">
+              <label>关键词<input id="freight-rates-keyword" placeholder="国家 / 仓库 / 周数" /></label>
+              <label>承运商<select id="freight-rates-carrier-filter"><option value="">全部承运商</option></select></label>
+              <label>运输方式<select id="freight-rates-transport-filter"><option value="">全部方式</option></select></label>
+              <button class="secondary-button" id="freight-rates-refresh" type="button">刷新</button>
+              <button class="primary-button" id="freight-rates-add" type="button">新增运费</button>
+            </section>
+            <div class="panel-head">
+              <h2>每周运价</h2>
+              <span id="freight-rates-count">共 0 条</span>
+            </div>
+            <div class="table-shell">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>周数</th>
+                    <th>日期</th>
+                    <th>国家</th>
+                    <th>仓库代码</th>
+                    <th>承运商</th>
+                    <th>运输方式</th>
+                    <th>价格</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="freight-rates-table"><tr><td colspan="8">正在读取运费记录。</td></tr></tbody>
+              </table>
+            </div>
+          </article>
+          <div class="modal-backdrop" id="freight-rate-modal" hidden>
+            <article class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="freight-rate-modal-title">
+              <div class="modal-title-row">
+                <h2 id="freight-rate-modal-title">新增运费</h2>
+                <button class="modal-close-button" id="freight-rate-close" type="button" aria-label="关闭运费编辑弹窗">×</button>
+              </div>
+              <form id="freight-rate-form" class="modal-body">
+                <label>周数<output id="freight-rate-week-preview">-</output></label>
+                <label>日期<input id="freight-rate-date" type="date" required /></label>
+                <label>国家<input id="freight-rate-country" placeholder="例如 CA / 美国 / 加拿大" required /></label>
+                <label>仓库代码<input id="freight-rate-warehouse-code" placeholder="例如 YOW3" required /></label>
+                <label>承运商<select id="freight-rate-carrier" required><option value="九方通逊">九方通逊</option><option value="同袍">同袍</option></select></label>
+                <label>运输方式<select id="freight-rate-transport-method" required><option value="普船">普船</option><option value="快船">快船</option><option value="空运">空运</option><option value="快递">快递</option></select></label>
+                <label>价格<input id="freight-rate-price" type="number" min="0" step="0.0001" required /></label>
+                <div class="modal-foot">
+                  <button class="secondary-button danger" id="freight-rate-delete" type="button" hidden>删除</button>
+                  <button class="secondary-button" id="freight-rate-cancel" type="button">取消</button>
+                  <button class="primary-button" type="submit">保存</button>
+                </div>
+              </form>
             </article>
           </div>
         </section>

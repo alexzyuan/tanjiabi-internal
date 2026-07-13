@@ -51,6 +51,7 @@ import { createFbaShopsFeature } from "./assets/js/features/fba-shops.js?v=20260
 import { createFbaMskuFeature } from "./assets/js/features/fba-msku.js?v=20260707-frontend-refactor-v1";
 import { createFbaAutomationFeature } from "./assets/js/features/fba-automation.js?v=20260707-frontend-refactor-v1";
 import { createFbaTaskFormFeature } from "./assets/js/features/fba-task-form.js?v=20260707-frontend-refactor-v1";
+import { createFreightRatesFeature } from "./assets/js/features/freight-rates.js?v=20260713-freight-rates-v1";
 import { createSalesForecastFeature } from "./assets/js/features/sales-forecast.js?v=20260707-frontend-refactor-v1";
 import { createSalesDashboardFeature } from "./assets/js/features/sales-dashboard.js?v=20260707-frontend-refactor-v1";
 import { createSidebarShellFeature } from "./assets/js/features/sidebar-shell.js?v=20260707-frontend-refactor-v1";
@@ -236,6 +237,8 @@ let loadLingxingShops = async () => {};
 let loadSyncStatus = async () => {};
 let loadSalesForecast = async () => {};
 let loadFbaFreightInitial = async () => {};
+let loadFreightRatesDashboard = async () => {};
+let loadFreightRatesInitial = async () => {};
 let openSupplierDetailModal = () => {};
 let renderPayableDetail = () => {};
 let renderSyncStatus = () => {};
@@ -260,6 +263,7 @@ let setupAdminSettings = () => {};
 let setupBreadcrumbNavigation = () => {};
 let setupBudgetTargets = () => {};
 let setupFbaFreight = () => {};
+let setupFreightRatesDashboard = () => {};
 let setupFbaShopPicker = () => {};
 let setupReviewRatingCalculator = () => {};
 let setupSalesDashboard = () => {};
@@ -877,6 +881,18 @@ async function refreshDashboardFromFilters() {
   setText,
 }));
 
+({ loadFreightRatesDashboard, loadFreightRatesInitial, setupFreightRatesDashboard } = createFreightRatesFeature({
+  root: document,
+  bind,
+  closestTarget,
+  escapeHtml,
+  fetchImpl: fetch.bind(window),
+  renderTableMessage,
+  setModalOpenState,
+  setText,
+  windowApi: window,
+}));
+
 ({ applyAuthVisibility, getCurrentAuthUser, loadAuthStatus, setupAuthShell } = createAuthShellFeature({
   root: document,
   windowObj: window,
@@ -1004,6 +1020,7 @@ function setupNavigation() {
     fba: "",
     admin: "",
     sync: "",
+    "freight-rates": "",
   };
 
   setupSidebarShell();
@@ -1116,6 +1133,9 @@ function setupNavigation() {
     if (view === "fba-freight") {
       await loadFbaFreightInitial();
     }
+    if (view === "freight-rates") {
+      await loadFreightRatesInitial();
+    }
     if (view === "sync") loadSyncStatus();
     if (view === "sync") loadLingxingShops();
     window.__tanjiaHideSidebarFlyout?.();
@@ -1159,6 +1179,7 @@ function setupNavigation() {
 
   setupSyncCenter();
   setupFbaFreight();
+  setupFreightRatesDashboard();
   setupFbaShopPicker();
   setupFbaMskuPicker();
   setupFbaAutomationBoard();

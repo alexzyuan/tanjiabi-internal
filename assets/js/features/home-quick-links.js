@@ -11,6 +11,7 @@ const homeQuickLinkCatalog = [
   { target: "review-rating", group: "工具", title: "review计算", description: "星级占比、目标分与补量" },
   { target: "ai-image-workflow", group: "工具", title: "AI图片工作流", description: "产品图与文案流程" },
   { target: "fba-freight", group: "物流", title: "FBA货件处理", description: "货代表格与领星发货单" },
+  { target: "freight-rates", group: "物流", title: "运费看板", description: "每周承运商运费" },
   { target: "fba", group: "工具", title: "FBA刷仓", description: "仓库命中与自动任务" },
   { target: "product-progress", group: "产品", title: "产品进度", description: "开发状态与节点" },
   { target: "aftersales", group: "产品", title: "售后数据", description: "售后与退款趋势" },

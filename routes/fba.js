@@ -12,6 +12,9 @@ export function createFbaRoutes(deps = {}) {
     listFbaForwarderTemplates,
     exportFbaFreightShipments,
     convertFbaFreightShipmentsToForwarderTemplate,
+    listFreightRates,
+    saveFreightRate,
+    deleteFreightRate,
     listFbaShipmentOrderWarehouses,
     createReadySendFbaShipmentOrders,
     saveFbaBoxTemplate,
@@ -87,6 +90,44 @@ export function createFbaRoutes(deps = {}) {
       path: "/api/fba/freight/templates",
       auth: "session",
       handler: async ({ res }) => sendJson(res, 200, { ok: true, templates: listFbaForwarderTemplates() }),
+    },
+    {
+      method: "GET",
+      path: "/api/fba/freight-rates",
+      auth: "session",
+      errorStatusCode: 400,
+      handler: async ({ res, url }) => sendJson(res, 200, await listFreightRates({
+        keyword: url.searchParams.get("keyword") || "",
+        week: url.searchParams.get("week") || "",
+        country: url.searchParams.get("country") || "",
+        warehouseCode: url.searchParams.get("warehouseCode") || "",
+        carrier: url.searchParams.get("carrier") || "",
+        transportMethod: url.searchParams.get("transportMethod") || "",
+      })),
+    },
+    {
+      method: "POST",
+      path: "/api/fba/freight-rates",
+      auth: "session",
+      errorStatusCode: 400,
+      handler: async ({ req, res }) => sendJson(res, 200, { ok: true, row: await saveFreightRate(await readJsonBody(req)) }),
+    },
+    {
+      method: "PUT",
+      pattern: /^\/api\/fba\/freight-rates\/(?<id>[^/]+)$/,
+      auth: "session",
+      errorStatusCode: 400,
+      handler: async ({ req, res, params }) => {
+        const body = await readJsonBody(req);
+        sendJson(res, 200, { ok: true, row: await saveFreightRate({ ...body, id: decodeURIComponent(params.id) }) });
+      },
+    },
+    {
+      method: "DELETE",
+      pattern: /^\/api\/fba\/freight-rates\/(?<id>[^/]+)$/,
+      auth: "session",
+      errorStatusCode: 400,
+      handler: async ({ res, params }) => sendJson(res, 200, { ok: true, ...(await deleteFreightRate(decodeURIComponent(params.id))) }),
     },
     {
       method: "GET",
