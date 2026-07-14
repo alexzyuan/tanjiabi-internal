@@ -56,6 +56,7 @@ import {
 } from "./src/services/platformCashflowService.js";
 import { getPayablesDashboard } from "./src/services/payablesService.js";
 import { getFactoryInventoryDashboard, saveFactoryInventoryShippedQuantity } from "./src/services/factoryInventoryService.js";
+import { startFactoryInventoryWarmupScheduler } from "./src/services/factoryInventoryWarmupService.js";
 import { getSupplierBoardDashboard } from "./src/services/supplierBoardService.js";
 import {
   deleteSupplierDetail,
@@ -904,6 +905,7 @@ startSyncScheduler();
 startPlatformCashflowScheduler();
 startFbaStaScheduler();
 startStoreInspectionScheduler();
+startFactoryInventoryWarmupScheduler();
 startFbaShipmentWarmupScheduler();
 
 const server = http.createServer((req, res) => {

@@ -20,6 +20,7 @@ const DEFAULT_START_DATE = "2026-03-01";
 const PURCHASE_ORDER_PAGE_SIZE = 500;
 const FACTORY_INVENTORY_SHIPPED_FILE = path.join(process.cwd(), "data-cache", "factory-inventory-shipped-quantities.json");
 let shippedQuantityWriteQueue = Promise.resolve();
+const factoryInventoryBuildPromises = new Map();
 
 function readFirst(item, keys) {
   for (const key of keys) {
@@ -1070,6 +1071,37 @@ async function buildDashboard(adapter, params) {
   };
 }
 
+async function buildAndCacheDashboardOnce(key, adapter, { startDate, endDate }) {
+  const existing = factoryInventoryBuildPromises.get(key);
+  if (existing) {
+    console.info("[factory-inventory] join in-flight refresh", { startDate, endDate });
+    return existing;
+  }
+
+  const startedAt = Date.now();
+  const run = (async () => {
+    console.info("[factory-inventory] refresh started", { startDate, endDate });
+    const data = await buildDashboard(adapter, { startDate, endDate });
+    await saveFactoryInventoryCache(key, data);
+    console.info("[factory-inventory] refresh finished", {
+      startDate,
+      endDate,
+      rows: data.rows?.length || 0,
+      durationMs: Date.now() - startedAt,
+    });
+    return data;
+  })();
+
+  factoryInventoryBuildPromises.set(key, run);
+  try {
+    return await run;
+  } finally {
+    if (factoryInventoryBuildPromises.get(key) === run) {
+      factoryInventoryBuildPromises.delete(key);
+    }
+  }
+}
+
 export async function getFactoryInventoryDashboard(params = {}) {
   const startDate = dateOnly(params.startDate) || DEFAULT_START_DATE;
   const endDate = dateOnly(params.endDate);
@@ -1083,8 +1115,7 @@ export async function getFactoryInventoryDashboard(params = {}) {
   if (!data) {
     const adapter = params.adapter || getLingxingAdapter();
     try {
-      data = await buildDashboard(adapter, { startDate, endDate });
-      await saveFactoryInventoryCache(key, data);
+      data = await buildAndCacheDashboardOnce(key, adapter, { startDate, endDate });
     } catch (error) {
       const stale = await readStaleFactoryInventoryCache(key);
       if (stale?.data) {
@@ -1116,6 +1147,26 @@ export async function getFactoryInventoryDashboard(params = {}) {
       endDate,
       shippedQuantityUpdatedAt: shippedStore.updatedAt || "",
     },
+  };
+}
+
+export async function warmFactoryInventoryCache(params = {}) {
+  const startDate = dateOnly(params.startDate) || DEFAULT_START_DATE;
+  const endDate = dateOnly(params.endDate) || todayDate();
+  const startedAt = Date.now();
+  const data = await getFactoryInventoryDashboard({
+    ...params,
+    startDate,
+    endDate,
+    forceRefresh: true,
+  });
+  return {
+    ok: true,
+    startDate,
+    endDate,
+    rows: data.rows?.length || 0,
+    updatedAt: data.meta?.updatedAt || "",
+    durationMs: Date.now() - startedAt,
   };
 }
 

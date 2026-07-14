@@ -67,3 +67,23 @@ test("factory inventory owns refresh, export, sorting, shipped quantity, and fil
     [["#factory-inventory-table .factory-inventory-sort-button", "click"]],
   );
 });
+
+test("factory inventory skips duplicate loads while a load is already running", async () => {
+  let releaseLoad;
+  const loadCalls = [];
+  const { feature } = createFeature({
+    loadDashboardSection: async (options) => {
+      loadCalls.push(options.endpoint);
+      await new Promise((resolve) => {
+        releaseLoad = resolve;
+      });
+    },
+  });
+
+  const first = feature.loadFactoryInventory({ forceRefresh: true });
+  const second = feature.loadFactoryInventory({ forceRefresh: true });
+
+  assert.equal(loadCalls.length, 1);
+  releaseLoad();
+  await Promise.all([first, second]);
+});

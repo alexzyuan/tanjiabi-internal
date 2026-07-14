@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { factoryInventoryTestUtils } from "../src/services/factoryInventoryService.js";
+import { factoryInventoryTestUtils, getFactoryInventoryDashboard } from "../src/services/factoryInventoryService.js";
 
 const {
   aggregateFbaInventoryByMsku,
@@ -251,4 +251,47 @@ test("采购单归一化会过滤 ERP 已作废采购单", () => {
   ], new Map(), { startDate: "2026-03-01" });
 
   assert.deepEqual(rows.map((row) => row.purchaseOrderNo), ["PO-ACTIVE"]);
+});
+
+test("同一日期范围的工厂库存强制刷新会复用同一个进行中的构建", async () => {
+  let purchaseOrderCalls = 0;
+  let markPurchaseOrdersStarted;
+  let releasePurchaseOrders;
+  const purchaseOrdersStarted = new Promise((resolve) => {
+    markPurchaseOrdersStarted = resolve;
+  });
+  const adapter = {
+    async fetchPurchaseOrders() {
+      purchaseOrderCalls += 1;
+      markPurchaseOrdersStarted();
+      await new Promise((release) => {
+        releasePurchaseOrders = release;
+      });
+      return { data: { list: [], total: 0 } };
+    },
+    normalizeRecordList(payload) {
+      return payload?.data?.list || [];
+    },
+    async fetchSellers() {
+      return { data: [] };
+    },
+  };
+
+  const first = getFactoryInventoryDashboard({
+    adapter,
+    startDate: "2026-03-01",
+    endDate: "2026-07-31",
+    forceRefresh: true,
+  });
+  const second = getFactoryInventoryDashboard({
+    adapter,
+    startDate: "2026-03-01",
+    endDate: "2026-07-31",
+    forceRefresh: true,
+  });
+
+  await purchaseOrdersStarted;
+  assert.equal(purchaseOrderCalls, 1);
+  releasePurchaseOrders();
+  await Promise.all([first, second]);
 });

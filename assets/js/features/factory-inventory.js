@@ -31,6 +31,8 @@ export function createFactoryInventoryFeature({
     options: { factories: [] },
   };
   let factoryInventorySort = { key: "orderTime", direction: "desc" };
+  let factoryInventoryLoadPromise = null;
+  let factoryInventoryLoadKey = "";
   const factoryInventoryShippedSaveTimers = new Map();
   const factoryInventoryShippedSaveVersions = new Map();
   const visibleLimit = 500;
@@ -285,8 +287,13 @@ export function createFactoryInventoryFeature({
 
   async function loadFactoryInventory({ forceRefresh = false } = {}) {
     setDefaultFactoryInventoryDates();
-    await loadDashboardSection({
-      endpoint: `/api/dashboard/factory-inventory?${buildFactoryInventoryQuery({ forceRefresh })}`,
+    const query = buildFactoryInventoryQuery({ forceRefresh });
+    const loadKey = query || "default";
+    if (factoryInventoryLoadPromise && factoryInventoryLoadKey === loadKey) {
+      return factoryInventoryLoadPromise;
+    }
+    const run = loadDashboardSection({
+      endpoint: `/api/dashboard/factory-inventory?${query}`,
       buttonSelector: "#factory-inventory-refresh",
       busyText: "刷新中...",
       restoreText: "刷新库存",
@@ -303,6 +310,16 @@ export function createFactoryInventoryFeature({
       onFinally: renderFactoryInventory,
       root,
     });
+    factoryInventoryLoadPromise = run;
+    factoryInventoryLoadKey = loadKey;
+    try {
+      return await run;
+    } finally {
+      if (factoryInventoryLoadPromise === run) {
+        factoryInventoryLoadPromise = null;
+        factoryInventoryLoadKey = "";
+      }
+    }
   }
 
   function updateFactoryInventoryRowShippedQuantity(manualKey, shippedQuantity, savedRow = {}) {
