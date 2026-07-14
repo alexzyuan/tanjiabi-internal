@@ -46,7 +46,7 @@ import { createAiImageWorkflowFeature } from "./assets/js/features/ai-image-work
 import { createAdminSettingsFeature } from "./assets/js/features/admin-settings.js?v=20260706-frontend-refactor-v1";
 import { createBudgetTargetsFeature } from "./assets/js/features/budget-targets.js?v=20260706-frontend-refactor-v1";
 import { createSyncCenterFeature } from "./assets/js/features/sync-center.js?v=20260706-frontend-refactor-v1";
-import { createFbaFreightFeature } from "./assets/js/features/fba-freight.js?v=20260714-force-refresh-v1";
+import { createFbaFreightFeature } from "./assets/js/features/fba-freight.js?v=20260714-jiufang-modal-v1";
 import { createFbaShopsFeature } from "./assets/js/features/fba-shops.js?v=20260706-frontend-refactor-v1";
 import { createFbaMskuFeature } from "./assets/js/features/fba-msku.js?v=20260707-frontend-refactor-v1";
 import { createFbaAutomationFeature } from "./assets/js/features/fba-automation.js?v=20260707-frontend-refactor-v1";

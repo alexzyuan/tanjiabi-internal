@@ -1929,11 +1929,6 @@
                   <option value="">请选择发货仓库</option>
                 </select>
               </label>
-              <label>九方渠道
-                <select id="fba-freight-jiufang-channel">
-                  <option value="">请选择九方渠道</option>
-                </select>
-              </label>
               <button class="secondary-button" id="fba-freight-refresh" type="button">读取货件</button>
               <button class="secondary-button" id="fba-freight-export" type="button">生成表格</button>
               <button class="primary-button" id="fba-freight-batch-convert" type="button">批量转表格</button>
@@ -2001,11 +1996,17 @@
                 <button class="modal-close-button" id="fba-freight-jiufang-close" type="button" aria-label="关闭九方下单弹窗">×</button>
               </div>
               <div class="modal-body">
+                <label class="fba-forwarder-template-field">九方渠道
+                  <select id="fba-freight-jiufang-channel">
+                    <option value="">请选择九方渠道</option>
+                  </select>
+                </label>
                 <div class="fba-jiufang-summary" id="fba-freight-jiufang-summary"></div>
               </div>
               <div class="modal-foot">
                 <button class="secondary-button" id="fba-freight-jiufang-cancel" type="button">取消</button>
-                <button class="primary-button" id="fba-freight-jiufang-confirm" type="button" disabled>确认提交九方</button>
+                <button class="secondary-button" id="fba-freight-jiufang-precheck" type="button" disabled>预检</button>
+                <button class="primary-button" id="fba-freight-jiufang-confirm" type="button" disabled>确认下单</button>
               </div>
             </article>
           </div>
