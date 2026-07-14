@@ -66,12 +66,19 @@
   margin-top: 10px;
 }
 
+.module-grid:has(> .metric-tile) {
+  grid-template-columns: repeat(auto-fill, minmax(var(--tj-kpi-card-min-width), var(--tj-kpi-card-width)));
+  justify-content: start;
+  align-items: start;
+  gap: var(--tj-kpi-grid-gap);
+}
+
 .cashflow-metrics {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(var(--tj-kpi-card-min-width), var(--tj-kpi-card-width)));
 }
 
 .inventory-kpi-grid {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(var(--tj-kpi-card-min-width), var(--tj-kpi-card-width)));
 }
 
 .inventory-kpi-grid .inventory-age-kpi {
@@ -79,22 +86,38 @@
 }
 
 .metric-tile {
-  min-height: 96px;
-  padding: 14px 16px;
+  width: var(--tj-kpi-card-width);
+  min-width: var(--tj-kpi-card-min-width);
+  max-width: var(--tj-kpi-card-max-width);
+  height: var(--tj-kpi-card-height);
+  padding: var(--tj-kpi-card-padding);
   background: var(--tj-content-bg);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--tj-kpi-card-radius);
   box-shadow: var(--shadow-soft);
   position: relative;
   overflow: hidden;
 }
 
+button.metric-tile {
+  appearance: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+button.metric-tile[aria-pressed="true"] {
+  border-color: var(--tj-action-blue);
+  box-shadow: 0 0 0 3px var(--tj-focus-ring-soft), var(--tj-shadow-soft);
+}
+
 .metric-tile::before {
   content: "";
   position: absolute;
-  left: 18px;
+  left: 12px;
   top: 0;
-  width: 34px;
+  width: 28px;
   height: 3px;
   border-radius: 0 0 4px 4px;
   background: linear-gradient(90deg, var(--blue-800), var(--teal));
@@ -108,7 +131,18 @@
 
 .metric-tile strong {
   display: block;
-  margin: 9px 0 6px;
-  font-size: 24px;
+  margin: 4px 0 3px;
+  font-size: var(--tj-kpi-value-size);
+  line-height: 1;
   color: var(--blue-900);
+}
+
+.metric-tile span {
+  font-size: var(--tj-kpi-title-size);
+  line-height: 1.15;
+}
+
+.metric-tile small {
+  font-size: var(--tj-kpi-note-size);
+  line-height: 1.15;
 }

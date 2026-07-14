@@ -36,7 +36,8 @@
 }
 
 .supplier-detail-kpi-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(var(--tj-kpi-card-min-width), var(--tj-kpi-card-width)));
+  justify-content: start;
 }
 
 .supplier-detail-table-wrap table {
@@ -59,8 +60,7 @@
 }
 
 @media (max-width:1180px) {
-  .supplier-detail-filters,
-  .supplier-detail-kpi-grid {
+  .supplier-detail-filters {
     grid-template-columns: repeat(2, minmax(160px, 1fr));
   }
 }

@@ -46,7 +46,17 @@ body:not(.login-body) .filters {
   border-radius: 14px;
 }
 
+body:not(.login-body) .filters .filter-dropdown {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+
 body:not(.login-body) .filters .filter-dropdown-menu {
+  right: auto;
+  width: max-content;
+  min-width: max(100%, 220px);
+  max-width: min(360px, calc(100vw - 32px));
   background: var(--tj-content-bg);
   border: 1px solid var(--tj-border-subtle);
 }

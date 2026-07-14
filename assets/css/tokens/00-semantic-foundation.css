@@ -87,4 +87,14 @@
   --tj-topbar-fixed-height: 76px;
   --tj-brand-lockup-width: 148px;
   --tj-content-inline-gap: 12px;
+  --tj-kpi-card-width: 188px;
+  --tj-kpi-card-min-width: 168px;
+  --tj-kpi-card-max-width: 220px;
+  --tj-kpi-card-height: 84px;
+  --tj-kpi-card-padding: 8px 12px;
+  --tj-kpi-card-radius: 10px;
+  --tj-kpi-title-size: 12px;
+  --tj-kpi-value-size: 22px;
+  --tj-kpi-note-size: 11px;
+  --tj-kpi-grid-gap: 10px;
 }

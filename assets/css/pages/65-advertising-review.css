@@ -23,7 +23,8 @@
 }
 
 .ads-analysis-kpis {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(var(--tj-kpi-card-min-width), var(--tj-kpi-card-width)));
+  justify-content: start;
 }
 
 .ads-analysis-list {
@@ -133,11 +134,12 @@
 }
 
 .ads-keyword-kpis {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(var(--tj-kpi-card-min-width), var(--tj-kpi-card-width)));
+  justify-content: start;
 }
 
 .ads-keyword-kpis .metric-tile {
-  min-height: 104px;
+  height: var(--tj-kpi-card-height);
 }
 
 .ads-keyword-kpis .metric-tile.warning strong,

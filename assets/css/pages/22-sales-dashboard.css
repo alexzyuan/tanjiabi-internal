@@ -171,8 +171,10 @@ body.sales-view #view-sales .insight-row {
 
 .kpi-stack {
   display: grid;
-  grid-template-columns: repeat(5, minmax(180px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(var(--tj-kpi-card-min-width), var(--tj-kpi-card-width)));
+  justify-content: start;
+  align-items: start;
+  gap: var(--tj-kpi-grid-gap);
 }
 
 #view-sales .kpi-stack {
@@ -181,15 +183,19 @@ body.sales-view #view-sales .insight-row {
 
 .kpi-card,
 .mini-card {
+  width: var(--tj-kpi-card-width);
+  min-width: var(--tj-kpi-card-min-width);
+  max-width: var(--tj-kpi-card-max-width);
+  overflow: hidden;
   background: var(--tj-content-bg);
   border: 1px solid var(--tj-border-subtle);
-  border-radius: 8px;
+  border-radius: var(--tj-kpi-card-radius);
   box-shadow: var(--tj-shadow-soft);
 }
 
 .kpi-card {
-  min-height: 104px;
-  padding: 14px 16px;
+  height: var(--tj-kpi-card-height);
+  padding: var(--tj-kpi-card-padding);
   border-top: 3px solid var(--spectrum-accent-visual);
 }
 
@@ -207,16 +213,19 @@ body.sales-view #view-sales .insight-row {
 
 .card-title {
   position: relative;
-  margin: 0 0 8px;
+  margin: 0 0 3px;
+  color: var(--tj-text-muted);
+  font-size: var(--tj-kpi-title-size);
+  line-height: 1.15;
 }
 
 .card-title::before {
   content: "";
   display: inline-block;
-  width: 4px;
-  height: 16px;
-  margin-right: 9px;
-  vertical-align: -3px;
+  width: 3px;
+  height: 12px;
+  margin-right: 6px;
+  vertical-align: -2px;
   background: var(--tj-action-blue);
   border-radius: 3px;
 }
@@ -230,9 +239,10 @@ body.sales-view #view-sales .insight-row {
 
 .kpi-card strong {
   display: block;
-  margin: 16px 0 12px;
+  margin: 2px 0 3px;
   text-align: center;
-  font-size: 28px;
+  font-size: var(--tj-kpi-value-size);
+  line-height: 1;
 }
 
 .kpi-green strong {
@@ -248,9 +258,9 @@ body.sales-view #view-sales .insight-row {
 }
 
 .kpi-progress {
-  height: 6px;
+  height: 4px;
   overflow: hidden;
-  margin: 0 0 14px;
+  margin: 0 0 5px;
   background: var(--tj-surface-muted);
   border-radius: 999px;
 }
@@ -279,9 +289,10 @@ body.sales-view #view-sales .insight-row {
 .target-line {
   display: flex;
   justify-content: space-between;
-  gap: 10px;
+  gap: 6px;
   color: var(--tj-text-muted);
-  font-size: 14px;
+  font-size: var(--tj-kpi-note-size);
+  line-height: 1.1;
 }
 
 .target-line span:last-child {
@@ -289,13 +300,13 @@ body.sales-view #view-sales .insight-row {
 }
 
 .mini-card {
-  min-height: 98px;
+  height: var(--tj-kpi-card-height);
   display: grid;
   place-items: center;
   text-align: center;
   background: linear-gradient(180deg, var(--tj-content-bg), var(--tj-surface-muted));
-  padding: 12px 14px;
-  border-radius: 8px;
+  padding: var(--tj-kpi-card-padding);
+  border-radius: var(--tj-kpi-card-radius);
 }
 
 .mini-card span {
@@ -322,13 +333,13 @@ body.sales-view #view-sales .insight-row {
 
 @media (max-width: 1180px) {
   .kpi-stack {
-    grid-template-columns: repeat(3, minmax(180px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(var(--tj-kpi-card-min-width), var(--tj-kpi-card-width)));
   }
 }
 
 @media (max-width: 720px) {
   .kpi-card strong {
-    font-size: 24px;
+    font-size: var(--tj-kpi-value-size);
   }
 
   .kpi-stack {

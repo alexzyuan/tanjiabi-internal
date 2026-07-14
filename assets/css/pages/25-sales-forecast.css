@@ -261,6 +261,40 @@
   background: var(--tj-action-blue);
 }
 
+@media (max-width: 720px) {
+  .sales-forecast-panel .panel-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: var(--spectrum-spacing-100);
+  }
+
+  .sales-forecast-panel .panel-head h2 {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    line-height: 1.25;
+  }
+
+  .sales-forecast-panel-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: start;
+    gap: var(--spectrum-spacing-75);
+  }
+
+  .sales-forecast-view-toggle {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  #sales-forecast-status {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    text-align: left;
+  }
+}
+
 .sales-focus-toggle {
   width: 22px;
   height: 22px;

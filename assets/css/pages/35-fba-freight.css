@@ -38,7 +38,8 @@
 }
 
 #view-fba-freight .fba-freight-summary {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(var(--tj-kpi-card-min-width), var(--tj-kpi-card-width)));
+  justify-content: start;
 }
 
 #view-fba-freight .fba-freight-summary .metric-tile {
@@ -70,7 +71,7 @@
   overflow: hidden;
   border-radius: 8px;
   background: var(--tj-content-bg);
-  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.28);
+  box-shadow: var(--tj-shadow-modal);
 }
 
 #view-fba-freight .fba-forwarder-template-dialog {
@@ -78,7 +79,7 @@
   overflow: hidden;
   border-radius: 8px;
   background: var(--tj-content-bg);
-  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.28);
+  box-shadow: var(--tj-shadow-modal);
 }
 
 #view-fba-freight .fba-jiufang-order-dialog {
@@ -89,7 +90,7 @@
   overflow: hidden;
   border-radius: 8px;
   background: var(--tj-content-bg);
-  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.28);
+  box-shadow: var(--tj-shadow-modal);
 }
 
 #view-fba-freight .fba-forwarder-template-field {

@@ -28,7 +28,8 @@
 }
 
 .payable-kpi-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(var(--tj-kpi-card-min-width), var(--tj-kpi-card-width)));
+  justify-content: start;
 }
 
 .payable-pressure-card.danger strong {
@@ -338,7 +339,7 @@
 
 @media (max-width:1180px) {
   .payable-kpi-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(var(--tj-kpi-card-min-width), var(--tj-kpi-card-width)));
   }
 
   .payable-visual-grid {
@@ -364,7 +365,6 @@
   .payable-filters,
   .payable-flow-card,
   .payable-flow-branch.compact,
-  .payable-kpi-grid,
   .payable-visual-grid,
   .payable-status-row {
     grid-template-columns: 1fr;
@@ -392,8 +392,11 @@
     grid-column: auto;
   }
 
-  #view-payables .payable-kpi-grid,
   #view-payables .payable-visual-grid {
+    grid-template-columns: 1fr;
+  }
+
+  #view-payables .payable-kpi-grid {
     grid-template-columns: 1fr;
   }
 }

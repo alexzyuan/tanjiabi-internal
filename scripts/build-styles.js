@@ -104,7 +104,11 @@ function minifyCss(source) {
     }
 
     if ("{}:;,>+~()[]=".includes(char)) {
-      output = output.trimEnd();
+      if (char === ":" && pendingSpace && !["{", "}"].includes(output.at(-1))) {
+        output += " ";
+      } else {
+        output = output.trimEnd();
+      }
       output += char;
       pendingSpace = false;
       continue;

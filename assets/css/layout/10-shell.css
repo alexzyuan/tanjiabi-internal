@@ -1316,7 +1316,7 @@ body:not(.login-body) :where(.filters) .filter-dropdown-empty {
 body:not(.login-body) .metric-tile strong,
 body:not(.login-body) .kpi-card strong,
 body:not(.login-body) .home-kpi-card strong {
-  font-size: clamp(20px, 2.1vw, 27px);
+  font-size: var(--tj-kpi-value-size);
 }
 
 body:not(.login-body) .panel-head {
@@ -1735,7 +1735,7 @@ body:not(.login-body) .metric-tile,
 body:not(.login-body) .kpi-card,
 body:not(.login-body) .mini-card,
 body:not(.login-body) .home-kpi-card {
-  padding: 12px;
+  padding: var(--tj-kpi-card-padding);
 }
 
 body:not(.login-body) :where(.table-wrap),
@@ -2143,6 +2143,12 @@ body:not(.login-body) .budget-upload-panel {
   border: 0;
   border-radius: 12px;
   box-shadow: none;
+}
+
+body:not(.login-body) .metric-tile,
+body:not(.login-body) .kpi-card,
+body:not(.login-body) .mini-card {
+  border-radius: var(--tj-kpi-card-radius);
 }
 
 body:not(.login-body) .view > .module-hero,

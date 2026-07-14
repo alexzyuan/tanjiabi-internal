@@ -56,7 +56,8 @@ font-size:12px;
 line-height:1.45;
 }
 #view-clearance .clearance-kpi-grid {
-grid-template-columns:repeat(5, minmax(0, 1fr));
+grid-template-columns:repeat(auto-fill, minmax(var(--tj-kpi-card-min-width), var(--tj-kpi-card-width)));
+justify-content:start;
 margin-top:var(--spectrum-spacing-150);
 }
 #view-clearance .clearance-result-panel {
