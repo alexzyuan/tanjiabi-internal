@@ -46,6 +46,9 @@ test("route table requires every API route to declare auth", () => {
   assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/purchase/supplier-details")?.auth, "session");
   assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/admin/budget/uploads")?.auth, "session");
   assert.equal(routes.find((route) => route.method === "POST" && route.path === "/api/admin/budget/upload")?.auth, "session");
+  assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/fba/jiufang/channels")?.auth, "session");
+  assert.equal(routes.find((route) => route.method === "POST" && route.path === "/api/fba/jiufang/orders/dry-run")?.auth, "session");
+  assert.equal(routes.find((route) => route.method === "POST" && route.path === "/api/fba/jiufang/orders/create")?.auth, "session");
 });
 
 test("server router no longer contains legacy API if-else branches", async () => {

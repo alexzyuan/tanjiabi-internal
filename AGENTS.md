@@ -46,6 +46,19 @@ Default ownership:
 - Business composition stays in `src/services/*`.
 - Field-name translation and metric mapping stay in mapper files such as `src/services/lingxingDashboardMapper.js`.
 
+## FBA Logistics API Ordering
+
+The FBA freight workflow now supports direct external logistics API ordering in addition to Excel template export and Lingxing ready-send shipment-order creation.
+
+Rules for this path:
+
+1. Jiufang HTTP details live in `src/adapters/jiufangAdapter.js`; FBA-to-Jiufang payload composition lives in `src/services/jiufangFbaOrderService.js`; persisted Jiufang order state lives in `src/services/jiufangOrderStore.js`.
+2. Never hard-code Jiufang login, password, password hash, or token in source code, tests, docs, or UI. Runtime credentials must come from `.env` through `JIUFANG_USERNAME`, `JIUFANG_PASSWORD_MD5`, and `JIUFANG_TOKEN`.
+3. The UI must call `/api/fba/jiufang/orders/dry-run` before `/api/fba/jiufang/orders/create`. Real create calls require an explicit `confirmed: true` request body.
+4. Store only redacted request/response payloads. Logs may include shipment ID, Jiufang order number, channel code, endpoint, and request status, but must not include token or password hash.
+5. Duplicate protection is part of the business rule: do not create a second Jiufang order for a shipment with a stored Jiufang order number unless a future workflow explicitly adds a reviewed force-retry path.
+6. Do not call Jiufang real create endpoints during automated tests or exploratory debugging. Use injected adapters/mocks for tests and run a real shipment only after a successful dry-run has been reviewed.
+
 ## Lingxing Date Ranges
 
 Lingxing date-range APIs that document `start_date`/`end_date` as `左闭右开` must treat the user-facing end date as inclusive and the API `end_date` as exclusive. Frontend controls, dashboard filters, cache keys, logs, and visible metadata keep the real date selected by the user. Only backend request parameters sent to Lingxing add one day to the end boundary. For example, a visible range ending `2026-07-14` is sent to Lingxing as `end_date=2026-07-15`.

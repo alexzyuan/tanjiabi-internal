@@ -87,6 +87,11 @@ import {
   listFbaShipmentOrderWarehouses,
 } from "./src/services/fbaShipmentOrderService.js";
 import {
+  createJiufangFbaOrders,
+  dryRunJiufangFbaOrders,
+  listJiufangChannels,
+} from "./src/services/jiufangFbaOrderService.js";
+import {
   createFbaStaTasks,
   deleteFbaStaTask,
   getFbaStaAutomationState,
@@ -811,6 +816,9 @@ const apiRoutes = createApiRoutes(buildApiRoutes({
   exportFreightRateLogsCsv,
   listFbaShipmentOrderWarehouses,
   createReadySendFbaShipmentOrders,
+  listJiufangChannels,
+  dryRunJiufangFbaOrders,
+  createJiufangFbaOrders,
   saveFbaBoxTemplate,
   getFbaStaAutomationState,
   updateFbaStaAutomation,

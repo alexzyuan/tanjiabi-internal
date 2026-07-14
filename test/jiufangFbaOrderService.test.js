@@ -1,0 +1,230 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import {
+  buildJiufangShipmentPayload,
+  createJiufangFbaOrders,
+  dryRunJiufangFbaOrders,
+  listJiufangChannels,
+  validateJiufangOrderInput,
+} from "../src/services/jiufangFbaOrderService.js";
+
+const shipment = {
+  sid: 8708,
+  shipmentId: "FBA18QJFDCWJ",
+  staShipmentId: "STA-123",
+  storeName: "xiamentanjia-US",
+  country: "US",
+  fulfillmentCenterCode: "ONT8",
+  shipToAddress: {
+    name: "Amazon ONT8",
+    addressLine1: "24300 Nandina Ave",
+    city: "Moreno Valley",
+    stateOrProvinceCode: "CA",
+    postalCode: "92551",
+    countryCode: "US",
+  },
+  items: [{
+    msku: "MSKU-BLUE",
+    sku: "TJ-DGC-BLUE",
+    asin: "B0BLUE",
+    productName: "收纳盒",
+    title: "Storage Box",
+    brand: "Tanjia",
+    material: "Plastic",
+    purpose: "Home storage",
+    customsCode: "3924900000",
+    isBattery: "否",
+    unit: "pcs",
+    shippedQuantity: 12,
+    declaredValue: 2.5,
+  }],
+};
+
+const boxPayloadsByShipmentId = new Map([[
+  "FBA18QJFDCWJ",
+  {
+    data: {
+      shipmentList: [{
+        shipmentId: "STA-123",
+        shipmentPackingList: [{
+          localBoxId: 1,
+          weight: 10,
+          weightUnit: "KG",
+          length: 40,
+          width: 30,
+          height: 20,
+          lengthUnit: "CM",
+          productList: [{
+            msku: "MSKU-BLUE",
+            sku: "TJ-DGC-BLUE",
+            asin: "B0BLUE",
+            productName: "收纳盒",
+            title: "Storage Box",
+            brand: "Tanjia",
+            material: "Plastic",
+            purpose: "Home storage",
+            customsCode: "3924900000",
+            isBattery: "否",
+            unit: "pcs",
+            quantityInBox: 12,
+          }],
+        }],
+      }],
+    },
+  },
+]]);
+
+const senderProfile = {
+  shipperName: "Xiamen Tanjia wangluo keji youxian gongsi",
+  companyName: "Xiamen Tanjia wangluo keji youxian gongsi",
+  addressLine1: "No.1 Taiwen street",
+  addressLine2: "Room 239-9, Huli",
+  city: "Xiamen",
+  stateOrProvinceCode: "Fujian",
+  postalCode: "361006",
+  countryCode: "CN",
+  phoneNumber: "+86 13235037039",
+};
+
+test("buildJiufangShipmentPayload maps FBA shipment boxes to Jiufang ordinary shipment request", () => {
+  const { payload, summary } = buildJiufangShipmentPayload({
+    shipment,
+    boxPayloadsByShipmentId,
+    channelCode: "SEA-US-07",
+    senderProfile,
+    options: { departureCode: "SZ" },
+  });
+
+  assert.equal(payload.ShipmentRequest.ReferenceNumber.Value, "FBA18QJFDCWJ");
+  assert.equal(payload.ShipmentRequest.Service.Code, "SEA-US-07");
+  assert.equal(payload.ShipmentRequest.Departure.Code, "SZ");
+  assert.equal(payload.ShipmentRequest.ShipTo.DestinationFulfillmentCenterId, "ONT8");
+  assert.equal(payload.ShipmentRequest.Packages[0].BoxMark.FbaBoxNumber, "FBA18QJFDCWJ-1");
+  assert.equal(payload.ShipmentRequest.Packages[0].PackageWeight.Weight, 10);
+  assert.equal(payload.ShipmentRequest.Packages[0].Dimensions.Length, 40);
+  assert.equal(payload.ShipmentRequest.Packages[0].PackageDetails[0].SKU, "TJ-DGC-BLUE");
+  assert.equal(payload.ShipmentRequest.Invoices[0].UnitPrice, 2.5);
+  assert.equal(payload.ShipmentRequest.InvoiceLineTotal.MonetaryValue, 30);
+  assert.equal(summary.boxCount, 1);
+  assert.equal(summary.skuCount, 1);
+  assert.equal(summary.totalKg, 10);
+  assert.equal(summary.totalCbm, 0.024);
+});
+
+test("validateJiufangOrderInput fails fast on required missing fields", () => {
+  const errors = validateJiufangOrderInput({
+    shipment: {
+      ...shipment,
+      fulfillmentCenterCode: "",
+      shipToAddress: {},
+      items: [{ ...shipment.items[0], declaredValue: "" }],
+    },
+    boxPayloadsByShipmentId: new Map([["FBA18QJFDCWJ", { data: { shipmentList: [{ shipmentPackingList: [{ productList: [] }] }] } }]]),
+    channelCode: "",
+    senderProfile: {},
+  });
+
+  assert.deepEqual(errors.slice(0, 4), [
+    "FBA18QJFDCWJ 缺少九方渠道代码",
+    "FBA18QJFDCWJ 缺少 Amazon 物流中心编码",
+    "FBA18QJFDCWJ 缺少收件地址 addressLine1",
+    "FBA18QJFDCWJ 缺少收件地址 city",
+  ]);
+  assert.ok(errors.some((item) => item.includes("MSKU-BLUE 缺少申报单价")));
+  assert.ok(errors.some((item) => item.includes("第 1 箱缺少重量")));
+});
+
+test("dryRunJiufangFbaOrders does not call Jiufang and reports duplicate stored order", async () => {
+  let createCalled = false;
+  const result = await dryRunJiufangFbaOrders({
+    shipmentIds: ["FBA18QJFDCWJ"],
+    channelCode: "SEA-US-07",
+  }, {
+    getShipments: async () => [shipment],
+    fetchBoxPayloadsByShipmentId: async () => boxPayloadsByShipmentId,
+    orderStore: {
+      async listByShipmentIds() {
+        return new Map([["FBA18QJFDCWJ", { jiufangOrderNumber: "JF-EXISTS" }]]);
+      },
+    },
+    jiufangAdapter: {
+      async createShipment() {
+        createCalled = true;
+      },
+    },
+  });
+
+  assert.equal(createCalled, false);
+  assert.equal(result.results[0].status, "skipped");
+  assert.equal(result.results[0].reason, "已存在九方订单");
+  assert.equal(result.results[0].jiufangOrderNumber, "JF-EXISTS");
+});
+
+test("createJiufangFbaOrders requires explicit confirmation and saves returned Jiufang order number", async () => {
+  await assert.rejects(
+    () => createJiufangFbaOrders({
+      shipmentIds: ["FBA18QJFDCWJ"],
+      channelCode: "SEA-US-07",
+      confirmed: false,
+    }),
+    /确认提交/,
+  );
+
+  const saved = [];
+  const result = await createJiufangFbaOrders({
+    shipmentIds: ["FBA18QJFDCWJ"],
+    channelCode: "SEA-US-07",
+    confirmed: true,
+    operator: "Billy",
+  }, {
+    getShipments: async () => [shipment],
+    fetchBoxPayloadsByShipmentId: async () => boxPayloadsByShipmentId,
+    orderStore: {
+      async listByShipmentIds() {
+        return new Map();
+      },
+      async save(row) {
+        saved.push(row);
+      },
+    },
+    jiufangAdapter: {
+      async createShipment(payload) {
+        assert.equal(payload.ShipmentRequest.ReferenceNumber.Value, "FBA18QJFDCWJ");
+        return {
+          ShipmentResponse: { ShipmentIdentificationNumber: "JF260714001" },
+        };
+      },
+    },
+  });
+
+  assert.equal(result.createdCount, 1);
+  assert.equal(result.results[0].status, "created");
+  assert.equal(result.results[0].jiufangOrderNumber, "JF260714001");
+  assert.equal(saved[0].operator, "Billy");
+});
+
+test("listJiufangChannels normalizes Jiufang product response for selector options", async () => {
+  const result = await listJiufangChannels({}, {
+    jiufangAdapter: {
+      async listProducts(params) {
+        assert.equal(params.ShippingWay, "LCL");
+        return {
+          ProductResponse: {
+            Products: [
+              { Code: "SEA-US-07", Name: "九方美国海派", ShippingWay: "LCL" },
+              { Code: "", Name: "无效渠道" },
+            ],
+          },
+        };
+      },
+    },
+  });
+
+  assert.deepEqual(result.channels, [{
+    code: "SEA-US-07",
+    name: "九方美国海派",
+    shippingWay: "LCL",
+    isDefault: false,
+  }]);
+});

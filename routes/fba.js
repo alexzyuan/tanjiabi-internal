@@ -18,6 +18,9 @@ export function createFbaRoutes(deps = {}) {
     exportFreightRateLogsCsv,
     listFbaShipmentOrderWarehouses,
     createReadySendFbaShipmentOrders,
+    listJiufangChannels,
+    dryRunJiufangFbaOrders,
+    createJiufangFbaOrders,
     saveFbaBoxTemplate,
     getFbaStaAutomationState,
     updateFbaStaAutomation,
@@ -84,6 +87,51 @@ export function createFbaRoutes(deps = {}) {
           filters: body.filters || {},
           shipmentIds: Array.isArray(body.shipmentIds) ? body.shipmentIds : [],
           warehouse: body.warehouse || {},
+        });
+        sendJson(res, result.ok ? 200 : 207, result);
+      },
+    },
+    {
+      method: "GET",
+      path: "/api/fba/jiufang/channels",
+      auth: "session",
+      errorStatusCode: 502,
+      handler: async ({ res, url }) => sendJson(res, 200, await listJiufangChannels({
+        shippingWay: url.searchParams.get("shippingWay") || "LCL",
+      })),
+    },
+    {
+      method: "POST",
+      path: "/api/fba/jiufang/orders/dry-run",
+      auth: "session",
+      errorStatusCode: 400,
+      handler: async ({ req, res }) => {
+        const body = await readJsonBody(req);
+        const result = await dryRunJiufangFbaOrders({
+          filters: body.filters || {},
+          shipmentIds: Array.isArray(body.shipmentIds) ? body.shipmentIds : [],
+          channelCode: body.channelCode || "",
+          options: body.options || {},
+          forceRetry: body.forceRetry === true,
+        });
+        sendJson(res, result.ok ? 200 : 207, result);
+      },
+    },
+    {
+      method: "POST",
+      path: "/api/fba/jiufang/orders/create",
+      auth: "session",
+      errorStatusCode: 400,
+      handler: async ({ req, res }) => {
+        const body = await readJsonBody(req);
+        const result = await createJiufangFbaOrders({
+          filters: body.filters || {},
+          shipmentIds: Array.isArray(body.shipmentIds) ? body.shipmentIds : [],
+          channelCode: body.channelCode || "",
+          options: body.options || {},
+          forceRetry: body.forceRetry === true,
+          confirmed: body.confirmed === true,
+          operator: requestOperator(req),
         });
         sendJson(res, result.ok ? 200 : 207, result);
       },
