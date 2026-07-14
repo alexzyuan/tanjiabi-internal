@@ -81,6 +81,7 @@ import {
   saveFreightRate,
 } from "./src/services/freightRateService.js";
 import { getFbaShipmentCandidates } from "./src/services/fbaShipmentCandidateService.js";
+import { startFbaShipmentWarmupScheduler } from "./src/services/fbaShipmentWarmupService.js";
 import {
   createReadySendFbaShipmentOrders,
   listFbaShipmentOrderWarehouses,
@@ -635,6 +636,7 @@ function readFbaFreightFilters(url) {
     shipmentStatus: url.searchParams.get("shipmentStatus") || url.searchParams.get("shipment_status") || "",
     offset: url.searchParams.get("offset") || "",
     length: url.searchParams.get("length") || "",
+    forceRefresh: ["1", "true"].includes(String(url.searchParams.get("forceRefresh") || "").toLowerCase()),
   };
 }
 
@@ -894,6 +896,7 @@ startSyncScheduler();
 startPlatformCashflowScheduler();
 startFbaStaScheduler();
 startStoreInspectionScheduler();
+startFbaShipmentWarmupScheduler();
 
 const server = http.createServer((req, res) => {
   router(req, res).catch((error) => {

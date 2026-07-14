@@ -9,6 +9,7 @@ import { getSharedProductCatalogMap } from "./sharedDataService.js";
 
 const DEFAULT_CACHE_TTL_MS = 5 * 60 * 1000;
 const candidateCache = new Map();
+const candidateInflightRequests = new Map();
 
 function firstText(...values) {
   for (const value of values) {
@@ -103,6 +104,7 @@ export function buildFbaShipmentCandidateCacheKey(filters = {}) {
 
 export function clearFbaShipmentCandidateCache() {
   candidateCache.clear();
+  candidateInflightRequests.clear();
 }
 
 function rowsHaveSellerMappings(rows = []) {
@@ -154,30 +156,14 @@ async function enrichProductCatalog(adapter, shipments, {
   }
 }
 
-export async function getFbaShipmentCandidates(filters = {}, {
+async function fetchFbaShipmentCandidates(normalizedFilters, cacheKey, {
   adapter = getLingxingAdapter(),
   sellers = [],
-  autoLoadSellerMappings = false,
-  now = Date.now(),
-  ttlMs = DEFAULT_CACHE_TTL_MS,
+  autoLoadSellerMappings,
+  now,
   productCatalogRequired = false,
   forceProductCatalogRefresh = false,
 } = {}) {
-  const normalizedFilters = normalizeFbaShipmentCandidateFilters(filters);
-  const cacheKey = buildFbaShipmentCandidateCacheKey(normalizedFilters);
-  const cached = candidateCache.get(cacheKey);
-  const needsSellerMappings = autoLoadSellerMappings || (Array.isArray(sellers) && sellers.length > 0);
-  const cachedCanSatisfy = !needsSellerMappings || rowsHaveSellerMappings(cached?.result?.rows || []);
-  if (!normalizedFilters.forceRefresh && cached && now - cached.fetchedAtMs < ttlMs && cachedCanSatisfy) {
-    return {
-      ...cached.result,
-      cache: { hit: true, key: cacheKey, fetchedAt: cached.result.fetchedAt },
-    };
-  }
-  if (!normalizedFilters.forceRefresh && cached && !cachedCanSatisfy) {
-    console.info("[fba-shipment-candidates] bypassed cache without seller mappings", { cacheKey });
-  }
-
   const params = fbaFreightSheetTestUtils.buildLingxingShipmentParams(normalizedFilters);
   const [payload, sellerMappings] = await Promise.all([
     adapter.fetchFbaCargoShipments(params),
@@ -203,7 +189,55 @@ export async function getFbaShipmentCandidates(filters = {}, {
     shipmentCount: result.rows.length,
     itemCount: result.rows.reduce((sum, row) => sum + (row.items || []).length, 0),
     cacheKey,
+    forceRefresh: normalizedFilters.forceRefresh,
     requestId: result.sourceRequestId,
   });
   return { ...result, cache: { hit: false, key: cacheKey, fetchedAt } };
+}
+
+export async function getFbaShipmentCandidates(filters = {}, {
+  adapter = getLingxingAdapter(),
+  sellers = [],
+  autoLoadSellerMappings = false,
+  now = Date.now(),
+  ttlMs = DEFAULT_CACHE_TTL_MS,
+  productCatalogRequired = false,
+  forceProductCatalogRefresh = false,
+} = {}) {
+  const normalizedFilters = normalizeFbaShipmentCandidateFilters(filters);
+  const cacheKey = buildFbaShipmentCandidateCacheKey(normalizedFilters);
+  const cached = candidateCache.get(cacheKey);
+  const needsSellerMappings = autoLoadSellerMappings || (Array.isArray(sellers) && sellers.length > 0);
+  const cachedCanSatisfy = !needsSellerMappings || rowsHaveSellerMappings(cached?.result?.rows || []);
+  if (!normalizedFilters.forceRefresh && cached && now - cached.fetchedAtMs < ttlMs && cachedCanSatisfy) {
+    return {
+      ...cached.result,
+      cache: { hit: true, key: cacheKey, fetchedAt: cached.result.fetchedAt },
+    };
+  }
+  if (!normalizedFilters.forceRefresh && cached && !cachedCanSatisfy) {
+    console.info("[fba-shipment-candidates] bypassed cache without seller mappings", { cacheKey });
+  }
+
+  const inflight = candidateInflightRequests.get(cacheKey);
+  if (inflight) {
+    console.info("[fba-shipment-candidates] joined in-flight request", {
+      cacheKey,
+      forceRefresh: normalizedFilters.forceRefresh,
+    });
+    return inflight;
+  }
+
+  const request = fetchFbaShipmentCandidates(normalizedFilters, cacheKey, {
+    adapter,
+    sellers,
+    autoLoadSellerMappings,
+    now,
+    productCatalogRequired,
+    forceProductCatalogRefresh,
+  }).finally(() => {
+    candidateInflightRequests.delete(cacheKey);
+  });
+  candidateInflightRequests.set(cacheKey, request);
+  return request;
 }

@@ -27,6 +27,7 @@ export function createFbaFreightFeature({
   let fbaFreightWarehouses = [];
   let selectedFbaFreightShipmentIds = new Set();
   let pendingFbaFreightConvertShipmentIds = [];
+  let fbaFreightLoading = false;
   let fbaFreightOrderCreating = false;
   const fbaFreightOrderResults = new Map();
 
@@ -62,7 +63,7 @@ export function createFbaFreightFeature({
     if (previous && [...select.options].some((option) => option.value === previous)) select.value = previous;
   }
 
-  function buildFbaFreightQuery() {
+  function buildFbaFreightQuery({ forceRefresh = false } = {}) {
     const params = new URLSearchParams();
     const startDate = fbaValue("#fba-freight-start-date");
     const endDate = fbaValue("#fba-freight-end-date");
@@ -74,6 +75,7 @@ export function createFbaFreightFeature({
     if (sid) params.set("sids", sid);
     if (shipmentId) params.set("shipmentId", shipmentId);
     if (status) params.set("shipmentStatus", status);
+    if (forceRefresh) params.set("forceRefresh", "true");
     params.set("length", "500");
     return params;
   }
@@ -84,6 +86,12 @@ export function createFbaFreightFeature({
 
   function setFbaFreightStatus(message) {
     setText("#fba-freight-status", message, root);
+  }
+
+  function setFbaFreightLoading(loading) {
+    fbaFreightLoading = Boolean(loading);
+    const refreshButton = query("#fba-freight-refresh");
+    if (refreshButton) refreshButton.disabled = fbaFreightLoading;
   }
 
   function fbaFreightRowId(row = {}) {
@@ -202,11 +210,13 @@ export function createFbaFreightFeature({
     else renderFbaFreightRows();
   }
 
-  async function loadFbaFreightShipments() {
+  async function loadFbaFreightShipments({ forceRefresh = false } = {}) {
+    if (fbaFreightLoading) return;
     setDefaultFbaFreightDates();
-    setFbaFreightStatus("正在读取领星 fbaCargo 货件...");
+    setFbaFreightLoading(true);
+    setFbaFreightStatus(forceRefresh ? "正在强制读取领星 fbaCargo 货件..." : "正在读取领星 fbaCargo 货件...");
     try {
-      const response = await fetchImpl(`/api/fba/freight/shipments?${buildFbaFreightQuery().toString()}`);
+      const response = await fetchImpl(`/api/fba/freight/shipments?${buildFbaFreightQuery({ forceRefresh }).toString()}`);
       const data = await response.json().catch(() => ({}));
       if (!response.ok || data.ok === false) throw new Error(data.error || `API ${response.status}`);
       fbaFreightRows = data.rows || data.shipments || [];
@@ -219,6 +229,8 @@ export function createFbaFreightFeature({
       fbaFreightRows = [];
       renderFbaFreightRows();
       setFbaFreightStatus(`读取失败：${error.message || error}`);
+    } finally {
+      setFbaFreightLoading(false);
     }
   }
 
@@ -455,7 +467,7 @@ export function createFbaFreightFeature({
   }
 
   function setupFbaFreight() {
-    bind(root, "#fba-freight-refresh", "click", loadFbaFreightShipments);
+    bind(root, "#fba-freight-refresh", "click", () => loadFbaFreightShipments({ forceRefresh: true }));
     bind(root, "#fba-freight-export", "click", exportFbaFreightWorkbook);
     bind(root, "#fba-freight-warehouse", "change", updateFbaFreightSelectionState);
     bind(root, "#fba-freight-template-select", "change", updateFbaFreightTemplateConfirmState);

@@ -791,11 +791,19 @@ export function normalizeFbaFreightFilters(filters = {}) {
   };
 }
 
+function nextDateText(dateText) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateText || "")) return dateText;
+  const date = new Date(`${dateText}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return dateText;
+  date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().slice(0, 10);
+}
+
 function buildLingxingShipmentParams(filters) {
   const params = {
     sid: filters.sids.join(","),
     start_date: filters.startDate,
-    end_date: filters.endDate,
+    end_date: nextDateText(filters.endDate),
     offset: filters.offset,
     length: filters.length,
   };

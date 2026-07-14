@@ -102,6 +102,45 @@ test("getFbaShipmentCandidates forceRefresh bypasses cache", async () => {
   assert.equal(adapter.calls.length, 2);
 });
 
+test("getFbaShipmentCandidates joins concurrent refreshes for the same key", async () => {
+  clearFbaShipmentCandidateCache();
+  let releaseShipments;
+  let shipmentFetchStarted;
+  const shipmentFetchStartedPromise = new Promise((resolve) => {
+    shipmentFetchStarted = resolve;
+  });
+  const adapter = {
+    calls: [],
+    async fetchFbaCargoShipments(params) {
+      this.calls.push(params);
+      shipmentFetchStarted();
+      await new Promise((resolve) => {
+        releaseShipments = resolve;
+      });
+      return payload;
+    },
+    async fetchListings() {
+      return { data: { list: [] } };
+    },
+    async fetchLocalProductInfos() {
+      return { data: [] };
+    },
+  };
+  const sellers = [{ sid: 8708, seller_id: "A1SELLERUS", marketplace_id: "ATVPDKIKX0DER" }];
+  const filters = { startDate: "2026-07-01", endDate: "2026-07-11", sid: "8708", forceRefresh: true };
+
+  const first = getFbaShipmentCandidates(filters, { adapter, sellers });
+  await shipmentFetchStartedPromise;
+  const second = getFbaShipmentCandidates(filters, { adapter, sellers });
+
+  assert.equal(adapter.calls.length, 1);
+  releaseShipments();
+  const [firstResult, secondResult] = await Promise.all([first, second]);
+  assert.equal(firstResult.rows.length, 1);
+  assert.equal(secondResult.rows.length, 1);
+  assert.equal(secondResult.cache.hit, false);
+});
+
 test("getFbaShipmentCandidates reloads stale cache when seller mappings are required", async () => {
   clearFbaShipmentCandidateCache();
   const events = [];

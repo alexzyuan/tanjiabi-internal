@@ -8,6 +8,7 @@ import {
   buildFbaFreightWorkbookBuffer,
   buildFbaForwarderWorkbookBuffer,
   convertFbaFreightShipmentsToForwarderTemplate,
+  fbaFreightSheetTestUtils,
   listFbaForwarderTemplates,
   normalizeFbaFreightShipments,
 } from "../src/services/fbaFreightSheetService.js";
@@ -95,6 +96,31 @@ test("normalizeFbaFreightShipments maps Lingxing fba shipment rows into freight 
   assert.equal(rows[0].createdAt, "2026-07-04 09:15");
   assert.equal(rows[0].items.length, 2);
   assert.equal(rows[0].items[0].msku, "JM-DGC-BLUE");
+});
+
+test("buildLingxingShipmentParams sends exclusive end_date so the UI end day is included", () => {
+  const params = fbaFreightSheetTestUtils.buildLingxingShipmentParams({
+    sids: [8708],
+    startDate: "2026-07-01",
+    endDate: "2026-07-14",
+    offset: 0,
+    length: 500,
+  });
+
+  assert.equal(params.start_date, "2026-07-01");
+  assert.equal(params.end_date, "2026-07-15");
+});
+
+test("buildLingxingShipmentParams keeps invalid end_date visible instead of silently guessing", () => {
+  const params = fbaFreightSheetTestUtils.buildLingxingShipmentParams({
+    sids: [8708],
+    startDate: "2026-07-01",
+    endDate: "bad-date",
+    offset: 0,
+    length: 500,
+  });
+
+  assert.equal(params.end_date, "bad-date");
 });
 
 test("buildFbaFreightWorkbookBuffer exports the requested freight sheet columns", () => {
