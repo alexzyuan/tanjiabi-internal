@@ -157,3 +157,63 @@ test("getLingxingAdapter returns the process singleton for matching default conf
   assert.equal(first, second);
   resetLingxingAdapterForTest();
 });
+
+test("LingxingAdapter sends exclusive end date to Lingxing without mutating UI filters", async () => {
+  const adapter = new LingxingAdapter(lingxingTestConfig);
+  const calls = [];
+  adapter.performSignedRequest = async (endpoint, options) => {
+    calls.push({ endpoint, params: options.params });
+    return { code: 0, data: { records: [] } };
+  };
+  const filters = {
+    startDate: "2026-07-01",
+    endDate: "2026-07-14",
+    sids: [8708],
+    currencyCode: "ORIGINAL",
+  };
+
+  await adapter.fetchMskuOrderProfit(filters);
+
+  assert.equal(filters.endDate, "2026-07-14");
+  assert.equal(calls[0].endpoint, "/basicOpen/finance/mreport/OrderProfit");
+  assert.equal(calls[0].params.startDate, "2026-07-01");
+  assert.equal(calls[0].params.endDate, "2026-07-15");
+});
+
+test("LingxingAdapter applies exclusive end_date to FBA shipment list at the API boundary", async () => {
+  const adapter = new LingxingAdapter(lingxingTestConfig);
+  const calls = [];
+  adapter.performSignedRequest = async (endpoint, options) => {
+    calls.push({ endpoint, params: options.params });
+    return { code: 0, data: { list: [] } };
+  };
+
+  await adapter.fetchFbaCargoShipments({
+    sid: "8708",
+    start_date: "2026-07-01",
+    end_date: "2026-07-14",
+  });
+
+  assert.equal(calls[0].endpoint, "/erp/sc/data/fba_report/shipmentList");
+  assert.equal(calls[0].params.start_date, "2026-07-01");
+  assert.equal(calls[0].params.end_date, "2026-07-15");
+});
+
+test("LingxingAdapter applies exclusive created_end_time for payable pools", async () => {
+  const adapter = new LingxingAdapter(lingxingTestConfig);
+  const calls = [];
+  adapter.performSignedRequest = async (endpoint, options) => {
+    calls.push({ endpoint, params: options.params });
+    return { code: 0, data: { records: [] } };
+  };
+
+  await adapter.fetchPayablePurchasePool({
+    start_date: "2026-07-01",
+    end_date: "2026-07-14",
+    created_start_time: "2026-07-01",
+    created_end_time: "2026-07-14",
+  });
+
+  assert.equal(calls[0].params.end_date, "2026-07-15");
+  assert.equal(calls[0].params.created_end_time, "2026-07-15");
+});

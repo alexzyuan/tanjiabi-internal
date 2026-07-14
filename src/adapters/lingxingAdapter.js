@@ -1,5 +1,6 @@
 import { getConfig } from "../config/index.js";
 import { getDefaultWeekRange, listDateRange } from "../utils/dateRange.js";
+import { withLingxingExclusiveEndDate } from "../utils/lingxingDateRange.js";
 import { readOrderProfitCache, readStaleOrderProfitCache, saveOrderProfitCache } from "../utils/cacheStore.js";
 import { createLingxingAuth, createLingxingClient, createTokenState, tokenConfigKey } from "./lingxing/index.js";
 
@@ -48,6 +49,10 @@ function sleep(ms) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+function lingxingDateRangeParams(params = {}, options = {}) {
+  return withLingxingExclusiveEndDate(params, options);
 }
 
 function adapterConfigKey(config = {}) {
@@ -164,7 +169,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 1000,
-        ...params,
+        ...lingxingDateRangeParams(params),
       },
     });
   }
@@ -224,7 +229,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 200,
-        ...params,
+        ...lingxingDateRangeParams(params),
       },
     });
   }
@@ -310,7 +315,7 @@ export class LingxingAdapter {
         offset: 0,
         length: 1000,
         date_type: 1,
-        ...params,
+        ...lingxingDateRangeParams(params),
       },
     });
   }
@@ -320,7 +325,7 @@ export class LingxingAdapter {
     const requestParams = {
       offset: 0,
       length: 1000,
-      ...restParams,
+      ...lingxingDateRangeParams(restParams),
     };
     if (currencyCode && currencyCode !== "ORIGINAL") {
       requestParams.currencyCode = currencyCode;
@@ -338,7 +343,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 1000,
-        ...params,
+        ...lingxingDateRangeParams(params),
       },
     });
   }
@@ -350,7 +355,7 @@ export class LingxingAdapter {
         offset: 0,
         length: 10000,
         search_date_field: "posted_date_locale",
-        ...params,
+        ...lingxingDateRangeParams(params),
       },
     });
   }
@@ -360,7 +365,7 @@ export class LingxingAdapter {
     const requestParams = {
       offset: 0,
       length: 5000,
-      ...restParams,
+      ...lingxingDateRangeParams(restParams),
     };
     if (currencyCode && currencyCode !== "ORIGINAL") {
       requestParams.currencyCode = currencyCode;
@@ -397,7 +402,7 @@ export class LingxingAdapter {
       summary_field: "msku",
       is_recently_enum: true,
       purchase_status: 0,
-      ...restParams,
+      ...lingxingDateRangeParams(restParams),
     };
     if (currencyCode && currencyCode !== "ORIGINAL") {
       requestParams.currency_code = currencyCode;
@@ -419,7 +424,7 @@ export class LingxingAdapter {
         dateType: 0,
         sortField: "curReturnGoodsCount",
         sortType: "DESC",
-        ...params,
+        ...lingxingDateRangeParams(params),
       },
     });
   }
@@ -433,7 +438,7 @@ export class LingxingAdapter {
         date_field: "review_time",
         sort_field: "review_date",
         sort_type: "desc",
-        ...params,
+        ...lingxingDateRangeParams(params),
       },
     });
   }
@@ -484,7 +489,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 100,
-        ...params,
+        ...lingxingDateRangeParams(params),
       },
     });
   }
@@ -560,7 +565,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 2100,
-        ...params,
+        ...lingxingDateRangeParams(params),
       },
     });
   }
@@ -604,7 +609,7 @@ export class LingxingAdapter {
         disposition: "01",
         offset: 0,
         length: 1000,
-        ...params,
+        ...lingxingDateRangeParams(params),
       },
     });
   }
@@ -615,7 +620,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 200,
-        ...params,
+        ...lingxingDateRangeParams(params),
       },
     });
   }
@@ -629,7 +634,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 200,
-        ...params,
+        ...lingxingDateRangeParams(params, { endKeys: ["end_date", "endDate", "created_end_time"] }),
       },
     });
   }
@@ -643,7 +648,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 200,
-        ...params,
+        ...lingxingDateRangeParams(params, { endKeys: ["end_date", "endDate", "created_end_time"] }),
       },
     });
   }
@@ -659,7 +664,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 200,
-        ...params,
+        ...lingxingDateRangeParams(params, { endKeys: ["end_date", "endDate", "created_end_time"] }),
       },
     });
   }
@@ -673,7 +678,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 500,
-        ...params,
+        ...lingxingDateRangeParams(params),
       },
     });
   }
@@ -688,7 +693,7 @@ export class LingxingAdapter {
         disposition: "01",
         offset: 0,
         length: 1000,
-        ...params,
+        ...lingxingDateRangeParams(params),
       },
     });
   }

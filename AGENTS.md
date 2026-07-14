@@ -46,6 +46,12 @@ Default ownership:
 - Business composition stays in `src/services/*`.
 - Field-name translation and metric mapping stay in mapper files such as `src/services/lingxingDashboardMapper.js`.
 
+## Lingxing Date Ranges
+
+Lingxing date-range APIs that document `start_date`/`end_date` as `左闭右开` must treat the user-facing end date as inclusive and the API `end_date` as exclusive. Frontend controls, dashboard filters, cache keys, logs, and visible metadata keep the real date selected by the user. Only backend request parameters sent to Lingxing add one day to the end boundary. For example, a visible range ending `2026-07-14` is sent to Lingxing as `end_date=2026-07-15`.
+
+Use `src/utils/lingxingDateRange.js` to build or normalize Lingxing request params. Do not hand-roll date `+1` logic in feature services, adapters, routes, or frontend code.
+
 If a change would add a large new feature, prefer adding a focused module under `src/` for backend code and a focused feature module under `assets/js/features/` for frontend code instead of adding an unbounded block to `app.js`.
 
 Current frontend module examples:

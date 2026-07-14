@@ -98,7 +98,7 @@ test("normalizeFbaFreightShipments maps Lingxing fba shipment rows into freight 
   assert.equal(rows[0].items[0].msku, "JM-DGC-BLUE");
 });
 
-test("buildLingxingShipmentParams sends exclusive end_date so the UI end day is included", () => {
+test("buildLingxingShipmentParams keeps the visible UI end date for the adapter boundary", () => {
   const params = fbaFreightSheetTestUtils.buildLingxingShipmentParams({
     sids: [8708],
     startDate: "2026-07-01",
@@ -108,10 +108,10 @@ test("buildLingxingShipmentParams sends exclusive end_date so the UI end day is 
   });
 
   assert.equal(params.start_date, "2026-07-01");
-  assert.equal(params.end_date, "2026-07-15");
+  assert.equal(params.end_date, "2026-07-14");
 });
 
-test("buildLingxingShipmentParams keeps invalid end_date visible instead of silently guessing", () => {
+test("buildLingxingShipmentParams keeps invalid end_date visible for normalized filter tests", () => {
   const params = fbaFreightSheetTestUtils.buildLingxingShipmentParams({
     sids: [8708],
     startDate: "2026-07-01",
