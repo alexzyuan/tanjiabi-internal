@@ -166,3 +166,76 @@ test("FBA freight row Jiufang button dry-runs that shipment and channel", async 
   });
   assert.equal(modalStates.at(-1).open, true);
 });
+
+test("FBA freight row Jiufang button requires explicit channel when Jiufang has no default", async () => {
+  const requests = [];
+  const statuses = [];
+  const elements = {
+    "#fba-freight-refresh": { disabled: false },
+    "#fba-freight-start-date": { value: "2026-07-01" },
+    "#fba-freight-end-date": { value: "2026-07-14" },
+    "#fba-freight-sid": { value: "8708" },
+    "#fba-freight-shipment-id": { value: "" },
+    "#fba-freight-status-filter": { value: "" },
+    "#fba-freight-jiufang-channel": { value: "", innerHTML: "" },
+    "#fba-freight-jiufang-confirm": { disabled: false },
+    "#fba-freight-jiufang-summary": { innerHTML: "" },
+    "#fba-freight-jiufang-modal": {},
+    "#fba-freight-table": { innerHTML: "" },
+  };
+  let closestTargetValue = null;
+  const root = {
+    querySelector(selector) {
+      return elements[selector] || null;
+    },
+    querySelectorAll() {
+      return [];
+    },
+  };
+  const bindCalls = [];
+  const feature = createFbaFreightFeature({
+    root,
+    bind: (...args) => bindCalls.push(args),
+    bindBackdropClose: () => {},
+    cachedSalesImageUrl: () => "",
+    closestTarget: () => closestTargetValue,
+    downloadBlob: () => {},
+    escapeHtml: (value) => String(value ?? ""),
+    fbaValue: (selector) => elements[selector]?.value || "",
+    fetchImpl: async (url, options = {}) => {
+      requests.push({ url, options });
+      if (String(url).startsWith("/api/fba/freight/shipments")) {
+        return { ok: true, json: async () => ({ rows: [{ shipmentId: "FBA18QJFDCWJ", shippedQuantity: 12 }] }) };
+      }
+      if (url === "/api/fba/jiufang/channels") {
+        return { ok: true, json: async () => ({ ok: true, channels: [{ code: "SEA-EU-03", name: "监管仓欧洲卡派", isDefault: false }] }) };
+      }
+      if (url === "/api/fba/jiufang/orders/dry-run") {
+        return { ok: true, json: async () => ({ ok: true, results: [] }) };
+      }
+      return { ok: true, json: async () => ({}) };
+    },
+    formatDate: () => "2026-07-14",
+    formatNumber: (value) => String(value),
+    getFbaShops: () => [],
+    loadFbaShops: async () => {},
+    normalizeFbaShop: (shop) => shop,
+    renderTableMessage: (table, _cols, message) => {
+      table.innerHTML = message;
+    },
+    setModalOpenState: () => {},
+    setText: (_selector, text) => statuses.push(text),
+  });
+
+  await feature.loadFbaFreightShipments();
+  feature.setupFbaFreight();
+  const tableClickHandler = bindCalls.find(([, selector, eventName]) => selector === "#fba-freight-table" && eventName === "click")[3];
+  closestTargetValue = { dataset: { fbaFreightJiufang: "FBA18QJFDCWJ" } };
+
+  await tableClickHandler({});
+
+  assert.ok(requests.find((request) => request.url === "/api/fba/jiufang/channels"));
+  assert.equal(requests.some((request) => request.url === "/api/fba/jiufang/orders/dry-run"), false);
+  assert.equal(elements["#fba-freight-jiufang-channel"].value, "");
+  assert.match(statuses.at(-1), /请选择九方渠道/);
+});

@@ -112,6 +112,70 @@ test("buildJiufangShipmentPayload maps FBA shipment boxes to Jiufang ordinary sh
   assert.equal(summary.totalCbm, 0.024);
 });
 
+test("buildJiufangShipmentPayload accepts Lingxing snake_case destination address fields", () => {
+  const { payload } = buildJiufangShipmentPayload({
+    shipment: {
+      ...shipment,
+      shipToAddress: {
+        name: "Amazon.com Services LLC",
+        address_line1: "18900 W McDowell Road",
+        city: "BUCKEYE",
+        state_or_province_code: "AZ",
+        postal_code: "85396",
+        country_code: "US",
+      },
+    },
+    boxPayloadsByShipmentId,
+    channelCode: "SEA-US-07",
+    senderProfile,
+  });
+
+  assert.deepEqual(payload.ShipmentRequest.ShipTo.Address, {
+    AddressLine: ["18900 W McDowell Road"],
+    City: "BUCKEYE",
+    StateProvinceCode: "AZ",
+    PostalCode: "85396",
+    CountryCode: "US",
+  });
+});
+
+test("buildJiufangShipmentPayload uses declaration price enriched on shipment item when box product omits it", () => {
+  const localBoxPayloadsByShipmentId = new Map([[
+    "FBA18QJFDCWJ",
+    {
+      data: {
+        shipmentList: [{
+          shipmentId: "STA-123",
+          shipmentPackingList: [{
+            localBoxId: 1,
+            weight: 10,
+            weightUnit: "KG",
+            length: 40,
+            width: 30,
+            height: 20,
+            lengthUnit: "CM",
+            productList: [{
+              msku: "MSKU-BLUE",
+              sku: "TJ-DGC-BLUE",
+              productName: "收纳盒",
+              quantityInBox: 12,
+            }],
+          }],
+        }],
+      },
+    },
+  ]]);
+
+  const { payload } = buildJiufangShipmentPayload({
+    shipment,
+    boxPayloadsByShipmentId: localBoxPayloadsByShipmentId,
+    channelCode: "SEA-US-07",
+    senderProfile,
+  });
+
+  assert.equal(payload.ShipmentRequest.Invoices[0].UnitPrice, 2.5);
+});
+
 test("validateJiufangOrderInput fails fast on required missing fields", () => {
   const errors = validateJiufangOrderInput({
     shipment: {

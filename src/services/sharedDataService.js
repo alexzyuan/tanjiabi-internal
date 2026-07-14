@@ -78,6 +78,12 @@ const productMaterialKeys = [
   "materialName",
   "product_material",
   "productMaterial",
+  "cg_product_material",
+  "cgProductMaterial",
+  "customs_clearance_material",
+  "customsClearanceMaterial",
+  "customs_clearance_en_material",
+  "customsClearanceEnMaterial",
   "declaration_material",
   "declarationMaterial",
   "材质",
@@ -90,6 +96,10 @@ const productPurposeKeys = [
   "use",
   "product_use",
   "productUse",
+  "customs_clearance_usage",
+  "customsClearanceUsage",
+  "customs_clearance_en_usage",
+  "customsClearanceEnUsage",
   "declaration_purpose",
   "declarationPurpose",
   "用途",
@@ -101,6 +111,14 @@ const productCustomsCodeKeys = [
   "customsCode",
   "clearance_code",
   "clearanceCode",
+  "bg_export_hs_code",
+  "bgExportHsCode",
+  "bg_import_hs_code",
+  "bgImportHsCode",
+  "customs_declaration_hs_code",
+  "customsDeclarationHsCode",
+  "customs_clearance_hs_code",
+  "customsClearanceHsCode",
   "hs_code",
   "hsCode",
   "hscode",
@@ -131,10 +149,29 @@ const productUnitKeys = [
   "unitName",
   "declare_unit",
   "declareUnit",
+  "customs_declaration_unit",
+  "customsDeclarationUnit",
   "declaration_unit",
   "declarationUnit",
   "单位",
   "申报单位",
+];
+
+const productDeclaredValueKeys = [
+  "declared_value",
+  "declaredValue",
+  "declare_unit_price",
+  "declareUnitPrice",
+  "declaration_price",
+  "declarationPrice",
+  "bg_customs_import_price",
+  "bgCustomsImportPrice",
+  "customs_import_price",
+  "customsImportPrice",
+  "customs_clearance_price",
+  "customsClearancePrice",
+  "申报单价",
+  "申报价格",
 ];
 
 function hasReadableValue(value) {
@@ -169,6 +206,17 @@ function readFirst(item, keys) {
     found = value;
   });
   return found || "";
+}
+
+function readBatteryDeclaration(record = {}) {
+  const explicit = readFirst(record, productBatteryKeys);
+  if (explicit) return explicit;
+  const specialAttrs = Array.isArray(record.special_attr)
+    ? record.special_attr
+    : Array.isArray(record.specialAttr)
+      ? record.specialAttr
+      : [];
+  return specialAttrs.map((value) => String(value).trim()).includes("1") ? "是" : "";
 }
 
 function readArrayText(value) {
@@ -311,6 +359,7 @@ function mergeProductCatalogInfo(existing = {}, incoming = {}) {
     customsCode: incoming.customsCode || existing.customsCode || "",
     isBattery: incoming.isBattery || existing.isBattery || "",
     unit: incoming.unit || existing.unit || "",
+    declaredValue: incoming.declaredValue || existing.declaredValue || 0,
     asin: incoming.asin || existing.asin || "",
     raw: incoming.raw || existing.raw || null,
   };
@@ -354,6 +403,7 @@ export function productCatalogMapToRecords(map) {
       product.customsCode,
       product.isBattery,
       product.unit,
+      product.declaredValue,
       product.asin,
     ].join("|");
     if (seen.has(identity)) return;
@@ -390,8 +440,9 @@ function normalizeSharedListingRecord(record = {}, fallbackSid = 0) {
     material: readFirst(record, productMaterialKeys),
     purpose: readFirst(record, productPurposeKeys),
     customsCode: readFirst(record, productCustomsCodeKeys),
-    isBattery: readFirst(record, productBatteryKeys),
+    isBattery: readBatteryDeclaration(record),
     unit: readFirst(record, productUnitKeys),
+    declaredValue: toNumber(readFirst(record, productDeclaredValueKeys)),
     asin: readFirst(record, ["asin", "ASIN"]),
     raw: record,
   };
@@ -411,8 +462,9 @@ function normalizeSharedProductRecord(record = {}) {
     material: readFirst(record, productMaterialKeys),
     purpose: readFirst(record, productPurposeKeys),
     customsCode: readFirst(record, productCustomsCodeKeys),
-    isBattery: readFirst(record, productBatteryKeys),
+    isBattery: readBatteryDeclaration(record),
     unit: readFirst(record, productUnitKeys),
+    declaredValue: toNumber(readFirst(record, productDeclaredValueKeys)),
     asin: readFirst(record, ["asin", "ASIN"]),
     raw: record,
   };
@@ -677,6 +729,7 @@ export function applySharedProductCatalogToRows(rows = [], catalogMap = new Map(
     if (!next.customsCode && product.customsCode) next.customsCode = product.customsCode;
     if (!next.isBattery && product.isBattery) next.isBattery = product.isBattery;
     if (!next.unit && product.unit) next.unit = product.unit;
+    if (!next.declaredValue && product.declaredValue) next.declaredValue = product.declaredValue;
     if (!next.asin && product.asin) next.asin = product.asin;
     return next;
   });

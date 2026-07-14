@@ -71,6 +71,10 @@ function destinationAddress(shipment = {}) {
   return shipment.shipToAddress || shipment.raw?.ship_to_address || shipment.raw?.shipToAddress || {};
 }
 
+function addressValue(address = {}, camelKey, snakeKey) {
+  return firstText(address[camelKey], address[snakeKey]);
+}
+
 function senderAddress(senderProfile = {}) {
   return {
     Name: firstText(senderProfile.companyName, senderProfile.shipperName),
@@ -92,11 +96,14 @@ function amazonAddress(shipment = {}) {
     Name: firstText(address.name, `Amazon ${shipment.fulfillmentCenterCode || ""}`),
     DestinationFulfillmentCenterId: firstText(shipment.fulfillmentCenterCode),
     Address: {
-      AddressLine: [address.addressLine1, address.addressLine2].filter(Boolean),
-      City: firstText(address.city),
-      StateProvinceCode: firstText(address.stateOrProvinceCode, address.state),
-      PostalCode: firstText(address.postalCode),
-      CountryCode: firstText(address.countryCode, address.country, shipment.country),
+      AddressLine: [
+        addressValue(address, "addressLine1", "address_line1"),
+        addressValue(address, "addressLine2", "address_line2"),
+      ].filter(Boolean),
+      City: addressValue(address, "city", "city"),
+      StateProvinceCode: firstText(addressValue(address, "stateOrProvinceCode", "state_or_province_code"), address.state),
+      PostalCode: addressValue(address, "postalCode", "postal_code"),
+      CountryCode: firstText(addressValue(address, "countryCode", "country_code"), address.country, shipment.country),
     },
   };
 }
@@ -177,9 +184,10 @@ export function validateJiufangOrderInput({
     ["stateOrProvinceCode", "stateOrProvinceCode"],
     ["postalCode", "postalCode"],
   ]) {
-    if (!firstText(address[key], key === "stateOrProvinceCode" ? address.state : "")) errors.push(`${shipmentId} 缺少收件地址 ${label}`);
+    const snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+    if (!firstText(addressValue(address, key, snakeKey), key === "stateOrProvinceCode" ? address.state : "")) errors.push(`${shipmentId} 缺少收件地址 ${label}`);
   }
-  if (!firstText(address.countryCode, address.country, shipment.country)) errors.push(`${shipmentId} 缺少收件国家`);
+  if (!firstText(addressValue(address, "countryCode", "country_code"), address.country, shipment.country)) errors.push(`${shipmentId} 缺少收件国家`);
 
   const sender = senderAddress(senderProfile);
   if (!firstText(sender.Name)) errors.push(`${shipmentId} 缺少发件公司名称`);

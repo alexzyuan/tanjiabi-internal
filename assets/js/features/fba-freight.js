@@ -149,7 +149,7 @@ export function createFbaFreightFeature({
     select.innerHTML = `<option value="">请选择九方渠道</option>${fbaFreightJiufangChannels
       .map((channel) => `<option value="${escapeHtml(channel.code)}">${escapeHtml(channel.name || channel.code)}</option>`)
       .join("")}`;
-    const defaultChannel = fbaFreightJiufangChannels.find((channel) => channel.isDefault) || fbaFreightJiufangChannels[0];
+    const defaultChannel = fbaFreightJiufangChannels.find((channel) => channel.isDefault);
     if (previous && fbaFreightJiufangChannels.some((channel) => channel.code === previous)) select.value = previous;
     else if (defaultChannel) select.value = defaultChannel.code;
   }
@@ -160,7 +160,7 @@ export function createFbaFreightFeature({
     setFbaFreightStatus("正在连接九方读取渠道...");
     await loadFbaFreightJiufangChannels();
     channelCode = selectedFbaFreightJiufangChannel();
-    if (!channelCode) throw new Error("九方未返回可用渠道，无法预检下单。");
+    if (!channelCode) throw new Error("请选择九方渠道后再预检下单。");
     return channelCode;
   }
 

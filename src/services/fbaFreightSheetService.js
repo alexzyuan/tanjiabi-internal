@@ -209,6 +209,7 @@ export function applyProductCatalogToFbaFreightShipments(shipments = [], catalog
         customsCode: item.customsCode || enriched.customsCode || "",
         isBattery: item.isBattery || enriched.isBattery || "",
         unit: item.unit || enriched.unit || "",
+        declaredValue: item.declaredValue || enriched.declaredValue || "",
         asin: item.asin || enriched.asin || "",
       };
     });
@@ -367,6 +368,7 @@ function normalizeForwarderLines(shipments = [], boxPayloadsByShipmentId = new M
           customsCode: item.customsCode || "",
           isBattery: item.isBattery || "",
           unit: item.unit || "",
+          declaredValue: item.declaredValue || "",
           quantity: item.shippedQuantity || shipment.shippedQuantity || 0,
           quantityInBox: item.quantityInCase || 0,
           boxCount: 0,
