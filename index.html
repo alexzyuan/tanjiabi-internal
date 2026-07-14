@@ -1200,12 +1200,12 @@
           <section class="module-grid">
             <article class="metric-tile"><span>销量预测</span><strong id="sales-forecast-total">0</strong><small>按当前月份公式汇总</small></article>
             <article class="metric-tile"><span>FBA在途</span><strong id="sales-forecast-inbound">0</strong><small>补货建议库存口径</small></article>
-            <article class="metric-tile"><span>低库存 SKU</span><strong id="sales-forecast-low-stock">0</strong><small>FBA 可售小于 14 天</small></article>
-            <article class="metric-tile"><span>需补货 SKU</span><strong id="sales-forecast-replenishment">0</strong><small>补货建议大于 0</small></article>
+            <button class="metric-tile" type="button" data-sales-forecast-locator="low-stock" aria-pressed="false" title="点击定位低库存 SKU"><span>低库存 SKU</span><strong id="sales-forecast-low-stock">0</strong><small>FBA 可售小于 14 天</small></button>
+            <button class="metric-tile" type="button" data-sales-forecast-locator="replenishment" aria-pressed="false" title="点击定位需补货 SKU"><span>需补货 SKU</span><strong id="sales-forecast-replenishment">0</strong><small>补货建议大于 0</small></button>
           </section>
 	          <article class="panel sales-forecast-panel">
 	            <div class="panel-head">
-	              <h2>销售预估明细</h2>
+	              <h2 id="sales-forecast-detail-title">销售预估明细</h2>
 	              <div class="sales-forecast-panel-actions">
 	                <div class="sales-forecast-view-toggle" role="tablist" aria-label="销售预估视图">
 	                  <button class="active" type="button" data-sales-forecast-view="default">默认</button>

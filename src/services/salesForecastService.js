@@ -525,6 +525,10 @@ function recalculateSalesForecastRowFromManual(row, manualRows = {}, now = new D
   const totalStock = toNumber(row.fbaAvailable) + toNumber(row.fbaTransfer) + toNumber(row.fbaReserved) + toNumber(row.awd);
   const salesForecast = Math.round(monthSalesForecast(monthlySales, now));
   const peakSeasonForecast = peakSeasonSalesForecast(monthlySales, now);
+  const availableDays = fbaAvailableDays(totalStock, monthlyDailySales, now);
+  const outOfStockDate = availableDays >= 999 ? "不缺货" : formatDateValue(addDays(now, availableDays));
+  const shippingDate = outOfStockDate === "不缺货" ? "无需发货" : formatDateValue(addDays(new Date(`${outOfStockDate}T00:00:00`), -45));
+  const purchaseDate = shippingDate === "无需发货" ? "无需采购" : formatDateValue(addDays(new Date(`${shippingDate}T00:00:00`), -30));
   return {
     ...row,
     manualKey: rowKey,
@@ -533,7 +537,12 @@ function recalculateSalesForecastRowFromManual(row, manualRows = {}, now = new D
     totalStock,
     salesForecast,
     peakSeasonForecast,
+    fbaAvailableDays: Number(availableDays.toFixed(1)),
+    outOfStockDate,
+    shippingDate,
+    purchaseDate,
     replenishmentSuggestion: Math.round(salesForecast - totalStock - toNumber(row.fbaInbound)),
+    daysRemainingInMonth: daysInMonthOffset(now, 0) - now.getDate(),
   };
 }
 
@@ -597,12 +606,7 @@ function buildSalesForecastExportRows(rows = [], { manualRows = {}, costLookup =
     const replenishmentEstimate = Math.round(toNumber(row.peakSeasonForecast) - toNumber(row.totalStock) - toNumber(row.fbaInbound));
     const cost = salesForecastCostForRow(row, costLookup);
     return {
-      storeName: row.storeName || "",
-      country: row.country || "",
-      productName: row.productName || "",
-      msku: row.msku || "",
-      totalStock: toNumber(row.totalStock),
-      peakSeasonForecast: toNumber(row.peakSeasonForecast),
+      ...row,
       replenishmentEstimate,
       goodsValue: Math.round(replenishmentEstimate * toNumber(cost.landedUnitCost) * 100) / 100,
     };
@@ -1481,49 +1485,108 @@ function salesForecastExportFileName() {
     String(date.getMonth() + 1).padStart(2, "0"),
     String(date.getDate()).padStart(2, "0"),
   ].join("-");
-  return `销售预估旺季补货-${stamp}.xlsx`;
+  return `销售预估全量-${stamp}.xlsx`;
 }
 
 function setSheetWidths(sheet, widths) {
   sheet["!cols"] = widths.map((wch) => ({ wch }));
 }
 
-export async function exportSalesForecastEstimateXlsx(filters = {}) {
-  const [data, provisionData] = await Promise.all([
-    getSalesForecastDashboard(filters),
-    getInventoryProvisionDashboard({
+function buildSalesForecastExportColumns(now = new Date()) {
+  const monthIndex = now.getMonth();
+  return [
+    { key: "imageUrl", label: "图片", width: 44 },
+    { key: "storeName", label: "店铺", width: 18 },
+    { key: "country", label: "国家", width: 10 },
+    { key: "productName", label: "产品名称", width: 36 },
+    { key: "msku", label: "msku", width: 26 },
+    { key: "fbaAvailable", label: "FBA可售", width: 12 },
+    { key: "fbaTransfer", label: "FBA转库", width: 12 },
+    { key: "fbaReserved", label: "FBA预留", width: 12 },
+    { key: "awd", label: "AWD", width: 10 },
+    { key: "fbaInbound", label: "FBA在途", width: 12 },
+    { key: "totalStock", label: "总库存", width: 12 },
+    { key: "salesForecast", label: "销量预测", width: 12 },
+    { key: "peakSeasonForecast", label: "旺季预测", width: 12 },
+    { key: "fbaAvailableDays", label: "FBA可售天数", width: 14 },
+    { key: "inboundArrivalDate", label: "在途送达时间", width: 16 },
+    { key: "outOfStockDate", label: "断货日期", width: 14 },
+    { key: "shippingDate", label: "发货日期", width: 14 },
+    { key: "purchaseDate", label: "采购日期", width: 14 },
+    { key: "recommendedDaily", label: "日销建议", width: 12 },
+    { key: "replenishmentSuggestion", label: "补货建议", width: 12 },
+    ...Array.from({ length: 12 - monthIndex }, (_, offset) => {
+      const index = monthIndex + offset;
+      return [
+        { key: `monthDaily${index}`, label: `${index + 1}月日销`, type: "monthDaily", monthIndex: index, width: 12 },
+        { key: `monthSales${index}`, label: `${index + 1}月销量`, type: "monthSales", monthIndex: index, width: 12 },
+      ];
+    }).flat(),
+    { key: "daysRemainingInMonth", label: "本月剩余天数", width: 14 },
+    { key: "days3", label: "3天日均", type: "recentDaily", width: 12 },
+    { key: "days7", label: "7天日均", type: "recentDaily", width: 12 },
+    { key: "days14", label: "14天日均", type: "recentDaily", width: 12 },
+    { key: "days30", label: "30天日均", type: "recentDaily", width: 12 },
+    { key: "replenishmentEstimate", label: "补货预计", width: 12 },
+    { key: "goodsValue", label: "货值统计", width: 14 },
+  ];
+}
+
+function salesForecastExportValue(row = {}, column = {}) {
+  if (column.type === "monthDaily") return row.monthlyDailySales?.[column.monthIndex] ?? 0;
+  if (column.type === "monthSales") return row.monthlySales?.[column.monthIndex] ?? 0;
+  if (column.type === "recentDaily") return row.recentDaily?.[column.key] ?? 0;
+  return row[column.key] ?? "";
+}
+
+function buildSalesForecastExportScope(filters = {}) {
+  const force = filters.force === true || filters.force === "1";
+  return {
+    dashboardFilters: force ? { force: true } : {},
+    provisionFilters: { costMode: "landed" },
+    ignoredFilters: {
       country: filters.country || "",
-      storeName: filters.store || "",
+      store: filters.store || "",
       keyword: filters.keyword || "",
-      costMode: "landed",
-    }),
+    },
+  };
+}
+
+export async function exportSalesForecastEstimateXlsx(filters = {}) {
+  const exportScope = buildSalesForecastExportScope(filters);
+  const exportNow = new Date();
+  const [data, provisionData] = await Promise.all([
+    getSalesForecastDashboard(exportScope.dashboardFilters),
+    getInventoryProvisionDashboard(exportScope.provisionFilters),
   ]);
   const costLookup = buildSalesForecastCostLookup(provisionData.detailRows || []);
   const exportRows = buildSalesForecastExportRows(data.rows || [], {
     manualRows: data.manualDaily || {},
     costLookup,
+    now: exportNow,
+  });
+  const columns = buildSalesForecastExportColumns(exportNow);
+  console.info("[sales-forecast-export] full export", {
+    rowCount: exportRows.length,
+    columnCount: columns.length,
+    ignoredFilters: exportScope.ignoredFilters,
+    force: Boolean(exportScope.dashboardFilters.force),
   });
 
   const module = await import("xlsx");
   const XLSX = module.default || module;
   const workbook = XLSX.utils.book_new();
-  const headers = ["店铺", "国家", "产品名称", "msku", "总库存", "旺季预测", "补货预计", "货值统计"];
-  const rows = exportRows.map((row) => [
-    row.storeName,
-    row.country,
-    row.productName,
-    row.msku,
-    row.totalStock,
-    row.peakSeasonForecast,
-    row.replenishmentEstimate,
-    row.goodsValue,
-  ]);
+  const headers = columns.map((column) => column.label);
+  const rows = exportRows.map((row) => columns.map((column) => salesForecastExportValue(row, column)));
   const sheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-  sheet["!autofilter"] = { ref: `A1:H${Math.max(1, rows.length + 1)}` };
-  setSheetWidths(sheet, [18, 10, 36, 26, 12, 12, 12, 14]);
-  XLSX.utils.book_append_sheet(workbook, sheet, "旺季补货");
+  const lastColumn = XLSX.utils.encode_col(Math.max(0, headers.length - 1));
+  sheet["!autofilter"] = { ref: `A1:${lastColumn}${Math.max(1, rows.length + 1)}` };
+  setSheetWidths(sheet, columns.map((column) => column.width || 12));
+  XLSX.utils.book_append_sheet(workbook, sheet, "销售预估全量");
 
   const metaRows = [
+    ["导出范围", "销售预估数据表全量行、全量数据列导出，不受页面国家、店铺、关键词筛选影响"],
+    ["导出列数", String(columns.length)],
     ["销售预估数据源", data.meta?.source || ""],
     ["销售预估同步状态", data.meta?.syncStatus || ""],
     ["成本取值", provisionData.meta?.costModeLabel || "采购成本 + 单位头程费用"],
@@ -1547,5 +1610,7 @@ export const salesForecastTestUtils = {
   applyPreviousYearMonthlySales,
   applyFbaInventoryDetails,
   buildSalesForecastCostLookup,
+  buildSalesForecastExportColumns,
   buildSalesForecastExportRows,
+  buildSalesForecastExportScope,
 };

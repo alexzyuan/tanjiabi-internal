@@ -7,7 +7,9 @@ const {
   applyPreviousYearMonthlySales,
   applyFbaInventoryDetails,
   buildSalesForecastCostLookup,
+  buildSalesForecastExportColumns,
   buildSalesForecastExportRows,
+  buildSalesForecastExportScope,
 } = salesForecastTestUtils;
 
 test("同期销量只按 sid 和 MSKU 精确匹配", () => {
@@ -105,7 +107,73 @@ test("销售预估导出按旺季预测扣总库存和在途，并使用采购�
   });
 
   assert.equal(rows[0].totalStock, 50);
+  assert.equal(rows[0].salesForecast, 141);
   assert.equal(rows[0].peakSeasonForecast, 141);
+  assert.equal(rows[0].fbaAvailableDays, 24.7);
+  assert.equal(rows[0].outOfStockDate, "2026-07-31");
+  assert.equal(rows[0].shippingDate, "2026-06-16");
+  assert.equal(rows[0].purchaseDate, "2026-05-17");
   assert.equal(rows[0].replenishmentEstimate, 71);
   assert.equal(rows[0].goodsValue, 852);
+});
+
+test("销售预估导出列覆盖数据表所有业务列并保留导出统计列", () => {
+  const columns = buildSalesForecastExportColumns(new Date("2026-07-13T00:00:00"));
+  const labels = columns.map((column) => column.label);
+
+  assert.equal(labels.includes("关注"), false);
+  assert.equal(labels.includes("隐藏"), false);
+  assert.deepEqual(labels.slice(0, 5), ["图片", "店铺", "国家", "产品名称", "msku"]);
+  assert.equal(labels.includes("FBA可售"), true);
+  assert.equal(labels.includes("FBA在途"), true);
+  assert.equal(labels.includes("销量预测"), true);
+  assert.equal(labels.includes("7月日销"), true);
+  assert.equal(labels.includes("12月销量"), true);
+  assert.equal(labels.includes("3天日均"), true);
+  assert.equal(labels.includes("补货建议"), true);
+  assert.equal(labels.includes("补货预计"), true);
+  assert.equal(labels.includes("货值统计"), true);
+});
+
+test("销售预估导出使用全量数据范围，不继承页面筛选", () => {
+  const scope = buildSalesForecastExportScope({
+    country: "美国",
+    store: "xiamentanjia-US",
+    keyword: "JM-DGC",
+    force: "1",
+  });
+
+  assert.deepEqual(scope.dashboardFilters, { force: true });
+  assert.deepEqual(scope.provisionFilters, { costMode: "landed" });
+  assert.deepEqual(scope.ignoredFilters, {
+    country: "美国",
+    store: "xiamentanjia-US",
+    keyword: "JM-DGC",
+  });
+});
+
+test("销售预估导出保留非补货行", () => {
+  const rowKey = encodeURIComponent("8708|JM-DGC-BLUE");
+  const manualRows = {
+    [rowKey]: [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
+  };
+  const rows = buildSalesForecastExportRows([{
+    sid: 8708,
+    storeName: "xiamentanjia-US",
+    country: "美国",
+    productName: "灯光船蓝色",
+    msku: "JM-DGC-BLUE",
+    fbaAvailable: 100,
+    fbaTransfer: 0,
+    fbaReserved: 0,
+    awd: 0,
+    fbaInbound: 0,
+  }], {
+    manualRows,
+    costLookup: new Map(),
+    now: new Date("2026-07-07T00:00:00"),
+  });
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].replenishmentEstimate < 0, true);
 });

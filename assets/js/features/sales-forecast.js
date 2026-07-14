@@ -45,6 +45,7 @@ export function createSalesForecastFeature({
   let salesForecastViewMode = ["default", "focus", "hidden"].includes(globalThis.localStorage?.getItem("tanjia:salesForecastViewMode:v1"))
     ? globalThis.localStorage.getItem("tanjia:salesForecastViewMode:v1")
     : "default";
+  let salesForecastLocatorMode = "";
   const salesForecastManualSaveTimers = new Map();
 
   function query(selector) {
@@ -131,6 +132,30 @@ function renderSalesForecastViewToggle() {
   const selected = [...queryAll("[data-sales-forecast-view]")]
     .find((button) => button.dataset.salesForecastView === salesForecastViewMode);
   setSelectedElementState("[data-sales-forecast-view]", selected);
+}
+
+function salesForecastLocatorLabel(mode = salesForecastLocatorMode) {
+  if (mode === "low-stock") return "低库存 SKU";
+  if (mode === "replenishment") return "需补货 SKU";
+  return "";
+}
+
+function salesForecastMatchesLocator(row, mode = salesForecastLocatorMode) {
+  if (mode === "low-stock") return row.fbaAvailableDays > 0 && row.fbaAvailableDays < 14;
+  if (mode === "replenishment") return row.replenishmentSuggestion > 0;
+  return true;
+}
+
+function renderSalesForecastLocatorCards() {
+  queryAll("[data-sales-forecast-locator]").forEach((card) => {
+    const active = card.dataset.salesForecastLocator === salesForecastLocatorMode;
+    card.classList.toggle("active", active);
+    card.setAttribute("aria-pressed", String(active));
+  });
+}
+
+function scrollSalesForecastTableIntoView() {
+  query(".sales-forecast-panel")?.scrollIntoView?.({ behavior: "smooth", block: "start" });
 }
 
 function loadSalesForecastManualDaily() {
@@ -549,22 +574,29 @@ function renderSalesForecast(data = salesForecastData) {
   renderSalesForecastHeader();
   const nextData = data || salesForecastData || { rows: [], summary: {}, meta: {} };
   const rows = prepareSalesForecastRows(nextData.rows || []);
-  const visibleRows = rows.filter((row) => {
+  const baseVisibleRows = rows.filter((row) => {
     const hidden = isSalesForecastHidden(row);
     if (salesForecastViewMode === "hidden") return hidden;
     if (hidden) return false;
     if (salesForecastViewMode === "focus") return isSalesForecastFocused(row);
     return true;
   });
-  const summary = summarizeSalesForecastRows(visibleRows);
+  const visibleRows = salesForecastLocatorMode
+    ? baseVisibleRows.filter((row) => salesForecastMatchesLocator(row))
+    : baseVisibleRows;
+  const summary = summarizeSalesForecastRows(baseVisibleRows);
   salesForecastData = { ...nextData, rows, summary };
   renderSalesForecastStores(salesForecastData.meta?.stores || []);
   renderSalesForecastViewToggle();
+  renderSalesForecastLocatorCards();
   setText("#sales-forecast-total", formatNumber(summary.salesForecast || 0));
   setText("#sales-forecast-inbound", formatNumber(summary.fbaInbound || 0));
   setText("#sales-forecast-low-stock", formatNumber(summary.lowStockCount || 0));
   setText("#sales-forecast-replenishment", formatNumber(summary.replenishmentCount || 0));
-  setText("#sales-forecast-status", `${salesForecastData.meta?.source || "领星 ERP"} · ${salesForecastData.meta?.syncStatus || ""} · ${salesForecastData.meta?.updatedAt || ""}`);
+  const baseStatusText = `${salesForecastData.meta?.source || "领星 ERP"} · ${salesForecastData.meta?.syncStatus || ""} · ${salesForecastData.meta?.updatedAt || ""}`;
+  const locatorLabel = salesForecastLocatorLabel();
+  setText("#sales-forecast-detail-title", locatorLabel ? `销售预估明细 - ${locatorLabel}（已筛选）` : "销售预估明细");
+  setText("#sales-forecast-status", locatorLabel ? `已定位到 ${formatNumber(visibleRows.length)} 个${locatorLabel} · ${baseStatusText}` : baseStatusText);
 
   const table = query("#sales-forecast-table-body");
   if (!table) return;
@@ -582,7 +614,9 @@ function renderSalesForecast(data = salesForecastData) {
       </tr>
     `).join("")
     : `<tr><td colspan="${salesForecastColumns.length}">${
-      salesForecastViewMode === "hidden"
+      salesForecastLocatorMode
+        ? `当前没有${salesForecastLocatorLabel()}。`
+        : salesForecastViewMode === "hidden"
         ? "当前没有隐藏产品。"
         : salesForecastViewMode === "focus"
           ? "当前没有关注产品。"
@@ -746,6 +780,20 @@ function setSalesForecastViewMode(mode) {
   renderSalesForecast(salesForecastData);
 }
 
+function setSalesForecastLocatorMode(mode) {
+  const nextMode = ["low-stock", "replenishment"].includes(mode) ? mode : "";
+  salesForecastLocatorMode = salesForecastLocatorMode === nextMode ? "" : nextMode;
+  renderSalesForecast(salesForecastData);
+  if (salesForecastLocatorMode) scrollSalesForecastTableIntoView();
+}
+
+function handleSalesForecastLocatorKeydown(event) {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const card = closestTarget(event, "[data-sales-forecast-locator]");
+  if (!card) return;
+  event.preventDefault();
+  setSalesForecastLocatorMode(card.dataset.salesForecastLocator);
+}
 
     function setupSalesForecast() {
     renderSalesForecastHeader();
@@ -770,6 +818,10 @@ function setSalesForecastViewMode(mode) {
     bind(root, "#sales-forecast-table-body", "pointerout", handleSalesForecastTooltipClose);
     bind(root, "#sales-forecast-table-body", "focusin", handleSalesForecastTooltipOpen);
     bind(root, "#sales-forecast-table-body", "focusout", handleSalesForecastTooltipClose);
+    bindAll(root, "[data-sales-forecast-locator]", "click", function handleSalesForecastLocatorClick() {
+      setSalesForecastLocatorMode(this.dataset.salesForecastLocator);
+    });
+    bindAll(root, "[data-sales-forecast-locator]", "keydown", handleSalesForecastLocatorKeydown);
     bindAll(root, "[data-sales-forecast-view]", "click", function handleSalesForecastViewClick() {
       setSalesForecastViewMode(this.dataset.salesForecastView);
     });
