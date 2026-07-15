@@ -682,6 +682,10 @@ Batch 3 edited only:
 - assets/css/pages/37-fba-task-form.css
 - test/stylesStructure.test.js, to keep the raw CSS budget gate aligned with semantic-token expansion
 
+Batch 4 edited only:
+- assets/css/pages/45-admin-settings.css
+- assets/css/pages/68-knowledge-library.css
+
 styles.css was regenerated with npm run build:css.
 ```
 
@@ -722,6 +726,16 @@ npm test: pass, 373 passing
 npm run check: pass
 git diff --check: pass
 CSS standards debt reductions versus baseline: 4
+```
+
+Current Batch 4 result:
+
+```text
+node --test test/stylesStructure.test.js: pass, 45 passing
+npm test: pass, 373 passing
+npm run check: pass
+git diff --check: pass
+CSS standards debt reductions versus baseline: 11
 ```
 
 - [ ] **Step 4: Browser verify each batch**
@@ -765,6 +779,16 @@ fba-freight: active view renders, no document/body horizontal overflow, table ke
 fba: active view renders, no document/body horizontal overflow, status tab interaction works, new task modal opens with visible fields
 freight-rates: active view renders, no document/body horizontal overflow, visible controls present
 app console errors/warnings: none observed during Batch 3 desktop checks
+```
+
+Current Batch 4 Web desktop result at 1440x1000:
+
+```text
+admin: active view renders, no document/body horizontal overflow, admin clear button interaction works
+sync: active view renders, no document/body horizontal overflow, visible manual sync control present
+guide/knowledge library: active view renders, no document/body horizontal overflow, search input interaction works
+aftersales-mail: active view renders, no document/body horizontal overflow, visible mail controls present
+app console errors/warnings: none observed during Batch 4 desktop checks
 ```
 
 - [ ] **Step 5: Commit each batch**

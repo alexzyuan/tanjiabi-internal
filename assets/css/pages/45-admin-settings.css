@@ -23,7 +23,7 @@
 
 .admin-account-actions .primary-button,
 .admin-account-actions .secondary-button {
-  height: 38px;
+  height: var(--tj-control-height);
 }
 
 .admin-account-table-wrap {
