@@ -203,6 +203,22 @@ test("buildJiufangShipmentPayload resolves legal sender by store owner prefix re
   assert.deepEqual(tandanbo.Address.AddressLine, ["厦门火炬高新区软件园三期诚毅北大街56号2302单元-3室之1D"]);
 });
 
+test("buildJiufangShipmentPayload resolves legal sender from Lingxing display shop names", () => {
+  const tanjia = buildJiufangShipmentPayload({
+    shipment: { ...shipment, storeName: "探嘉加拿大", sid: 8709 },
+    boxPayloadsByShipmentId,
+    channelCode: "SEA-CA-02",
+  }).payload.ShipmentRequest.ShipFrom;
+  const tandanbo = buildJiufangShipmentPayload({
+    shipment: { ...shipment, storeName: "坦蛋伯澳洲", sid: 11503 },
+    boxPayloadsByShipmentId,
+    channelCode: "SEA-AU-01",
+  }).payload.ShipmentRequest.ShipFrom;
+
+  assert.equal(tanjia.CompanyNameCn, "厦门探嘉网络科技有限公司");
+  assert.equal(tandanbo.CompanyNameCn, "厦门坦蛋伯网络科技有限公司");
+});
+
 test("validateJiufangOrderInput fails fast when Jiufang sender store owner cannot be resolved", () => {
   const errors = validateJiufangOrderInput({
     shipment: { ...shipment, storeName: "unknown-store-US" },

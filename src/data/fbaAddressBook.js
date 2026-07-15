@@ -1,4 +1,5 @@
 import { readEnv } from "../config/index.js";
+import { findLingxingShop } from "./lingxingShopMap.js";
 
 function envText(key, fallback = "") {
   return String(readEnv(key, fallback) || "").trim();
@@ -38,7 +39,8 @@ export const fbaAddressProfiles = {
 };
 
 export function getFbaAddressProfile(shopName = "", { strict = false } = {}) {
-  const value = String(shopName).toLowerCase();
+  const shop = findLingxingShop(shopName);
+  const value = String(shop?.name || shopName).toLowerCase();
   if (value.startsWith("xiamentanjia")) return fbaAddressProfiles.xiamentanjia;
   if (value.startsWith("tandanbo")) return fbaAddressProfiles.tandanbo;
   if (strict) return null;
