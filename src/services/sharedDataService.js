@@ -18,6 +18,7 @@ const PRODUCT_CATALOG_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const LISTING_BATCH_SIZE = 50;
 const PRODUCT_BATCH_SIZE = 80;
 const LISTING_SHARED_CATALOG_DIR = path.join(process.cwd(), "data-cache", "listing-shared-catalog");
+const sharedProductCatalogRefreshes = new Map();
 
 const productSupplierKeys = [
   "supplier_name",
@@ -783,30 +784,51 @@ export async function getSharedProductCatalogMap(adapter = getLingxingAdapter(),
   }
   metrics.increment("cacheHit", 0);
 
-  const apiListingItems = await metrics.measure("listingLookup", () => fetchListingItems(adapter, rows, { strict, metrics }));
-  metrics.increment("apiListingItems", apiListingItems.length);
-  const sharedListingItems = await metrics.measure("sharedCatalogLookup", () => fetchListingSharedCatalogItems(rows, apiListingItems, {
-    listingSharedCatalogRecords,
-    readListingSharedCatalog,
-    strict,
-  }));
-  metrics.increment("sharedListingItems", sharedListingItems.length);
-  const listingItems = [...apiListingItems, ...sharedListingItems];
-  const productRecords = await metrics.measure("productLookup", () => fetchProductRecords(adapter, rows, listingItems, { strict, metrics }));
-  metrics.increment("productRecords", productRecords.length);
-  const map = await metrics.measure("buildCatalog", async () => buildSharedProductCatalogMap({ sourceRows: rows, listingRecords: listingItems, productRecords }));
-  const records = productCatalogMapToRecords(map);
-  metrics.increment("outputRecords", records.length);
-  await metrics.measure("writeCache", () => saveProductCatalogCache(cacheKey, { records }));
-  const performance = metrics.summary();
-  console.info("[shared-product-catalog] performance", performance);
-  return {
-    map,
-    cacheHit: false,
-    updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
-    status: `刷新共享商品目录 ${records.length} 个索引`,
-    performance,
-  };
+  const refreshKey = JSON.stringify({ cacheKey, strict });
+  const inFlight = sharedProductCatalogRefreshes.get(refreshKey);
+  if (inFlight) {
+    metrics.increment("joinedInFlight");
+    const joined = await metrics.measure("joinInFlight", () => inFlight);
+    metrics.increment("outputRecords", joined.map?.size || 0);
+    const performance = metrics.summary();
+    console.info("[shared-product-catalog] performance", performance);
+    return { ...joined, performance };
+  }
+
+  const refresh = (async () => {
+    const apiListingItems = await metrics.measure("listingLookup", () => fetchListingItems(adapter, rows, { strict, metrics }));
+    metrics.increment("apiListingItems", apiListingItems.length);
+    const sharedListingItems = await metrics.measure("sharedCatalogLookup", () => fetchListingSharedCatalogItems(rows, apiListingItems, {
+      listingSharedCatalogRecords,
+      readListingSharedCatalog,
+      strict,
+    }));
+    metrics.increment("sharedListingItems", sharedListingItems.length);
+    const listingItems = [...apiListingItems, ...sharedListingItems];
+    const productRecords = await metrics.measure("productLookup", () => fetchProductRecords(adapter, rows, listingItems, { strict, metrics }));
+    metrics.increment("productRecords", productRecords.length);
+    const map = await metrics.measure("buildCatalog", async () => buildSharedProductCatalogMap({ sourceRows: rows, listingRecords: listingItems, productRecords }));
+    const records = productCatalogMapToRecords(map);
+    metrics.increment("outputRecords", records.length);
+    await metrics.measure("writeCache", () => saveProductCatalogCache(cacheKey, { records }));
+    const performance = metrics.summary();
+    console.info("[shared-product-catalog] performance", performance);
+    return {
+      map,
+      cacheHit: false,
+      updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
+      status: `刷新共享商品目录 ${records.length} 个索引`,
+      performance,
+    };
+  })();
+  sharedProductCatalogRefreshes.set(refreshKey, refresh);
+  try {
+    return await refresh;
+  } finally {
+    if (sharedProductCatalogRefreshes.get(refreshKey) === refresh) {
+      sharedProductCatalogRefreshes.delete(refreshKey);
+    }
+  }
 }
 
 function sameCode(left, right) {

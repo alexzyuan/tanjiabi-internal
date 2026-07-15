@@ -272,6 +272,66 @@ test("共享商品目录缓存命中返回性能元数据且不调用 Lingxing",
   assert.equal(result.performance.counters.lingxingListingRequests || 0, 0);
 });
 
+test("共享商品目录并发相同缓存键时合并刷新请求", async () => {
+  let releaseListing;
+  const listingGate = new Promise((resolve) => {
+    releaseListing = resolve;
+  });
+  let listingCalls = 0;
+  let productCalls = 0;
+  let saveCalls = 0;
+  const rows = [{
+    sid: 8708,
+    storeName: "xiamentanjia-US",
+    country: "美国",
+    msku: "JM-DGC-BLUE",
+    sku: "TJ001",
+  }];
+  const adapter = {
+    async fetchListings() {
+      listingCalls += 1;
+      await listingGate;
+      return {
+        data: {
+          total: 1,
+          list: [{
+            sid: 8708,
+            seller_sku: "JM-DGC-BLUE",
+            local_sku: "TJ001",
+          }],
+        },
+      };
+    },
+    async fetchLocalProductInfos() {
+      productCalls += 1;
+      return {
+        data: [{
+          sku: "TJ001",
+          product_name: "灯光船蓝色",
+        }],
+      };
+    },
+  };
+  const options = {
+    readProductCatalogCache: async () => null,
+    saveProductCatalogCache: async () => {
+      saveCalls += 1;
+    },
+    listingSharedCatalogRecords: [],
+  };
+
+  const first = getSharedProductCatalogMap(adapter, rows, options);
+  const second = getSharedProductCatalogMap(adapter, rows, options);
+  releaseListing();
+  const [firstResult, secondResult] = await Promise.all([first, second]);
+
+  assert.equal(listingCalls, 1);
+  assert.equal(productCalls, 2);
+  assert.equal(saveCalls, 1);
+  assert.equal(firstResult.map.size, secondResult.map.size);
+  assert.equal(secondResult.performance.counters.joinedInFlight, 1);
+});
+
 test("统一店铺缓存命中时不再调用 Lingxing fetchSellers", async () => {
   const cached = {
     sellers: [{ sid: 8708, name: "xiamentanjia-US", status: 1 }],

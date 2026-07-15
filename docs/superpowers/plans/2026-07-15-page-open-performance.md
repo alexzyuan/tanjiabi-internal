@@ -122,10 +122,28 @@ Expected: pass.
 
 Do these only after performance logs confirm repeated heavy work:
 
-1. Add in-flight coalescing to `getSharedProductCatalogMap()` by cache key.
-2. Add default-view warmup jobs for supplier board, inventory provision, and sales forecast.
-3. Add process-level TTL cache for hot JSON cache reads where parsing large files is measurable.
-4. Profile table render paths before changing frontend rendering strategy.
+1. Add default-view warmup jobs for supplier board, inventory provision, and sales forecast.
+2. Add process-level TTL cache for hot JSON cache reads where parsing large files is measurable.
+3. Profile table render paths before changing frontend rendering strategy.
+
+## Implemented: Shared Product Catalog In-Flight Coalescing
+
+**Files:**
+- Modify: `src/services/sharedDataService.js`
+- Modify: `test/sharedDataService.test.js`
+
+**Behavior:**
+- Cache hits still return immediately after the existing cache read.
+- Cache misses now coalesce concurrent refreshes by stable shared product catalog cache key and strict-mode flag.
+- Joined calls return the same catalog result and their own `performance` summary with `joinedInFlight: 1` and `joinInFlightMs`.
+- The in-flight entry is deleted in `finally`, so failed refreshes do not poison later requests.
+
+**Verification:**
+```bash
+node --test test/sharedDataService.test.js
+```
+
+Expected: concurrent identical shared product catalog calls perform one Listing refresh, one product refresh sequence, and one cache write.
 
 ## Verification
 
