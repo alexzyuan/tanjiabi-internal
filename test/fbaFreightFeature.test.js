@@ -322,8 +322,8 @@ test("FBA freight Jiufang confirm automatically prechecks before creating order"
     "/api/fba/jiufang/orders/dry-run",
     "/api/fba/jiufang/orders/create",
   ]);
-  assert.match(elements["#fba-freight-jiufang-summary"].innerHTML, /预检通过/);
-  assert.match(elements["#fba-freight-jiufang-summary"].innerHTML, /下单成功/);
+  assert.match(elements["#fba-freight-jiufang-summary"].innerHTML, /货件号 FBA-US-1 已在九方物流系统下单成功/);
+  assert.match(elements["#fba-freight-jiufang-summary"].innerHTML, /九方单号：JF260715001/);
   assert.match(elements["#fba-freight-jiufang-summary"].innerHTML, /JF260715001/);
   assert.ok(statuses.some((status) => /九方预检中/.test(status)));
 });
@@ -407,4 +407,111 @@ test("FBA freight Jiufang create success stays in modal and shows order number",
   assert.match(elements["#fba-freight-jiufang-summary"].innerHTML, /下单成功/);
   assert.match(elements["#fba-freight-jiufang-summary"].innerHTML, /JF260714888/);
   assert.equal(modalStates.at(-1).open, true);
+});
+
+test("FBA freight rows render persisted Jiufang order number in processing result column", async () => {
+  const { elements, feature } = createFeature({
+    fetchImpl: async (url) => {
+      if (String(url).startsWith("/api/fba/freight/shipments")) {
+        return {
+          ok: true,
+          json: async () => ({
+            ok: true,
+            rows: [{
+              shipmentId: "FBA-PERSISTED-1",
+              country: "美国",
+              shippedQuantity: 12,
+              jiufangOrderNumber: "LCL2607ZZ01",
+            }],
+          }),
+        };
+      }
+      return { ok: true, json: async () => ({ ok: true }) };
+    },
+  });
+
+  await feature.loadFbaFreightShipments();
+
+  assert.match(elements["#fba-freight-table"].innerHTML, /data-fba-freight-order-result="FBA-PERSISTED-1"/);
+  assert.match(elements["#fba-freight-table"].innerHTML, /九方：下单成功 LCL2607ZZ01/);
+});
+
+test("FBA freight Jiufang create success converts modal to close-only success state", async () => {
+  const requests = [];
+  const elements = {
+    "#fba-freight-refresh": { disabled: false },
+    "#fba-freight-start-date": { value: "2026-07-01" },
+    "#fba-freight-end-date": { value: "2026-07-14" },
+    "#fba-freight-sid": { value: "8708" },
+    "#fba-freight-shipment-id": { value: "" },
+    "#fba-freight-status-filter": { value: "" },
+    "#fba-freight-jiufang-channel": { value: "SEA-MS-31", innerHTML: "", hidden: false },
+    "#fba-freight-jiufang-cancel": { hidden: false },
+    "#fba-freight-jiufang-confirm": { disabled: false, textContent: "确认下单" },
+    "#fba-freight-jiufang-summary": { innerHTML: "" },
+    "#fba-freight-jiufang-modal": {},
+    "#fba-freight-table": { innerHTML: "" },
+  };
+  let closestTargetValue = null;
+  const root = {
+    querySelector(selector) {
+      return elements[selector] || null;
+    },
+    querySelectorAll() {
+      return [];
+    },
+  };
+  const bindCalls = [];
+  const modalStates = [];
+  const feature = createFbaFreightFeature({
+    root,
+    bind: (...args) => bindCalls.push(args),
+    bindBackdropClose: () => {},
+    cachedSalesImageUrl: () => "",
+    closestTarget: () => closestTargetValue,
+    downloadBlob: () => {},
+    escapeHtml: (value) => String(value ?? ""),
+    fbaValue: (selector) => elements[selector]?.value || "",
+    fetchImpl: async (url, options = {}) => {
+      requests.push({ url, options });
+      if (String(url).startsWith("/api/fba/freight/shipments")) {
+        return { ok: true, json: async () => ({ rows: [{ shipmentId: "FBA-US-2", country: "美国", shippedQuantity: 12 }] }) };
+      }
+      if (url === "/api/fba/jiufang/orders/dry-run") {
+        return { ok: true, json: async () => ({ ok: true, readyCount: 1, failedCount: 0, results: [{ shipmentId: "FBA-US-2", status: "ready", summary: { boxCount: 1, totalKg: 10 } }] }) };
+      }
+      if (url === "/api/fba/jiufang/orders/create") {
+        return { ok: true, json: async () => ({ ok: true, createdCount: 1, failedCount: 0, results: [{ shipmentId: "FBA-US-2", status: "created", jiufangOrderNumber: "LCL2607UI01" }] }) };
+      }
+      return { ok: true, json: async () => ({}) };
+    },
+    formatDate: () => "2026-07-14",
+    formatNumber: (value) => String(value),
+    getFbaShops: () => [],
+    loadFbaShops: async () => {},
+    normalizeFbaShop: (shop) => shop,
+    renderTableMessage: (table, _cols, message) => {
+      table.innerHTML = message;
+    },
+    setModalOpenState: (modal, open) => modalStates.push({ modal, open }),
+    setText: () => {},
+  });
+
+  await feature.loadFbaFreightShipments();
+  feature.setupFbaFreight();
+  const tableClickHandler = bindCalls.find(([, selector, eventName]) => selector === "#fba-freight-table" && eventName === "click")[3];
+  closestTargetValue = { dataset: { fbaFreightJiufang: "FBA-US-2" } };
+  await tableClickHandler({});
+  await bindCalls.find(([, selector, eventName]) => selector === "#fba-freight-jiufang-confirm" && eventName === "click")[3]();
+
+  assert.match(elements["#fba-freight-jiufang-summary"].innerHTML, /货件号 FBA-US-2 已在九方物流系统下单成功/);
+  assert.match(elements["#fba-freight-jiufang-summary"].innerHTML, /九方单号：LCL2607UI01/);
+  assert.equal(elements["#fba-freight-jiufang-cancel"].hidden, true);
+  assert.equal(elements["#fba-freight-jiufang-confirm"].textContent, "关闭页面");
+  assert.equal(elements["#fba-freight-table"].innerHTML.includes("九方：下单成功 LCL2607UI01"), true);
+
+  await bindCalls.find(([, selector, eventName]) => selector === "#fba-freight-jiufang-confirm" && eventName === "click")[3]();
+
+  assert.equal(requests.filter((request) => request.url === "/api/fba/jiufang/orders/create").length, 1);
+  assert.equal(modalStates.at(-1).open, false);
 });

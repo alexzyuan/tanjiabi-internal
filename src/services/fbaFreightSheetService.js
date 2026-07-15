@@ -10,6 +10,7 @@ import {
   getSharedProductCatalogMap,
 } from "./sharedDataService.js";
 import { getFbaShipmentCandidates } from "./fbaShipmentCandidateService.js";
+import { listJiufangOrdersByShipmentIds } from "./jiufangOrderStore.js";
 import { readZipEntries, writeZipEntries } from "../utils/zipArchive.js";
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -824,6 +825,9 @@ export async function getFbaFreightShipments(filters = {}, {
   sellers = [],
   productCatalogRequired = false,
   forceProductCatalogRefresh = false,
+  jiufangOrderStore = {
+    listByShipmentIds: (shipmentIds) => listJiufangOrdersByShipmentIds(shipmentIds),
+  },
 } = {}) {
   const result = await getFbaShipmentCandidates(filters, {
     adapter,
@@ -831,13 +835,26 @@ export async function getFbaFreightShipments(filters = {}, {
     productCatalogRequired,
     forceProductCatalogRefresh,
   });
+  const shipmentIds = result.rows.map((row) => row.shipmentId).filter(Boolean);
+  const jiufangOrdersByShipmentId = await jiufangOrderStore.listByShipmentIds(shipmentIds);
+  const rows = result.rows.map((row) => {
+    const jiufangOrder = jiufangOrdersByShipmentId.get(row.shipmentId);
+    if (!jiufangOrder) return row;
+    return {
+      ...row,
+      jiufangOrderNumber: jiufangOrder.jiufangOrderNumber,
+      jiufangChannelCode: jiufangOrder.channelCode || "",
+      jiufangCreatedAt: jiufangOrder.createdAt || "",
+    };
+  });
   console.info("[fba-freight] normalized shipments", {
-    shipmentCount: result.rows.length,
-    itemCount: result.rows.reduce((total, shipment) => total + (shipment.items || []).length, 0),
+    shipmentCount: rows.length,
+    itemCount: rows.reduce((total, shipment) => total + (shipment.items || []).length, 0),
+    jiufangOrderCount: rows.filter((row) => row.jiufangOrderNumber).length,
     imageCatalogStatus: result.imageCatalogStatus || "",
     cacheHit: Boolean(result.cache?.hit),
   });
-  return result;
+  return { ...result, rows };
 }
 
 export async function exportFbaFreightShipments(filters = {}, options = {}) {

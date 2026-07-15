@@ -374,3 +374,34 @@ test("getFbaFreightShipments uses shared candidate cache for identical filters",
 
   assert.equal(shipmentCalls, 1);
 });
+
+test("getFbaFreightShipments annotates rows with persisted Jiufang order numbers", async () => {
+  const { clearFbaShipmentCandidateCache } = await import("../src/services/fbaShipmentCandidateService.js");
+  const { getFbaFreightShipments } = await import("../src/services/fbaFreightSheetService.js");
+  clearFbaShipmentCandidateCache();
+  const adapter = {
+    async fetchFbaCargoShipments() {
+      return shipmentPayload;
+    },
+    async fetchListings() {
+      return { data: { list: [] } };
+    },
+    async fetchLocalProductInfos() {
+      return { data: [] };
+    },
+  };
+
+  const result = await getFbaFreightShipments({ startDate: "2026-07-01", endDate: "2026-07-10", sid: "8708" }, {
+    adapter,
+    sellers: [{ sid: 8708, name: "xiamentanjia-US", country: "美国", seller_id: "A1SELLERUS", marketplace_id: "ATVPDKIKX0DER" }],
+    jiufangOrderStore: {
+      async listByShipmentIds(ids) {
+        assert.deepEqual(ids, ["FBA18QJFDCWJ"]);
+        return new Map([["FBA18QJFDCWJ", { jiufangOrderNumber: "LCL2607ZZ01", channelCode: "SEA-OA-03" }]]);
+      },
+    },
+  });
+
+  assert.equal(result.rows[0].jiufangOrderNumber, "LCL2607ZZ01");
+  assert.equal(result.rows[0].jiufangChannelCode, "SEA-OA-03");
+});
