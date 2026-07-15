@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  applySharedProductCatalogToRows,
   buildSharedProductCatalogMap,
+  getSharedProductCatalogMap,
   getSharedSellers,
   listingMskuCatalogKey,
   productCatalogKey,
@@ -79,6 +81,89 @@ test("共享商品目录读取产品管理物流报关清关嵌套字段", () =>
   assert.equal(product.isBattery, "是");
   assert.equal(product.unit, "件");
   assert.equal(product.declaredValue, 2);
+});
+
+test("共享商品目录通过 listing seller_sku 映射到领星内部 SKU", () => {
+  const map = buildSharedProductCatalogMap({
+    sourceRows: [{ sid: 8708, msku: "JMCA-DGC-Spider", sku: "JMCA-DGC-Spider" }],
+    listingRecords: [{
+      sid: 8708,
+      seller_sku: "JMCA-DGC-Spider",
+      local_sku: "TJ033",
+      local_name: "双支蜘蛛船",
+    }],
+    productRecords: [{
+      sku: "TJ033",
+      product_name: "双支蜘蛛船",
+      brand_name: "JOI MEW",
+      material: "塑料",
+      purpose: "kids tool",
+      customs_code: "9503008390",
+      unit: "件",
+      declared_value: "2.00",
+    }],
+  });
+
+  const product = map.get(listingMskuCatalogKey(8708, "JMCA-DGC-Spider"));
+  assert.equal(product.sku, "TJ033");
+  assert.equal(product.productName, "双支蜘蛛船");
+  assert.equal(product.declaredValue, 2);
+
+  const [row] = applySharedProductCatalogToRows([
+    { sid: 8708, msku: "JMCA-DGC-Spider", sku: "JMCA-DGC-Spider" },
+  ], map);
+  assert.equal(row.sku, "JMCA-DGC-Spider");
+  assert.equal(row.internalSku, "TJ033");
+  assert.equal(row.brand, "JOI MEW");
+  assert.equal(row.customsCode, "9503008390");
+});
+
+test("共享商品目录在 ERP Listing API 缺失时用 Listing 共享目录兜底内部 SKU", async () => {
+  let listingApiCalled = false;
+  const productLookupSkus = [];
+  const result = await getSharedProductCatalogMap({
+    async fetchListings() {
+      listingApiCalled = true;
+      return { data: { list: [] } };
+    },
+    async fetchLocalProductInfos(params) {
+      productLookupSkus.push(...(params.skus || []));
+      return {
+        data: [{
+          sku: "TJ033",
+          product_name: "双支蜘蛛船",
+          brand_name: "JOI MEW",
+          material: "塑料",
+          purpose: "kids tool",
+          customs_code: "9503008390",
+          unit: "件",
+          declared_value: "2.00",
+        }],
+      };
+    },
+  }, [{
+    sid: 8708,
+    storeName: "xiamentanjia-CA",
+    country: "加拿大",
+    msku: "JMCA-DGC-Spider",
+    sku: "JMCA-DGC-Spider",
+  }], {
+    forceRefresh: true,
+    listingSharedCatalogRecords: [{
+      MSKU: "JMCA-DGC-Spider",
+      店铺: "xiamentanjia-CA",
+      国家: "加拿大",
+      品名: "双支蜘蛛船",
+      SKU: "TJ033",
+    }],
+  });
+
+  const product = result.map.get(listingMskuCatalogKey(8708, "JMCA-DGC-Spider"));
+  assert.equal(listingApiCalled, true);
+  assert.equal(productLookupSkus.includes("TJ033"), true);
+  assert.equal(product.internalSku, "TJ033");
+  assert.equal(product.productName, "双支蜘蛛船");
+  assert.equal(product.customsCode, "9503008390");
 });
 
 test("统一店铺缓存命中时不再调用 Lingxing fetchSellers", async () => {

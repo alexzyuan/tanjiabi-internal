@@ -199,7 +199,7 @@ export function createFbaFreightFeature({
 
   async function ensureFbaFreightJiufangChannelSelected() {
     const channelCode = selectedFbaFreightJiufangChannel();
-    if (!channelCode) throw new Error("请选择九方渠道后再预检下单。");
+    if (!channelCode) throw new Error("请选择九方渠道后再确认下单。");
     return channelCode;
   }
 
@@ -520,7 +520,7 @@ export function createFbaFreightFeature({
     if (countries.length !== 1) return "<p class=\"modal-tip\">请选择同一个国家的货件后再提交九方。</p>";
     if (!pendingFbaFreightJiufangChannelOptions.length) return `<p class="modal-tip">${escapeHtml(countries[0])} 暂无常用九方渠道配置。</p>`;
     const ids = rows.map((row) => fbaFreightRowId(row)).filter(Boolean);
-    return `<p class="modal-tip">已选择 ${escapeHtml(formatNumber(ids.length))} 个 ${escapeHtml(countries[0])} 货件。请选择渠道后点击预检。</p>`;
+    return `<p class="modal-tip">已选择 ${escapeHtml(formatNumber(ids.length))} 个 ${escapeHtml(countries[0])} 货件。请选择渠道后点击确认下单，系统会先自动预检。</p>`;
   }
 
   function renderFbaFreightJiufangSummary(data = {}) {
@@ -550,6 +550,7 @@ export function createFbaFreightFeature({
     const precheckButton = query("#fba-freight-jiufang-precheck");
     const confirmButton = query("#fba-freight-jiufang-confirm");
     if (precheckButton) {
+      precheckButton.hidden = true;
       precheckButton.disabled = !pendingFbaFreightJiufangShipmentIds.length
         || !selectedFbaFreightJiufangChannel()
         || fbaFreightJiufangSubmitting
@@ -557,9 +558,9 @@ export function createFbaFreightFeature({
     }
     if (confirmButton) {
       confirmButton.disabled = !pendingFbaFreightJiufangShipmentIds.length
+        || !selectedFbaFreightJiufangChannel()
         || fbaFreightJiufangSubmitting
-        || Number(data.readyCount || 0) <= 0
-        || Number(data.failedCount || 0) > 0;
+        || !pendingFbaFreightJiufangChannelOptions.length;
     }
   }
 
@@ -592,6 +593,44 @@ export function createFbaFreightFeature({
     setModalOpenState(query("#fba-freight-jiufang-modal"), true);
   }
 
+  function setFbaFreightJiufangSummaryHtml(html) {
+    const content = query("#fba-freight-jiufang-summary");
+    if (content) content.innerHTML = html;
+  }
+
+  async function requestFbaFreightJiufangDryRun(ids = [], channelCode = "") {
+    const response = await fetchImpl("/api/fba/jiufang/orders/dry-run", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        filters: fbaFreightFiltersObject(),
+        shipmentIds: ids,
+        channelCode,
+      }),
+    });
+    const data = await response.json().catch(() => ({}));
+    const results = Array.isArray(data.results) ? data.results : null;
+    if (!results) throw new Error(data.error || "接口没有返回九方预检结果");
+    return { data, results };
+  }
+
+  async function requestFbaFreightJiufangCreate(ids = [], channelCode = "") {
+    const response = await fetchImpl("/api/fba/jiufang/orders/create", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        filters: fbaFreightFiltersObject(),
+        shipmentIds: ids,
+        channelCode,
+        confirmed: true,
+      }),
+    });
+    const data = await response.json().catch(() => ({}));
+    const results = Array.isArray(data.results) ? data.results : null;
+    if (!results) throw new Error(data.error || "接口没有返回九方下单结果");
+    return { data, results };
+  }
+
   async function dryRunFbaFreightJiufangOrders(shipmentIds = pendingFbaFreightJiufangShipmentIds) {
     const ids = [...shipmentIds].filter(Boolean);
     if (!ids.length) {
@@ -604,26 +643,15 @@ export function createFbaFreightFeature({
     try {
       const channelCode = await ensureFbaFreightJiufangChannelSelected();
       setFbaFreightStatus(`九方下单预检中：${formatNumber(ids.length)} 个货件`);
-      const response = await fetchImpl("/api/fba/jiufang/orders/dry-run", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          filters: fbaFreightFiltersObject(),
-          shipmentIds: ids,
-          channelCode,
-        }),
-      });
-      const data = await response.json().catch(() => ({}));
-      const results = Array.isArray(data.results) ? data.results : null;
-      if (!results) throw new Error(data.error || "接口没有返回九方预检结果");
+      setFbaFreightJiufangSummaryHtml(`<p class="modal-tip">1. 预检中：正在检查地址、装箱明细和报关字段。</p>`);
+      const { data, results } = await requestFbaFreightJiufangDryRun(ids, channelCode);
       results.forEach((result) => setFbaFreightJiufangResultCell(result.shipmentId, renderFbaFreightJiufangResult(result)));
       pendingFbaFreightJiufangShipmentIds = results
         .filter((result) => result.status === "ready")
         .map((result) => result.shipmentId)
         .filter(Boolean);
       pendingFbaFreightJiufangDryRunResult = data;
-      const content = query("#fba-freight-jiufang-summary");
-      if (content) content.innerHTML = renderFbaFreightJiufangSummary(data);
+      setFbaFreightJiufangSummaryHtml(renderFbaFreightJiufangSummary(data));
       updateFbaFreightJiufangActionState(data);
       setModalOpenState(query("#fba-freight-jiufang-modal"), true);
       setFbaFreightStatus(`九方预检完成：可提交 ${formatNumber(data.readyCount || 0)}，失败 ${formatNumber(data.failedCount || 0)}`);
@@ -645,25 +673,38 @@ export function createFbaFreightFeature({
     fbaFreightJiufangSubmitting = true;
     updateFbaFreightSelectionState();
     updateFbaFreightJiufangActionState();
-    setFbaFreightStatus(`正在提交九方：${formatNumber(ids.length)} 个货件`);
-    setFbaFreightJiufangResults(ids, "提交中");
+    setFbaFreightJiufangResults(ids, "预检中");
     try {
-      const response = await fetchImpl("/api/fba/jiufang/orders/create", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          filters: fbaFreightFiltersObject(),
-          shipmentIds: ids,
-          channelCode,
-          confirmed: true,
-        }),
-      });
-      const data = await response.json().catch(() => ({}));
-      const results = Array.isArray(data.results) ? data.results : null;
-      if (!results) throw new Error(data.error || "接口没有返回九方下单结果");
+      setFbaFreightStatus(`九方预检中：${formatNumber(ids.length)} 个货件`);
+      setFbaFreightJiufangSummaryHtml(`<p class="modal-tip">1. 预检中：正在检查地址、装箱明细和报关字段。</p>`);
+      const { data: dryRunData, results: dryRunResults } = await requestFbaFreightJiufangDryRun(ids, channelCode);
+      dryRunResults.forEach((result) => setFbaFreightJiufangResultCell(result.shipmentId, renderFbaFreightJiufangResult(result)));
+      const readyIds = dryRunResults
+        .filter((result) => result.status === "ready")
+        .map((result) => result.shipmentId)
+        .filter(Boolean);
+      pendingFbaFreightJiufangShipmentIds = readyIds;
+      pendingFbaFreightJiufangDryRunResult = dryRunData;
+      if (!readyIds.length || Number(dryRunData.failedCount || 0) > 0) {
+        setFbaFreightJiufangSummaryHtml(renderFbaFreightJiufangSummary(dryRunData));
+        setFbaFreightStatus(`九方预检完成：可提交 ${formatNumber(dryRunData.readyCount || 0)}，失败 ${formatNumber(dryRunData.failedCount || 0)}`);
+        updateFbaFreightJiufangActionState(dryRunData);
+        return;
+      }
+      setFbaFreightJiufangResults(readyIds, "提交中");
+      setFbaFreightStatus(`九方预检通过，正在提交：${formatNumber(readyIds.length)} 个货件`);
+      setFbaFreightJiufangSummaryHtml(`
+        <p class="modal-tip">1. 预检通过：${escapeHtml(formatNumber(readyIds.length))} 个货件可提交。</p>
+        <p class="modal-tip">2. 正在下单：等待九方返回单号。</p>
+        ${renderFbaFreightJiufangSummary(dryRunData)}
+      `);
+      const { data, results } = await requestFbaFreightJiufangCreate(readyIds, channelCode);
       results.forEach((result) => setFbaFreightJiufangResultCell(result.shipmentId, renderFbaFreightJiufangResult(result)));
-      const content = query("#fba-freight-jiufang-summary");
-      if (content) content.innerHTML = renderFbaFreightJiufangSummary(data);
+      setFbaFreightJiufangSummaryHtml(`
+        <p class="modal-tip">1. 预检通过：${escapeHtml(formatNumber(readyIds.length))} 个货件可提交。</p>
+        <p class="modal-tip">2. 下单完成：已收到九方返回结果。</p>
+        ${renderFbaFreightJiufangSummary(data)}
+      `);
       setFbaFreightStatus(`九方提交完成：成功 ${formatNumber(data.createdCount || 0)}，失败 ${formatNumber(data.failedCount || 0)}`);
       if (Number(data.failedCount || 0) === 0 && Number(data.createdCount || 0) > 0) {
         pendingFbaFreightJiufangShipmentIds = [];

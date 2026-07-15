@@ -114,7 +114,7 @@ function lineKey(line = {}) {
 
 function productMatchesLine(product = {}, line = {}) {
   const candidates = [product.msku, product.sku, product.asin].map((value) => firstText(value)).filter(Boolean);
-  const wanted = [line.msku, line.sku, line.asin].map((value) => firstText(value)).filter(Boolean);
+  const wanted = [line.msku, line.sku, line.internalSku, line.asin].map((value) => firstText(value)).filter(Boolean);
   return candidates.some((candidate) => wanted.includes(candidate));
 }
 
@@ -122,7 +122,7 @@ function packageDetailsForBox(box = {}, linesByKey = new Map()) {
   return (box.productList || []).map((product) => {
     const line = [...linesByKey.values()].find((candidate) => productMatchesLine(product, candidate)) || {};
     return {
-      SKU: firstText(product.sku, line.sku, product.msku, line.msku),
+      SKU: firstText(line.internalSku, product.sku, line.sku, product.msku, line.msku),
       ProductName: firstText(product.title, product.productName, line.title, line.productName),
       Quantity: numberValue(product.quantityInBox || product.quantity || product.total || box.total),
     };
@@ -131,7 +131,7 @@ function packageDetailsForBox(box = {}, linesByKey = new Map()) {
 
 function buildInvoices(lines = []) {
   return lines.map((line) => ({
-    SKU: firstText(line.sku, line.msku),
+    SKU: firstText(line.internalSku, line.sku, line.msku),
     ProductName: firstText(line.title, line.productName),
     ChineseName: firstText(line.productName),
     EnglishName: firstText(line.title, line.productName),
@@ -223,7 +223,7 @@ export function validateJiufangOrderInput({
       productName: firstText(item.productName, item.title, item.msku, item.sku),
     }));
   for (const line of declarationLines) {
-    const label = firstText(line.msku, line.sku, line.asin, shipmentId);
+    const label = firstText(line.internalSku, line.msku, line.sku, line.asin, shipmentId);
     for (const [key, name] of requiredLineFields) {
       if (!firstText(line[key])) errors.push(`${label} 缺少${name}`);
     }

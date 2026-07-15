@@ -169,13 +169,14 @@ test("applyProductCatalogToFbaFreightShipments fills product images by sid and m
     },
   });
   const catalogMap = new Map([
-    ["sid:8708:msku:jm-dgc-blue", { sid: 8708, msku: "JM-DGC-BLUE", imageUrl: "https://img.example.com/catalog-blue.jpg", productName: "Catalog Blue" }],
+    ["sid:8708:msku:jm-dgc-blue", { sid: 8708, msku: "JM-DGC-BLUE", internalSku: "TJ001", imageUrl: "https://img.example.com/catalog-blue.jpg", productName: "Catalog Blue" }],
   ]);
 
   const enriched = applyProductCatalogToFbaFreightShipments(rows, catalogMap);
 
   assert.equal(enriched[0].productImageUrl, "https://img.example.com/catalog-blue.jpg");
   assert.equal(enriched[0].items[0].imageUrl, "https://img.example.com/catalog-blue.jpg");
+  assert.equal(enriched[0].items[0].internalSku, "TJ001");
   assert.equal(enriched[0].items[0].productName, "Catalog Blue");
 });
 

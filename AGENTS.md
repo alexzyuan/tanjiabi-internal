@@ -58,6 +58,7 @@ Rules for this path:
 4. Store only redacted request/response payloads. Logs may include shipment ID, Jiufang order number, channel code, endpoint, and request status, but must not include token or password hash.
 5. Duplicate protection is part of the business rule: do not create a second Jiufang order for a shipment with a stored Jiufang order number unless a future workflow explicitly adds a reviewed force-retry path.
 6. Do not call Jiufang real create endpoints during automated tests or exploratory debugging. Use injected adapters/mocks for tests and run a real shipment only after a successful dry-run has been reviewed.
+7. FBA shipment MSKU/SKU values can be Amazon listing SKUs. Before building Jiufang declaration data, resolve `seller_sku` through Lingxing `/erp/listing` first and use Listing `local_sku` as the ERP internal SKU for product-management lookup and Jiufang payload SKU fields. A local `data-cache/listing-shared-catalog/*.xlsx` Listing 共享目录 may be read only as a backup when the API result is missing an internal SKU; it is not a frontend upload workflow.
 
 ## Lingxing Date Ranges
 

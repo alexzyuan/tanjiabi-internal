@@ -190,6 +190,8 @@ export function applyProductCatalogToFbaFreightShipments(shipments = [], catalog
   return shipments.map((shipment) => {
     const itemRows = (shipment.items || []).map((item) => ({
       sid: shipment.sid,
+      storeName: shipment.storeName,
+      country: shipment.country,
       msku: item.msku,
       sku: item.sku,
       productName: item.productName || item.title,
@@ -201,6 +203,7 @@ export function applyProductCatalogToFbaFreightShipments(shipments = [], catalog
       return {
         ...item,
         imageUrl: item.imageUrl || enriched.imageUrl || "",
+        internalSku: item.internalSku || enriched.internalSku || "",
         productName: item.productName || enriched.productName || "",
         title: item.title || enriched.productName || "",
         brand: item.brand || enriched.brand || "",
@@ -357,6 +360,7 @@ function normalizeForwarderLines(shipments = [], boxPayloadsByShipmentId = new M
           item,
           boxes: [],
           sku: item.sku || item.msku,
+          internalSku: item.internalSku || "",
           msku: item.msku,
           asin: item.asin || "",
           productName: item.productName || item.title || item.msku,
@@ -381,11 +385,17 @@ function normalizeForwarderLines(shipments = [], boxPayloadsByShipmentId = new M
     for (const box of boxes) {
       for (const product of box.productList || []) {
         const key = firstText(product.msku, product.sku, product.asin, "unknown");
+        const item = (shipment.items || []).find((candidate) =>
+          candidate.msku === product.msku
+          || candidate.sku === product.sku
+          || candidate.internalSku === product.sku
+        ) || {};
         const existing = grouped.get(key) || {
           shipment,
-          item: (shipment.items || []).find((candidate) => candidate.msku === product.msku || candidate.sku === product.sku) || {},
+          item,
           boxes: [],
           sku: firstText(product.sku, product.msku),
+          internalSku: firstText(item.internalSku),
           msku: firstText(product.msku),
           asin: firstText(product.asin),
           productName: firstText(product.productName, product.title),
@@ -426,6 +436,7 @@ function normalizeForwarderLines(shipments = [], boxPayloadsByShipmentId = new M
       volumeCbm: roundNumber(boxCount * lengthCm * widthCm * heightCm / 1000000, 4),
       boxRange: boxRangeText(line.boxes),
       imageUrl: line.imageUrl || line.item?.imageUrl || line.shipment?.productImageUrl || "",
+      internalSku: line.internalSku || line.item?.internalSku || "",
       productName: line.productName || line.item?.productName || line.item?.title || line.sku,
       title: line.title || line.productName || line.item?.title || line.sku,
       asin: line.asin || line.item?.asin || "",

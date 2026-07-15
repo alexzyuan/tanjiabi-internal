@@ -112,6 +112,57 @@ test("buildJiufangShipmentPayload maps FBA shipment boxes to Jiufang ordinary sh
   assert.equal(summary.totalCbm, 0.024);
 });
 
+test("buildJiufangShipmentPayload uses internal SKU mapped from Lingxing listing", () => {
+  const listingSkuShipment = {
+    ...shipment,
+    items: [{
+      ...shipment.items[0],
+      msku: "JMCA-DGC-Spider",
+      sku: "JMCA-DGC-Spider",
+      internalSku: "TJ033",
+      productName: "双支蜘蛛船",
+      title: "Spider Boat",
+    }],
+  };
+  const listingSkuBoxes = new Map([[
+    "FBA18QJFDCWJ",
+    {
+      data: {
+        shipmentList: [{
+          shipmentId: "STA-123",
+          shipmentPackingList: [{
+            localBoxId: 1,
+            weight: 10,
+            weightUnit: "KG",
+            length: 40,
+            width: 30,
+            height: 20,
+            lengthUnit: "CM",
+            productList: [{
+              msku: "JMCA-DGC-Spider",
+              sku: "JMCA-DGC-Spider",
+              asin: "B0BLUE",
+              productName: "双支蜘蛛船",
+              title: "Spider Boat",
+              quantityInBox: 12,
+            }],
+          }],
+        }],
+      },
+    },
+  ]]);
+
+  const { payload } = buildJiufangShipmentPayload({
+    shipment: listingSkuShipment,
+    boxPayloadsByShipmentId: listingSkuBoxes,
+    channelCode: "SEA-US-07",
+    senderProfile,
+  });
+
+  assert.equal(payload.ShipmentRequest.Packages[0].PackageDetails[0].SKU, "TJ033");
+  assert.equal(payload.ShipmentRequest.Invoices[0].SKU, "TJ033");
+});
+
 test("buildJiufangShipmentPayload accepts Lingxing snake_case destination address fields", () => {
   const { payload } = buildJiufangShipmentPayload({
     shipment: {

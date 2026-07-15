@@ -128,6 +128,8 @@ async function enrichProductCatalog(adapter, shipments, {
   const seedRows = shipments.flatMap((shipment) =>
     (shipment.items || []).map((item) => ({
       sid: shipment.sid,
+      storeName: shipment.storeName,
+      country: shipment.country,
       msku: item.msku,
       sku: item.sku,
       productName: item.productName || item.title,
