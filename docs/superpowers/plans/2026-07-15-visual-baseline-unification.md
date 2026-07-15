@@ -228,7 +228,7 @@ git commit -m "test: add generated css preview path"
 - Modify: `assets/css/legacy/current.css`
 - Create/modify: `docs/visual-baseline/2026-07-15/findings.md`
 
-- [ ] **Step 1: Generate preview CSS**
+- [x] **Step 1: Generate preview CSS**
 
 Run:
 ```bash
@@ -237,7 +237,7 @@ ALLOW_CSS_REBUILD=1 npm run build:css -- --output /tmp/tanjia-generated-preview.
 
 Expected: preview CSS generated without changing `styles.css`.
 
-- [ ] **Step 2: Compare shell states**
+- [x] **Step 2: Compare shell states**
 
 Render the app with `/tmp/tanjia-generated-preview.css` injected over the locked stylesheet.
 
@@ -260,7 +260,7 @@ content left offset
 mobile sidebar overlay behavior
 ```
 
-- [ ] **Step 3: Record each mismatch**
+- [x] **Step 3: Record each mismatch**
 
 Create or update `docs/visual-baseline/2026-07-15/findings.md`:
 ```markdown
@@ -273,9 +273,11 @@ Create or update `docs/visual-baseline/2026-07-15/findings.md`:
 | home-shell-expanded | Example: active icon vertical offset | assets/css/layout/10-shell.css | Move the owning selector into `layout/10-shell.css`, then remove the matching legacy parity selector |
 ```
 
-- [ ] **Step 4: Move only shell ownership into layout**
+- [x] **Step 4: Move only shell ownership into layout**
 
 For each shell mismatch, adjust `assets/css/layout/10-shell.css` first. Use semantic tokens from `assets/css/tokens/*` when a color, spacing, radius, or control size is reusable.
+
+Current result: no shell mismatch was found because `/tmp/tanjia-generated-preview.css` is byte-identical to checked-in `styles.css`; no source CSS change was needed.
 
 Allowed examples:
 ```css
@@ -293,11 +295,13 @@ Disallowed examples:
 }
 ```
 
-- [ ] **Step 5: Shrink parity selectors only after source ownership exists**
+- [x] **Step 5: Shrink parity selectors only after source ownership exists**
 
 When a selector is fully represented in `layout/10-shell.css`, remove the matching temporary selector from `assets/css/legacy/98-shell-topbar-parity.css` or `assets/css/legacy/current.css`.
 
-- [ ] **Step 6: Run CSS checks**
+Current result: no selectors were removed in this pass because no shell mismatch required ownership movement.
+
+- [x] **Step 6: Run CSS checks**
 
 Run:
 ```bash
@@ -307,7 +311,7 @@ npm run check
 
 Expected: both exit 0. The build check may print the existing visual lock skip message until Phase 3.
 
-- [ ] **Step 7: Re-capture preview screenshots**
+- [x] **Step 7: Re-capture preview screenshots**
 
 Capture generated-preview screenshots for the shell states:
 ```text
@@ -318,7 +322,7 @@ docs/visual-baseline/2026-07-15/generated/mobile/home-shell-mobile
 
 Expected: no visible regression against locked baseline for shell/sidebar/topbar.
 
-- [ ] **Step 8: Commit shell parity**
+- [x] **Step 8: Commit shell parity**
 
 Run:
 ```bash
