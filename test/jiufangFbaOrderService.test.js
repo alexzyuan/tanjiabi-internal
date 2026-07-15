@@ -107,7 +107,9 @@ test("buildJiufangShipmentPayload maps FBA shipment boxes to Jiufang ordinary sh
   assert.equal(payload.ShipmentRequest.Departure.Code, "SZ");
   assert.equal(payload.ShipmentRequest.ShipFrom.CompanyNameCn, "厦门探嘉网络科技有限公司");
   assert.equal(payload.ShipmentRequest.ShipFrom.CompanyNameEn, "Xiamen Tanjia wangluo keji youxian gongsi");
+  assert.equal(payload.ShipmentRequest.ShipFrom.AttentionName, "justin");
   assert.equal(payload.ShipmentRequest.ShipFrom.EnterpriseCreditCode, "91350200TEST000001");
+  assert.deepEqual(payload.ShipmentRequest.Importer, { Address: { AddressLine: [null] } });
   assert.equal(payload.ShipmentRequest.ShipmentServiceOptions.ChannelCapacity, "1");
   assert.equal(payload.ShipmentRequest.ShipmentServiceOptions.ExportLicence, false);
   assert.equal(payload.ShipmentRequest.ShipTo.DestinationFulfillmentCenterId, "ONT8");
@@ -204,11 +206,13 @@ test("buildJiufangShipmentPayload resolves legal sender by store owner prefix re
   }).payload.ShipmentRequest.ShipFrom;
 
   assert.equal(tanjia.CompanyNameCn, "厦门探嘉网络科技有限公司");
+  assert.equal(tanjia.AttentionName, "justin");
   assert.equal(tanjia.EnterpriseCreditCode, "91350206MAD64HGE0K");
-  assert.deepEqual(tanjia.Address.AddressLine, ["厦门火炬高新区软件园三期诚毅北大街56号2302单元-3室之2D"]);
+  assert.deepEqual(tanjia.Address.AddressLine, ["Unit 2302-3-2D, No. 56 Chengyi North Street, Phase III Software Park, Xiamen Torch High-tech Zone"]);
   assert.equal(tandanbo.CompanyNameCn, "厦门坦蛋伯网络科技有限公司");
+  assert.equal(tandanbo.AttentionName, "justin");
   assert.equal(tandanbo.EnterpriseCreditCode, "91350206MADNM7UF44");
-  assert.deepEqual(tandanbo.Address.AddressLine, ["厦门火炬高新区软件园三期诚毅北大街56号2302单元-3室之1D"]);
+  assert.deepEqual(tandanbo.Address.AddressLine, ["Unit 2302-3-1D, No. 56 Chengyi North Street, Phase III Software Park, Xiamen Torch High-tech Zone"]);
 });
 
 test("buildJiufangShipmentPayload resolves legal sender from Lingxing display shop names", () => {

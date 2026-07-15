@@ -112,15 +112,23 @@ function senderAddress(senderProfile = {}) {
   return {
     CompanyNameCn: firstText(profile.companyNameCn, profile.companyNameCN, profile.companyChineseName),
     CompanyNameEn: firstText(profile.companyNameEn, profile.companyName, profile.shipperName),
-    AttentionName: firstText(profile.contact, profile.contactName, profile.shipperName, profile.companyName),
+    AttentionName: "justin",
     Phone: firstText(profile.phoneNumber, profile.phone),
     EnterpriseCreditCode: firstText(profile.enterpriseCreditCode, profile.creditCode),
     Address: {
-      AddressLine: [profile.addressLine1, profile.addressLine2].filter(Boolean),
+      AddressLine: [firstText(profile.addressLineEn1, profile.addressLine1), firstText(profile.addressLineEn2, profile.addressLine2)].filter(Boolean),
       City: firstText(profile.city),
       StateProvinceCode: firstText(profile.stateOrProvinceCode, profile.province),
       PostalCode: firstText(profile.postalCode),
       CountryCode: firstText(profile.countryCode, "CN"),
+    },
+  };
+}
+
+function emptyImporter() {
+  return {
+    Address: {
+      AddressLine: [null],
     },
   };
 }
@@ -335,6 +343,7 @@ export function buildJiufangShipmentPayload({
         Service: { Code: channelCode },
         ShipFrom: senderAddress(resolvedSenderProfile),
         ShipTo: amazonAddress(shipment),
+        Importer: emptyImporter(),
         InvoiceLineTotal: {
           CurrencyCode: "USD",
           MonetaryValue: summary.invoiceTotal,
