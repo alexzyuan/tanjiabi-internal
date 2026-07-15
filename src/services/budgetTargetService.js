@@ -316,7 +316,8 @@ async function parseBudgetWorkbook(filePath, fileName, storedName, selectedMonth
     };
   }
 
-  const workbook = XLSX.readFile(filePath, { cellDates: false });
+  const workbookContent = await readFile(filePath);
+  const workbook = XLSX.read(workbookContent, { type: "buffer", cellDates: false });
   const summarySheetName = workbook.SheetNames.find((name) => !["销售预算", "Sheet1", "销量预估", "出货"].includes(name)) || workbook.SheetNames[0];
   const summaryRows = readSheetRows(workbook, XLSX, summarySheetName);
   const budgetRows = findBudgetRows(workbook, XLSX);
