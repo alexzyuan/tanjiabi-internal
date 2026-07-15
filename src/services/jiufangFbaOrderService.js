@@ -311,6 +311,7 @@ export function buildJiufangShipmentPayload({
         ShipmentServiceOptions: {
           PickUp: false,
           Dropoff: true,
+          ExportLicence: false,
           DeliveryTerms: firstText(options.deliveryTerms, "DDP"),
           Fba: true,
           Tax: true,

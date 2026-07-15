@@ -100,6 +100,7 @@ test("buildJiufangShipmentPayload maps FBA shipment boxes to Jiufang ordinary sh
   assert.equal(payload.ShipmentRequest.Service.Code, "SEA-US-07");
   assert.equal(payload.ShipmentRequest.Departure.Code, "SZ");
   assert.equal(payload.ShipmentRequest.ShipmentServiceOptions.ChannelCapacity, "1");
+  assert.equal(payload.ShipmentRequest.ShipmentServiceOptions.ExportLicence, false);
   assert.equal(payload.ShipmentRequest.ShipTo.DestinationFulfillmentCenterId, "ONT8");
   assert.equal(payload.ShipmentRequest.Packages[0].BoxMark.FbaBoxNumber, "FBA18QJFDCWJ-1");
   assert.equal(payload.ShipmentRequest.Packages[0].PackageWeight.Weight, 10);
