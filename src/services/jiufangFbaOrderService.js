@@ -157,6 +157,7 @@ function packageDetailsForBox(box = {}, linesByKey = new Map()) {
 function buildInvoices(lines = []) {
   return lines.map((line) => ({
     SKU: firstText(line.internalSku, line.sku, line.msku),
+    ShipmentID: firstText(line.shipment?.shipmentId, line.shipment?.staShipmentId),
     ProductName: firstText(line.title, line.productName),
     ChineseName: firstText(line.productName),
     EnglishName: firstText(line.title, line.productName),

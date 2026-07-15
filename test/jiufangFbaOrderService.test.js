@@ -111,6 +111,7 @@ test("buildJiufangShipmentPayload maps FBA shipment boxes to Jiufang ordinary sh
   assert.equal(payload.ShipmentRequest.Packages[0].PackageWeight.Weight, 10);
   assert.equal(payload.ShipmentRequest.Packages[0].Dimensions.Length, 40);
   assert.equal(payload.ShipmentRequest.Packages[0].PackageDetails[0].SKU, "TJ-DGC-BLUE");
+  assert.equal(payload.ShipmentRequest.Invoices[0].ShipmentID, "FBA18QJFDCWJ");
   assert.equal(payload.ShipmentRequest.Invoices[0].UnitPrice, 2.5);
   assert.equal(payload.ShipmentRequest.InvoiceLineTotal.MonetaryValue, 30);
   assert.equal(summary.boxCount, 1);
