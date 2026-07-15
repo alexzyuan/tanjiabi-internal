@@ -5,7 +5,9 @@ import {
   buildSharedProductCatalogMap,
   getSharedProductCatalogMap,
   getSharedSellers,
+  listingCountryMskuCatalogKey,
   listingMskuCatalogKey,
+  listingStoreMskuCatalogKey,
   productCatalogKey,
 } from "../src/services/sharedDataService.js";
 
@@ -116,6 +118,65 @@ test("共享商品目录通过 listing seller_sku 映射到领星内部 SKU", ()
   assert.equal(row.internalSku, "TJ033");
   assert.equal(row.brand, "JOI MEW");
   assert.equal(row.customsCode, "9503008390");
+});
+
+test("共享商品目录应用到行时合并所有命中的索引，避免空店铺索引遮挡内部 SKU 商品资料", () => {
+  const map = new Map([
+    [productCatalogKey(listingStoreMskuCatalogKey("探嘉加拿大", "JMCA-DGC-Spider")), {
+      sid: 8709,
+      storeName: "探嘉加拿大",
+      country: "加拿大",
+      msku: "JMCA-DGC-Spider",
+      sku: "TJ033",
+      internalSku: "",
+    }],
+    [productCatalogKey(listingCountryMskuCatalogKey("加拿大", "JMCA-DGC-Spider")), {
+      sid: 8709,
+      country: "加拿大",
+      msku: "JMCA-DGC-Spider",
+      sku: "TJ033",
+      internalSku: "TJ033",
+    }],
+    [productCatalogKey(listingMskuCatalogKey(8709, "JMCA-DGC-Spider")), {
+      sid: 8709,
+      country: "加拿大",
+      msku: "JMCA-DGC-Spider",
+      sku: "TJ033",
+      internalSku: "TJ033",
+    }],
+    [productCatalogKey("TJ033"), {
+      sku: "TJ033",
+      internalSku: "TJ033",
+      product_name: "双支蜘蛛船",
+      productName: "双支蜘蛛船",
+      brand: "JOI MEW",
+      material: "塑料",
+      purpose: "kids tool",
+      customsCode: "9503008390",
+      isBattery: "是",
+      unit: "套",
+      declaredValue: 2,
+    }],
+  ]);
+
+  const [row] = applySharedProductCatalogToRows([
+    {
+      sid: 8709,
+      storeName: "探嘉加拿大",
+      country: "加拿大",
+      msku: "JMCA-DGC-Spider",
+      sku: "TJ033",
+    },
+  ], map);
+
+  assert.equal(row.internalSku, "TJ033");
+  assert.equal(row.brand, "JOI MEW");
+  assert.equal(row.material, "塑料");
+  assert.equal(row.purpose, "kids tool");
+  assert.equal(row.customsCode, "9503008390");
+  assert.equal(row.isBattery, "是");
+  assert.equal(row.unit, "套");
+  assert.equal(row.declaredValue, 2);
 });
 
 test("共享商品目录在 ERP Listing API 缺失时用 Listing 共享目录兜底内部 SKU", async () => {

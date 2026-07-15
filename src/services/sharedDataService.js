@@ -874,11 +874,58 @@ function catalogLookupKeys(row = {}) {
   ]).map(productCatalogKey);
 }
 
+const productCatalogFillFields = [
+  "imageUrl",
+  "productName",
+  "supplier",
+  "purchasePrice",
+  "internalSku",
+  "brand",
+  "material",
+  "purpose",
+  "customsCode",
+  "isBattery",
+  "unit",
+  "declaredValue",
+  "asin",
+];
+
+function catalogFieldHasValue(product = {}, field) {
+  if (field === "purchasePrice" || field === "declaredValue") return Number(product[field] || 0) > 0;
+  return hasReadableValue(product[field]);
+}
+
+function findMergedCatalogProduct(row = {}, catalogMap = new Map()) {
+  const matches = catalogLookupKeys(row)
+    .map((key) => ({ key, product: catalogMap.get(key) }))
+    .filter((item) => item.product);
+  if (!matches.length) return { product: null, matches: [], shadowedFields: [] };
+  const product = matches.reduce((merged, item) => mergeProductCatalogInfo(merged, item.product), {});
+  const first = matches[0].product;
+  const shadowedFields = matches.length > 1
+    ? productCatalogFillFields.filter((field) => !catalogFieldHasValue(first, field) && catalogFieldHasValue(product, field))
+    : [];
+  return { product, matches, shadowedFields };
+}
+
 export function applySharedProductCatalogToRows(rows = [], catalogMap = new Map()) {
   if (!catalogMap.size) return rows;
+  let shadowLogCount = 0;
   return rows.map((row) => {
-    const product = catalogLookupKeys(row).map((key) => catalogMap.get(key)).find(Boolean);
+    const { product, matches, shadowedFields } = findMergedCatalogProduct(row, catalogMap);
     if (!product) return row;
+    if (shadowedFields.length && shadowLogCount < 20) {
+      shadowLogCount += 1;
+      console.info("[shared-product-catalog] 合并多个商品目录索引，避免不完整索引遮挡字段", {
+        sid: row.sid || "",
+        storeName: row.storeName || "",
+        country: row.country || "",
+        msku: row.msku || "",
+        sku: row.sku || "",
+        matchedKeys: matches.map((item) => item.key),
+        filledFields: shadowedFields,
+      });
+    }
     const next = { ...row };
     if (!next.imageUrl && product.imageUrl) next.imageUrl = product.imageUrl;
     if ((!next.productName || sameCode(next.productName, next.sku) || sameCode(next.productName, next.msku)) && product.productName) {
