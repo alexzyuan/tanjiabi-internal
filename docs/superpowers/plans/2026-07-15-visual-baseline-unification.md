@@ -436,7 +436,7 @@ git commit -m "style: align generated page css with locked baseline"
 - Modify: `assets/css/README.md`
 - Modify: `design.md`
 
-- [ ] **Step 1: Confirm parity sign-off**
+- [x] **Step 1: Confirm parity sign-off**
 
 Before rebuilding, confirm these are true:
 ```text
@@ -450,7 +450,7 @@ locked and generated screenshots match for fba-freight
 locked and generated screenshots match for modal-open-state
 ```
 
-- [ ] **Step 2: Rebuild the generated CSS**
+- [x] **Step 2: Rebuild the generated CSS**
 
 Run:
 ```bash
@@ -462,7 +462,9 @@ Expected:
 styles.css rebuilt
 ```
 
-- [ ] **Step 3: Update lock documentation**
+Current result: `styles.css` was already byte-identical to the generated output, so the command reported `styles.css already up to date`.
+
+- [x] **Step 3: Update lock documentation**
 
 In `assets/css/README.md`, replace the temporary visual lock section with:
 ```markdown
@@ -476,7 +478,7 @@ Visual baseline:
 
 In `design.md`, replace the temporary lock wording with the same rule: generated CSS is now the source-compatible visual baseline.
 
-- [ ] **Step 4: Update structure tests**
+- [x] **Step 4: Update structure tests**
 
 In `test/stylesStructure.test.js`, remove or update assertions that expect:
 ```text
@@ -492,7 +494,7 @@ styles.css keeps semantic token roots consolidated
 CSS standards gate is part of the default check command
 ```
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 Run:
 ```bash
@@ -510,7 +512,7 @@ check exits 0
 npm audit reports 0 vulnerabilities
 ```
 
-- [ ] **Step 6: Commit rebuild unlock**
+- [x] **Step 6: Commit rebuild unlock**
 
 Run:
 ```bash

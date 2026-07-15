@@ -4,7 +4,6 @@ import nodeTest from "node:test";
 import { isRepositoryMetadataPath } from "../src/utils/pathFilters.js";
 
 const cssLayerOrder = ["tokens", "base", "layout", "components", "pages", "legacy"];
-const visualLockReason = "temporary visual lock is active; rerun CSS structure gates after generated CSS reaches sidebar/topbar visual parity";
 
 async function listCssFiles(dirUrl) {
   let entries = [];
@@ -94,37 +93,7 @@ function minifyCss(source) {
   return `${output.replace(/;}/g, "}").replace(/}/g, "}\n").trim()}\n`;
 }
 
-async function isLegacyVisualRollback() {
-  const { size } = await stat(new URL("../styles.css", import.meta.url));
-  return size > 300_000;
-}
-
-function cssStructureTest(name, optionsOrFn, maybeFn) {
-  const hasOptions = typeof optionsOrFn !== "function";
-  const options = hasOptions ? optionsOrFn : {};
-  const fn = hasOptions ? maybeFn : optionsOrFn;
-
-  nodeTest(name, options, async (t) => {
-    if (await isLegacyVisualRollback()) {
-      t.skip(visualLockReason);
-      return;
-    }
-    await fn(t);
-  });
-}
-
-nodeTest("CSS structure gates expose the temporary visual lock mode", async (t) => {
-  if (!(await isLegacyVisualRollback())) {
-    t.skip("generated CSS visual parity baseline is active");
-    return;
-  }
-
-  const source = await readFile(new URL("../styles.css", import.meta.url), "utf8");
-  assert.ok(source.length > 300_000, "locked visual styles should be visibly larger than the modern CSS budget");
-  assert.match(source, /linear-gradient|radial-gradient/, "locked visual styles should preserve the approved sidebar/topbar visual baseline");
-});
-
-const test = cssStructureTest;
+const test = nodeTest;
 
 test("styles.css keeps semantic token roots consolidated", async () => {
   const source = await readFile(new URL("../styles.css", import.meta.url), "utf8");

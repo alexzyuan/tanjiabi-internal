@@ -38,9 +38,9 @@ Default ownership:
 - Feature-specific frontend state, event binding, API loading and rendering stay in focused modules under `assets/js/features/*`.
 - Shared frontend utilities stay in `assets/js/*` files such as `ui-utils.js`, `dashboard-loader.js`, `filter-controls.js`, `navigation-utils.js`, `sales-shell.js`, `table-sorter.js`, `date-utils.js`, `file-utils.js`, `image-url.js` and `fba-utils.js`.
 - Shared formatting, parsing, table sorting and filter helpers must stay generic and not include feature-specific business rules.
-- Visual rules stay in `styles.css` using Spectrum or project semantic tokens.
-- The single CSS target is generated `styles.css` from `assets/css/*`. Current generated CSS does not yet reproduce the approved sidebar/topbar visual baseline, so `styles.css` is temporarily locked to prevent accidental regressions while the layered source catches up. Do not rebuild or hand-edit `styles.css` during unrelated work.
-- For new CSS work, edit layered source files under `assets/css/*`. Only after screenshot-verified visual parity may a reviewed CSS baseline migration run `ALLOW_CSS_REBUILD=1 npm run build:css` and remove the visual lock. Do not append one-off rules to `styles.css`.
+- Visual rules stay in generated `styles.css` using Spectrum or project semantic tokens.
+- The single CSS target is generated `styles.css` from `assets/css/*`. Do not hand-edit `styles.css`; edit layered source files under `assets/css/*`, run `npm run build:css`, and verify rendered screenshots for shell, sidebar, topbar, filters, tables, and modal changes.
+- Do not append one-off rules to `styles.css`.
 - API routing and auth stay in `server.js`.
 - External API calls stay in `src/adapters/*`.
 - Business composition stays in `src/services/*`.

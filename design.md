@@ -94,14 +94,14 @@ light dashboard / compact SaaS / calm operations console / white content on gray
 
 CSS 只有一个最终标准：`styles.css` 由 `assets/css/*` 分层源生成。
 
-当前生成式 CSS 还没有完整复现已批准的 sidebar/topbar 视觉，所以 `styles.css` 暂时锁定为线上可接受的视觉基准，防止再次因为自动构建把 sidebar 图标和 topbar 观感改坏。这个锁是迁移保护，不是第二条长期标准。
+当前分层源已经通过截图验收复现 sidebar、topbar 与核心页面基线；`styles.css` 是可由 `assets/css/*` 重新生成的视觉基线，不再作为手工锁定文件维护。
 
-短期规则：
+规则：
 
-- 不要为了通过现代 CSS 门禁而直接重建或覆盖 `styles.css`。
-- 不要在无视觉验收的情况下移除旧基线里的浅蓝渐变、sidebar 图标尺寸或 topbar/sidebar 关系。
-- CSS 结构治理可以继续，但必须以当前视觉截图为回归基准，做到“拆结构，不改观感”。
-- 只有在分层源已经通过截图确认与当前视觉等价时，才允许用 `ALLOW_CSS_REBUILD=1 npm run build:css` 生成新的 `styles.css`。
+- 不要手工编辑 `styles.css`。
+- CSS 改动先编辑 `assets/css/*`，再运行 `npm run build:css`。
+- 不要在无视觉验收的情况下改变 sidebar 图标尺寸、topbar/sidebar 关系、筛选栏密度、表格行高或弹窗结构。
+- CSS 结构治理可以继续，但必须以 `docs/visual-baseline/` 截图为回归基准，做到“拆结构，不改观感”。
 
 长期目标仍然是下方的现代 light dashboard 基线：单一蓝色强调、语义 token、减少渐变和硬编码色。迁移时先保证视觉等价，再逐步收敛这些现代化指标。
 
@@ -808,8 +808,7 @@ DNS 应配置：
 风险：
 
 - 前端为原生 JS 单文件，`app.js` 长期维护成本会上升。
-- 当前 `styles.css` 处于临时视觉锁定状态，生成式分层源尚未完整复现 sidebar/topbar 视觉。
-- `styles.css` 已超过万行，若继续追加一次性覆盖，视觉规则会失控。
+- `styles.css` 已解除临时视觉锁，但如果继续追加一次性覆盖，视觉规则仍会失控。
 - 缓存和上传文件主要在本地文件系统，缺少数据库事务和审计能力。
 - HTTPS 尚未配置。
 - 域名使用中国内地服务器时需要关注 ICP 备案。

@@ -16,9 +16,9 @@ const previewOutput = argValue("--output");
 const outputPath = previewOutput ? path.resolve(rootDir, previewOutput) : outputFile;
 const layerOrder = ["tokens", "base", "layout", "components", "pages", "legacy"];
 const visualLockMessage = [
-  "styles.css is temporarily locked because assets/css/* does not yet reproduce the approved sidebar/topbar visual baseline.",
-  "The single CSS target remains generated styles.css from assets/css/*.",
-  "Set ALLOW_CSS_REBUILD=1 only after visual parity has been reviewed with screenshots.",
+  "Legacy visual rollback detected: styles.css is oversized and still contains gradient-heavy rollback styles.",
+  "The single CSS target is generated styles.css from assets/css/*.",
+  "Set ALLOW_CSS_REBUILD=1 only for a reviewed recovery after screenshot parity has been confirmed.",
 ].join(" ");
 
 async function listCssFiles(dir) {
@@ -149,7 +149,7 @@ async function main() {
 
   if (legacyRollbackActive && process.env.ALLOW_CSS_REBUILD !== "1") {
     if (checkOnly) {
-      console.log(`styles.css visual lock is active; build check skipped. ${visualLockMessage}`);
+      console.log(`styles.css legacy rollback safeguard is active; build check skipped. ${visualLockMessage}`);
       return;
     }
     throw new Error(visualLockMessage);
