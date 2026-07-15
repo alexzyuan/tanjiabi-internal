@@ -1,7 +1,7 @@
 import { getConfig } from "../config/index.js";
 import { getDefaultWeekRange, listDateRange } from "../utils/dateRange.js";
 import { withLingxingExclusiveEndDate } from "../utils/lingxingDateRange.js";
-import { readOrderProfitCache, readStaleOrderProfitCache, saveOrderProfitCache } from "../utils/cacheStore.js";
+import { readOrderProfitCache, saveOrderProfitCache } from "../utils/cacheStore.js";
 import { createLingxingAuth, createLingxingClient, createTokenState, tokenConfigKey } from "./lingxing/index.js";
 
 const CORE_COUNTRY_NAMES = new Set(["美国", "加拿大", "澳洲", "澳大利亚", "德国", "US", "CA", "AU", "DE", "USA", "Canada", "Australia", "Germany", "Deutschland"]);
@@ -1300,12 +1300,15 @@ export class LingxingAdapter {
         });
         await saveOrderProfitCache(cacheKey, { orderProfitRecords });
       } catch (error) {
-        const stale = await readStaleOrderProfitCache(cacheKey);
-        if (!stale?.data?.orderProfitRecords) throw error;
-        orderProfitRecords = stale.data.orderProfitRecords;
-        cacheState = "stale";
-        cacheUpdatedAt = stale.updatedAt || "";
-        sourceWarning = error.message;
+        console.error("[lingxing-adapter] order profit fetch failed", {
+          startDate: range.startDate,
+          endDate: range.endDate,
+          sids: selectedSids,
+          currencyCode,
+          cacheKey,
+          error: error.message,
+        });
+        throw error;
       }
     }
 

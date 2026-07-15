@@ -3,7 +3,6 @@ import { filterCoreSellers, getLingxingAdapter } from "../adapters/lingxingAdapt
 import { supplierTaxRates } from "../data/supplierTaxRates.js";
 import { getSharedProductCatalogMap, getSharedSellers } from "./sharedDataService.js";
 import {
-  readStaleSupplierBoardCache,
   readSupplierBoardCache,
   readSupplierBoardProductMapCache,
   saveSupplierBoardCache,
@@ -852,10 +851,6 @@ export async function getSupplierBoardDashboard(filters = {}) {
   const cacheKey = stableSupplierBoardCacheKey(normalizedFilters);
   const cached = await readSupplierBoardCache(cacheKey, supplierBoardCacheTtl(normalizedFilters));
   if (cached?.data) return withCacheMeta(cached.data, cached);
-  if (!normalizedFilters.forceRefresh) {
-    const stale = await readStaleSupplierBoardCache(cacheKey);
-    if (stale?.data) return withCacheMeta(stale.data, stale, "已快速读取服务器历史缓存");
-  }
 
   try {
 	    const adapter = getLingxingAdapter();
@@ -886,10 +881,11 @@ export async function getSupplierBoardDashboard(filters = {}) {
     await saveSupplierBoardCache(cacheKey, data);
     return data;
   } catch (error) {
-    const stale = await readStaleSupplierBoardCache(cacheKey);
-    if (stale?.data) {
-      return withCacheMeta(stale.data, stale, `实时读取失败，使用服务器缓存：${error.message}；缓存时间`);
-    }
+    console.error("[supplier-board] refresh failed", {
+      filters: normalizedFilters,
+      cacheKey,
+      error: error.message,
+    });
     const data = emptyPayload(normalizedFilters, `供应商看板读取失败：${error.message}`);
     data.error = error.message;
     data.details = error.details || null;

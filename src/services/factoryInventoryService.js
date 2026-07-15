@@ -9,7 +9,6 @@ import {
 } from "./sharedDataService.js";
 import {
   readFactoryInventoryCache,
-  readStaleFactoryInventoryCache,
   saveFactoryInventoryCache,
 } from "../utils/cacheStore.js";
 import { readJsonFileWithRecovery } from "../utils/jsonFile.js";
@@ -1117,19 +1116,13 @@ export async function getFactoryInventoryDashboard(params = {}) {
     try {
       data = await buildAndCacheDashboardOnce(key, adapter, { startDate, endDate });
     } catch (error) {
-      const stale = await readStaleFactoryInventoryCache(key);
-      if (stale?.data) {
-        data = {
-          ...stale.data,
-          meta: {
-            ...(stale.data.meta || {}),
-            syncStatus: `实时读取失败，显示缓存：${error.message}`,
-            stale: true,
-          },
-        };
-      } else {
-        throw error;
-      }
+      console.error("[factory-inventory] refresh failed", {
+        startDate,
+        endDate,
+        cacheKey: key,
+        error: error.message,
+      });
+      throw error;
     }
   }
 
