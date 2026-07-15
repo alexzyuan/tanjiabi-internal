@@ -1462,11 +1462,13 @@ export async function getSalesForecastDashboard(filters = {}) {
     const refreshed = await runSalesForecastDashboardRefresh();
     return buildSalesForecastDashboardResponse(refreshed, filters, manualDaily, hiddenRows, { cacheHit: false });
   } catch (error) {
-    if (cached) {
-      const hydrated = await ensureCachedPreviousYearSales(cached);
-      return buildSalesForecastDashboardResponse(hydrated, filters, manualDaily, hiddenRows, { cacheHit: true, stale: true });
-    }
-    throw error;
+    console.error("[sales-forecast] refresh failed", {
+      force: Boolean(filters.force),
+      cacheUpdatedAt: cached?.updatedAt || "",
+      cacheAgeMs: cached?.cachedAt ? Date.now() - Number(cached.cachedAt) : null,
+      error: error.message,
+    });
+    throw new Error(`销售预估刷新失败，未使用过期缓存：${error.message}`);
   }
 }
 

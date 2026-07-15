@@ -2081,5 +2081,6 @@ export async function exportInventoryProvisionDetailXlsx(filters = {}) {
 
 export const inventoryProvisionTestUtils = {
   costModes,
+  normalizeLingxingInventoryRows,
   toProvisionRow,
 };
