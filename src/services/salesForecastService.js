@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readFile, readdir, rename, unlink, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readdir, unlink } from "node:fs/promises";
 import path from "node:path";
 import { filterCoreSellers, getLingxingAdapter } from "../adapters/lingxingAdapter.js";
 import { getInventoryProvisionDashboard } from "./inventoryProvisionService.js";
@@ -6,6 +6,7 @@ import { getSalesStatMonthlyQuantityRows } from "./supplierBoardService.js";
 import { getSharedSellers } from "./sharedDataService.js";
 import { getSyncState } from "./syncService.js";
 import { listFilterValues, matchesAnyFilter } from "../utils/filterUtils.js";
+import { readJson, writeJsonAtomic } from "../utils/jsonStore.js";
 
 const COUNTRY_OPTIONS = ["美国", "加拿大", "澳洲"];
 const MONTH_DAYS_2026 = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
@@ -62,20 +63,11 @@ function nowText() {
 }
 
 async function readJsonFile(file, fallback) {
-  try {
-    const content = await readFile(file, "utf8");
-    return JSON.parse(content);
-  } catch {
-    return fallback;
-  }
+  return readJson(file, fallback);
 }
 
 async function writeJsonFile(file, payload) {
-  await mkdir(path.dirname(file), { recursive: true });
-  const tempFile = `${file}.${process.pid}.${Date.now()}.tmp`;
-  await writeFile(tempFile, JSON.stringify(payload, null, 2), "utf8");
-  await rename(tempFile, file);
-  return payload;
+  return writeJsonAtomic(file, payload);
 }
 
 function normalizeManualDailyValues(values) {

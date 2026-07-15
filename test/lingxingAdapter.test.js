@@ -199,6 +199,25 @@ test("LingxingAdapter applies exclusive end_date to FBA shipment list at the API
   assert.equal(calls[0].params.end_date, "2026-07-15");
 });
 
+test("LingxingAdapter sends FBA inventory history with month-form snake date fields", async () => {
+  const adapter = new LingxingAdapter(lingxingTestConfig);
+  const calls = [];
+  adapter.performSignedRequest = async (endpoint, options) => {
+    calls.push({ endpoint, params: options.params });
+    return { code: 0, data: { row_data: [] } };
+  };
+
+  await adapter.fetchFbaInventoryHistory({
+    start_date: "2026-05",
+    end_date: "2026-05",
+    seller_id: ["A3U4NGIBQX1BFQ"],
+  });
+
+  assert.equal(calls[0].endpoint, "/cost/center/openApi/fba/detail/query");
+  assert.equal(calls[0].params.start_date, "2026-05");
+  assert.equal(calls[0].params.end_date, "2026-05");
+});
+
 test("LingxingAdapter applies exclusive created_end_time for payable pools", async () => {
   const adapter = new LingxingAdapter(lingxingTestConfig);
   const calls = [];
@@ -216,4 +235,48 @@ test("LingxingAdapter applies exclusive created_end_time for payable pools", asy
 
   assert.equal(calls[0].params.end_date, "2026-07-15");
   assert.equal(calls[0].params.created_end_time, "2026-07-15");
+});
+
+test("LingxingAdapter sends monthly inventory ledger summary with month-form camel date fields", async () => {
+  const adapter = new LingxingAdapter(lingxingTestConfig);
+  const calls = [];
+  adapter.performSignedRequest = async (endpoint, options) => {
+    calls.push({ endpoint, params: options.params });
+    return { code: 1, data: { records: [] } };
+  };
+
+  await adapter.fetchMonthlyInventoryLedgerSummary({
+    sellerIds: ["A3U4NGIBQX1BFQ"],
+    startDate: "2026-05",
+    endDate: "2026-05",
+  });
+
+  assert.equal(calls[0].endpoint, "/cost/center/ods/summary/query");
+  assert.equal(calls[0].params.queryType, 1);
+  assert.equal(calls[0].params.startDate, "2026-05");
+  assert.equal(calls[0].params.endDate, "2026-05");
+  assert.equal(calls[0].params.start_date, undefined);
+  assert.equal(calls[0].params.end_date, undefined);
+});
+
+test("LingxingAdapter sends daily inventory ledger summary with camel exclusive end date", async () => {
+  const adapter = new LingxingAdapter(lingxingTestConfig);
+  const calls = [];
+  adapter.performSignedRequest = async (endpoint, options) => {
+    calls.push({ endpoint, params: options.params });
+    return { code: 1, data: { records: [] } };
+  };
+
+  await adapter.fetchInventoryLedgerSummary({
+    sellerIds: ["A3U4NGIBQX1BFQ"],
+    startDate: "2026-05-01",
+    endDate: "2026-05-31",
+  });
+
+  assert.equal(calls[0].endpoint, "/cost/center/ods/summary/query");
+  assert.equal(calls[0].params.queryType, 2);
+  assert.equal(calls[0].params.startDate, "2026-05-01");
+  assert.equal(calls[0].params.endDate, "2026-06-01");
+  assert.equal(calls[0].params.start_date, undefined);
+  assert.equal(calls[0].params.end_date, undefined);
 });

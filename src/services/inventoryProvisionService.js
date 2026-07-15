@@ -22,7 +22,7 @@ const ageBuckets = [
   { key: "271_plus", label: "271天及以上", min: 271, max: Infinity, rate: 1, color: "#ef6f73" },
 ];
 
-const historicalOwnerSyncVersion = 3;
+const historicalOwnerSyncVersion = 4;
 const provisionMovementBaselineMonth = "2026-03";
 const provisionMovementStartMonth = "2026-04";
 const emptyListingOwnerFilterValue = "__EMPTY_LISTING_OWNER__";
@@ -673,6 +673,70 @@ function groupProvisionRows(rows) {
   return groups;
 }
 
+function groupRowsByValue(rows, valueGetter) {
+  const groups = new Map();
+  rows.forEach((row) => {
+    const key = valueGetter(row);
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        rows: [],
+        quantity: 0,
+        provisionAmount: 0,
+      });
+    }
+    const group = groups.get(key);
+    group.rows.push(row);
+    group.quantity = round(group.quantity + Number(row.quantity || 0));
+    group.provisionAmount = round(group.provisionAmount + Number(row.provisionAmount || 0));
+  });
+  return groups;
+}
+
+function hasCompleteCohortMonths(rows) {
+  return rows.every((row) => String(row.cohortMonth || "").trim());
+}
+
+function canUseCohortProvisionMovements(currentRows, previousRows) {
+  const rows = currentRows.concat(previousRows);
+  return rows.length > 0 && hasCompleteCohortMonths(rows);
+}
+
+function addBucketMovementRow(bucketMovementRows, movement) {
+  if (movement.monthlyProvisionAmount > 0) {
+    bucketMovementRows.push({
+      monthlyProvisionAmount: movement.monthlyProvisionAmount,
+      monthlyProvisionBucketKey: movement.monthlyProvisionBucketKey || "",
+    });
+  }
+  if (movement.reversalAmount > 0) {
+    bucketMovementRows.push({
+      reversalAmount: movement.reversalAmount,
+      reversalBucketKey: movement.reversalBucketKey || "",
+    });
+  }
+}
+
+function distributeMovementToRows(rows, amount, field, bucketField, bucketKey) {
+  if (!rows.length || amount <= 0) return;
+  const positiveRows = rows.filter((row) => Number(row.provisionAmount || 0) > 0);
+  const targetRows = positiveRows.length ? positiveRows : rows;
+  const totalWeight = sumBy(targetRows, positiveRows.length ? "provisionAmount" : "quantity");
+  let remaining = amount;
+  targetRows.forEach((row, index) => {
+    const weight = positiveRows.length ? Number(row.provisionAmount || 0) : Number(row.quantity || 0);
+    const movementAmount = index === targetRows.length - 1
+      ? remaining
+      : totalWeight
+        ? round(amount * weight / totalWeight)
+        : 0;
+    if (movementAmount <= 0) return;
+    remaining = round(remaining - movementAmount);
+    row[field] = round(Number(row[field] || 0) + movementAmount);
+    row[bucketField] = row[bucketField] || bucketKey || "";
+  });
+}
+
 function addReversalToBucketRows(targetRows, previousRows, reversalAmount) {
   const positiveRows = previousRows.filter((row) => row.provisionAmount > 0);
   const previousProvisionAmount = sumBy(positiveRows, "provisionAmount");
@@ -737,7 +801,106 @@ function buildReversalOnlyRow(previousRows, reversalAmount) {
   };
 }
 
-function applyProvisionMovements(currentRows, previousRows) {
+function applyAggregateProvisionMovementForGroup({
+  currentGroup,
+  previousGroup,
+  bucketMovementRows,
+  reversalOnlyRows,
+}) {
+  let monthlyProvisionAmount = 0;
+  let reversalAmount = 0;
+  const currentProvisionAmount = currentGroup?.provisionAmount || 0;
+  const previousProvisionAmount = previousGroup?.provisionAmount || 0;
+
+  const groupMonthlyProvisionAmount = round(currentProvisionAmount - previousProvisionAmount);
+  if (groupMonthlyProvisionAmount > 0 && currentGroup?.rows?.length) {
+    monthlyProvisionAmount = groupMonthlyProvisionAmount;
+    bucketMovementRows.push(...addMonthlyProvisionToRows(currentGroup.rows, groupMonthlyProvisionAmount));
+  }
+
+  const groupReversalAmount = round(previousProvisionAmount - currentProvisionAmount);
+  if (groupReversalAmount > 0 && previousGroup?.rows?.length) {
+    reversalAmount = groupReversalAmount;
+    addReversalToBucketRows(bucketMovementRows, previousGroup.rows, groupReversalAmount);
+
+    if (currentGroup?.rows?.length) {
+      const [target] = currentGroup.rows
+        .slice()
+        .sort((left, right) => Number(right.provisionAmount || 0) - Number(left.provisionAmount || 0));
+      target.reversalAmount = round(Number(target.reversalAmount || 0) + groupReversalAmount);
+      target.reversalBucketKey = target.reversalBucketKey || previousGroup.rows.find((row) => row.provisionAmount > 0)?.bucketKey || "";
+    } else {
+      const releasedRow = buildReversalOnlyRow(previousGroup.rows, groupReversalAmount);
+      if (releasedRow) reversalOnlyRows.push(releasedRow);
+    }
+  }
+
+  return { monthlyProvisionAmount, reversalAmount };
+}
+
+function applyCohortProvisionMovementForGroup({
+  currentGroup,
+  previousGroup,
+  bucketMovementRows,
+  reversalOnlyRows,
+}) {
+  const currentCohorts = groupRowsByValue(currentGroup?.rows || [], (row) => String(row.cohortMonth || "").trim());
+  const previousCohorts = groupRowsByValue(previousGroup?.rows || [], (row) => String(row.cohortMonth || "").trim());
+  const cohortKeys = new Set([...currentCohorts.keys(), ...previousCohorts.keys()]);
+  let monthlyProvisionAmount = 0;
+  let reversalAmount = 0;
+
+  cohortKeys.forEach((cohortKey) => {
+    const currentCohort = currentCohorts.get(cohortKey);
+    const previousCohort = previousCohorts.get(cohortKey);
+    const currentQuantity = currentCohort?.quantity || 0;
+    const previousQuantity = previousCohort?.quantity || 0;
+    const currentProvisionAmount = currentCohort?.provisionAmount || 0;
+    const previousProvisionAmount = previousCohort?.provisionAmount || 0;
+    const currentProvisionPerUnit = currentQuantity ? currentProvisionAmount / currentQuantity : 0;
+    const previousProvisionPerUnit = previousQuantity ? previousProvisionAmount / previousQuantity : 0;
+    const matchedQuantity = Math.min(currentQuantity, previousQuantity);
+    const consumedQuantity = Math.max(0, previousQuantity - currentQuantity);
+    const newQuantity = Math.max(0, currentQuantity - previousQuantity);
+    const retainedIncrease = round(matchedQuantity * Math.max(0, currentProvisionPerUnit - previousProvisionPerUnit));
+    const retainedDecrease = round(matchedQuantity * Math.max(0, previousProvisionPerUnit - currentProvisionPerUnit));
+    const newProvision = round(newQuantity * currentProvisionPerUnit);
+    const consumedReversal = round(consumedQuantity * previousProvisionPerUnit);
+    const cohortMonthlyProvisionAmount = round(retainedIncrease + newProvision);
+    const cohortReversalAmount = round(retainedDecrease + consumedReversal);
+    const monthlyBucketKey = currentCohort?.rows?.find((row) => row.provisionAmount > 0)?.bucketKey || "";
+    const reversalBucketKey = previousCohort?.rows?.find((row) => row.provisionAmount > 0)?.bucketKey || "";
+
+    if (cohortMonthlyProvisionAmount > 0 && currentCohort?.rows?.length) {
+      monthlyProvisionAmount = round(monthlyProvisionAmount + cohortMonthlyProvisionAmount);
+      distributeMovementToRows(currentCohort.rows, cohortMonthlyProvisionAmount, "monthlyProvisionAmount", "monthlyProvisionBucketKey", monthlyBucketKey);
+      addBucketMovementRow(bucketMovementRows, {
+        monthlyProvisionAmount: cohortMonthlyProvisionAmount,
+        monthlyProvisionBucketKey: monthlyBucketKey,
+      });
+    }
+
+    if (cohortReversalAmount <= 0) return;
+
+    reversalAmount = round(reversalAmount + cohortReversalAmount);
+    addBucketMovementRow(bucketMovementRows, {
+      reversalAmount: cohortReversalAmount,
+      reversalBucketKey,
+    });
+
+    if (currentCohort?.rows?.length) {
+      distributeMovementToRows(currentCohort.rows, cohortReversalAmount, "reversalAmount", "reversalBucketKey", reversalBucketKey);
+      return;
+    }
+
+    const releasedRow = buildReversalOnlyRow(previousCohort?.rows || [], cohortReversalAmount);
+    if (releasedRow) reversalOnlyRows.push(releasedRow);
+  });
+
+  return { monthlyProvisionAmount, reversalAmount };
+}
+
+export function applyProvisionMovements(currentRows, previousRows) {
   const rows = currentRows.map((row) => ({
     ...row,
     monthlyProvisionAmount: 0,
@@ -753,38 +916,25 @@ function applyProvisionMovements(currentRows, previousRows) {
   let monthlyProvisionAmount = 0;
   let reversalAmount = 0;
 
-  currentGroups.forEach((currentGroup, key) => {
-    if (!currentGroup.provisionAmount) return;
-    const previousGroup = previousGroups.get(key);
-    const previousProvisionAmount = previousGroup?.provisionAmount || 0;
-    const groupMonthlyProvisionAmount = round(currentGroup.provisionAmount - previousProvisionAmount);
-    if (groupMonthlyProvisionAmount <= 0) return;
-
-    monthlyProvisionAmount = round(monthlyProvisionAmount + groupMonthlyProvisionAmount);
-    bucketMovementRows.push(...addMonthlyProvisionToRows(currentGroup.rows, groupMonthlyProvisionAmount));
-  });
-
-  previousGroups.forEach((previousGroup, key) => {
-    if (!previousGroup.provisionAmount) return;
+  const groupKeys = new Set([...currentGroups.keys(), ...previousGroups.keys()]);
+  groupKeys.forEach((key) => {
     const currentGroup = currentGroups.get(key);
-    const currentProvisionAmount = currentGroup?.provisionAmount || 0;
-    const groupReversalAmount = round(previousGroup.provisionAmount - currentProvisionAmount);
-    if (groupReversalAmount <= 0) return;
-
-    reversalAmount = round(reversalAmount + groupReversalAmount);
-    addReversalToBucketRows(bucketMovementRows, previousGroup.rows, groupReversalAmount);
-
-    if (currentGroup?.rows?.length) {
-      const [target] = currentGroup.rows
-        .slice()
-        .sort((left, right) => Number(right.provisionAmount || 0) - Number(left.provisionAmount || 0));
-      target.reversalAmount = round(Number(target.reversalAmount || 0) + groupReversalAmount);
-      target.reversalBucketKey = target.reversalBucketKey || previousGroup.rows.find((row) => row.provisionAmount > 0)?.bucketKey || "";
-      return;
-    }
-
-    const releasedRow = buildReversalOnlyRow(previousGroup.rows, groupReversalAmount);
-    if (releasedRow) reversalOnlyRows.push(releasedRow);
+    const previousGroup = previousGroups.get(key);
+    const movement = canUseCohortProvisionMovements(currentGroup?.rows || [], previousGroup?.rows || [])
+      ? applyCohortProvisionMovementForGroup({
+        currentGroup,
+        previousGroup,
+        bucketMovementRows,
+        reversalOnlyRows,
+      })
+      : applyAggregateProvisionMovementForGroup({
+        currentGroup,
+        previousGroup,
+        bucketMovementRows,
+        reversalOnlyRows,
+      });
+    monthlyProvisionAmount = round(monthlyProvisionAmount + movement.monthlyProvisionAmount);
+    reversalAmount = round(reversalAmount + movement.reversalAmount);
   });
 
   rows.forEach((row) => {
@@ -1306,6 +1456,7 @@ async function loadHistoricalInventoryRowsFromLingxing(selectedMonth) {
         msku: row.msku || "",
       }),
       ageDays: ageDaysForHistoricalMonth(selectedMonth, cohort.month),
+      cohortMonth: cohort.month,
       quantity: cohort.quantity,
       purchaseCost,
       firstLegCost,
@@ -1927,3 +2078,8 @@ export async function exportInventoryProvisionDetailXlsx(filters = {}) {
     rowCount: detailRows.length,
   };
 }
+
+export const inventoryProvisionTestUtils = {
+  costModes,
+  toProvisionRow,
+};

@@ -565,7 +565,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 2100,
-        ...lingxingDateRangeParams(params),
+        ...params,
       },
     });
   }
@@ -609,7 +609,7 @@ export class LingxingAdapter {
         disposition: "01",
         offset: 0,
         length: 1000,
-        ...lingxingDateRangeParams(params),
+        ...params,
       },
     });
   }
