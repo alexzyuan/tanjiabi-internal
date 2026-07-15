@@ -6,7 +6,7 @@
   margin-top: 12px;
   padding: 12px 14px;
   border: 1px solid var(--tj-border-subtle);
-  border-radius: 8px;
+  border-radius: var(--tj-panel-radius);
   background: var(--tj-content-bg);
 }
 
@@ -19,10 +19,10 @@
 .filter-toolbar input,
 .filter-toolbar select {
   width: 100%;
-  height: 38px;
+  height: var(--tj-control-height);
   border: 1px solid var(--tj-border-control);
-  border-radius: 8px;
-  padding: 0 10px;
+  border-radius: var(--tj-control-radius);
+  padding: 0 var(--tj-control-padding-x);
   color: var(--tj-text-body);
   background: var(--tj-content-bg);
 }

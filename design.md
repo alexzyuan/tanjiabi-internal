@@ -102,6 +102,7 @@ CSS 只有一个最终标准：`styles.css` 由 `assets/css/*` 分层源生成�
 - CSS 改动先编辑 `assets/css/*`，再运行 `npm run build:css`。
 - 不要在无视觉验收的情况下改变 sidebar 图标尺寸、topbar/sidebar 关系、筛选栏密度、表格行高或弹窗结构。
 - CSS 结构治理可以继续，但必须以 `docs/visual-baseline/` 截图为回归基准，做到“拆结构，不改观感”。
+- 共享控件、表格、面板和弹窗使用 `--tj-control-height`、`--tj-control-height-compact`、`--tj-control-radius`、`--tj-panel-radius`、`--tj-modal-radius`、`--tj-table-row-hover-bg` 和 `--tj-focus-ring` 作为视觉基线；页面级 CSS 不应重新定义这些基础尺寸。
 
 长期目标仍然是下方的现代 light dashboard 基线：单一蓝色强调、语义 token、减少渐变和硬编码色。迁移时先保证视觉等价，再逐步收敛这些现代化指标。
 

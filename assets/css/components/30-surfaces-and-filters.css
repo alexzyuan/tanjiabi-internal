@@ -7,7 +7,7 @@
   padding: 12px;
   border: 1px solid var(--tj-border-subtle);
   box-shadow: var(--tj-shadow-soft);
-  border-radius: 8px;
+  border-radius: var(--tj-panel-radius);
   margin-top: 14px;
 }
 
@@ -25,12 +25,12 @@
 .filters select {
   width: 100%;
   min-width: 0;
-  height: 38px;
+  height: var(--tj-control-height);
   border: 1px solid var(--tj-border-control);
   color: var(--tj-text-body);
   background: var(--tj-content-bg);
-  padding: 0 10px;
-  border-radius: 8px;
+  padding: 0 var(--tj-control-padding-x);
+  border-radius: var(--tj-control-radius);
   transition: border-color 0.16s ease, box-shadow 0.16s ease;
 }
 
@@ -43,7 +43,7 @@
 .filter-toolbar select:focus {
   outline: 0;
   border-color: var(--tj-action-blue);
-  box-shadow: 0 0 0 3px var(--tj-focus-ring-soft);
+  box-shadow: var(--tj-focus-ring);
 }
 
 .form-span-2 {
@@ -53,7 +53,7 @@
 .panel {
   background: var(--tj-content-bg);
   border: 1px solid var(--tj-border-subtle);
-  border-radius: 8px;
+  border-radius: var(--tj-panel-radius);
   box-shadow: var(--tj-shadow-soft);
   padding: 18px;
   min-width: 0;
@@ -97,7 +97,7 @@
 .table-scroll {
   overflow: auto;
   border: 1px solid var(--tj-border-subtle);
-  border-radius: 8px;
+  border-radius: var(--tj-panel-radius);
 }
 
 .table-scroll table {
@@ -124,7 +124,7 @@
   display: grid;
   place-items: center;
   border: 1px dashed var(--tj-border-subtle);
-  border-radius: 8px;
+  border-radius: var(--tj-panel-radius);
   color: var(--tj-text-muted);
   background: var(--tj-content-bg);
 }

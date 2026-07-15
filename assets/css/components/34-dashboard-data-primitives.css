@@ -36,7 +36,7 @@ svg {
   overflow: auto;
   background: var(--tj-content-bg);
   border: 1px solid var(--tj-border-subtle);
-  border-radius: var(--spectrum-control-radius);
+  border-radius: var(--tj-panel-radius);
   box-shadow: var(--tj-shadow-soft);
 }
 
@@ -74,7 +74,7 @@ svg {
   padding: 12px;
   background: var(--tj-surface-muted);
   border: 1px solid var(--tj-border-subtle);
-  border-radius: var(--spectrum-control-radius);
+  border-radius: var(--tj-panel-radius);
 }
 
 .anomaly-list div {
@@ -122,6 +122,11 @@ svg {
 .sort-button[data-direction="desc"]::after {
   content: "↓";
   opacity: 1;
+}
+
+.sort-button:focus-visible {
+  outline: 0;
+  box-shadow: var(--tj-focus-ring);
 }
 
 .image-placeholder {

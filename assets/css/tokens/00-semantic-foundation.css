@@ -73,6 +73,7 @@
   --tj-border-card: rgba(204, 222, 242, 0.88);
   --tj-border-accent-muted: #7e9cc2;
   --tj-focus-ring-soft: rgba(29, 111, 242, 0.1);
+  --tj-focus-ring: 0 0 0 3px var(--tj-focus-ring-soft);
   --tj-overlay-backdrop: rgba(15, 23, 42, 0.38);
   --tj-shadow-soft: 0 6px 18px rgba(51, 108, 255, 0.08);
   --tj-shadow-floating: 0 26px 60px rgba(22, 35, 58, 0.16);
@@ -84,6 +85,13 @@
   --tj-warning-emphasis: #ff8a00;
   --tj-danger: #ef4444;
   --tj-danger-text-strong: #c8442d;
+  --tj-control-height: 38px;
+  --tj-control-height-compact: 34px;
+  --tj-control-radius: 8px;
+  --tj-control-padding-x: 10px;
+  --tj-panel-radius: 8px;
+  --tj-modal-radius: var(--spectrum-card-radius);
+  --tj-table-row-hover-bg: var(--tj-action-blue-soft);
   --tj-topbar-fixed-height: 76px;
   --tj-brand-lockup-width: 148px;
   --tj-content-inline-gap: 12px;

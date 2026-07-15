@@ -1,11 +1,11 @@
 /* Shared table row controls. */
 body:not(.login-body) .table-select {
   min-width: 104px;
-  min-height: 36px;
-  height: 36px;
+  min-height: var(--tj-control-height-compact);
+  height: var(--tj-control-height-compact);
   padding: 0 28px 0 10px;
   border: 1px solid var(--tj-border-control);
-  border-radius: 7px;
+  border-radius: var(--tj-control-radius);
   color: var(--tj-text-strong);
   background: var(--tj-content-bg);
   font: inherit;
@@ -14,14 +14,25 @@ body:not(.login-body) .table-select {
 }
 
 .table-action {
+  min-height: var(--tj-control-height-compact);
   padding: 4px 8px;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--tj-control-radius);
   color: var(--tj-action-blue);
   background: transparent;
   font: inherit;
   font-weight: 800;
   cursor: pointer;
+}
+
+body:not(.login-body) .table-select:focus-visible,
+.table-action:focus-visible {
+  outline: 0;
+  box-shadow: var(--tj-focus-ring);
+}
+
+.table-action:hover {
+  background: var(--tj-table-row-hover-bg);
 }
 
 .table-action.danger {

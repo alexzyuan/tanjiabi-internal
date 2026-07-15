@@ -535,7 +535,7 @@ git commit -m "style: unlock generated css baseline"
 - Modify: `assets/css/components/55-modal-shell.css`
 - Modify: `design.md`
 
-- [ ] **Step 1: Define the shared visual target**
+- [x] **Step 1: Define the shared visual target**
 
 Use existing project tokens first:
 ```css
@@ -557,7 +557,7 @@ Use existing project tokens first:
 
 Only add a token when the concept is reused by at least two components.
 
-- [ ] **Step 2: Normalize controls**
+- [x] **Step 2: Normalize controls**
 
 Update shared control CSS so buttons, inputs, selects, filter chips, and icon buttons use consistent:
 ```text
@@ -570,7 +570,7 @@ disabled state
 hover state
 ```
 
-- [ ] **Step 3: Normalize tables**
+- [x] **Step 3: Normalize tables**
 
 Update shared table primitives for:
 ```text
@@ -583,11 +583,11 @@ sort button state
 horizontal overflow behavior
 ```
 
-- [ ] **Step 4: Normalize cards and panels**
+- [x] **Step 4: Normalize cards and panels**
 
 Keep cards for repeated items, modals, and framed tools. Do not introduce nested cards.
 
-- [ ] **Step 5: Normalize modals**
+- [x] **Step 5: Normalize modals**
 
 Update modal shell CSS for consistent:
 ```text
@@ -599,7 +599,7 @@ mobile width
 focus-visible states
 ```
 
-- [ ] **Step 6: Browser verification**
+- [x] **Step 6: Browser verification**
 
 Check desktop and mobile:
 ```text
@@ -622,7 +622,7 @@ tables remain horizontally scrollable where needed
 no one-off page palette dominates
 ```
 
-- [ ] **Step 7: Verify and commit**
+- [x] **Step 7: Verify and commit**
 
 Run:
 ```bash

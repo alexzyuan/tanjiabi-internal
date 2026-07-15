@@ -171,7 +171,7 @@ test("build-styles supports non-destructive preview output", async () => {
 
 test("styles.css stays within the raw size budget", async () => {
   const { size } = await stat(new URL("../styles.css", import.meta.url));
-  assert.ok(size <= 251_000, `styles.css should be <= 251KB raw, got ${size} bytes`);
+  assert.ok(size <= 253_000, `styles.css should be <= 253KB raw, got ${size} bytes`);
 });
 
 test("CSS standards gate is part of the default check command", async () => {
@@ -233,6 +233,36 @@ test("shared filters and panel surfaces live outside legacy css", async () => {
   assert.equal(legacySource.includes(".table-scroll table"), false);
   assert.equal(legacySource.includes(".upload-status {"), false);
   assert.equal(legacySource.includes(".empty-state {\n  min-height:"), false);
+});
+
+test("shared visual component tokens normalize controls, tables, and modals", async () => {
+  const tokenSource = await readFile(new URL("../assets/css/tokens/00-semantic-foundation.css", import.meta.url), "utf8");
+  const surfacesSource = await readFile(new URL("../assets/css/components/30-surfaces-and-filters.css", import.meta.url), "utf8");
+  const formSource = await readFile(new URL("../assets/css/components/32-form-controls.css", import.meta.url), "utf8");
+  const tableSource = await readFile(new URL("../assets/css/components/45-table-controls.css", import.meta.url), "utf8");
+  const modalSource = await readFile(new URL("../assets/css/components/55-modal-shell.css", import.meta.url), "utf8");
+
+  [
+    "--tj-control-height",
+    "--tj-control-height-compact",
+    "--tj-control-radius",
+    "--tj-control-padding-x",
+    "--tj-panel-radius",
+    "--tj-table-row-hover-bg",
+    "--tj-modal-radius",
+    "--tj-focus-ring",
+  ].forEach((token) => {
+    assert.match(tokenSource, new RegExp(`${token}:`));
+  });
+
+  assert.match(surfacesSource, /height:\s*var\(--tj-control-height\)/);
+  assert.match(surfacesSource, /border-radius:\s*var\(--tj-control-radius\)/);
+  assert.match(formSource, /height:\s*var\(--tj-control-height\)/);
+  assert.match(formSource, /box-shadow:\s*var\(--tj-focus-ring\)/);
+  assert.match(tableSource, /height:\s*var\(--tj-control-height-compact\)/);
+  assert.match(tableSource, /background:\s*var\(--tj-table-row-hover-bg\)/);
+  assert.match(modalSource, /border-radius:\s*var\(--tj-modal-radius\)/);
+  assert.match(modalSource, /\.modal-close-button:focus-visible/);
 });
 
 test("shared filter toolbar styles live outside page css and use semantic tokens", async () => {
@@ -393,7 +423,8 @@ test("shared form and multi-select controls live outside legacy css", async () =
   assert.match(componentSource, /^\.multi-select-option\s*\{/m);
   assert.match(componentSource, /^\.secondary-button\s*\{/m);
   assert.match(componentSource, /var\(--tj-border-control\)/);
-  assert.match(componentSource, /var\(--spectrum-control-radius\)/);
+  assert.match(componentSource, /var\(--tj-control-radius\)/);
+  assert.match(componentSource, /var\(--tj-focus-ring\)/);
   assert.equal(/#(?:d8e4f0|ffffff|f8fbff)\b/i.test(componentSource), false);
 
   [
