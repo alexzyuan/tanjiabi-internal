@@ -33,7 +33,7 @@
 **Files:**
 - Create: `docs/visual-baseline/2026-07-15/README.md`
 
-- [ ] **Step 1: Start the local server**
+- [x] **Step 1: Start the local server**
 
 Run:
 ```bash
@@ -47,7 +47,7 @@ Expected:
 
 If port `4173` is already in use, stop the existing local server only if it belongs to this repo; otherwise use the already-running server for screenshots.
 
-- [ ] **Step 2: Capture desktop baseline screenshots**
+- [x] **Step 2: Capture desktop baseline screenshots**
 
 Use the in-app browser or Playwright at `http://127.0.0.1:4173/`.
 
@@ -69,7 +69,7 @@ Expected screenshots directory:
 docs/visual-baseline/2026-07-15/locked/desktop/
 ```
 
-- [ ] **Step 3: Capture narrow baseline screenshots**
+- [x] **Step 3: Capture narrow baseline screenshots**
 
 Use viewport `390x844`.
 
@@ -88,7 +88,7 @@ Expected screenshots directory:
 docs/visual-baseline/2026-07-15/locked/mobile/
 ```
 
-- [ ] **Step 4: Record the manifest**
+- [x] **Step 4: Record the manifest**
 
 Write `docs/visual-baseline/2026-07-15/README.md`:
 ```markdown
@@ -126,7 +126,7 @@ This baseline captures the approved locked `styles.css` visual state before CSS 
 Generated CSS must visually match these screenshots before `styles.css` is rebuilt.
 ```
 
-- [ ] **Step 5: Verify no code changed except docs/screenshots**
+- [x] **Step 5: Verify no code changed except docs/screenshots**
 
 Run:
 ```bash
@@ -135,7 +135,7 @@ git status -sb
 
 Expected: only `docs/visual-baseline/2026-07-15/*` is modified or untracked.
 
-- [ ] **Step 6: Commit baseline artifacts**
+- [x] **Step 6: Commit baseline artifacts**
 
 Run:
 ```bash
