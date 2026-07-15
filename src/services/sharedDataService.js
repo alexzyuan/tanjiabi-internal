@@ -910,13 +910,14 @@ function findMergedCatalogProduct(row = {}, catalogMap = new Map()) {
 
 export function applySharedProductCatalogToRows(rows = [], catalogMap = new Map()) {
   if (!catalogMap.size) return rows;
-  let shadowLogCount = 0;
-  return rows.map((row) => {
+  let shadowedRowCount = 0;
+  const shadowSamples = [];
+  const enrichedRows = rows.map((row) => {
     const { product, matches, shadowedFields } = findMergedCatalogProduct(row, catalogMap);
     if (!product) return row;
-    if (shadowedFields.length && shadowLogCount < 20) {
-      shadowLogCount += 1;
-      console.info("[shared-product-catalog] 合并多个商品目录索引，避免不完整索引遮挡字段", {
+    if (shadowedFields.length) {
+      shadowedRowCount += 1;
+      if (shadowSamples.length < 5) shadowSamples.push({
         sid: row.sid || "",
         storeName: row.storeName || "",
         country: row.country || "",
@@ -944,4 +945,12 @@ export function applySharedProductCatalogToRows(rows = [], catalogMap = new Map(
     if (!next.asin && product.asin) next.asin = product.asin;
     return next;
   });
+  if (shadowedRowCount) {
+    console.info("[shared-product-catalog] 合并多个商品目录索引，避免不完整索引遮挡字段", {
+      rowCount: rows.length,
+      shadowedRowCount,
+      samples: shadowSamples,
+    });
+  }
+  return enrichedRows;
 }
