@@ -936,6 +936,7 @@ export function applySharedProductCatalogToRows(rows = [], catalogMap = new Map(
     if (!next.purchasePrice && product.purchasePrice) next.purchasePrice = product.purchasePrice;
     if (!next.internalSku && product.internalSku) next.internalSku = product.internalSku;
     if (!next.brand && product.brand) next.brand = product.brand;
+    if (!next.model && product.model) next.model = product.model;
     if (!next.material && product.material) next.material = product.material;
     if (!next.purpose && product.purpose) next.purpose = product.purpose;
     if (!next.customsCode && product.customsCode) next.customsCode = product.customsCode;

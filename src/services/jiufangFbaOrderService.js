@@ -99,20 +99,30 @@ function addressValue(address = {}, camelKey, snakeKey) {
 }
 
 function senderAddress(senderProfile = {}) {
+  const profile = senderProfile || {};
   return {
-    CompanyNameCn: firstText(senderProfile.companyNameCn, senderProfile.companyNameCN, senderProfile.companyChineseName),
-    CompanyNameEn: firstText(senderProfile.companyNameEn, senderProfile.companyName, senderProfile.shipperName),
-    AttentionName: firstText(senderProfile.contact, senderProfile.contactName, senderProfile.shipperName, senderProfile.companyName),
-    Phone: firstText(senderProfile.phoneNumber, senderProfile.phone),
-    EnterpriseCreditCode: firstText(senderProfile.enterpriseCreditCode, senderProfile.creditCode),
+    CompanyNameCn: firstText(profile.companyNameCn, profile.companyNameCN, profile.companyChineseName),
+    CompanyNameEn: firstText(profile.companyNameEn, profile.companyName, profile.shipperName),
+    AttentionName: firstText(profile.contact, profile.contactName, profile.shipperName, profile.companyName),
+    Phone: firstText(profile.phoneNumber, profile.phone),
+    EnterpriseCreditCode: firstText(profile.enterpriseCreditCode, profile.creditCode),
     Address: {
-      AddressLine: [senderProfile.addressLine1, senderProfile.addressLine2].filter(Boolean),
-      City: firstText(senderProfile.city),
-      StateProvinceCode: firstText(senderProfile.stateOrProvinceCode, senderProfile.province),
-      PostalCode: firstText(senderProfile.postalCode),
-      CountryCode: firstText(senderProfile.countryCode, "CN"),
+      AddressLine: [profile.addressLine1, profile.addressLine2].filter(Boolean),
+      City: firstText(profile.city),
+      StateProvinceCode: firstText(profile.stateOrProvinceCode, profile.province),
+      PostalCode: firstText(profile.postalCode),
+      CountryCode: firstText(profile.countryCode, "CN"),
     },
   };
+}
+
+function shipmentStoreName(shipment = {}) {
+  return firstText(shipment.storeName, shipment.raw?.seller, shipment.raw?.seller_name, shipment.sid);
+}
+
+function resolveJiufangSenderProfile(shipment = {}, senderProfile) {
+  if (senderProfile !== undefined) return senderProfile;
+  return getFbaAddressProfile(shipmentStoreName(shipment), { strict: true });
 }
 
 function amazonAddress(shipment = {}) {
@@ -156,22 +166,24 @@ function packageDetailsForBox(box = {}, linesByKey = new Map()) {
 
 function buildInvoices(lines = []) {
   return lines.map((line) => ({
-    SKU: firstText(line.internalSku, line.sku, line.msku),
-    ShipmentID: firstText(line.shipment?.shipmentId, line.shipment?.staShipmentId),
-    ProductName: firstText(line.title, line.productName),
-    ChineseName: firstText(line.productName),
-    EnglishName: firstText(line.title, line.productName),
-    Quantity: numberValue(line.quantity),
-    UnitPrice: declaredUnitPrice(line),
+    ShipmentId: firstText(line.shipment?.shipmentId, line.shipment?.staShipmentId),
+    ReferenceId: firstText(line.shipment?.referenceId, line.shipment?.raw?.referenceId, line.shipment?.raw?.reference_id, line.shipment?.staShipmentId),
+    Sku: firstText(line.internalSku, line.sku, line.msku),
+    ProductNameCn: firstText(line.productName),
+    ProductNameEn: firstText(line.title, line.productName),
     CurrencyCode: "USD",
     Brand: firstText(line.brand),
     Material: firstText(line.material),
     Purpose: firstText(line.purpose),
-    CustomsCode: firstText(line.customsCode),
-    Unit: firstText(line.unit),
+    HsCode: firstText(line.customsCode),
+    CustomsClearanceCode: firstText(line.customsCode),
     Asin: firstText(line.asin),
+    PurchasingPrice: declaredUnitPrice(line),
+    Num: numberValue(line.quantity),
+    MeasurementUnit: firstText(line.unit),
     IsBattery: firstText(line.isBattery),
-  })).filter((line) => line.SKU && line.Quantity > 0);
+    Model: firstText(line.model, line.item?.model),
+  })).filter((line) => line.Sku && line.Num > 0);
 }
 
 function summaryFor({ shipment, lines, boxes, channelCode, channelCapacity }) {
@@ -195,7 +207,7 @@ export function validateJiufangOrderInput({
   shipment = {},
   boxPayloadsByShipmentId = new Map(),
   channelCode = "",
-  senderProfile = getFbaAddressProfile(shipment.storeName || shipment.raw?.seller || ""),
+  senderProfile,
   options = {},
 } = {}) {
   const shipmentId = firstText(shipment.shipmentId, shipment.staShipmentId, "未知货件");
@@ -203,6 +215,7 @@ export function validateJiufangOrderInput({
   const address = destinationAddress(shipment);
   const boxes = boxesForShipment(shipment, boxPayloadsByShipmentId);
   const lines = normalizeForwarderLines([shipment], boxPayloadsByShipmentId);
+  const resolvedSenderProfile = resolveJiufangSenderProfile(shipment, senderProfile);
 
   if (!firstText(channelCode)) errors.push(`${shipmentId} 缺少九方渠道代码`);
   if (!firstText(shipment.fulfillmentCenterCode)) errors.push(`${shipmentId} 缺少 Amazon 物流中心编码`);
@@ -217,7 +230,8 @@ export function validateJiufangOrderInput({
   }
   if (!firstText(addressValue(address, "countryCode", "country_code"), address.country, shipment.country)) errors.push(`${shipmentId} 缺少收件国家`);
 
-  const sender = senderAddress(senderProfile);
+  if (!resolvedSenderProfile) errors.push(`${shipmentId} 无法识别发件店铺主体：${shipmentStoreName(shipment) || "空"}`);
+  const sender = senderAddress(resolvedSenderProfile);
   if (!firstText(sender.CompanyNameCn)) errors.push(`${shipmentId} 缺少发件公司中文名`);
   if (!firstText(sender.CompanyNameEn)) errors.push(`${shipmentId} 缺少发件公司英文名`);
   if (!firstText(sender.EnterpriseCreditCode)) errors.push(`${shipmentId} 缺少发件企业信用代码`);
@@ -269,10 +283,11 @@ export function buildJiufangShipmentPayload({
   shipment = {},
   boxPayloadsByShipmentId = new Map(),
   channelCode = "",
-  senderProfile = getFbaAddressProfile(shipment.storeName || shipment.raw?.seller || ""),
+  senderProfile,
   options = {},
 } = {}) {
-  const errors = validateJiufangOrderInput({ shipment, boxPayloadsByShipmentId, channelCode, senderProfile, options });
+  const resolvedSenderProfile = resolveJiufangSenderProfile(shipment, senderProfile);
+  const errors = validateJiufangOrderInput({ shipment, boxPayloadsByShipmentId, channelCode, senderProfile: resolvedSenderProfile, options });
   if (errors.length) throw new Error(errors.join("；"));
 
   const config = getConfig().jiufang;
@@ -306,7 +321,7 @@ export function buildJiufangShipmentPayload({
         ReferenceNumber: { Value: shipment.shipmentId },
         Qty: boxes.length,
         Service: { Code: channelCode },
-        ShipFrom: senderAddress(senderProfile),
+        ShipFrom: senderAddress(resolvedSenderProfile),
         ShipTo: amazonAddress(shipment),
         InvoiceLineTotal: {
           CurrencyCode: "USD",
@@ -447,7 +462,7 @@ export async function dryRunJiufangFbaOrders(input = {}, deps = {}) {
       });
       continue;
     }
-    const senderProfile = input.senderProfile || getFbaAddressProfile(shipment.storeName || shipment.raw?.seller || "");
+    const senderProfile = input.senderProfile || resolveJiufangSenderProfile(shipment);
     const missingFields = validateJiufangOrderInput({
       shipment,
       boxPayloadsByShipmentId: prepared.boxPayloadsByShipmentId,
@@ -495,7 +510,7 @@ export async function createJiufangFbaOrders(input = {}, deps = {}) {
       });
       continue;
     }
-    const senderProfile = input.senderProfile || getFbaAddressProfile(shipment.storeName || shipment.raw?.seller || "");
+    const senderProfile = input.senderProfile || resolveJiufangSenderProfile(shipment);
     let payload = null;
     let summary = null;
     try {

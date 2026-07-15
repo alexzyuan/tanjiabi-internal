@@ -10,12 +10,12 @@ export const fbaAddressProfiles = {
     label: "坦蛋伯发货地址",
     shipperName: "Xiamen tandanbo wangluokeji youxiangongsi",
     companyName: "Xiamen tandanbo wangluokeji youxiangongsi",
-    companyNameCn: envText("FBA_TANDANBO_COMPANY_NAME_CN"),
-    enterpriseCreditCode: envText("FBA_TANDANBO_ENTERPRISE_CREDIT_CODE"),
-    addressLine1: envText("FBA_TANDANBO_ADDRESS_LINE1", "Room 623-40, No. 89, Anling 2nd Road"),
+    companyNameCn: envText("FBA_TANDANBO_COMPANY_NAME_CN", "厦门坦蛋伯网络科技有限公司"),
+    enterpriseCreditCode: envText("FBA_TANDANBO_ENTERPRISE_CREDIT_CODE", "91350206MADNM7UF44"),
+    addressLine1: envText("FBA_TANDANBO_ADDRESS_LINE1", "厦门火炬高新区软件园三期诚毅北大街56号2302单元-3室之1D"),
     addressLine2: envText("FBA_TANDANBO_ADDRESS_LINE2"),
-    city: envText("FBA_TANDANBO_CITY", "Xiamen"),
-    stateOrProvinceCode: envText("FBA_TANDANBO_STATE_PROVINCE", "Fujian"),
+    city: envText("FBA_TANDANBO_CITY", "厦门市"),
+    stateOrProvinceCode: envText("FBA_TANDANBO_STATE_PROVINCE", "福建省"),
     postalCode: envText("FBA_TANDANBO_POSTAL_CODE", "361006"),
     countryCode: "CN",
     phoneNumber: "8615759601196",
@@ -25,20 +25,22 @@ export const fbaAddressProfiles = {
     label: "厦门探嘉发货地址",
     shipperName: "Xiamen Tanjia wangluo keji youxian gongsi",
     companyName: "Xiamen Tanjia wangluo keji youxian gongsi",
-    companyNameCn: envText("FBA_TANJIA_COMPANY_NAME_CN"),
-    enterpriseCreditCode: envText("FBA_TANJIA_ENTERPRISE_CREDIT_CODE"),
-    addressLine1: envText("FBA_TANJIA_ADDRESS_LINE1", "No.1 Taiwen street"),
-    addressLine2: envText("FBA_TANJIA_ADDRESS_LINE2", "Room 239-9, Huli"),
-    city: envText("FBA_TANJIA_CITY", "Xiamen"),
-    stateOrProvinceCode: envText("FBA_TANJIA_STATE_PROVINCE", "Fujian"),
+    companyNameCn: envText("FBA_TANJIA_COMPANY_NAME_CN", "厦门探嘉网络科技有限公司"),
+    enterpriseCreditCode: envText("FBA_TANJIA_ENTERPRISE_CREDIT_CODE", "91350206MAD64HGE0K"),
+    addressLine1: envText("FBA_TANJIA_ADDRESS_LINE1", "厦门火炬高新区软件园三期诚毅北大街56号2302单元-3室之2D"),
+    addressLine2: envText("FBA_TANJIA_ADDRESS_LINE2"),
+    city: envText("FBA_TANJIA_CITY", "厦门市"),
+    stateOrProvinceCode: envText("FBA_TANJIA_STATE_PROVINCE", "福建省"),
     postalCode: envText("FBA_TANJIA_POSTAL_CODE", "361006"),
     countryCode: "CN",
     phoneNumber: "+86 13235037039",
   },
 };
 
-export function getFbaAddressProfile(shopName = "") {
+export function getFbaAddressProfile(shopName = "", { strict = false } = {}) {
   const value = String(shopName).toLowerCase();
   if (value.startsWith("xiamentanjia")) return fbaAddressProfiles.xiamentanjia;
+  if (value.startsWith("tandanbo")) return fbaAddressProfiles.tandanbo;
+  if (strict) return null;
   return fbaAddressProfiles.tandanbo;
 }

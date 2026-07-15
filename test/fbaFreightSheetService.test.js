@@ -169,7 +169,7 @@ test("applyProductCatalogToFbaFreightShipments fills product images by sid and m
     },
   });
   const catalogMap = new Map([
-    ["sid:8708:msku:jm-dgc-blue", { sid: 8708, msku: "JM-DGC-BLUE", internalSku: "TJ001", imageUrl: "https://img.example.com/catalog-blue.jpg", productName: "Catalog Blue" }],
+    ["sid:8708:msku:jm-dgc-blue", { sid: 8708, msku: "JM-DGC-BLUE", internalSku: "TJ001", imageUrl: "https://img.example.com/catalog-blue.jpg", productName: "Catalog Blue", model: "SB-2" }],
   ]);
 
   const enriched = applyProductCatalogToFbaFreightShipments(rows, catalogMap);
@@ -178,6 +178,7 @@ test("applyProductCatalogToFbaFreightShipments fills product images by sid and m
   assert.equal(enriched[0].items[0].imageUrl, "https://img.example.com/catalog-blue.jpg");
   assert.equal(enriched[0].items[0].internalSku, "TJ001");
   assert.equal(enriched[0].items[0].productName, "Catalog Blue");
+  assert.equal(enriched[0].items[0].model, "SB-2");
 });
 
 test("convertFbaFreightShipmentsToForwarderTemplate fills Jiufang header and product declaration fields from ERP product management", async () => {

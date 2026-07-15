@@ -36,6 +36,7 @@ const shipment = {
     customsCode: "3924900000",
     isBattery: "否",
     unit: "pcs",
+    model: "SB-2",
     shippedQuantity: 12,
     declaredValue: 2.5,
   }],
@@ -67,6 +68,7 @@ const boxPayloadsByShipmentId = new Map([[
             customsCode: "3924900000",
             isBattery: "否",
             unit: "pcs",
+            model: "SB-2",
             quantityInBox: 12,
           }],
         }],
@@ -111,8 +113,16 @@ test("buildJiufangShipmentPayload maps FBA shipment boxes to Jiufang ordinary sh
   assert.equal(payload.ShipmentRequest.Packages[0].PackageWeight.Weight, 10);
   assert.equal(payload.ShipmentRequest.Packages[0].Dimensions.Length, 40);
   assert.equal(payload.ShipmentRequest.Packages[0].PackageDetails[0].SKU, "TJ-DGC-BLUE");
-  assert.equal(payload.ShipmentRequest.Invoices[0].ShipmentID, "FBA18QJFDCWJ");
-  assert.equal(payload.ShipmentRequest.Invoices[0].UnitPrice, 2.5);
+  assert.equal(payload.ShipmentRequest.Invoices[0].ShipmentId, "FBA18QJFDCWJ");
+  assert.equal(payload.ShipmentRequest.Invoices[0].Sku, "TJ-DGC-BLUE");
+  assert.equal(payload.ShipmentRequest.Invoices[0].ProductNameCn, "收纳盒");
+  assert.equal(payload.ShipmentRequest.Invoices[0].ProductNameEn, "Storage Box");
+  assert.equal(payload.ShipmentRequest.Invoices[0].HsCode, "3924900000");
+  assert.equal(payload.ShipmentRequest.Invoices[0].CustomsClearanceCode, "3924900000");
+  assert.equal(payload.ShipmentRequest.Invoices[0].PurchasingPrice, 2.5);
+  assert.equal(payload.ShipmentRequest.Invoices[0].Num, 12);
+  assert.equal(payload.ShipmentRequest.Invoices[0].MeasurementUnit, "pcs");
+  assert.equal(payload.ShipmentRequest.Invoices[0].Model, "SB-2");
   assert.equal(payload.ShipmentRequest.InvoiceLineTotal.MonetaryValue, 30);
   assert.equal(summary.boxCount, 1);
   assert.equal(summary.skuCount, 1);
@@ -168,7 +178,40 @@ test("buildJiufangShipmentPayload uses internal SKU mapped from Lingxing listing
   });
 
   assert.equal(payload.ShipmentRequest.Packages[0].PackageDetails[0].SKU, "TJ033");
-  assert.equal(payload.ShipmentRequest.Invoices[0].SKU, "TJ033");
+  assert.equal(payload.ShipmentRequest.Invoices[0].Sku, "TJ033");
+});
+
+test("buildJiufangShipmentPayload resolves legal sender by store owner prefix regardless of country", () => {
+  const tanjia = buildJiufangShipmentPayload({
+    shipment: { ...shipment, storeName: "xiamentanjia-CA", country: "加拿大" },
+    boxPayloadsByShipmentId,
+    channelCode: "SEA-CA-02",
+    senderProfile: undefined,
+  }).payload.ShipmentRequest.ShipFrom;
+  const tandanbo = buildJiufangShipmentPayload({
+    shipment: { ...shipment, storeName: "tandanbo-AU", country: "澳洲" },
+    boxPayloadsByShipmentId,
+    channelCode: "SEA-AU-01",
+    senderProfile: undefined,
+  }).payload.ShipmentRequest.ShipFrom;
+
+  assert.equal(tanjia.CompanyNameCn, "厦门探嘉网络科技有限公司");
+  assert.equal(tanjia.EnterpriseCreditCode, "91350206MAD64HGE0K");
+  assert.deepEqual(tanjia.Address.AddressLine, ["厦门火炬高新区软件园三期诚毅北大街56号2302单元-3室之2D"]);
+  assert.equal(tandanbo.CompanyNameCn, "厦门坦蛋伯网络科技有限公司");
+  assert.equal(tandanbo.EnterpriseCreditCode, "91350206MADNM7UF44");
+  assert.deepEqual(tandanbo.Address.AddressLine, ["厦门火炬高新区软件园三期诚毅北大街56号2302单元-3室之1D"]);
+});
+
+test("validateJiufangOrderInput fails fast when Jiufang sender store owner cannot be resolved", () => {
+  const errors = validateJiufangOrderInput({
+    shipment: { ...shipment, storeName: "unknown-store-US" },
+    boxPayloadsByShipmentId,
+    channelCode: "SEA-US-07",
+    senderProfile: undefined,
+  });
+
+  assert.ok(errors.some((item) => item.includes("无法识别发件店铺主体")));
 });
 
 test("buildJiufangShipmentPayload sends battery channel capacity when ERP product is marked battery", () => {
@@ -247,7 +290,7 @@ test("buildJiufangShipmentPayload uses declaration price enriched on shipment it
     senderProfile,
   });
 
-  assert.equal(payload.ShipmentRequest.Invoices[0].UnitPrice, 2.5);
+  assert.equal(payload.ShipmentRequest.Invoices[0].PurchasingPrice, 2.5);
 });
 
 test("validateJiufangOrderInput fails fast on required missing fields", () => {
