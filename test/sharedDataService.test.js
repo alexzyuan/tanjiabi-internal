@@ -225,6 +225,51 @@ test("共享商品目录在 ERP Listing API 缺失时用 Listing 共享目录兜
   assert.equal(product.internalSku, "TJ033");
   assert.equal(product.productName, "双支蜘蛛船");
   assert.equal(product.customsCode, "9503008390");
+  assert.equal(result.performance.scope, "shared-product-catalog");
+  assert.equal(result.performance.counters.cacheHit, 0);
+  assert.equal(result.performance.counters.sourceRows, 1);
+  assert.equal(result.performance.counters.outputRecords, result.map.size);
+  assert.equal(result.performance.counters.lingxingListingRequests > 0, true);
+  assert.equal(result.performance.counters.lingxingProductInfoRequests > 0, true);
+});
+
+test("共享商品目录缓存命中返回性能元数据且不调用 Lingxing", async () => {
+  let listingCalls = 0;
+  const result = await getSharedProductCatalogMap({
+    async fetchListings() {
+      listingCalls += 1;
+      throw new Error("should not fetch listings on cache hit");
+    },
+  }, [{
+    sid: 8708,
+    storeName: "xiamentanjia-US",
+    country: "美国",
+    msku: "JM-DGC-BLUE",
+    sku: "TJ001",
+  }], {
+    readProductCatalogCache: async () => ({
+      updatedAt: "2026-07-15 10:00:00",
+      data: {
+        records: [{
+          key: listingMskuCatalogKey(8708, "JM-DGC-BLUE"),
+          product: {
+            sid: 8708,
+            msku: "JM-DGC-BLUE",
+            sku: "TJ001",
+            productName: "灯光船蓝色",
+          },
+        }],
+      },
+    }),
+  });
+
+  assert.equal(listingCalls, 0);
+  assert.equal(result.cacheHit, true);
+  assert.equal(result.map.size, 1);
+  assert.equal(result.performance.scope, "shared-product-catalog");
+  assert.equal(result.performance.counters.cacheHit, 1);
+  assert.equal(result.performance.counters.outputRecords, 1);
+  assert.equal(result.performance.counters.lingxingListingRequests || 0, 0);
 });
 
 test("统一店铺缓存命中时不再调用 Lingxing fetchSellers", async () => {

@@ -6,6 +6,7 @@ import {
   fetchLingxingListingsBySidMskus,
   fetchLingxingProductRecords,
 } from "../src/services/lingxingCatalogLookupService.js";
+import { createPerformanceMetrics } from "../src/utils/performanceMetrics.js";
 
 test("fetchLingxingListingRecords follows Lingxing offset pagination", async () => {
   const calls = [];
@@ -120,4 +121,31 @@ test("fetchLingxingProductRecords uses local product fallback and strict errors"
     }, { skus: ["TJ002"] }, { sku_list: ["TJ002"] }, { strict: true }),
     /ERP 产品管理查询失败：new failed; fallback: old failed/,
   );
+});
+
+test("Lingxing catalog lookup records request counters when metrics are provided", async () => {
+  const metrics = createPerformanceMetrics("catalog-test", { now: () => 100 });
+  const adapter = {
+    async fetchListings() {
+      return { data: { total: 0, list: [] } };
+    },
+    async fetchLocalProductInfos() {
+      throw new Error("new api unavailable");
+    },
+    async fetchLocalProducts() {
+      return { data: { rows: [{ sku: "TJ001" }] } };
+    },
+  };
+
+  await fetchLingxingListingsBySidMskus(adapter, 8708, ["A"], {
+    sidVariants: [{ sid: 8708 }],
+    metrics,
+  });
+  await fetchLingxingProductRecords(adapter, { skus: ["TJ001"] }, { sku_list: ["TJ001"] }, { metrics });
+
+  assert.deepEqual(metrics.summary().counters, {
+    lingxingListingRequests: 2,
+    lingxingProductInfoRequests: 1,
+    lingxingProductFallbackRequests: 1,
+  });
 });

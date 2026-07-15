@@ -1,6 +1,7 @@
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { filterCoreSellers, getLingxingAdapter } from "../adapters/lingxingAdapter.js";
+import { createPerformanceMetrics } from "../utils/performanceMetrics.js";
 import {
   fetchLingxingListingsBySidMskus,
   fetchLingxingProductRecords,
@@ -673,7 +674,7 @@ async function fetchListingSharedCatalogItems(rows = [], apiListingItems = [], {
   return matched;
 }
 
-async function fetchListingItems(adapter, rows = [], { strict = false } = {}) {
+async function fetchListingItems(adapter, rows = [], { strict = false, metrics = null } = {}) {
   const rowsBySid = new Map();
   rows.forEach((row) => {
     const sid = Number(row.sid || 0);
@@ -685,30 +686,30 @@ async function fetchListingItems(adapter, rows = [], { strict = false } = {}) {
 
   const items = [];
   for (const [sid, mskus] of rowsBySid.entries()) {
-    const records = await fetchLingxingListingsBySidMskus(adapter, sid, mskus, { batchSize: LISTING_BATCH_SIZE, strict });
+    const records = await fetchLingxingListingsBySidMskus(adapter, sid, mskus, { batchSize: LISTING_BATCH_SIZE, strict, metrics });
     records.map((record) => normalizeSharedListingRecord(record, sid)).filter(Boolean).forEach((item) => items.push(item));
   }
   return items;
 }
 
-async function safeFetchProductRecords(adapter, params, fallbackParams = null, { strict = false } = {}) {
-  return fetchLingxingProductRecords(adapter, params, fallbackParams, { strict });
+async function safeFetchProductRecords(adapter, params, fallbackParams = null, { strict = false, metrics = null } = {}) {
+  return fetchLingxingProductRecords(adapter, params, fallbackParams, { strict, metrics });
 }
 
-async function fetchProductRecords(adapter, rows = [], listingItems = [], { strict = false } = {}) {
+async function fetchProductRecords(adapter, rows = [], listingItems = [], { strict = false, metrics = null } = {}) {
   const lookupValues = uniqueText([...rows, ...listingItems].flatMap((row) => [row.internalSku, row.sku, row.msku]));
   const skuIdentifiers = uniqueText(listingItems.flatMap((row) => [row.skuIdentifier, row.internalSku, row.sku, row.msku]));
   const productIds = uniqueText(listingItems.map((row) => row.productId));
   const records = [];
 
   for (const batch of chunkArray(lookupValues, PRODUCT_BATCH_SIZE)) {
-    records.push(...await safeFetchProductRecords(adapter, { skus: batch }, { sku_list: batch }, { strict }));
+    records.push(...await safeFetchProductRecords(adapter, { skus: batch }, { sku_list: batch }, { strict, metrics }));
   }
   for (const batch of chunkArray(skuIdentifiers, PRODUCT_BATCH_SIZE)) {
-    records.push(...await safeFetchProductRecords(adapter, { sku_identifiers: batch }, { sku_identifier_list: batch }, { strict }));
+    records.push(...await safeFetchProductRecords(adapter, { sku_identifiers: batch }, { sku_identifier_list: batch }, { strict, metrics }));
   }
   for (const batch of chunkArray(productIds, PRODUCT_BATCH_SIZE)) {
-    records.push(...await safeFetchProductRecords(adapter, { product_ids: batch }, { product_id_list: batch }, { strict }));
+    records.push(...await safeFetchProductRecords(adapter, { product_ids: batch }, { product_id_list: batch }, { strict, metrics }));
   }
   return records;
 }
@@ -758,36 +759,53 @@ export async function getSharedProductCatalogMap(adapter = getLingxingAdapter(),
   strict = false,
   listingSharedCatalogRecords = null,
   readListingSharedCatalog = readListingSharedCatalogRecords,
+  readProductCatalogCache = readSharedProductCatalogCache,
+  saveProductCatalogCache = saveSharedProductCatalogCache,
 } = {}) {
+  const metrics = createPerformanceMetrics("shared-product-catalog");
+  metrics.increment("sourceRows", rows.length);
   const cacheKey = stableProductCatalogCacheKey(rows);
   if (!forceRefresh) {
-    const cached = await readSharedProductCatalogCache(cacheKey, ttlMs);
+    const cached = await metrics.measure("readCache", () => readProductCatalogCache(cacheKey, ttlMs));
     if (cached?.data?.records) {
+      metrics.increment("cacheHit");
+      metrics.increment("outputRecords", cached.data.records.length);
+      const performance = metrics.summary();
+      console.info("[shared-product-catalog] performance", performance);
       return {
         map: productCatalogRecordsToMap(cached.data.records),
         cacheHit: true,
         updatedAt: cached.updatedAt || "",
         status: `复用共享商品目录 ${cached.data.records.length} 个索引`,
+        performance,
       };
     }
   }
+  metrics.increment("cacheHit", 0);
 
-  const apiListingItems = await fetchListingItems(adapter, rows, { strict });
-  const sharedListingItems = await fetchListingSharedCatalogItems(rows, apiListingItems, {
+  const apiListingItems = await metrics.measure("listingLookup", () => fetchListingItems(adapter, rows, { strict, metrics }));
+  metrics.increment("apiListingItems", apiListingItems.length);
+  const sharedListingItems = await metrics.measure("sharedCatalogLookup", () => fetchListingSharedCatalogItems(rows, apiListingItems, {
     listingSharedCatalogRecords,
     readListingSharedCatalog,
     strict,
-  });
+  }));
+  metrics.increment("sharedListingItems", sharedListingItems.length);
   const listingItems = [...apiListingItems, ...sharedListingItems];
-  const productRecords = await fetchProductRecords(adapter, rows, listingItems, { strict });
-  const map = buildSharedProductCatalogMap({ sourceRows: rows, listingRecords: listingItems, productRecords });
+  const productRecords = await metrics.measure("productLookup", () => fetchProductRecords(adapter, rows, listingItems, { strict, metrics }));
+  metrics.increment("productRecords", productRecords.length);
+  const map = await metrics.measure("buildCatalog", async () => buildSharedProductCatalogMap({ sourceRows: rows, listingRecords: listingItems, productRecords }));
   const records = productCatalogMapToRecords(map);
-  await saveSharedProductCatalogCache(cacheKey, { records });
+  metrics.increment("outputRecords", records.length);
+  await metrics.measure("writeCache", () => saveProductCatalogCache(cacheKey, { records }));
+  const performance = metrics.summary();
+  console.info("[shared-product-catalog] performance", performance);
   return {
     map,
     cacheHit: false,
     updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
     status: `刷新共享商品目录 ${records.length} 个索引`,
+    performance,
   };
 }
 

@@ -19,10 +19,12 @@ export async function fetchLingxingListingRecords(adapter, baseParams, {
   pageSize = 1000,
   maxOffset = 5000,
   normalize = normalizeRecordList,
+  metrics = null,
 } = {}) {
   const records = [];
   let offset = 0;
   while (offset < maxOffset) {
+    metrics?.increment?.("lingxingListingRequests");
     const payload = await adapter.fetchListings({ ...baseParams, offset, length: pageSize });
     const pageRows = normalize(payload);
     records.push(...pageRows);
@@ -42,6 +44,7 @@ export async function fetchLingxingListingsBySidMskus(adapter, sid, mskus = [], 
   sidVariants = lingxingSidVariants(sid),
   normalize = normalizeRecordList,
   strict = false,
+  metrics = null,
 } = {}) {
   const records = [];
   for (const batch of chunkArray(uniqueText(mskus), batchSize)) {
@@ -56,9 +59,9 @@ export async function fetchLingxingListingsBySidMskus(adapter, sid, mskus = [], 
     let lastError = null;
     for (const variant of sidVariants) {
       try {
-        batchRecords = await fetchLingxingListingRecords(adapter, { ...baseParams, ...variant }, { normalize });
+        batchRecords = await fetchLingxingListingRecords(adapter, { ...baseParams, ...variant }, { normalize, metrics });
         if (!batchRecords.length) {
-          batchRecords = await fetchLingxingListingRecords(adapter, { ...baseParams, exact_search: 0, ...variant }, { normalize });
+          batchRecords = await fetchLingxingListingRecords(adapter, { ...baseParams, exact_search: 0, ...variant }, { normalize, metrics });
         }
         if (batchRecords.length) break;
       } catch (error) {
@@ -71,7 +74,7 @@ export async function fetchLingxingListingsBySidMskus(adapter, sid, mskus = [], 
         const singleParams = { ...baseParams, search_value: [msku], exact_search: 1 };
         for (const variant of sidVariants) {
           try {
-            const singleRecords = await fetchLingxingListingRecords(adapter, { ...singleParams, ...variant }, { normalize });
+            const singleRecords = await fetchLingxingListingRecords(adapter, { ...singleParams, ...variant }, { normalize, metrics });
             if (singleRecords.length) {
               batchRecords.push(...singleRecords);
               break;
@@ -90,8 +93,9 @@ export async function fetchLingxingListingsBySidMskus(adapter, sid, mskus = [], 
   return records;
 }
 
-export async function fetchLingxingProductRecords(adapter, params, fallbackParams = null, { strict = false } = {}) {
+export async function fetchLingxingProductRecords(adapter, params, fallbackParams = null, { strict = false, metrics = null } = {}) {
   try {
+    metrics?.increment?.("lingxingProductInfoRequests");
     return normalizeRecordList(await adapter.fetchLocalProductInfos(params));
   } catch (error) {
     if (!fallbackParams) {
@@ -99,6 +103,7 @@ export async function fetchLingxingProductRecords(adapter, params, fallbackParam
       return [];
     }
     try {
+      metrics?.increment?.("lingxingProductFallbackRequests");
       return normalizeRecordList(await adapter.fetchLocalProducts(fallbackParams));
     } catch (fallbackError) {
       if (strict) {
