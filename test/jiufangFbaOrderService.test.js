@@ -78,6 +78,8 @@ const boxPayloadsByShipmentId = new Map([[
 const senderProfile = {
   shipperName: "Xiamen Tanjia wangluo keji youxian gongsi",
   companyName: "Xiamen Tanjia wangluo keji youxian gongsi",
+  companyNameCn: "厦门探嘉网络科技有限公司",
+  enterpriseCreditCode: "91350200TEST000001",
   addressLine1: "No.1 Taiwen street",
   addressLine2: "Room 239-9, Huli",
   city: "Xiamen",
@@ -99,6 +101,9 @@ test("buildJiufangShipmentPayload maps FBA shipment boxes to Jiufang ordinary sh
   assert.equal(payload.ShipmentRequest.ReferenceNumber.Value, "FBA18QJFDCWJ");
   assert.equal(payload.ShipmentRequest.Service.Code, "SEA-US-07");
   assert.equal(payload.ShipmentRequest.Departure.Code, "SZ");
+  assert.equal(payload.ShipmentRequest.ShipFrom.CompanyNameCn, "厦门探嘉网络科技有限公司");
+  assert.equal(payload.ShipmentRequest.ShipFrom.CompanyNameEn, "Xiamen Tanjia wangluo keji youxian gongsi");
+  assert.equal(payload.ShipmentRequest.ShipFrom.EnterpriseCreditCode, "91350200TEST000001");
   assert.equal(payload.ShipmentRequest.ShipmentServiceOptions.ChannelCapacity, "1");
   assert.equal(payload.ShipmentRequest.ShipmentServiceOptions.ExportLicence, false);
   assert.equal(payload.ShipmentRequest.ShipTo.DestinationFulfillmentCenterId, "ONT8");
@@ -263,6 +268,8 @@ test("validateJiufangOrderInput fails fast on required missing fields", () => {
     "FBA18QJFDCWJ 缺少收件地址 addressLine1",
     "FBA18QJFDCWJ 缺少收件地址 city",
   ]);
+  assert.ok(errors.some((item) => item.includes("缺少发件公司中文名")));
+  assert.ok(errors.some((item) => item.includes("缺少发件企业信用代码")));
   assert.ok(errors.some((item) => item.includes("MSKU-BLUE 缺少申报单价")));
   assert.ok(errors.some((item) => item.includes("第 1 箱缺少重量")));
 });
@@ -307,6 +314,7 @@ test("createJiufangFbaOrders requires explicit confirmation and saves returned J
   const result = await createJiufangFbaOrders({
     shipmentIds: ["FBA18QJFDCWJ"],
     channelCode: "SEA-US-07",
+    senderProfile,
     confirmed: true,
     operator: "Billy",
   }, {
