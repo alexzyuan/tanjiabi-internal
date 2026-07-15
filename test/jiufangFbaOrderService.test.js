@@ -99,6 +99,7 @@ test("buildJiufangShipmentPayload maps FBA shipment boxes to Jiufang ordinary sh
   assert.equal(payload.ShipmentRequest.ReferenceNumber.Value, "FBA18QJFDCWJ");
   assert.equal(payload.ShipmentRequest.Service.Code, "SEA-US-07");
   assert.equal(payload.ShipmentRequest.Departure.Code, "SZ");
+  assert.equal(payload.ShipmentRequest.ShipmentServiceOptions.ChannelCapacity, "1");
   assert.equal(payload.ShipmentRequest.ShipTo.DestinationFulfillmentCenterId, "ONT8");
   assert.equal(payload.ShipmentRequest.Packages[0].BoxMark.FbaBoxNumber, "FBA18QJFDCWJ-1");
   assert.equal(payload.ShipmentRequest.Packages[0].PackageWeight.Weight, 10);
@@ -161,6 +162,21 @@ test("buildJiufangShipmentPayload uses internal SKU mapped from Lingxing listing
 
   assert.equal(payload.ShipmentRequest.Packages[0].PackageDetails[0].SKU, "TJ033");
   assert.equal(payload.ShipmentRequest.Invoices[0].SKU, "TJ033");
+});
+
+test("buildJiufangShipmentPayload sends battery channel capacity when ERP product is marked battery", () => {
+  const { payload, summary } = buildJiufangShipmentPayload({
+    shipment: {
+      ...shipment,
+      items: [{ ...shipment.items[0], isBattery: "是" }],
+    },
+    boxPayloadsByShipmentId,
+    channelCode: "SEA-CA-02",
+    senderProfile,
+  });
+
+  assert.equal(payload.ShipmentRequest.ShipmentServiceOptions.ChannelCapacity, "5");
+  assert.equal(summary.channelCapacity, "5");
 });
 
 test("buildJiufangShipmentPayload accepts Lingxing snake_case destination address fields", () => {

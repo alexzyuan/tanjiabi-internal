@@ -67,6 +67,29 @@ function declaredUnitPrice(line = {}) {
   );
 }
 
+const knownJiufangChannelCapacityCodes = new Set(["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "15"]);
+const batteryYesValues = new Set(["1", "true", "yes", "y", "是", "有", "带电", "含电", "含电池", "内置电池"]);
+const batteryNoValues = new Set(["0", "false", "no", "n", "否", "无", "不带电", "不含电", "不含电池", "普货"]);
+
+function batteryFlag(value) {
+  const text = firstText(value).toLowerCase();
+  if (!text) return "";
+  if (knownJiufangChannelCapacityCodes.has(text)) return text === "1" ? "no" : "yes";
+  if (batteryYesValues.has(text)) return "yes";
+  if (batteryNoValues.has(text)) return "no";
+  if (text.includes("不含") || text.includes("不带") || text.includes("无电") || text.includes("普货")) return "no";
+  if (text.includes("电池") || text.includes("带电") || text.includes("含电")) return "yes";
+  return "";
+}
+
+function channelCapacityForShipment(shipment = {}, lines = [], options = {}) {
+  const explicit = firstText(options.channelCapacity, options.ChannelCapacity);
+  if (explicit) return explicit;
+  const flags = [...(shipment.items || []), ...lines].map((line) => batteryFlag(line.isBattery)).filter(Boolean);
+  if (!flags.length) return "";
+  return flags.includes("yes") ? "5" : "1";
+}
+
 function destinationAddress(shipment = {}) {
   return shipment.shipToAddress || shipment.raw?.ship_to_address || shipment.raw?.shipToAddress || {};
 }
@@ -148,13 +171,14 @@ function buildInvoices(lines = []) {
   })).filter((line) => line.SKU && line.Quantity > 0);
 }
 
-function summaryFor({ shipment, lines, boxes, channelCode }) {
+function summaryFor({ shipment, lines, boxes, channelCode, channelCapacity }) {
   const totalKg = boxes.reduce((total, box) => total + boxWeightKg(box), 0);
   const totalCbm = boxes.reduce((total, box) => total + (boxCm(box, "length") * boxCm(box, "width") * boxCm(box, "height") / 1000000), 0);
   const invoiceTotal = lines.reduce((total, line) => total + declaredUnitPrice(line) * numberValue(line.quantity), 0);
   return {
     shipmentId: firstText(shipment.shipmentId),
     channelCode,
+    channelCapacity,
     warehouseCode: firstText(shipment.fulfillmentCenterCode),
     boxCount: boxes.length,
     skuCount: new Set(lines.map(lineKey).filter(Boolean)).size,
@@ -169,6 +193,7 @@ export function validateJiufangOrderInput({
   boxPayloadsByShipmentId = new Map(),
   channelCode = "",
   senderProfile = getFbaAddressProfile(shipment.storeName || shipment.raw?.seller || ""),
+  options = {},
 } = {}) {
   const shipmentId = firstText(shipment.shipmentId, shipment.staShipmentId, "未知货件");
   const errors = [];
@@ -230,6 +255,7 @@ export function validateJiufangOrderInput({
     if (declaredUnitPrice(line) <= 0) errors.push(`${label} 缺少申报单价`);
   }
   if (!declarationLines.length) errors.push(`${shipmentId} 没有可下单的 SKU 明细`);
+  if (!channelCapacityForShipment(shipment, declarationLines, options)) errors.push(`${shipmentId} 缺少九方渠道能力（请确认 SKU 是否带电）`);
   return errors;
 }
 
@@ -240,7 +266,7 @@ export function buildJiufangShipmentPayload({
   senderProfile = getFbaAddressProfile(shipment.storeName || shipment.raw?.seller || ""),
   options = {},
 } = {}) {
-  const errors = validateJiufangOrderInput({ shipment, boxPayloadsByShipmentId, channelCode, senderProfile });
+  const errors = validateJiufangOrderInput({ shipment, boxPayloadsByShipmentId, channelCode, senderProfile, options });
   if (errors.length) throw new Error(errors.join("；"));
 
   const config = getConfig().jiufang;
@@ -248,7 +274,9 @@ export function buildJiufangShipmentPayload({
   const lines = normalizeForwarderLines([shipment], boxPayloadsByShipmentId);
   const linesByKey = new Map(lines.map((line) => [lineKey(line), line]));
   const invoices = buildInvoices(lines);
-  const summary = summaryFor({ shipment, lines, boxes, channelCode });
+  const channelCapacity = channelCapacityForShipment(shipment, lines, options);
+  if (!channelCapacity) throw new Error(`${firstText(shipment.shipmentId, shipment.staShipmentId, "未知货件")} 缺少九方渠道能力`);
+  const summary = summaryFor({ shipment, lines, boxes, channelCode, channelCapacity });
   const packages = boxes.map((box, index) => ({
     BoxMark: {
       FbaBoxNumber: firstText(box.fbaBoxNumber, box.cartonId, `${shipment.shipmentId}-${box.localBoxId || index + 1}`),
@@ -286,6 +314,7 @@ export function buildJiufangShipmentPayload({
           DeliveryTerms: firstText(options.deliveryTerms, "DDP"),
           Fba: true,
           Tax: true,
+          ChannelCapacity: channelCapacity,
           AmazonWarehouseCode: firstText(shipment.fulfillmentCenterCode),
         },
         Departure: { Code: firstText(options.departureCode, config.defaultDepartureCode) },
@@ -417,6 +446,7 @@ export async function dryRunJiufangFbaOrders(input = {}, deps = {}) {
       boxPayloadsByShipmentId: prepared.boxPayloadsByShipmentId,
       channelCode: input.channelCode,
       senderProfile,
+      options: input.options || {},
     });
     if (missingFields.length) {
       results.push({ shipmentId: shipment.shipmentId, status: "failed", missingFields });
