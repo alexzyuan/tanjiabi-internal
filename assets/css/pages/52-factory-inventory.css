@@ -18,7 +18,7 @@ background:linear-gradient(180deg, var(--tj-page-bg) 0%, var(--tj-page-bg) 86%, 
 grid-template-columns:repeat(2, minmax(150px, 0.75fr)) minmax(190px, 1fr) minmax(260px, 1.4fr) minmax(170px, 0.85fr);
 }
 .factory-inventory-filters .checkbox-label {
-min-height:var(--spectrum-control-height);
+min-height:var(--tj-control-height);
 flex-direction:row;
 align-items:center;
 justify-content:flex-start;
@@ -123,10 +123,10 @@ font-weight:700;
 }
 .factory-shipped-input {
 width:92px;
-height:var(--spectrum-control-height);
+height:var(--tj-control-height);
 padding:0 var(--spectrum-spacing-100);
 border:1px solid var(--tj-border-strong);
-border-radius:var(--spectrum-control-radius);
+border-radius:var(--tj-control-radius);
 color:var(--tj-text-strong);
 background:var(--tj-content-bg);
 font:inherit;

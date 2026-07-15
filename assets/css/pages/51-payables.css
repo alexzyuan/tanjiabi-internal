@@ -117,7 +117,7 @@
   align-items: center;
   padding: 12px;
   border: 1px solid var(--tj-border-subtle);
-  border-radius: var(--spectrum-control-radius);
+  border-radius: var(--tj-panel-radius);
   background: linear-gradient(180deg, var(--tj-content-bg), var(--tj-surface-muted));
 }
 
@@ -143,7 +143,7 @@
   height: 28px;
   display: flex;
   overflow: hidden;
-  border-radius: 7px;
+  border-radius: var(--tj-control-radius);
   background: var(--tj-surface-muted);
   box-shadow: var(--tj-shadow-inset-control);
 }
@@ -205,7 +205,7 @@
 .payable-comparison-line div {
   height: 12px;
   overflow: hidden;
-  border-radius: 999px;
+  border-radius: var(--tj-control-radius);
   background: var(--tj-surface-muted);
   box-shadow: var(--tj-shadow-inset-control-soft);
 }
@@ -247,7 +247,7 @@
   min-height: 64px;
   padding: 10px 12px;
   border: 1px solid var(--tj-border-subtle);
-  border-radius: var(--spectrum-control-radius);
+  border-radius: var(--tj-panel-radius);
   background: var(--tj-surface-muted);
 }
 
@@ -281,7 +281,7 @@
   width: 8px;
   border: 2px solid var(--tj-border-accent-muted);
   border-right: 0;
-  border-radius: var(--spectrum-control-radius) 0 0 8px;
+  border-radius: var(--tj-panel-radius) 0 0 var(--tj-panel-radius);
 }
 
 .payable-flow-branch.danger strong {
@@ -310,9 +310,9 @@
 
 .payable-tabs button {
   min-width: auto;
-  height: 34px;
+  height: var(--tj-control-height-compact);
   padding: 0 14px;
-  border-radius: 7px;
+  border-radius: var(--tj-control-radius);
   font-size: 13px;
   white-space: nowrap;
 }

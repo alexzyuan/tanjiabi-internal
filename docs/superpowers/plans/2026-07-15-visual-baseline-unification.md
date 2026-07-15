@@ -655,7 +655,7 @@ Batch 3: FBA freight, FBA automation, FBA task form, freight rates
 Batch 4: admin, sync center, knowledge library, aftersales
 ```
 
-- [x] **Step 2: For each batch, edit only owning page files**
+- [ ] **Step 2: For each batch, edit only owning page files**
 
 Example:
 ```text
@@ -669,6 +669,11 @@ Batch 1 edited only:
 - assets/css/pages/21-home-quick-links.css
 - assets/css/pages/22-sales-dashboard.css
 - assets/css/pages/25-sales-forecast.css
+
+Batch 2 edited only:
+- assets/css/pages/51-payables.css
+- assets/css/pages/52-factory-inventory.css
+- assets/css/pages/53-supplier-board.css
 
 styles.css was regenerated with npm run build:css.
 ```
@@ -688,6 +693,15 @@ Current Batch 1 result:
 
 ```text
 node --test test/stylesStructure.test.js: pass
+npm test: pass, 373 passing
+npm run check: pass
+git diff --check: pass
+```
+
+Current Batch 2 result:
+
+```text
+node --test test/stylesStructure.test.js: pass, 45 passing
 npm test: pass, 373 passing
 npm run check: pass
 git diff --check: pass
@@ -713,6 +727,18 @@ sales-forecast desktop/mobile: no horizontal document overflow
 home mobile hero stacks vertically and sync pill stays within viewport
 sales and sales-forecast tables remain horizontally scrollable where needed
 app console errors/warnings: none observed during Batch 1 browser checks
+```
+
+Scope update on 2026-07-15: user requested not to handle mobile view for the current visual cleanup. From Batch 2 onward, browser verification targets Web desktop only unless the user reopens mobile scope.
+
+Current Batch 2 Web desktop result at 1440x1000:
+
+```text
+supplier-board: active view renders, no document/body horizontal overflow, table keeps intended horizontal scroll, visible controls present
+inventory-provision: active view renders, no document/body horizontal overflow, tables fit desktop width
+factory-inventory: active view renders, no document/body horizontal overflow, table keeps intended horizontal scroll, checkbox interaction works
+payables: active view renders, no document/body horizontal overflow, detail tab interaction works
+app console errors/warnings: none observed during Batch 2 desktop checks
 ```
 
 - [ ] **Step 5: Commit each batch**

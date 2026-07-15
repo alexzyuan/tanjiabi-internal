@@ -11,7 +11,7 @@ overflow:hidden;
 flex:0 0 auto;
 position:relative;
 z-index:4;
-padding-bottom:10px;
+padding-bottom:var(--spectrum-spacing-150);
 background:linear-gradient(180deg, var(--tj-page-bg) 0%, var(--tj-page-bg) 86%, color-mix(in srgb, var(--tj-page-bg) 92%, transparent) 100%);
 }
 .supplier-board-filters { grid-template-columns:130px repeat(2, minmax(180px, 0.9fr)) repeat(2, minmax(150px, 0.8fr)); }
