@@ -132,7 +132,7 @@ body:not(.login-body) .home-quick-config-row strong,
 body:not(.login-body) .home-quick-config-row small {
   overflow: hidden;
   text-overflow: ellipsis;
-  var(--tj-content-bg)-space: nowrap;
+  white-space: nowrap;
 }
 
 body:not(.login-body) .home-quick-config-row strong {
@@ -195,4 +195,16 @@ body:not(.login-body) .home-quick-empty {
   color: var(--spectrum-text-secondary);
   background: var(--spectrum-background-layer-2);
   font-size: 13px;
+}
+
+@media (max-width: 900px) {
+  body:not(.login-body) .home-hero {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  body:not(.login-body) .home-sync-pill {
+    min-width: 0;
+    width: 100%;
+  }
 }

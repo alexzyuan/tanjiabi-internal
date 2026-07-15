@@ -645,7 +645,7 @@ git commit -m "style: unify shared visual components"
 - Modify page CSS files under `assets/css/pages/*`.
 - Modify `styles.css` only by running `npm run build:css`.
 
-- [ ] **Step 1: Batch pages by risk**
+- [x] **Step 1: Batch pages by risk**
 
 Use this order:
 ```text
@@ -655,11 +655,22 @@ Batch 3: FBA freight, FBA automation, FBA task form, freight rates
 Batch 4: admin, sync center, knowledge library, aftersales
 ```
 
-- [ ] **Step 2: For each batch, edit only owning page files**
+- [x] **Step 2: For each batch, edit only owning page files**
 
 Example:
 ```text
 Batch 2 edits only assets/css/pages/51-payables.css, 52-factory-inventory.css, 53-supplier-board.css, 55-inventory-provision.css unless a repeated rule belongs in components.
+```
+
+Current result:
+
+```text
+Batch 1 edited only:
+- assets/css/pages/21-home-quick-links.css
+- assets/css/pages/22-sales-dashboard.css
+- assets/css/pages/25-sales-forecast.css
+
+styles.css was regenerated with npm run build:css.
 ```
 
 - [ ] **Step 3: Rebuild and verify each batch**
@@ -673,6 +684,15 @@ npm run check
 
 Expected: all pass.
 
+Current Batch 1 result:
+
+```text
+node --test test/stylesStructure.test.js: pass
+npm test: pass, 373 passing
+npm run check: pass
+git diff --check: pass
+```
+
 - [ ] **Step 4: Browser verify each batch**
 
 For each changed page:
@@ -682,6 +702,17 @@ mobile render has no overlapping text
 changed controls work by mouse
 changed controls show visible keyboard focus
 tables and modals remain usable
+```
+
+Current Batch 1 result:
+
+```text
+home desktop/mobile: no horizontal document overflow
+sales-dashboard desktop/mobile: no horizontal document overflow
+sales-forecast desktop/mobile: no horizontal document overflow
+home mobile hero stacks vertically and sync pill stays within viewport
+sales and sales-forecast tables remain horizontally scrollable where needed
+app console errors/warnings: none observed during Batch 1 browser checks
 ```
 
 - [ ] **Step 5: Commit each batch**

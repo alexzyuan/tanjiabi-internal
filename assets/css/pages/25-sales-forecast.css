@@ -16,7 +16,7 @@
   --sales-forecast-month-bg: color-mix(in srgb, var(--tj-warning) 13%, var(--tj-content-bg));
   max-height: calc(100vh - 360px);
   border: 1px solid var(--sales-forecast-border);
-  border-radius: 8px;
+  border-radius: var(--tj-panel-radius);
   position: relative;
   isolation: isolate;
 }
@@ -241,7 +241,7 @@
   display: inline-flex;
   padding: 3px;
   border: 1px solid var(--tj-border-control);
-  border-radius: 8px;
+  border-radius: var(--tj-control-radius);
   background: var(--tj-action-blue-soft);
 }
 
@@ -299,7 +299,7 @@
   width: 22px;
   height: 22px;
   border: 2px solid var(--tj-border-control);
-  border-radius: 4px;
+  border-radius: var(--spectrum-control-radius);
   color: var(--tj-tone-warning-text);
   background: var(--tj-content-bg);
   display: inline-grid;

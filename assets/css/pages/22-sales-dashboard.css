@@ -18,15 +18,15 @@ body.sales-view #view-sales .insight-row {
 
 .date-range-button {
   width: 100%;
-  height: 38px;
+  height: var(--tj-control-height);
   display: flex;
   align-items: center;
   justify-content: space-between;
   border: 1px solid var(--tj-border-control);
   color: var(--tj-text-body);
   background: var(--tj-content-bg);
-  padding: 0 10px;
-  border-radius: 8px;
+  padding: 0 var(--tj-control-padding-x);
+  border-radius: var(--tj-control-radius);
   cursor: pointer;
 }
 
@@ -48,8 +48,8 @@ body.sales-view #view-sales .insight-row {
   padding: 12px;
   background: var(--tj-content-bg);
   border: 1px solid var(--tj-border-subtle);
-  border-radius: 8px;
-  box-shadow: 0 26px 60px rgba(22, 35, 58, 0.16);
+  border-radius: var(--tj-panel-radius);
+  box-shadow: var(--tj-shadow-floating);
 }
 
 .date-range-popover[hidden] {
@@ -69,7 +69,7 @@ body.sales-view #view-sales .insight-row {
   background: transparent;
   color: var(--tj-text-body);
   text-align: left;
-  border-radius: 8px;
+  border-radius: var(--tj-control-radius);
   cursor: pointer;
 }
 
@@ -101,7 +101,7 @@ body.sales-view #view-sales .insight-row {
   border: 1px solid var(--tj-border-subtle);
   border-left: 3px solid var(--spectrum-accent-visual);
   border-top: 3px solid var(--spectrum-accent-visual);
-  border-radius: 8px;
+  border-radius: var(--tj-panel-radius);
   box-shadow: var(--tj-shadow-soft);
 }
 
@@ -262,7 +262,7 @@ body.sales-view #view-sales .insight-row {
   overflow: hidden;
   margin: 0 0 5px;
   background: var(--tj-surface-muted);
-  border-radius: 999px;
+  border-radius: var(--tj-control-radius);
 }
 
 .kpi-progress span {
