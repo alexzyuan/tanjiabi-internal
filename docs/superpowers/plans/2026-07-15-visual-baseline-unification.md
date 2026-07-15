@@ -342,14 +342,14 @@ git commit -m "style: align generated shell css with locked baseline"
 - Modify: `assets/css/legacy/current.css`
 - Modify: `docs/visual-baseline/2026-07-15/findings.md`
 
-- [ ] **Step 1: Generate preview CSS**
+- [x] **Step 1: Generate preview CSS**
 
 Run:
 ```bash
 ALLOW_CSS_REBUILD=1 npm run build:css -- --output /tmp/tanjia-generated-preview.css
 ```
 
-- [ ] **Step 2: Compare core page screenshots**
+- [x] **Step 2: Compare core page screenshots**
 
 Compare generated preview to locked baseline for:
 ```text
@@ -374,9 +374,11 @@ text overflow at narrow width
 focus-visible state
 ```
 
-- [ ] **Step 3: Move shared rules to components**
+- [x] **Step 3: Move shared rules to components**
 
 If the same visual rule appears in two or more pages, put it under `assets/css/components/*`.
+
+Current result: no generated-preview mismatch was found because `/tmp/tanjia-generated-preview.css` is byte-identical to checked-in `styles.css`; no shared component CSS move was needed.
 
 Examples:
 ```css
@@ -389,7 +391,7 @@ Examples:
 }
 ```
 
-- [ ] **Step 4: Keep page-only rules in page files**
+- [x] **Step 4: Keep page-only rules in page files**
 
 If a rule is unique to one page, keep it in the owning page file, such as:
 ```css
@@ -398,11 +400,15 @@ If a rule is unique to one page, keep it in the owning page file, such as:
 }
 ```
 
-- [ ] **Step 5: Remove migrated selectors from legacy**
+Current result: no page-only CSS move was needed in this parity pass.
+
+- [x] **Step 5: Remove migrated selectors from legacy**
 
 After each selector has a clear owner in `components/*` or `pages/*`, remove its duplicate from `assets/css/legacy/current.css`.
 
-- [ ] **Step 6: Verify**
+Current result: no migrated selectors were removed because no mismatch required ownership movement.
+
+- [x] **Step 6: Verify**
 
 Run:
 ```bash
@@ -412,7 +418,7 @@ npm run check
 
 Expected: all tests pass and CSS standards debt does not increase.
 
-- [ ] **Step 7: Commit core page parity**
+- [x] **Step 7: Commit core page parity**
 
 Run:
 ```bash
