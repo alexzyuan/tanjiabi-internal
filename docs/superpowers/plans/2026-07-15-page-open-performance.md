@@ -122,9 +122,8 @@ Expected: pass.
 
 Do these only after performance logs confirm repeated heavy work:
 
-1. Add default-view warmup jobs for supplier board, inventory provision, and sales forecast.
-2. Add process-level TTL cache for hot JSON cache reads where parsing large files is measurable.
-3. Profile table render paths before changing frontend rendering strategy.
+1. Add process-level TTL cache for hot JSON cache reads where parsing large files is measurable.
+2. Profile table render paths before changing frontend rendering strategy.
 
 ## Implemented: Shared Product Catalog In-Flight Coalescing
 
@@ -144,6 +143,28 @@ node --test test/sharedDataService.test.js
 ```
 
 Expected: concurrent identical shared product catalog calls perform one Listing refresh, one product refresh sequence, and one cache write.
+
+## Implemented: Default Dashboard Warmup
+
+**Files:**
+- Create: `src/services/defaultDashboardWarmupService.js`
+- Create: `test/defaultDashboardWarmupService.test.js`
+- Modify: `server.js`
+- Modify: `package.json`
+
+**Behavior:**
+- Adds a daily `default-dashboard-warmup` scheduler using the same state-file and job-lock pattern as existing warmups.
+- Warms the default first-screen caches for sales forecast, inventory provision, and supplier board.
+- Uses explicit refresh parameters where the business service supports them: sales forecast `{ force: true }`, supplier board `{ dimension: "month", forceRefresh: true }`, and inventory provision default filters.
+- Records per-job duration, row count, cache hit status, sync status, and updated time in logs and warmup state.
+- Fails visibly and records failure state if any warmup job throws; it does not serve or invent fallback data.
+
+**Verification:**
+```bash
+node --test test/defaultDashboardWarmupService.test.js test/supplierBoardFailFast.test.js
+```
+
+Expected: scheduler gating, default job parameters, and per-job state summaries pass.
 
 ## Verification
 

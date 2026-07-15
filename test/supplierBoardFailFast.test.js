@@ -31,6 +31,15 @@ async function writeExpiredSupplierBoardCache(cacheStore) {
   await writeFile(cacheFile, JSON.stringify(cached, null, 2), "utf8");
 }
 
+async function writeFreshSupplierBoardCache(cacheStore) {
+  await cacheStore.saveSupplierBoardCache(supplierBoardCacheKey(), {
+    meta: { syncStatus: "fresh supplier cache" },
+    rows: [{ supplier: "FRESH", msku: "JM-DGC-BLUE", quantity: 99 }],
+    summary: { quantity: 99 },
+    suppliers: [],
+  });
+}
+
 async function withTempLingxingProvider(run) {
   const projectRoot = process.cwd();
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), "supplier-board-cache-"));
@@ -76,6 +85,24 @@ test("supplier board force refresh fails fast instead of serving expired cache a
   await withTempLingxingProvider(async (projectRoot) => {
     const cacheStore = await importFresh(projectRoot, "src/utils/cacheStore.js");
     await writeExpiredSupplierBoardCache(cacheStore);
+    const { getSupplierBoardDashboard } = await importFresh(projectRoot, "src/services/supplierBoardService.js");
+
+    await assert.rejects(
+      getSupplierBoardDashboard({
+        dimension: "month",
+        startDate: "2026-07",
+        endDate: "2026-07",
+        forceRefresh: true,
+      }),
+      /Lingxing adapter is missing/,
+    );
+  });
+});
+
+test("supplier board force refresh bypasses fresh cache", async () => {
+  await withTempLingxingProvider(async (projectRoot) => {
+    const cacheStore = await importFresh(projectRoot, "src/utils/cacheStore.js");
+    await writeFreshSupplierBoardCache(cacheStore);
     const { getSupplierBoardDashboard } = await importFresh(projectRoot, "src/services/supplierBoardService.js");
 
     await assert.rejects(
