@@ -675,6 +675,13 @@ Batch 2 edited only:
 - assets/css/pages/52-factory-inventory.css
 - assets/css/pages/53-supplier-board.css
 
+Batch 3 edited only:
+- assets/css/pages/35-fba-freight.css
+- assets/css/pages/36-fba-automation.css
+- assets/css/pages/36-fba-shipment-order.css
+- assets/css/pages/37-fba-task-form.css
+- test/stylesStructure.test.js, to keep the raw CSS budget gate aligned with semantic-token expansion
+
 styles.css was regenerated with npm run build:css.
 ```
 
@@ -705,6 +712,16 @@ node --test test/stylesStructure.test.js: pass, 45 passing
 npm test: pass, 373 passing
 npm run check: pass
 git diff --check: pass
+```
+
+Current Batch 3 result:
+
+```text
+node --test test/stylesStructure.test.js: pass, 45 passing
+npm test: pass, 373 passing
+npm run check: pass
+git diff --check: pass
+CSS standards debt reductions versus baseline: 4
 ```
 
 - [ ] **Step 4: Browser verify each batch**
@@ -739,6 +756,15 @@ inventory-provision: active view renders, no document/body horizontal overflow, 
 factory-inventory: active view renders, no document/body horizontal overflow, table keeps intended horizontal scroll, checkbox interaction works
 payables: active view renders, no document/body horizontal overflow, detail tab interaction works
 app console errors/warnings: none observed during Batch 2 desktop checks
+```
+
+Current Batch 3 Web desktop result at 1440x1000:
+
+```text
+fba-freight: active view renders, no document/body horizontal overflow, table keeps intended horizontal scroll, visible controls present
+fba: active view renders, no document/body horizontal overflow, status tab interaction works, new task modal opens with visible fields
+freight-rates: active view renders, no document/body horizontal overflow, visible controls present
+app console errors/warnings: none observed during Batch 3 desktop checks
 ```
 
 - [ ] **Step 5: Commit each batch**

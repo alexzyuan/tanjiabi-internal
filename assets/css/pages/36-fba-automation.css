@@ -14,7 +14,6 @@
   --fba-surface: var(--tj-content-bg);
   --fba-surface-soft: var(--tj-surface-muted);
   --fba-skeleton: color-mix(in srgb, var(--tj-action-blue) 8%, var(--tj-content-bg));
-  --fba-modal-shadow: 0 30px 80px rgba(15, 23, 42, 0.28);
 }
 .fba-board-head,
 .fba-board-actions,
@@ -38,9 +37,9 @@
 }
 .fba-board-actions input {
   width: min(340px, 40vw);
-  height: 34px;
+  height: var(--tj-control-height-compact);
   border: 1px solid var(--tj-border-subtle);
-  border-radius: 8px;
+  border-radius: var(--tj-control-radius);
   padding: 0 10px;
 }
 .fba-status-tabs {
@@ -49,9 +48,9 @@
   margin-bottom: 12px;
 }
 .status-tab {
-  height: 34px;
+  height: var(--tj-control-height-compact);
   border: 1px solid var(--tj-border-subtle);
-  border-radius: 8px;
+  border-radius: var(--tj-control-radius);
   padding: 0 12px;
   background: var(--fba-surface);
   color: var(--tj-text-muted);
@@ -73,7 +72,7 @@
   margin: 0 0 12px;
   padding: 12px;
   border: 1px solid color-mix(in srgb, var(--tj-action-blue) 28%, var(--tj-content-bg));
-  border-radius: 8px;
+  border-radius: var(--tj-panel-radius);
   background: color-mix(in srgb, var(--tj-action-blue) 6%, var(--tj-content-bg));
 }
 .fba-queue-panel[hidden] {
@@ -103,7 +102,7 @@
   min-height: 42px;
   padding: 8px 10px;
   border: 1px solid var(--tj-border-subtle);
-  border-radius: 8px;
+  border-radius: var(--tj-panel-radius);
   background: var(--fba-surface);
 }
 .queue-info {
@@ -127,7 +126,7 @@
   height: 28px;
   margin-left: auto;
   flex: 0 0 auto;
-  border-radius: 999px;
+  border-radius: 50%;
 }
 .queue-spinner {
   border: 3px solid color-mix(in srgb, var(--tj-action-blue) 16%, var(--tj-content-bg));
@@ -156,7 +155,7 @@
 .task-group {
   overflow: hidden;
   border: 1px solid var(--tj-border-subtle);
-  border-radius: 8px;
+  border-radius: var(--tj-panel-radius);
   background: var(--fba-surface);
 }
 .task-group-head {
@@ -195,7 +194,7 @@
 .fba-task-skeleton > * {
   display: block;
   min-height: 16px;
-  border-radius: 6px;
+  border-radius: var(--spectrum-control-radius);
   background: linear-gradient(90deg, var(--fba-skeleton) 0%, var(--fba-surface-soft) 45%, var(--fba-skeleton) 100%);
   background-size: 220% 100%;
   animation: fba-skeleton-shimmer 1.2s ease-in-out infinite;
@@ -263,9 +262,9 @@
   display: grid;
   grid-template-rows: auto 1fr auto;
   overflow: hidden;
-  border-radius: 8px;
+  border-radius: var(--tj-panel-radius);
   background: var(--fba-surface);
-  box-shadow: var(--fba-modal-shadow);
+  box-shadow: var(--tj-shadow-modal);
 }
 @media (max-width: 1200px) {
   .fba-grid {

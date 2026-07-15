@@ -42,7 +42,7 @@
 .fba-shipment-order-toolbar button {
   width: auto;
   min-width: 96px;
-  height: 38px;
+  height: var(--tj-control-height);
   padding: 0 14px;
   white-space: nowrap;
 }

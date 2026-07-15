@@ -171,7 +171,7 @@ test("build-styles supports non-destructive preview output", async () => {
 
 test("styles.css stays within the raw size budget", async () => {
   const { size } = await stat(new URL("../styles.css", import.meta.url));
-  assert.ok(size <= 253_000, `styles.css should be <= 253KB raw, got ${size} bytes`);
+  assert.ok(size <= 254_000, `styles.css should be <= 254KB raw, got ${size} bytes`);
 });
 
 test("CSS standards gate is part of the default check command", async () => {

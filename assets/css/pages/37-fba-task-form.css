@@ -16,7 +16,7 @@
 
 .toggle-row {
   display: flex;
-  min-height: 38px;
+  min-height: var(--tj-control-height);
   align-items: center;
   gap: 8px;
   color: var(--tj-text-body);
@@ -41,12 +41,12 @@
 
 .form-grid .task-schedule-options .toggle-row {
   display: flex;
-  min-height: 40px;
+  min-height: var(--tj-control-height);
   align-items: center;
   gap: 8px;
   padding: 0 12px;
   border: 1px solid var(--tj-border-control);
-  border-radius: var(--spectrum-control-radius);
+  border-radius: var(--tj-control-radius);
   background: var(--tj-content-bg);
   color: var(--tj-text-body);
   font-size: 14px;
@@ -64,10 +64,10 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
-  min-height: 40px;
+  min-height: var(--tj-control-height);
   padding: 10px 12px;
   border: 1px solid var(--tj-border-control);
-  border-radius: var(--spectrum-control-radius);
+  border-radius: var(--tj-control-radius);
   background: var(--tj-content-bg);
 }
 
@@ -123,7 +123,7 @@
 .form-grid .schedule-effective-row input {
   height: 44px;
   border-color: var(--tj-border-control);
-  border-radius: 7px;
+  border-radius: var(--tj-control-radius);
   font-size: 14px;
 }
 
@@ -173,17 +173,17 @@
 .form-grid .schedule-time-row input {
   height: 44px;
   border-color: var(--tj-border-control);
-  border-radius: 7px;
+  border-radius: var(--tj-control-radius);
   font-size: 14px;
   font-weight: 750;
 }
 
 .schedule-add-button {
   width: fit-content;
-  min-height: 40px;
+  min-height: var(--tj-control-height);
   margin-top: 12px;
   border: 1px solid var(--tj-action-blue);
-  border-radius: 7px;
+  border-radius: var(--tj-control-radius);
   padding: 0 18px;
   background: var(--tj-content-bg);
   color: var(--tj-action-blue-hover);
@@ -236,9 +236,9 @@
   overflow: auto;
   padding: 6px;
   border: 1px solid var(--tj-border-subtle);
-  border-radius: var(--spectrum-control-radius);
+  border-radius: var(--tj-panel-radius);
   background: var(--tj-content-bg);
-  box-shadow: var(--tj-shadow);
+  box-shadow: var(--tj-shadow-floating);
 }
 
 .msku-suggest-panel[hidden] {
@@ -246,12 +246,12 @@
 }
 
 .search-results {
-  min-height: 34px;
+  min-height: var(--tj-control-height-compact);
   max-height: 128px;
   overflow: auto;
   padding: 8px;
   border: 1px solid var(--tj-border-subtle);
-  border-radius: var(--spectrum-control-radius);
+  border-radius: var(--tj-panel-radius);
   color: var(--tj-text-muted);
   background: var(--tj-surface-muted);
   line-height: 1.6;
@@ -262,7 +262,7 @@
   width: 100%;
   padding: 6px;
   border: 0;
-  border-radius: var(--spectrum-control-radius);
+  border-radius: var(--tj-control-radius);
   color: var(--tj-text-body);
   background: transparent;
   text-align: left;
