@@ -151,7 +151,7 @@ git commit -m "test: capture visual baseline"
 - Modify: `scripts/build-styles.js`
 - Test: `test/stylesStructure.test.js`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add this test to `test/stylesStructure.test.js` near the existing build script tests:
 ```js
@@ -162,7 +162,7 @@ test("build-styles supports non-destructive preview output", async () => {
 });
 ```
 
-- [ ] **Step 2: Run the red test**
+- [x] **Step 2: Run the red test**
 
 Run:
 ```bash
@@ -171,7 +171,7 @@ node --test test/stylesStructure.test.js
 
 Expected: fails because `scripts/build-styles.js` does not yet support `--output`.
 
-- [ ] **Step 3: Implement minimal preview output support**
+- [x] **Step 3: Implement minimal preview output support**
 
 In `scripts/build-styles.js`, add a small argument reader:
 ```js
@@ -190,7 +190,7 @@ const outputPath = previewOutput ? path.resolve(rootDir, previewOutput) : output
 
 Use `outputPath` anywhere the script currently reads, stats, or writes `outputFile`, except inside `isLegacyVisualRollbackActive()` which must continue checking the real locked `styles.css`.
 
-- [ ] **Step 4: Run the green test**
+- [x] **Step 4: Run the green test**
 
 Run:
 ```bash
@@ -199,7 +199,7 @@ node --test test/stylesStructure.test.js
 
 Expected: pass.
 
-- [ ] **Step 5: Verify preview generation does not touch `styles.css`**
+- [x] **Step 5: Verify preview generation does not touch `styles.css`**
 
 Run:
 ```bash
@@ -212,7 +212,7 @@ test -s /tmp/tanjia-generated-preview.css
 
 Expected: command exits 0 and `/tmp/tanjia-generated-preview.css` exists.
 
-- [ ] **Step 6: Commit preview support**
+- [x] **Step 6: Commit preview support**
 
 Run:
 ```bash

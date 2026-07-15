@@ -6,6 +6,14 @@ import { isRepositoryMetadataPath } from "../src/utils/pathFilters.js";
 const rootDir = process.cwd();
 const sourceDir = path.join(rootDir, "assets", "css");
 const outputFile = path.join(rootDir, "styles.css");
+function argValue(name) {
+  const index = process.argv.indexOf(name);
+  if (index === -1) return "";
+  return process.argv[index + 1] || "";
+}
+
+const previewOutput = argValue("--output");
+const outputPath = previewOutput ? path.resolve(rootDir, previewOutput) : outputFile;
 const layerOrder = ["tokens", "base", "layout", "components", "pages", "legacy"];
 const visualLockMessage = [
   "styles.css is temporarily locked because assets/css/* does not yet reproduce the approved sidebar/topbar visual baseline.",
@@ -150,15 +158,15 @@ async function main() {
   const css = await buildCss();
 
   if (checkOnly) {
-    const current = await readFile(outputFile, "utf8");
+    const current = await readFile(outputPath, "utf8");
     if (current !== css) {
       throw new Error("styles.css is out of date. Run npm run build:css.");
     }
-    await stat(outputFile);
+    await stat(outputPath);
     return;
   }
 
-  const changed = await writeIfChanged(outputFile, css);
+  const changed = await writeIfChanged(outputPath, css);
   console.log(changed ? "styles.css rebuilt" : "styles.css already up to date");
 }
 

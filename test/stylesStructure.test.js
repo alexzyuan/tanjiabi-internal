@@ -194,6 +194,12 @@ test("styles.css is generated from layered CSS sources", async () => {
   assert.equal(styles, generated, "styles.css must match npm run build:css output");
 });
 
+test("build-styles supports non-destructive preview output", async () => {
+  const source = await readFile(new URL("../scripts/build-styles.js", import.meta.url), "utf8");
+  assert.match(source, /--output/);
+  assert.match(source, /outputPath/);
+});
+
 test("styles.css stays within the raw size budget", async () => {
   const { size } = await stat(new URL("../styles.css", import.meta.url));
   assert.ok(size <= 251_000, `styles.css should be <= 251KB raw, got ${size} bytes`);
