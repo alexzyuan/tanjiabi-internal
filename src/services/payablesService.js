@@ -1,6 +1,7 @@
 import { getConfig } from "../config/index.js";
 import { getLingxingAdapter } from "../adapters/lingxingAdapter.js";
 import { formatDate, getPacificTodayDate } from "../utils/pacificDate.js";
+import { normalizeRecordList, readFirst, toNumber } from "../utils/recordAccess.js";
 
 const metricDocs = [
   ["供应商金额来源", "领星 ERP - 请款池 - 采购 - 现结货款。"],
@@ -39,29 +40,9 @@ function monthText(value) {
   return normalizeDateText(value).slice(0, 7) || "未分月";
 }
 
-function toNumber(value) {
-  if (value === null || value === undefined || value === "") return 0;
-  const number = Number(String(value).replace(/,/g, "").replace(/[^\d.-]/g, ""));
-  return Number.isFinite(number) ? number : 0;
-}
-
 function round(value, digits = 2) {
   const factor = 10 ** digits;
   return Math.round(toNumber(value) * factor) / factor;
-}
-
-function readFirst(item, keys) {
-  for (const key of keys) {
-    const value = item?.[key];
-    if (value !== undefined && value !== null && String(value).trim() !== "") return value;
-  }
-  return "";
-}
-
-function normalizeRecordList(payload) {
-  const data = payload?.data || payload || {};
-  const records = data.records || data.list || data.rows || data.data || data.items || data.result || data;
-  return Array.isArray(records) ? records : [];
 }
 
 function totalCountOf(payload, recordsLength = 0) {

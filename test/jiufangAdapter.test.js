@@ -1,28 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { withEnv } from "./helpers/env.js";
 import { getConfig } from "../src/config/index.js";
 import {
   JiufangApiError,
   createJiufangAdapter,
   redactJiufangPayload,
 } from "../src/adapters/jiufangAdapter.js";
-
-function withEnv(values, fn) {
-  const previous = {};
-  for (const key of Object.keys(values)) {
-    previous[key] = process.env[key];
-    if (values[key] === undefined) delete process.env[key];
-    else process.env[key] = values[key];
-  }
-  try {
-    return fn();
-  } finally {
-    for (const key of Object.keys(values)) {
-      if (previous[key] === undefined) delete process.env[key];
-      else process.env[key] = previous[key];
-    }
-  }
-}
 
 test("getConfig exposes Jiufang credentials without raw password storage", () => withEnv({
   JIUFANG_API_BASE_URL: "https://cgi.jiufanglogistics.cn/api/",

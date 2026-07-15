@@ -6,23 +6,13 @@ import {
   LingxingAdapter,
   resetLingxingAdapterForTest,
 } from "../src/adapters/lingxingAdapter.js";
+import { jsonResponse } from "./helpers/http.js";
 
 const lingxingTestConfig = {
   baseUrl: "https://openapi.test/",
   appKey: "1234567890abcdef",
   appSecret: "secret",
 };
-
-function jsonResponse(payload, { ok = true, status = 200, statusText = "OK" } = {}) {
-  return {
-    ok,
-    status,
-    statusText,
-    async json() {
-      return payload;
-    },
-  };
-}
 
 test("filterCoreSellers includes JOI MEW Germany stores", () => {
   const sellers = filterCoreSellers([

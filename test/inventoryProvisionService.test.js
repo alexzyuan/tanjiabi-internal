@@ -1,22 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-
-async function withEnv(values, run) {
-  const previous = {};
-  Object.keys(values).forEach((key) => {
-    previous[key] = process.env[key];
-    if (values[key] === undefined) delete process.env[key];
-    else process.env[key] = values[key];
-  });
-  try {
-    return await run();
-  } finally {
-    Object.keys(values).forEach((key) => {
-      if (previous[key] === undefined) delete process.env[key];
-      else process.env[key] = previous[key];
-    });
-  }
-}
+import { withEnv } from "./helpers/env.js";
 
 test("inventory provision landed cost rows calculate provision amount by aging bucket", async () => {
   const { inventoryProvisionTestUtils } = await import("../src/services/inventoryProvisionService.js");

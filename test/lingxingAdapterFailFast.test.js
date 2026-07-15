@@ -2,14 +2,8 @@ import assert from "node:assert/strict";
 import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 import test from "node:test";
-
-async function importFresh(projectRoot, relativePath) {
-  const url = pathToFileURL(path.join(projectRoot, relativePath));
-  url.searchParams.set("testRun", `${Date.now()}-${Math.random()}`);
-  return import(url.href);
-}
+import { importFresh } from "./helpers/moduleImport.js";
 
 function orderProfitCacheKey({ startDate, endDate, sids, currencyCode = "ORIGINAL" }) {
   return JSON.stringify({

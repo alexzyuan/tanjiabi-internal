@@ -1,6 +1,7 @@
 import { getConfig } from "../config/index.js";
 import { getLingxingAdapter } from "../adapters/lingxingAdapter.js";
 import { listDateRange } from "../utils/dateRange.js";
+import { normalizeRecordList, readFirst, toNumber } from "../utils/recordAccess.js";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -19,29 +20,9 @@ const adKeywordAnalysisCacheDir = path.join(process.cwd(), "data-cache", "ad-key
 let adKeywordAnalysisTimer = null;
 let adKeywordAnalysisRunning = false;
 
-function readFirst(item, keys) {
-  for (const key of keys) {
-    const value = item?.[key];
-    if (value !== undefined && value !== null && String(value).trim() !== "") return value;
-  }
-  return "";
-}
-
-function normalizeRecordList(payload) {
-  const data = payload?.data || payload || {};
-  const records = data.records || data.list || data.rows || data.data || data.items || data.result || data;
-  return Array.isArray(records) ? records : [];
-}
-
 function totalCountOf(payload, recordsLength = 0) {
   const data = payload?.data || payload || {};
   return Number(data.total ?? data.count ?? data.totalCount ?? data.total_count ?? payload?.total ?? recordsLength) || recordsLength;
-}
-
-function toNumber(value) {
-  if (value === null || value === undefined || value === "") return 0;
-  const number = Number(String(value).replace(/,/g, "").replace(/[^\d.-]/g, ""));
-  return Number.isFinite(number) ? number : 0;
 }
 
 function parseBudget(value) {
