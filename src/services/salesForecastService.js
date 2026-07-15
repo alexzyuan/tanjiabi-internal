@@ -1313,24 +1313,13 @@ async function refreshSalesForecastDashboardCache() {
     .sort((a, b) => a.storeName.localeCompare(b.storeName, "zh-CN") || a.country.localeCompare(b.country, "zh-CN") || productOrderIndex(a) - productOrderIndex(b) || a.msku.localeCompare(b.msku, "zh-CN"));
   const { rows: listingRows } = await enrichRowsFromListingCache(normalizedRows);
   let rows = listingRows;
-  let fbaInventorySyncStatus = "";
-  try {
-    const fbaInventoryResult = await enrichRowsWithFbaInventory(adapter, rows, selectedSids);
-    rows = fbaInventoryResult.rows;
-    fbaInventorySyncStatus = `FBA库存精确匹配 ${fbaInventoryResult.matchedCount}/${fbaInventoryResult.inventoryCount} 条`;
-  } catch (error) {
-    fbaInventorySyncStatus = `FBA库存明细读取失败，保留补货建议库存：${error.message}`;
-  }
-  let previousYearSyncStatus = "";
-  let previousYearEndpoint = "";
-  try {
-    const previousYearResult = await enrichRowsWithPreviousYearSales(adapter, rows, sellerBySid, selectedSids);
-    rows = previousYearResult.rows;
-    previousYearSyncStatus = previousYearResult.syncStatus || "";
-    previousYearEndpoint = previousYearResult.endpoint || "";
-  } catch (error) {
-    previousYearSyncStatus = `2025同期销量读取失败：${error.message}`;
-  }
+  const fbaInventoryResult = await enrichRowsWithFbaInventory(adapter, rows, selectedSids);
+  rows = fbaInventoryResult.rows;
+  const fbaInventorySyncStatus = `FBA库存精确匹配 ${fbaInventoryResult.matchedCount}/${fbaInventoryResult.inventoryCount} 条`;
+  const previousYearResult = await enrichRowsWithPreviousYearSales(adapter, rows, sellerBySid, selectedSids);
+  rows = previousYearResult.rows;
+  const previousYearSyncStatus = previousYearResult.syncStatus || "";
+  const previousYearEndpoint = previousYearResult.endpoint || "";
   const cachedAt = Date.now();
   const cache = {
     version: SALES_FORECAST_CACHE_VERSION,
@@ -1384,21 +1373,22 @@ async function ensureCachedPreviousYearSales(cache) {
     await writeSalesForecastDashboardCache(nextCache);
     return nextCache;
   } catch (error) {
-    return {
-      ...cache,
-      previousYearSalesEndpoint: previousYearEndpoint,
-      previousYearSyncStatus: `2025同期销量读取失败：${error.message}`,
-    };
+    console.error("[sales-forecast] previous year sales hydration failed", {
+      cacheUpdatedAt: cache.updatedAt || "",
+      cacheAgeMs: cache.cachedAt ? Date.now() - Number(cache.cachedAt) : null,
+      error: error.message,
+    });
+    throw new Error(`销售预估同期销量补齐失败：${error.message}`);
   }
 }
 
-function buildSalesForecastDashboardResponse(cache, filters, manualDaily, hiddenRows, { cacheHit = true, stale = false } = {}) {
+function buildSalesForecastDashboardResponse(cache, filters, manualDaily, hiddenRows, { cacheHit = true } = {}) {
   const countries = listFilterValues(filters.country);
   const rows = filterRows(cache.rows || [], filters);
   const availableStores = storeOptions((cache.rows || []).filter((row) => !countries.length || countries.includes(row.country)));
   const cacheExpiresAt = new Date(Number(cache.cachedAt || Date.now()) + SALES_FORECAST_CACHE_TTL_MS)
     .toLocaleString("zh-CN", { hour12: false });
-  const cacheLabel = stale ? "缓存数据（实时刷新失败）" : cacheHit ? "12小时缓存" : "实时更新";
+  const cacheLabel = cacheHit ? "12小时缓存" : "实时更新";
   const enrichmentLabel = cache.enrichmentPending ? "；品名和图片后台补齐中" : "";
   const previousYearLabel = cache.previousYearSyncStatus ? `；${cache.previousYearSyncStatus}` : "";
   const fbaInventoryLabel = cache.fbaInventorySyncStatus ? `；${cache.fbaInventorySyncStatus}` : "";
@@ -1410,7 +1400,6 @@ function buildSalesForecastDashboardResponse(cache, filters, manualDaily, hidden
       syncStatus: `${cacheLabel}；补货建议 ${cache.adviceCount || cache.rows?.length || 0} 条；店铺 ${cache.sellerCount || 0} 个${fbaInventoryLabel}${enrichmentLabel}${previousYearLabel}`,
       updatedAt: cache.updatedAt || nowText(),
       cacheHit,
-      stale,
       cacheExpiresAt,
       enrichmentPending: Boolean(cache.enrichmentPending),
       countries: COUNTRY_OPTIONS,

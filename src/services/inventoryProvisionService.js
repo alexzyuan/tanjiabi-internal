@@ -1553,7 +1553,6 @@ export async function getInventoryProvisionDashboard(filters = {}) {
   let syncStatus = config.dataProvider === "lingxing" ? "等待领星 FBA 库存明细返回" : "本地模拟库龄数据";
   let snapshotAvailable = true;
   let snapshotUpdatedAt = "";
-  let liveFallback = false;
   let availableDates = [];
   let previousPeriod = "";
   let previousSourceRows = [];
@@ -1570,16 +1569,12 @@ export async function getInventoryProvisionDashboard(filters = {}) {
           ? `实时读取并保存今日快照：明细 ${result.rows.length} 条，原始记录 ${result.rawCount} 条`
           : `今日实时库存暂无可计提数据，原始记录 ${result.rawCount} 条`;
       } catch (error) {
-        const cached = await readInventoryProvisionSnapshot(currentDate);
-        if (cached?.data?.rows) {
-          sourceRows = cached.data.rows;
-          snapshotUpdatedAt = cached.updatedAt || "";
-          liveFallback = true;
-          syncStatus = `实时读取失败，显示今日最近快照 ${snapshotUpdatedAt}`;
-        } else {
-          snapshotAvailable = false;
-          syncStatus = `今日实时库存读取失败，且无可用快照：${error.message}`;
-        }
+        console.error("[inventory-provision] live inventory read failed", {
+          date: currentDate,
+          requestedMonth: date,
+          error: error.message,
+        });
+        throw new Error(`库存减值实时库存读取失败，未使用今日快照：${error.message}`);
       }
     } else {
       source = "领星 ERP · FBA历史库存月报";
@@ -1669,7 +1664,6 @@ export async function getInventoryProvisionDashboard(filters = {}) {
       costModeDescription: costMode.description,
       snapshotAvailable,
       snapshotUpdatedAt,
-      liveFallback,
       availableDates,
       reversalStatus,
       ruleText: `计提资产减值规则：91-180天*40%、181-270天*80%、271天及以上*100%；当前成本计算=${costMode.label}`,
