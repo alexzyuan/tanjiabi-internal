@@ -70,6 +70,7 @@ function declaredUnitPrice(line = {}) {
 const knownJiufangChannelCapacityCodes = new Set(["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "15"]);
 const batteryYesValues = new Set(["1", "true", "yes", "y", "是", "有", "带电", "含电", "含电池", "内置电池"]);
 const batteryNoValues = new Set(["0", "false", "no", "n", "否", "无", "不带电", "不含电", "不含电池", "普货"]);
+const defaultJiufangDeclareValue = 2;
 
 function batteryFlag(value) {
   const text = firstText(value).toLowerCase();
@@ -88,6 +89,14 @@ function channelCapacityForShipment(shipment = {}, lines = [], options = {}) {
   const flags = [...(shipment.items || []), ...lines].map((line) => batteryFlag(line.isBattery)).filter(Boolean);
   if (!flags.length) return "";
   return flags.includes("yes") ? "5" : "1";
+}
+
+function jiufangChargedText(value) {
+  return batteryFlag(value) === "yes" ? "是" : "否";
+}
+
+function jiufangDeclareValue() {
+  return defaultJiufangDeclareValue;
 }
 
 function destinationAddress(shipment = {}) {
@@ -157,11 +166,10 @@ function packageDetailsForBox(box = {}, linesByKey = new Map()) {
   return (box.productList || []).map((product) => {
     const line = [...linesByKey.values()].find((candidate) => productMatchesLine(product, candidate)) || {};
     return {
-      SKU: firstText(line.internalSku, product.sku, line.sku, product.msku, line.msku),
-      ProductName: firstText(product.title, product.productName, line.title, line.productName),
-      Quantity: numberValue(product.quantityInBox || product.quantity || product.total || box.total),
+      Sku: firstText(line.internalSku, product.sku, line.sku, product.msku, line.msku),
+      Num: numberValue(product.quantityInBox || product.quantity || product.total || box.total),
     };
-  }).filter((item) => item.SKU && item.Quantity > 0);
+  }).filter((item) => item.Sku && item.Num > 0);
 }
 
 function buildInvoices(lines = []) {
@@ -178,18 +186,21 @@ function buildInvoices(lines = []) {
     HsCode: firstText(line.customsCode),
     CustomsClearanceCode: firstText(line.customsCode),
     Asin: firstText(line.asin),
-    PurchasingPrice: declaredUnitPrice(line),
+    PurchasingPrice: declaredUnitPrice(line) || jiufangDeclareValue(line),
     Num: numberValue(line.quantity),
+    DeclareValue: jiufangDeclareValue(line),
     MeasurementUnit: firstText(line.unit),
-    IsBattery: firstText(line.isBattery),
+    IsCharged: jiufangChargedText(line.isBattery),
     Model: firstText(line.model, line.item?.model),
+    ImageUrl: firstText(line.imageUrl, line.item?.imageUrl),
+    PerSuitNum: 1,
   })).filter((line) => line.Sku && line.Num > 0);
 }
 
 function summaryFor({ shipment, lines, boxes, channelCode, channelCapacity }) {
   const totalKg = boxes.reduce((total, box) => total + boxWeightKg(box), 0);
   const totalCbm = boxes.reduce((total, box) => total + (boxCm(box, "length") * boxCm(box, "width") * boxCm(box, "height") / 1000000), 0);
-  const invoiceTotal = lines.reduce((total, line) => total + declaredUnitPrice(line) * numberValue(line.quantity), 0);
+  const invoiceTotal = lines.reduce((total, line) => total + jiufangDeclareValue(line) * numberValue(line.quantity), 0);
   return {
     shipmentId: firstText(shipment.shipmentId),
     channelCode,
@@ -252,11 +263,13 @@ export function validateJiufangOrderInput({
 
   const requiredLineFields = [
     ["brand", "品牌"],
+    ["model", "型号"],
     ["material", "材质"],
     ["purpose", "用途"],
     ["customsCode", "清关编码"],
     ["isBattery", "是否带电"],
     ["unit", "单位"],
+    ["imageUrl", "图片"],
   ];
   const declarationLines = lines.length
     ? lines
@@ -272,7 +285,6 @@ export function validateJiufangOrderInput({
     for (const [key, name] of requiredLineFields) {
       if (!firstText(line[key])) errors.push(`${label} 缺少${name}`);
     }
-    if (declaredUnitPrice(line) <= 0) errors.push(`${label} 缺少申报单价`);
   }
   if (!declarationLines.length) errors.push(`${shipmentId} 没有可下单的 SKU 明细`);
   if (!channelCapacityForShipment(shipment, declarationLines, options)) errors.push(`${shipmentId} 缺少九方渠道能力（请确认 SKU 是否带电）`);

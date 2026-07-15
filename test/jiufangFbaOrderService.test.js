@@ -30,6 +30,7 @@ const shipment = {
     asin: "B0BLUE",
     productName: "收纳盒",
     title: "Storage Box",
+    imageUrl: "https://img.example.com/storage-box.jpg",
     brand: "Tanjia",
     material: "Plastic",
     purpose: "Home storage",
@@ -62,6 +63,7 @@ const boxPayloadsByShipmentId = new Map([[
             asin: "B0BLUE",
             productName: "收纳盒",
             title: "Storage Box",
+            imageUrl: "https://img.example.com/storage-box.jpg",
             brand: "Tanjia",
             material: "Plastic",
             purpose: "Home storage",
@@ -112,7 +114,8 @@ test("buildJiufangShipmentPayload maps FBA shipment boxes to Jiufang ordinary sh
   assert.equal(payload.ShipmentRequest.Packages[0].BoxMark.FbaBoxNumber, "FBA18QJFDCWJ-1");
   assert.equal(payload.ShipmentRequest.Packages[0].PackageWeight.Weight, 10);
   assert.equal(payload.ShipmentRequest.Packages[0].Dimensions.Length, 40);
-  assert.equal(payload.ShipmentRequest.Packages[0].PackageDetails[0].SKU, "TJ-DGC-BLUE");
+  assert.equal(payload.ShipmentRequest.Packages[0].PackageDetails[0].Sku, "TJ-DGC-BLUE");
+  assert.equal(payload.ShipmentRequest.Packages[0].PackageDetails[0].Num, 12);
   assert.equal(payload.ShipmentRequest.Invoices[0].ShipmentId, "FBA18QJFDCWJ");
   assert.equal(payload.ShipmentRequest.Invoices[0].Sku, "TJ-DGC-BLUE");
   assert.equal(payload.ShipmentRequest.Invoices[0].ProductNameCn, "收纳盒");
@@ -120,10 +123,14 @@ test("buildJiufangShipmentPayload maps FBA shipment boxes to Jiufang ordinary sh
   assert.equal(payload.ShipmentRequest.Invoices[0].HsCode, "3924900000");
   assert.equal(payload.ShipmentRequest.Invoices[0].CustomsClearanceCode, "3924900000");
   assert.equal(payload.ShipmentRequest.Invoices[0].PurchasingPrice, 2.5);
+  assert.equal(payload.ShipmentRequest.Invoices[0].DeclareValue, 2);
   assert.equal(payload.ShipmentRequest.Invoices[0].Num, 12);
   assert.equal(payload.ShipmentRequest.Invoices[0].MeasurementUnit, "pcs");
+  assert.equal(payload.ShipmentRequest.Invoices[0].IsCharged, "否");
   assert.equal(payload.ShipmentRequest.Invoices[0].Model, "SB-2");
-  assert.equal(payload.ShipmentRequest.InvoiceLineTotal.MonetaryValue, 30);
+  assert.equal(payload.ShipmentRequest.Invoices[0].ImageUrl, "https://img.example.com/storage-box.jpg");
+  assert.equal(payload.ShipmentRequest.Invoices[0].PerSuitNum, 1);
+  assert.equal(payload.ShipmentRequest.InvoiceLineTotal.MonetaryValue, 24);
   assert.equal(summary.boxCount, 1);
   assert.equal(summary.skuCount, 1);
   assert.equal(summary.totalKg, 10);
@@ -162,6 +169,7 @@ test("buildJiufangShipmentPayload uses internal SKU mapped from Lingxing listing
               asin: "B0BLUE",
               productName: "双支蜘蛛船",
               title: "Spider Boat",
+              imageUrl: "https://img.example.com/spider.jpg",
               quantityInBox: 12,
             }],
           }],
@@ -177,7 +185,7 @@ test("buildJiufangShipmentPayload uses internal SKU mapped from Lingxing listing
     senderProfile,
   });
 
-  assert.equal(payload.ShipmentRequest.Packages[0].PackageDetails[0].SKU, "TJ033");
+  assert.equal(payload.ShipmentRequest.Packages[0].PackageDetails[0].Sku, "TJ033");
   assert.equal(payload.ShipmentRequest.Invoices[0].Sku, "TJ033");
 });
 
@@ -272,7 +280,7 @@ test("buildJiufangShipmentPayload accepts Lingxing snake_case destination addres
   });
 });
 
-test("buildJiufangShipmentPayload uses declaration price enriched on shipment item when box product omits it", () => {
+test("buildJiufangShipmentPayload defaults Jiufang declare value to 2 when ERP price is missing", () => {
   const localBoxPayloadsByShipmentId = new Map([[
     "FBA18QJFDCWJ",
     {
@@ -291,6 +299,7 @@ test("buildJiufangShipmentPayload uses declaration price enriched on shipment it
               msku: "MSKU-BLUE",
               sku: "TJ-DGC-BLUE",
               productName: "收纳盒",
+              imageUrl: "https://img.example.com/storage-box.jpg",
               quantityInBox: 12,
             }],
           }],
@@ -300,13 +309,17 @@ test("buildJiufangShipmentPayload uses declaration price enriched on shipment it
   ]]);
 
   const { payload } = buildJiufangShipmentPayload({
-    shipment,
+    shipment: {
+      ...shipment,
+      items: [{ ...shipment.items[0], declaredValue: "" }],
+    },
     boxPayloadsByShipmentId: localBoxPayloadsByShipmentId,
     channelCode: "SEA-US-07",
     senderProfile,
   });
 
-  assert.equal(payload.ShipmentRequest.Invoices[0].PurchasingPrice, 2.5);
+  assert.equal(payload.ShipmentRequest.Invoices[0].PurchasingPrice, 2);
+  assert.equal(payload.ShipmentRequest.Invoices[0].DeclareValue, 2);
 });
 
 test("validateJiufangOrderInput fails fast on required missing fields", () => {
@@ -330,7 +343,7 @@ test("validateJiufangOrderInput fails fast on required missing fields", () => {
   ]);
   assert.ok(errors.some((item) => item.includes("缺少发件公司中文名")));
   assert.ok(errors.some((item) => item.includes("缺少发件企业信用代码")));
-  assert.ok(errors.some((item) => item.includes("MSKU-BLUE 缺少申报单价")));
+  assert.equal(errors.some((item) => item.includes("MSKU-BLUE 缺少申报单价")), false);
   assert.ok(errors.some((item) => item.includes("第 1 箱缺少重量")));
 });
 
