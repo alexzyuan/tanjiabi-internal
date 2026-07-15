@@ -25,7 +25,7 @@ const dotEnvPath = path.join(process.cwd(), ".env");
 const dotEnv = loadDotEnv();
 const dotEnvLoaded = existsSync(dotEnvPath);
 
-function readEnv(name, fallback = "") {
+export function readEnv(name, fallback = "") {
   return process.env[name] || dotEnv[name] || fallback;
 }
 

@@ -1,5 +1,7 @@
+import { readEnv } from "../config/index.js";
+
 function envText(key, fallback = "") {
-  return String(process.env[key] || fallback || "").trim();
+  return String(readEnv(key, fallback) || "").trim();
 }
 
 export const fbaAddressProfiles = {
