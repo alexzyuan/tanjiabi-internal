@@ -105,10 +105,10 @@ test("buildJiufangShipmentPayload maps FBA shipment boxes to Jiufang ordinary sh
   assert.equal(payload.ShipmentRequest.ReferenceNumber.Value, "FBA18QJFDCWJ");
   assert.equal(payload.ShipmentRequest.Service.Code, "SEA-US-07");
   assert.equal(payload.ShipmentRequest.Departure.Code, "SZ");
-  assert.equal(Object.hasOwn(payload.ShipmentRequest.ShipFrom, "CompanyNameCn"), false);
+  assert.equal(payload.ShipmentRequest.ShipFrom.CompanyNameCn, "厦门探嘉网络科技有限公司");
   assert.equal(payload.ShipmentRequest.ShipFrom.CompanyNameEn, "Xiamen Tanjia wangluo keji youxian gongsi");
   assert.equal(payload.ShipmentRequest.ShipFrom.AttentionName, "justin");
-  assert.equal(Object.hasOwn(payload.ShipmentRequest.ShipFrom, "EnterpriseCreditCode"), false);
+  assert.equal(payload.ShipmentRequest.ShipFrom.EnterpriseCreditCode, "91350200TEST000001");
   assert.equal(Object.hasOwn(payload.ShipmentRequest, "Importer"), false);
   assert.equal(payload.ShipmentRequest.ShipmentServiceOptions.ChannelCapacity, "1");
   assert.equal(payload.ShipmentRequest.ShipmentServiceOptions.ExportLicence, false);
@@ -205,13 +205,13 @@ test("buildJiufangShipmentPayload resolves legal sender by store owner prefix re
     senderProfile: undefined,
   }).payload.ShipmentRequest.ShipFrom;
 
-  assert.equal(Object.hasOwn(tanjia, "CompanyNameCn"), false);
+  assert.equal(tanjia.CompanyNameCn, "厦门探嘉网络科技有限公司");
   assert.equal(tanjia.AttentionName, "justin");
-  assert.equal(Object.hasOwn(tanjia, "EnterpriseCreditCode"), false);
+  assert.equal(tanjia.EnterpriseCreditCode, "91350206MAD64HGE0K");
   assert.deepEqual(tanjia.Address.AddressLine, ["Unit 2302-3-2D, No. 56 Chengyi North Street, Phase III Software Park, Xiamen Torch High-tech Zone"]);
-  assert.equal(Object.hasOwn(tandanbo, "CompanyNameCn"), false);
+  assert.equal(tandanbo.CompanyNameCn, "厦门坦蛋伯网络科技有限公司");
   assert.equal(tandanbo.AttentionName, "justin");
-  assert.equal(Object.hasOwn(tandanbo, "EnterpriseCreditCode"), false);
+  assert.equal(tandanbo.EnterpriseCreditCode, "91350206MADNM7UF44");
   assert.deepEqual(tandanbo.Address.AddressLine, ["Unit 2302-3-1D, No. 56 Chengyi North Street, Phase III Software Park, Xiamen Torch High-tech Zone"]);
 });
 
@@ -227,10 +227,8 @@ test("buildJiufangShipmentPayload resolves legal sender from Lingxing display sh
     channelCode: "SEA-AU-01",
   }).payload.ShipmentRequest.ShipFrom;
 
-  assert.equal(Object.hasOwn(tanjia, "CompanyNameCn"), false);
-  assert.equal(Object.hasOwn(tandanbo, "CompanyNameCn"), false);
-  assert.equal(tanjia.CompanyNameEn, "Xiamen Tanjia wangluo keji youxian gongsi");
-  assert.equal(tandanbo.CompanyNameEn, "Xiamen tandanbo wangluokeji youxiangongsi");
+  assert.equal(tanjia.CompanyNameCn, "厦门探嘉网络科技有限公司");
+  assert.equal(tandanbo.CompanyNameCn, "厦门坦蛋伯网络科技有限公司");
 });
 
 test("validateJiufangOrderInput fails fast when Jiufang sender store owner cannot be resolved", () => {
@@ -347,8 +345,8 @@ test("validateJiufangOrderInput fails fast on required missing fields", () => {
     "FBA18QJFDCWJ 缺少收件地址 addressLine1",
     "FBA18QJFDCWJ 缺少收件地址 city",
   ]);
-  assert.equal(errors.some((item) => item.includes("缺少发件公司中文名")), false);
-  assert.equal(errors.some((item) => item.includes("缺少发件企业信用代码")), false);
+  assert.ok(errors.some((item) => item.includes("缺少发件公司中文名")));
+  assert.ok(errors.some((item) => item.includes("缺少发件企业信用代码")));
   assert.equal(errors.some((item) => item.includes("MSKU-BLUE 缺少申报单价")), false);
   assert.ok(errors.some((item) => item.includes("第 1 箱缺少重量")));
 });
