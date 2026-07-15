@@ -110,11 +110,9 @@ function addressValue(address = {}, camelKey, snakeKey) {
 function senderAddress(senderProfile = {}) {
   const profile = senderProfile || {};
   return {
-    CompanyNameCn: firstText(profile.companyNameCn, profile.companyNameCN, profile.companyChineseName),
     CompanyNameEn: firstText(profile.companyNameEn, profile.companyName, profile.shipperName),
     AttentionName: "justin",
     Phone: firstText(profile.phoneNumber, profile.phone),
-    EnterpriseCreditCode: firstText(profile.enterpriseCreditCode, profile.creditCode),
     Address: {
       AddressLine: [firstText(profile.addressLineEn1, profile.addressLine1), firstText(profile.addressLineEn2, profile.addressLine2)].filter(Boolean),
       City: firstText(profile.city),
@@ -243,9 +241,7 @@ export function validateJiufangOrderInput({
 
   if (!resolvedSenderProfile) errors.push(`${shipmentId} 无法识别发件店铺主体：${shipmentStoreName(shipment) || "空"}`);
   const sender = senderAddress(resolvedSenderProfile);
-  if (!firstText(sender.CompanyNameCn)) errors.push(`${shipmentId} 缺少发件公司中文名`);
   if (!firstText(sender.CompanyNameEn)) errors.push(`${shipmentId} 缺少发件公司英文名`);
-  if (!firstText(sender.EnterpriseCreditCode)) errors.push(`${shipmentId} 缺少发件企业信用代码`);
   if (!firstText(sender.AttentionName)) errors.push(`${shipmentId} 缺少发件联系人`);
   if (!sender.Address.AddressLine.length) errors.push(`${shipmentId} 缺少发件地址`);
   if (!firstText(sender.Address.City)) errors.push(`${shipmentId} 缺少发件城市`);
