@@ -124,15 +124,6 @@ export async function readOrderProfitCache(key, ttlMs = 30 * 60 * 1000) {
   }
 }
 
-export async function readStaleOrderProfitCache(key) {
-  try {
-    const content = await readFile(path.join(orderProfitDir, `${hashKey(key)}.json`), "utf8");
-    return JSON.parse(content);
-  } catch {
-    return null;
-  }
-}
-
 export async function saveInventoryProvisionSnapshot(date, data) {
   const snapshotDate = normalizedSnapshotDate(date);
   if (!snapshotDate) throw new Error("库存计提快照日期格式无效");
@@ -258,10 +249,6 @@ export async function readSupplierBoardCache(key, ttlMs = Infinity) {
   return readNamedCache(supplierBoardDir, key, ttlMs);
 }
 
-export async function readStaleSupplierBoardCache(key) {
-  return readNamedCache(supplierBoardDir, key, Infinity);
-}
-
 export async function saveSupplierBoardProductMapCache(key, data) {
   await saveNamedCache(supplierBoardProductDir, key, data);
   await cleanupCacheDir(supplierBoardProductDir, supplierBoardProductCachePolicy);
@@ -287,8 +274,4 @@ export async function saveFactoryInventoryCache(key, data) {
 
 export async function readFactoryInventoryCache(key, ttlMs = Infinity) {
   return readNamedCache(factoryInventoryDir, key, ttlMs);
-}
-
-export async function readStaleFactoryInventoryCache(key) {
-  return readNamedCache(factoryInventoryDir, key, Infinity);
 }
