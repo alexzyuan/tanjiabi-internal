@@ -1,5 +1,5 @@
-function envText(key) {
-  return String(process.env[key] || "").trim();
+function envText(key, fallback = "") {
+  return String(process.env[key] || fallback || "").trim();
 }
 
 export const fbaAddressProfiles = {
@@ -10,11 +10,11 @@ export const fbaAddressProfiles = {
     companyName: "Xiamen tandanbo wangluokeji youxiangongsi",
     companyNameCn: envText("FBA_TANDANBO_COMPANY_NAME_CN"),
     enterpriseCreditCode: envText("FBA_TANDANBO_ENTERPRISE_CREDIT_CODE"),
-    addressLine1: "Room 623-40, No. 89, Anling 2nd Road",
-    addressLine2: "",
-    city: "Xiamen",
-    stateOrProvinceCode: "Fujian",
-    postalCode: "361006",
+    addressLine1: envText("FBA_TANDANBO_ADDRESS_LINE1", "Room 623-40, No. 89, Anling 2nd Road"),
+    addressLine2: envText("FBA_TANDANBO_ADDRESS_LINE2"),
+    city: envText("FBA_TANDANBO_CITY", "Xiamen"),
+    stateOrProvinceCode: envText("FBA_TANDANBO_STATE_PROVINCE", "Fujian"),
+    postalCode: envText("FBA_TANDANBO_POSTAL_CODE", "361006"),
     countryCode: "CN",
     phoneNumber: "8615759601196",
   },
@@ -25,11 +25,11 @@ export const fbaAddressProfiles = {
     companyName: "Xiamen Tanjia wangluo keji youxian gongsi",
     companyNameCn: envText("FBA_TANJIA_COMPANY_NAME_CN"),
     enterpriseCreditCode: envText("FBA_TANJIA_ENTERPRISE_CREDIT_CODE"),
-    addressLine1: "No.1 Taiwen street",
-    addressLine2: "Room 239-9, Huli",
-    city: "Xiamen",
-    stateOrProvinceCode: "Fujian",
-    postalCode: "361006",
+    addressLine1: envText("FBA_TANJIA_ADDRESS_LINE1", "No.1 Taiwen street"),
+    addressLine2: envText("FBA_TANJIA_ADDRESS_LINE2", "Room 239-9, Huli"),
+    city: envText("FBA_TANJIA_CITY", "Xiamen"),
+    stateOrProvinceCode: envText("FBA_TANJIA_STATE_PROVINCE", "Fujian"),
+    postalCode: envText("FBA_TANJIA_POSTAL_CODE", "361006"),
     countryCode: "CN",
     phoneNumber: "+86 13235037039",
   },
