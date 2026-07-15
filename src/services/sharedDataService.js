@@ -2,6 +2,10 @@ import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { filterCoreSellers, getLingxingAdapter } from "../adapters/lingxingAdapter.js";
 import {
+  fetchLingxingListingsBySidMskus,
+  fetchLingxingProductRecords,
+} from "./lingxingCatalogLookupService.js";
+import {
   readLingxingSellersCache,
   readSharedProductCatalogCache,
   saveLingxingSellersCache,
@@ -573,21 +577,6 @@ function stableProductCatalogCacheKey(rows = []) {
   });
 }
 
-async function fetchListingRecords(adapter, baseParams) {
-  const records = [];
-  let offset = 0;
-  let total = null;
-  while (offset < 5000) {
-    const payload = await adapter.fetchListings({ ...baseParams, offset, length: 1000 });
-    const pageRows = normalizeRecordList(payload);
-    records.push(...pageRows);
-    total = totalCountOf(payload, records.length);
-    if (!pageRows.length || pageRows.length < 1000 || records.length >= total) break;
-    offset += 1000;
-  }
-  return records;
-}
-
 async function listingSharedCatalogFilePaths() {
   const configured = String(process.env.LISTING_SHARED_CATALOG_FILE || "").trim();
   if (configured) return [configured];
@@ -696,69 +685,14 @@ async function fetchListingItems(adapter, rows = [], { strict = false } = {}) {
 
   const items = [];
   for (const [sid, mskus] of rowsBySid.entries()) {
-    for (const batch of chunkArray(uniqueText(mskus), LISTING_BATCH_SIZE)) {
-      const baseParams = {
-        is_pair: 1,
-        is_delete: 0,
-        search_field: "seller_sku",
-        search_value: batch,
-        exact_search: 1,
-      };
-      const variants = [{ sid }, { sids: [sid] }, { seller_id: sid }, { sellerId: sid }];
-      let records = [];
-      let lastError = null;
-      for (const variant of variants) {
-        try {
-          records = await fetchListingRecords(adapter, { ...baseParams, ...variant });
-          if (!records.length) records = await fetchListingRecords(adapter, { ...baseParams, exact_search: 0, ...variant });
-          if (records.length) break;
-        } catch (error) {
-          lastError = error;
-          records = [];
-        }
-      }
-      if (!records.length && batch.length > 1) {
-        for (const msku of batch) {
-          const singleParams = { ...baseParams, search_value: [msku], exact_search: 1 };
-          for (const variant of variants) {
-            try {
-              const singleRecords = await fetchListingRecords(adapter, { ...singleParams, ...variant });
-              if (singleRecords.length) {
-                records.push(...singleRecords);
-                break;
-              }
-            } catch {
-              // Try the next Listing parameter variant for this MSKU.
-            }
-          }
-        }
-      }
-      if (strict && !records.length && lastError) {
-        throw new Error(`ERP Listing 查询失败，SID ${sid}，MSKU ${batch.join(", ")}：${lastError.message}`);
-      }
-      records.map((record) => normalizeSharedListingRecord(record, sid)).filter(Boolean).forEach((item) => items.push(item));
-    }
+    const records = await fetchLingxingListingsBySidMskus(adapter, sid, mskus, { batchSize: LISTING_BATCH_SIZE, strict });
+    records.map((record) => normalizeSharedListingRecord(record, sid)).filter(Boolean).forEach((item) => items.push(item));
   }
   return items;
 }
 
 async function safeFetchProductRecords(adapter, params, fallbackParams = null, { strict = false } = {}) {
-  try {
-    return normalizeRecordList(await adapter.fetchLocalProductInfos(params));
-  } catch (error) {
-    if (!fallbackParams) {
-      if (strict) throw error;
-      return [];
-    }
-    try {
-      return normalizeRecordList(await adapter.fetchLocalProducts(fallbackParams));
-    } catch (fallbackError) {
-      if (strict) {
-        throw new Error(`ERP 产品管理查询失败：${error.message}; fallback: ${fallbackError.message}`);
-      }
-      return [];
-    }
-  }
+  return fetchLingxingProductRecords(adapter, params, fallbackParams, { strict });
 }
 
 async function fetchProductRecords(adapter, rows = [], listingItems = [], { strict = false } = {}) {

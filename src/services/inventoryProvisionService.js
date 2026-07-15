@@ -12,6 +12,7 @@ import {
 } from "../utils/cacheStore.js";
 import { listFilterValues, matchesAnyFilter } from "../utils/filterUtils.js";
 import { getSharedSellers } from "./sharedDataService.js";
+import { fetchLingxingListingsBySidMskus } from "./lingxingCatalogLookupService.js";
 
 const ageBuckets = [
   { key: "0_30", label: "0-30天", min: 0, max: 30, rate: 0, color: "#ffbe55" },
@@ -107,14 +108,6 @@ function uniqueNumbers(values) {
 
 function uniqueText(values) {
   return [...new Set(values.map((value) => String(value || "").trim()).filter(Boolean))];
-}
-
-function chunkArray(items, size) {
-  const chunks = [];
-  for (let index = 0; index < items.length; index += size) {
-    chunks.push(items.slice(index, index + size));
-  }
-  return chunks;
 }
 
 function sleep(ms) {
@@ -269,21 +262,6 @@ function findListingOwner(ownerMap, row) {
     || "-";
 }
 
-async function fetchListingRecords(adapter, baseParams) {
-  const records = [];
-  let offset = 0;
-  const length = 1000;
-  while (offset < 5000) {
-    const payload = await adapter.fetchListings({ ...baseParams, offset, length });
-    const pageRows = adapter.normalizeRecordList(payload);
-    records.push(...pageRows);
-    const total = Number(payload?.data?.total || payload?.total || 0);
-    if (!pageRows.length || pageRows.length < length || (total && records.length >= total)) break;
-    offset += length;
-  }
-  return records;
-}
-
 function listingOwnerRow(record, fallback = {}) {
   const msku = readNameList(readFirst(record, ["msku", "m_sku", "seller_sku", "sellerSku", "sellerSkuStr", "local_sku", "item_sku", "fnsku"])).trim();
   const owner = listingOwner(record);
@@ -311,46 +289,14 @@ async function fetchListingOwnerRows(adapter, rows = []) {
   for (const [sid, sidRows] of rowsBySid.entries()) {
     const sellerMskus = uniqueText(sidRows.map((row) => row.msku));
     const fallback = { sid, country: sidRows[0]?.country || "", countryCode: sidRows[0]?.countryCode || "" };
-    for (const batch of chunkArray(sellerMskus, 50)) {
-      const baseParams = {
-        is_pair: 1,
-        is_delete: 0,
-        search_field: "seller_sku",
-        search_value: batch,
-        exact_search: 1,
-      };
-      const variants = [{ sid }, { sids: [sid] }, { seller_id: sid }, { sellerId: sid }];
-      let records = [];
-      for (const variant of variants) {
-        try {
-          records = await fetchListingRecords(adapter, { ...baseParams, ...variant });
-          if (!records.length) records = await fetchListingRecords(adapter, { ...baseParams, exact_search: 0, ...variant });
-          if (records.length) break;
-        } catch {
-          records = [];
-        }
-      }
-      if (!records.length && batch.length > 1) {
-        for (const msku of batch) {
-          const singleParams = { ...baseParams, search_value: [msku], exact_search: 1 };
-          for (const variant of variants) {
-            try {
-              const singleRecords = await fetchListingRecords(adapter, { ...singleParams, ...variant });
-              if (singleRecords.length) {
-                records.push(...singleRecords);
-                break;
-              }
-            } catch {
-              // Try the next supported Listing parameter shape.
-            }
-          }
-        }
-      }
-      records
-        .map((record) => listingOwnerRow(record, fallback))
-        .filter(Boolean)
-        .forEach((row) => ownerRows.push(row));
-    }
+    const records = await fetchLingxingListingsBySidMskus(adapter, sid, sellerMskus, {
+      batchSize: 50,
+      normalize: (payload) => adapter.normalizeRecordList(payload),
+    });
+    records
+      .map((record) => listingOwnerRow(record, fallback))
+      .filter(Boolean)
+      .forEach((row) => ownerRows.push(row));
   }
   return ownerRows;
 }

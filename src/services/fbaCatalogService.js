@@ -2,6 +2,11 @@ import { filterCoreSellers, getLingxingAdapter } from "../adapters/lingxingAdapt
 import { lingxingShopMap } from "../data/lingxingShopMap.js";
 import { getFbaAddressProfile } from "../data/fbaAddressBook.js";
 import { getFbaBoxTemplate, hasCompleteBoxSpec } from "./fbaBoxTemplateService.js";
+import {
+  fetchLingxingListingRecords,
+  fetchLingxingProductRecords,
+  lingxingSidVariants,
+} from "./lingxingCatalogLookupService.js";
 
 const mskuCache = new Map();
 const CACHE_TTL_MS = 30 * 60 * 1000;
@@ -163,12 +168,7 @@ function mergeProductRecords(target, records) {
 }
 
 async function safeFetchProductInfo(adapter, params, fallbackParams = null) {
-  try {
-    return normalizeRecordList(await adapter.fetchLocalProductInfos(params));
-  } catch (error) {
-    if (!fallbackParams) throw error;
-    return normalizeRecordList(await adapter.fetchLocalProducts(fallbackParams));
-  }
+  return fetchLingxingProductRecords(adapter, params, fallbackParams, { strict: true });
 }
 
 async function fetchProductInfoMap(adapter, items) {
@@ -265,21 +265,6 @@ function uniqueMskus(items) {
   });
 }
 
-async function fetchListingRecords(adapter, baseParams) {
-  const records = [];
-  let offset = 0;
-  let total = null;
-  while (offset < 5000) {
-    const payload = await adapter.fetchListings({ ...baseParams, offset, length: 1000 });
-    const pageRows = normalizeRecordList(payload);
-    records.push(...pageRows);
-    total = Number(payload.total ?? total);
-    if (!pageRows.length || pageRows.length < 1000 || (Number.isFinite(total) && records.length >= total)) break;
-    offset += 1000;
-  }
-  return records;
-}
-
 async function fetchMskusForShop(adapter, shop, { force = false, exactMsku = "" } = {}) {
   const cacheKey = exactMsku ? `${shop.sid}:msku:${normalizeKey(exactMsku)}` : String(shop.sid);
   const cached = mskuCache.get(cacheKey);
@@ -294,19 +279,14 @@ async function fetchMskusForShop(adapter, shop, { force = false, exactMsku = "" 
     baseParams.search_value = [exactMsku];
     baseParams.exact_search = 1;
   }
-  const variants = [
-    { sid: shop.sid },
-    { sids: [shop.sid] },
-    { seller_id: shop.sid },
-    { sellerId: shop.sid },
-  ];
+  const variants = lingxingSidVariants(shop.sid);
 
   let lastPayload = null;
   let lastError = null;
   let items = [];
   for (const variant of variants) {
     try {
-      const records = await fetchListingRecords(adapter, { ...baseParams, ...variant });
+      const records = await fetchLingxingListingRecords(adapter, { ...baseParams, ...variant });
       lastPayload = { code: 0, data: records };
       items = uniqueMskus(records.map((record) => normalizeMskuRecord(record, shop)).filter(Boolean));
       if (items.length || lastPayload?.code === 0 || lastPayload?.code === "0") break;

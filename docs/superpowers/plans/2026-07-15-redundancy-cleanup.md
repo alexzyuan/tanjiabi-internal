@@ -183,3 +183,28 @@ Expected: deployment completes and `/api/health` returns healthy JSON.
 ## Later Phase: Lingxing Catalog Lookup Consolidation
 
 Do not mix this into the first helper cleanup. The later phase should first add focused tests around Listing/Product/Owner lookup behavior, then consolidate duplicate fetching in `sharedDataService`, `fbaCatalogService`, `supplierBoardService`, `inventoryProvisionService`, and `listingOwnerService`.
+
+## Later Phase Implementation: Lingxing Catalog Lookup Service
+
+**Files:**
+- Create: `src/services/lingxingCatalogLookupService.js`
+- Create: `test/lingxingCatalogLookupService.test.js`
+- Modify: `src/services/sharedDataService.js`
+- Modify: `src/services/fbaCatalogService.js`
+- Modify: `src/services/supplierBoardService.js`
+- Modify: `src/services/inventoryProvisionService.js`
+- Modify: `src/services/listingOwnerService.js`
+
+**Boundary:**
+- Shared service owns Lingxing Listing pagination, supported SID parameter variants, exact-to-fuzzy seller_sku lookup fallback, per-MSKU fallback for mixed batches, and local product-management fallback calls.
+- Feature modules still own record normalization, owner extraction, product-map construction, cache keys, and UI/business response shapes.
+- `fbaCatalogService.js` uses only the shared pagination helper for shop listing fetches because its existing behavior stops on the first successful empty listing response; it does not use the exact-to-fuzzy batch helper.
+
+**Verification:**
+```bash
+node --test test/lingxingCatalogLookupService.test.js test/sharedDataService.test.js test/supplierBoardFeature.test.js test/supplierBoardFailFast.test.js
+node --test test/lingxingCatalogLookupService.test.js test/inventoryProvisionService.test.js test/inventoryProvisionFeature.test.js test/supplierBoardFailFast.test.js
+node --test test/lingxingCatalogLookupService.test.js test/sharedDataService.test.js test/fbaFreightSheetService.test.js test/fbaFreightFeature.test.js test/fbaShipmentOrderService.test.js
+```
+
+Expected: all targeted tests pass before full `npm test`, `npm run check`, and `npm audit`.
