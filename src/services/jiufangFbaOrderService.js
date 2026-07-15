@@ -125,14 +125,6 @@ function senderAddress(senderProfile = {}) {
   };
 }
 
-function emptyImporter() {
-  return {
-    Address: {
-      AddressLine: [null],
-    },
-  };
-}
-
 function shipmentStoreName(shipment = {}) {
   return firstText(shipment.storeName, shipment.raw?.seller, shipment.raw?.seller_name, shipment.sid);
 }
@@ -343,7 +335,6 @@ export function buildJiufangShipmentPayload({
         Service: { Code: channelCode },
         ShipFrom: senderAddress(resolvedSenderProfile),
         ShipTo: amazonAddress(shipment),
-        Importer: emptyImporter(),
         InvoiceLineTotal: {
           CurrencyCode: "USD",
           MonetaryValue: summary.invoiceTotal,

@@ -109,7 +109,7 @@ test("buildJiufangShipmentPayload maps FBA shipment boxes to Jiufang ordinary sh
   assert.equal(payload.ShipmentRequest.ShipFrom.CompanyNameEn, "Xiamen Tanjia wangluo keji youxian gongsi");
   assert.equal(payload.ShipmentRequest.ShipFrom.AttentionName, "justin");
   assert.equal(payload.ShipmentRequest.ShipFrom.EnterpriseCreditCode, "91350200TEST000001");
-  assert.deepEqual(payload.ShipmentRequest.Importer, { Address: { AddressLine: [null] } });
+  assert.equal(Object.hasOwn(payload.ShipmentRequest, "Importer"), false);
   assert.equal(payload.ShipmentRequest.ShipmentServiceOptions.ChannelCapacity, "1");
   assert.equal(payload.ShipmentRequest.ShipmentServiceOptions.ExportLicence, false);
   assert.equal(payload.ShipmentRequest.ShipTo.DestinationFulfillmentCenterId, "ONT8");
