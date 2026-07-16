@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readdir, readFile, stat } from "node:fs/promises";
 import nodeTest from "node:test";
 import { isRepositoryMetadataPath } from "../src/utils/pathFilters.js";
+import { minifyCss } from "../scripts/lib/minifyCss.js";
 
 const cssLayerOrder = ["tokens", "base", "layout", "components", "pages", "legacy"];
 
@@ -25,75 +26,11 @@ async function listCssFiles(dirUrl) {
   return files.flat();
 }
 
-function shouldKeepCssSpace(before, after) {
-  if (!before || !after) return false;
-  if ("{}:;,>+~([".includes(before)) return false;
-  if ("{}:;,>+~)]".includes(after)) return false;
-  return true;
-}
-
-function minifyCss(source) {
-  let output = "";
-  let quote = null;
-  let pendingSpace = false;
-
-  for (let index = 0; index < source.length; index += 1) {
-    const char = source[index];
-    const next = source[index + 1];
-
-    if (quote) {
-      output += char;
-      if (char === "\\" && index + 1 < source.length) {
-        index += 1;
-        output += source[index];
-      } else if (char === quote) {
-        quote = null;
-      }
-      continue;
-    }
-
-    if (char === "\"" || char === "'") {
-      if (pendingSpace && shouldKeepCssSpace(output.at(-1), char)) output += " ";
-      pendingSpace = false;
-      quote = char;
-      output += char;
-      continue;
-    }
-
-    if (char === "/" && next === "*") {
-      index += 2;
-      while (index < source.length && !(source[index] === "*" && source[index + 1] === "/")) {
-        index += 1;
-      }
-      index += 1;
-      continue;
-    }
-
-    if (/\s/.test(char)) {
-      pendingSpace = true;
-      continue;
-    }
-
-    if ("{}:;,>+~()[]=".includes(char)) {
-      if (char === ":" && pendingSpace && !["{", "}"].includes(output.at(-1))) {
-        output += " ";
-      } else {
-        output = output.trimEnd();
-      }
-      output += char;
-      pendingSpace = false;
-      continue;
-    }
-
-    if (pendingSpace && shouldKeepCssSpace(output.at(-1), char)) output += " ";
-    pendingSpace = false;
-    output += char;
-  }
-
-  return `${output.replace(/;}/g, "}").replace(/}/g, "}\n").trim()}\n`;
-}
-
 const test = nodeTest;
+
+function countMinifyCssDefinitions(source) {
+  return (source.match(new RegExp("function\\s+minifyCss", "g")) || []).length;
+}
 
 test("styles.css keeps semantic token roots consolidated", async () => {
   const source = await readFile(new URL("../styles.css", import.meta.url), "utf8");
@@ -167,6 +104,18 @@ test("build-styles supports non-destructive preview output", async () => {
   const source = await readFile(new URL("../scripts/build-styles.js", import.meta.url), "utf8");
   assert.match(source, /--output/);
   assert.match(source, /outputPath/);
+});
+
+test("CSS minifier has a single shared implementation", async () => {
+  const buildScript = await readFile(new URL("../scripts/build-styles.js", import.meta.url), "utf8");
+  const structureTest = await readFile(new URL("./stylesStructure.test.js", import.meta.url), "utf8");
+  const minifier = await readFile(new URL("../scripts/lib/minifyCss.js", import.meta.url), "utf8");
+
+  assert.match(buildScript, /scripts\/lib\/minifyCss\.js|\.\/lib\/minifyCss\.js/);
+  assert.match(structureTest, /scripts\/lib\/minifyCss\.js|\.\.\/scripts\/lib\/minifyCss\.js/);
+  assert.equal(countMinifyCssDefinitions(buildScript), 0);
+  assert.equal(countMinifyCssDefinitions(structureTest), 0);
+  assert.equal(countMinifyCssDefinitions(minifier), 1);
 });
 
 test("styles.css stays within the raw size budget", async () => {
