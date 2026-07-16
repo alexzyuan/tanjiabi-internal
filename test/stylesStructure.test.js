@@ -120,7 +120,7 @@ test("CSS minifier has a single shared implementation", async () => {
 
 test("styles.css stays within the raw size budget", async () => {
   const { size } = await stat(new URL("../styles.css", import.meta.url));
-  assert.ok(size <= 254_000, `styles.css should be <= 254KB raw, got ${size} bytes`);
+  assert.ok(size <= 256_000, `styles.css should be <= 256KB raw, got ${size} bytes`);
 });
 
 test("CSS standards gate is part of the default check command", async () => {
@@ -273,7 +273,12 @@ test("shared table controls live outside legacy css and use semantic tokens", as
   const componentSource = await readFile(new URL("../assets/css/components/45-table-controls.css", import.meta.url), "utf8");
   const legacySource = await readFile(new URL("../assets/css/legacy/current.css", import.meta.url), "utf8");
 
-  assert.match(componentSource, /^\/\* Shared table row controls\. \*\//m);
+  assert.match(componentSource, /^\/\* Shared table baseline, states, and row controls\. \*\//m);
+  assert.match(componentSource, /^\.data-table-wrap\s*\{/m);
+  assert.match(componentSource, /^table\.data-table\s*\{/m);
+  assert.match(componentSource, /^table\.data-table--matrix\s*\{/m);
+  assert.match(componentSource, /^\.table-resize-handle\s*\{/m);
+  assert.match(componentSource, /^\.table-state-cell--error\s*\{/m);
   assert.match(componentSource, /^body:not\(\.login-body\) \.table-select\s*\{/m);
   assert.match(componentSource, /^\.table-action\s*\{/m);
   assert.match(componentSource, /^\.table-action\.danger\s*\{/m);

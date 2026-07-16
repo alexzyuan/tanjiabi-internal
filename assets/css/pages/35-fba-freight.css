@@ -15,7 +15,7 @@
 }
 
 #view-fba-freight .fba-freight-table {
-  min-width: 1360px;
+  --tj-table-min-width: 1360px;
 }
 
 #view-fba-freight .fba-freight-table th:nth-child(11),

@@ -59,6 +59,26 @@ test("ui data value button html helper escapes labels and marks active value", a
   assert.equal(utils.renderDataValueButtonsHtml([], "data-msku-store", "", { allLabel: "全部店铺" }), `<button class="active" type="button" data-msku-store="">全部店铺</button>`);
 });
 
+test("ui table message helper renders typed loading empty and error states", async () => {
+  const { utils } = await loadUiUtils();
+  const target = { innerHTML: "" };
+  const documentLike = {
+    querySelector(selector) {
+      return selector === "#tbody" ? target : null;
+    },
+  };
+
+  assert.equal(utils.inferTableMessageTone("正在读取数据。"), "loading");
+  assert.equal(utils.inferTableMessageTone("暂无符合条件的数据。"), "empty");
+  assert.equal(utils.inferTableMessageTone("读取失败：接口错误"), "error");
+
+  assert.equal(utils.renderTableMessage("#tbody", 3, "读取失败：接口错误", documentLike), target);
+  assert.equal(
+    target.innerHTML,
+    `<tr class="table-state-row table-state-row--error"><td class="table-state-cell table-state-cell--error" colspan="3">读取失败：接口错误</td></tr>`,
+  );
+});
+
 test("ui event helpers bind existing elements only once per call", async () => {
   const { utils } = await loadUiUtils();
   const calls = [];
@@ -964,10 +984,10 @@ test("ui table message helper renders escaped colspan rows", async () => {
   };
 
   assert.equal(utils.renderTableMessage("#target-table", 4, "<加载失败 & 重试>", documentLike), tableBody);
-  assert.equal(tableBody.innerHTML, '<tr><td colspan="4">&lt;加载失败 &amp; 重试&gt;</td></tr>');
+  assert.equal(tableBody.innerHTML, '<tr class="table-state-row table-state-row--error"><td class="table-state-cell table-state-cell--error" colspan="4">&lt;加载失败 &amp; 重试&gt;</td></tr>');
 
   assert.equal(utils.renderTableMessage(tableBody, 0, "空数据"), tableBody);
-  assert.equal(tableBody.innerHTML, '<tr><td colspan="1">空数据</td></tr>');
+  assert.equal(tableBody.innerHTML, '<tr class="table-state-row table-state-row--empty"><td class="table-state-cell table-state-cell--empty" colspan="1">空数据</td></tr>');
   assert.equal(utils.renderTableMessage("#missing", 3, "不会写入", documentLike), null);
 });
 

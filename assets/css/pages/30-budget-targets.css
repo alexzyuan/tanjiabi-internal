@@ -15,7 +15,7 @@
 }
 
 #view-budget .budget-target-table-wrap .data-table {
-  min-width: 1120px;
+  --tj-table-min-width: 1120px;
 }
 
 #view-budget .budget-toolbar {

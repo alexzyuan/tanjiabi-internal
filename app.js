@@ -24,6 +24,7 @@ import {
 import { createSalesShell } from "./assets/js/sales-shell.js?v=20260707-frontend-refactor-v1";
 import { createNavigationUtils } from "./assets/js/navigation-utils.js?v=20260707-frontend-refactor-v1";
 import { compareTableSortableValues, createTableSorter } from "./assets/js/table-sorter.js?v=20260707-frontend-refactor-v1";
+import { createDataTableManager } from "./assets/js/data-table-manager.js?v=20260716-table-baseline-v1";
 import { createAftersalesDashboardFeature } from "./assets/js/features/aftersales-dashboard.js?v=20260706-frontend-refactor-v1";
 import { createAftersalesMailFeature } from "./assets/js/features/aftersales-mail.js?v=20260706-frontend-refactor-v1";
 import { createCashflowDashboardFeature } from "./assets/js/features/cashflow-dashboard.js?v=20260706-frontend-refactor-v1";
@@ -325,6 +326,7 @@ let getCurrentAuthUser = () => null;
 let loadAuthStatus = async () => ({ enabled: false, authenticated: true });
 let setupAuthShell = () => {};
 let setupTableSortBridge = () => {};
+let setupDataTables = () => {};
 let makeUnavailableDashboard = (message) => ({
   meta: { syncStatus: message },
   kpis: [],
@@ -344,6 +346,10 @@ let makeUnavailableDashboard = (message) => ({
   getApplyMskuDetailSort: () => applyMskuDetailSort,
   getApplySupplierBoardSort: () => applySupplierBoardSort,
   setTableSortState,
+}));
+({ setupDataTables } = createDataTableManager({
+  root: document,
+  windowRef: window,
 }));
 
 ({
@@ -1175,6 +1181,7 @@ function setupNavigation() {
   setupFrontDateRangeControls();
   setupFrontShopFilterControls();
   initializeFilterDropdowns();
+  setupDataTables();
   setupTableSortBridge();
   setupAdminSettings();
 

@@ -41,7 +41,7 @@
 }
 
 .supplier-detail-table-wrap table {
-  min-width: 1080px;
+  --tj-table-min-width: 1080px;
 }
 
 #supplier-detail-table th:first-child,

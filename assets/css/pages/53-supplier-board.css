@@ -34,7 +34,7 @@ max-height:none;
 min-height:0;
 overflow:auto;
 }
-.supplier-board-table-wrap table { min-width:1680px; }
+.supplier-board-table-wrap table { --tj-table-min-width: 1680px; }
 #supplier-board-table th,
 #supplier-board-table td { vertical-align:middle; }
 #supplier-board-table th:nth-child(2),

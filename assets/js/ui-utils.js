@@ -376,11 +376,19 @@ const tanjiaUiGlobal = globalThis.window || globalThis;
     return schedule;
   }
 
+  function inferTableMessageTone(message) {
+    const text = String(message || "");
+    if (/失败|错误|异常|缺少|missing|error/i.test(text)) return "error";
+    if (/正在|等待|读取|加载|同步|生成中/.test(text)) return "loading";
+    return "empty";
+  }
+
   function renderTableMessage(target, colspan, message, root = tanjiaUiGlobal.document) {
     const element = resolveElement(target, root);
     if (!element) return null;
     const span = Math.max(1, Number.parseInt(colspan, 10) || 1);
-    element.innerHTML = `<tr><td colspan="${span}">${escapeHtml(message)}</td></tr>`;
+    const tone = inferTableMessageTone(message);
+    element.innerHTML = `<tr class="table-state-row table-state-row--${tone}"><td class="table-state-cell table-state-cell--${tone}" colspan="${span}">${escapeHtml(message)}</td></tr>`;
     return element;
   }
 
@@ -452,6 +460,7 @@ const TanjiaUiUtils = {
   formatNumber,
   formatPercent,
   formatRateNullable,
+  inferTableMessageTone,
   isVisibleElement,
   normalizeCountryName,
   normalizeFilterOption,
@@ -506,6 +515,7 @@ export {
   formatNumber,
   formatPercent,
   formatRateNullable,
+  inferTableMessageTone,
   isVisibleElement,
   normalizeCountryName,
   normalizeFilterOption,

@@ -1,4 +1,129 @@
-/* Shared table row controls. */
+/* Shared table baseline, states, and row controls. */
+.data-table-wrap {
+  position: relative;
+  overflow: auto;
+}
+
+table.data-table {
+  min-width: var(--tj-table-min-width, 980px);
+  font-variant-numeric: tabular-nums;
+}
+
+table.data-table--standard {
+  --tj-table-min-width: 980px;
+}
+
+table.data-table--wide {
+  --tj-table-min-width: 1280px;
+}
+
+table.data-table--matrix {
+  --tj-table-min-width: 2400px;
+  font-size: 12px;
+}
+
+table.data-table.is-column-resized {
+  table-layout: fixed;
+}
+
+table.data-table th {
+  position: sticky;
+  top: 0;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+
+table.data-table td {
+  text-align: left;
+}
+
+table.data-table td.table-cell--number {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+table.data-table th.table-cell--number {
+  font-variant-numeric: tabular-nums;
+}
+
+.table-state-row td,
+.table-state-cell {
+  height: 54px;
+  padding: 14px 16px;
+  text-align: left;
+  color: var(--tj-text-muted);
+  background: var(--tj-content-bg);
+}
+
+.table-state-cell--error {
+  color: var(--tj-tone-danger-text);
+  background: var(--tj-tone-danger-bg);
+}
+
+.table-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  z-index: 8;
+  width: 7px;
+  height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.table-resize-handle::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  right: 3px;
+  bottom: 8px;
+  width: 1px;
+  background: color-mix(in srgb, var(--tj-border-control) 70%, transparent);
+  opacity: 0;
+  transition: opacity 0.14s ease, background-color 0.14s ease;
+}
+
+th:hover > .table-resize-handle::after,
+.table-resize-handle:focus-visible::after,
+.is-resizing-column .table-resize-handle::after {
+  opacity: 1;
+  background: var(--tj-action-blue);
+}
+
+body:not(.login-body).is-table-column-resizing,
+body:not(.login-body).is-table-column-resizing * {
+  cursor: col-resize;
+  user-select: none;
+}
+
+.data-table-wrap.has-horizontal-overflow::after {
+  content: attr(data-scroll-hint);
+  position: sticky;
+  right: 10px;
+  bottom: 8px;
+  z-index: 12;
+  float: right;
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  margin: 0 8px 8px auto;
+  padding: 3px 8px;
+  border: 1px solid var(--tj-border-subtle);
+  border-radius: 999px;
+  color: var(--tj-text-muted);
+  background: color-mix(in srgb, var(--tj-content-bg) 92%, var(--tj-action-blue-soft));
+  box-shadow: var(--tj-shadow-soft);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.data-table-wrap.has-horizontal-overflow.is-scrolled-end::after {
+  content: "";
+  display: none;
+}
+
 body:not(.login-body) .table-select {
   min-width: 104px;
   min-height: var(--tj-control-height-compact);

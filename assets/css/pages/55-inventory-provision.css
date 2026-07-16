@@ -10,11 +10,11 @@
 }
 
 #view-provision .inventory-table-stack table {
-  min-width: 1080px;
+  --tj-table-min-width: 1080px;
 }
 
 #view-provision .inventory-table-stack article:first-child table {
-  min-width: 720px;
+  --tj-table-min-width: 720px;
 }
 
 #view-provision .inventory-chart-grid {

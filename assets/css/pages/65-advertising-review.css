@@ -163,7 +163,7 @@
 }
 
 .ads-keyword-table-wrap table {
-  min-width: 1180px;
+  --tj-table-min-width: 1180px;
 }
 
 .ads-keyword-table-wrap td {
@@ -236,7 +236,7 @@
 }
 
 .ads-portfolio-table-wrap table {
-  min-width: 1280px;
+  --tj-table-min-width: 1280px;
 }
 
 .ads-portfolio-table-wrap td:first-child strong {

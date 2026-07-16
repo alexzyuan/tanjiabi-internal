@@ -10,5 +10,5 @@
 }
 
 #view-cashflow .cashflow-stack table {
-  min-width: 1180px;
+  --tj-table-min-width: 1180px;
 }

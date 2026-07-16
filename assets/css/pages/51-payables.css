@@ -322,7 +322,7 @@
 }
 
 .payable-table-wrap table {
-  min-width: 940px;
+  --tj-table-min-width: 940px;
 }
 
 #payables-detail-table th:first-child,

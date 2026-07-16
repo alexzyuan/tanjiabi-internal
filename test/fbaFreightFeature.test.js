@@ -87,6 +87,27 @@ test("FBA freight initial load does not connect to Jiufang channels", async () =
   assert.equal(requestedUrls.includes("/api/fba/jiufang/channels"), false);
 });
 
+test("FBA freight load failure renders table error state", async () => {
+  const messages = [];
+  const statusMessages = [];
+  const { elements, feature } = createFeature({
+    fetchImpl: async () => ({ ok: false, json: async () => ({ error: "Lingxing missing config" }) }),
+    renderTableMessage: (table, colspan, message) => {
+      messages.push({ colspan, message });
+      table.innerHTML = message;
+    },
+    setText: (selector, value) => {
+      if (selector === "#fba-freight-status") statusMessages.push(value);
+    },
+  });
+
+  await feature.loadFbaFreightShipments();
+
+  assert.deepEqual(messages, [{ colspan: 12, message: "读取失败：Lingxing missing config" }]);
+  assert.equal(elements["#fba-freight-table"].innerHTML, "读取失败：Lingxing missing config");
+  assert.equal(statusMessages.at(-1), "读取失败：Lingxing missing config");
+});
+
 test("FBA freight row Jiufang button opens country channel picker before dry-run", async () => {
   const requests = [];
   const elements = {

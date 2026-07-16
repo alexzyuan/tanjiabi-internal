@@ -22,7 +22,7 @@
 }
 
 .sales-forecast-table {
-  min-width: 2540px;
+  --tj-table-min-width: 2540px;
   font-size: 12px;
 }
 

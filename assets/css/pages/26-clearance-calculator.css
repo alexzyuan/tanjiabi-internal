@@ -64,7 +64,7 @@ margin-top:var(--spectrum-spacing-150);
 margin-top:var(--spectrum-spacing-150);
 }
 #view-clearance .clearance-table-wrap table {
-min-width:1320px;
+--tj-table-min-width: 1320px;
 }
 .clearance-table-wrap th,
 .clearance-table-wrap td {

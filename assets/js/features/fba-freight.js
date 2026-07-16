@@ -275,6 +275,17 @@ export function createFbaFreightFeature({
     updateFbaFreightSelectionState();
   }
 
+  function renderFbaFreightError(message) {
+    const table = query("#fba-freight-table");
+    if (!table) return;
+    fbaFreightRows = [];
+    setText("#fba-freight-count", "0", root);
+    setText("#fba-freight-quantity", "0", root);
+    setText("#fba-freight-store-count", "0", root);
+    renderTableMessage(table, 12, `读取失败：${message}`);
+    updateFbaFreightSelectionState();
+  }
+
   async function loadFbaFreightInitial() {
     setDefaultFbaFreightDates();
     const [, , warehouseResult] = await Promise.allSettled([loadFbaShops(), loadFbaFreightTemplates(), loadFbaFreightWarehouses()]);
@@ -304,9 +315,9 @@ export function createFbaFreightFeature({
       renderFbaFreightRows();
       setFbaFreightStatus(`已读取 ${formatNumber(fbaFreightRows.length)} 个货件`);
     } catch (error) {
-      fbaFreightRows = [];
-      renderFbaFreightRows();
-      setFbaFreightStatus(`读取失败：${error.message || error}`);
+      const message = error.message || String(error);
+      renderFbaFreightError(message);
+      setFbaFreightStatus(`读取失败：${message}`);
     } finally {
       setFbaFreightLoading(false);
     }
