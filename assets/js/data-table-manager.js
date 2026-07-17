@@ -259,6 +259,8 @@ export function createDataTableManager({
 } = {}) {
   let activeResize = null;
   let mutationObserver = null;
+  let suppressResizeClick = false;
+  let suppressResizeClickTimer = null;
 
   function enhanceAll() {
     const tables = Array.from(root?.querySelectorAll?.(tableSelector) || []);
@@ -292,6 +294,37 @@ export function createDataTableManager({
     event.preventDefault();
   }
 
+  function clearResizeClickSuppression() {
+    suppressResizeClick = false;
+    if (suppressResizeClickTimer !== null) {
+      windowRef?.clearTimeout?.(suppressResizeClickTimer);
+      suppressResizeClickTimer = null;
+    }
+  }
+
+  function scheduleResizeClickSuppression() {
+    suppressResizeClick = true;
+    if (suppressResizeClickTimer !== null) windowRef?.clearTimeout?.(suppressResizeClickTimer);
+    suppressResizeClickTimer = windowRef?.setTimeout?.(clearResizeClickSuppression, 250) ?? null;
+  }
+
+  function stopResizeClick(event) {
+    event?.preventDefault?.();
+    event?.stopImmediatePropagation?.();
+    event?.stopPropagation?.();
+  }
+
+  function handleClick(event) {
+    if (event.target?.closest?.(".table-resize-handle")) {
+      clearResizeClickSuppression();
+      stopResizeClick(event);
+      return;
+    }
+    if (!suppressResizeClick || !event.target?.closest?.("th")) return;
+    clearResizeClickSuppression();
+    stopResizeClick(event);
+  }
+
   function handlePointerMove(event) {
     if (!activeResize) return;
     const nextWidth = activeResize.startWidth + (event.clientX - activeResize.startX);
@@ -307,6 +340,7 @@ export function createDataTableManager({
     updateScrollHint(activeResize.table);
     activeResize = null;
     root?.body?.classList?.remove("is-table-column-resizing");
+    scheduleResizeClickSuppression();
   }
 
   function bindTableWrapScroll() {
@@ -334,6 +368,7 @@ export function createDataTableManager({
     enhanceAll();
     bindTableWrapScroll();
     root?.addEventListener?.("pointerdown", handlePointerDown);
+    root?.addEventListener?.("click", handleClick, true);
     windowRef?.addEventListener?.("pointermove", handlePointerMove);
     windowRef?.addEventListener?.("pointerup", finishResize);
     windowRef?.addEventListener?.("resize", () => {
@@ -350,8 +385,10 @@ export function createDataTableManager({
 
   function teardown() {
     root?.removeEventListener?.("pointerdown", handlePointerDown);
+    root?.removeEventListener?.("click", handleClick, true);
     windowRef?.removeEventListener?.("pointermove", handlePointerMove);
     windowRef?.removeEventListener?.("pointerup", finishResize);
+    clearResizeClickSuppression();
     mutationObserver?.disconnect?.();
     mutationObserver = null;
   }
