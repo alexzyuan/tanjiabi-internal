@@ -16,10 +16,6 @@
   line-height: 1.45;
 }
 
-.payable-filters {
-  grid-template-columns: repeat(4, minmax(150px, 1fr));
-}
-
 .payable-summary-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -342,9 +338,6 @@
     grid-column: 1 / -1;
   }
 
-  .payable-filters {
-    grid-template-columns: repeat(2, minmax(160px, 1fr));
-  }
 }
 
 @media (max-width:720px) {
@@ -354,7 +347,6 @@
     text-align: left;
   }
 
-  .payable-filters,
   .payable-flow-card,
   .payable-flow-branch.compact,
   .payable-visual-grid,

@@ -1,7 +1,4 @@
 /* Sales forecast table and controls */
-.sales-forecast-filters {
-  grid-template-columns: minmax(160px, 220px) minmax(180px, 260px) minmax(280px, 1fr);
-}
 
 .sales-forecast-table-wrap {
   --sales-forecast-border: var(--tj-border-subtle);

@@ -1,6 +1,6 @@
 # 探嘉 BI 唯一设计规范
 
-更新时间：2026-07-05
+更新时间：2026-07-17
 
 本文档是探嘉 BI 的唯一主规范，合并了原 `DESIGN_SYSTEM.md` 与 `UI_DESIGN_README.md` 的有效内容。后续产品设计、UI 调整、前后端实现、权限、部署和验收都以本文档为准。
 
@@ -186,6 +186,24 @@ font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
 - 新增数据表的数字、金额、百分比列优先在表头声明 `data-column-kind="number"`，或用 `data-column-type="money"` / `data-column-type="percent"` 等语义类型；表格管理器会先尊重显式声明，再使用表头文案推断作为旧表格兼容兜底。
 - 表格基线样式分两层：`assets/css/components/45-table-controls.css` 提供共享表格组件规则，`assets/css/final/90-table-invariants.css` 位于 page/legacy 之后，只放产品级不变量，例如数字列右对齐、`tabular-nums`、状态行对齐和列宽调整手柄基础交互。
 - 页面 CSS 可以调整表格宽度、sticky、密度和页面专属视觉，但不能重新定义普通 `th` / `td` 的左右对齐；文本列默认左对齐，数字列由 `.table-cell--number` 统一右对齐。
+
+筛选栏契约：
+
+- 普通筛选栏统一使用 `.filters`，紧凑工具筛选栏统一使用 `.filter-toolbar`；新增筛选区必须复用这两个共享类，不新增页面私有筛选栏基线。
+- 筛选栏容器使用白底、无外层实线框、`column-gap: 8px`、`row-gap: 8px`、`min-height: 48px`、`padding: 8px 10px`。输入框、下拉、日期按钮自身保留浅边框。
+- 控件高度统一用 `--tj-control-height-compact`，圆角用 `--tj-control-radius`，字号 13px，focus 使用 `--tj-focus-ring`。
+- `.filters` 默认字段宽度为 116px，日期字段 240px，搜索字段 220px；`.filter-toolbar` 默认字段宽度为 150px，日期字段 240px，直接 search 输入 180px，按钮宽度按内容自适应。
+- checkbox 型筛选使用 `.checkbox-label`，由共享筛选栏规则统一控制字号、间距和 checkbox 尺寸。
+- 页面级 CSS 不允许重新定义 `.filters` / `.filter-toolbar` / `*-filters` / `*-toolbar` 的 `display`、`grid-template-*`、`gap`、`padding`、`border`、控件高度、控件边框、focus 样式或日期控件宽度。页面可以控制筛选栏是否显示，也可以调整所在业务面板、KPI、表格和图表布局。
+- 结构测试会扫描 page CSS，防止新页面继续用页面私有规则覆盖共享筛选栏基线。
+
+日期控件契约：
+
+- 新增日期范围筛选优先使用 `assets/js/date-range-picker.js` 和 `assets/css/components/36-date-range-picker.css` 的共享双月日期控件。
+- 默认展开视图是前 30 天到今天；开始日期选中后，结束日期只能在开始日期起 30 天内，并且不能超过今天。
+- 日期弹层宽度为 `min(760px, 96vw)`，左侧快捷项宽度 112px；快捷项 hover/focus 使用淡蓝底。
+- 选中开始/结束日期使用蓝色圆形填充，今天使用蓝色细圆边框，范围预览使用淡蓝底。
+- 日期按钮不使用额外伪元素图标；弹层必须显式设置字体大小，不能继承外层 label 的隐藏文字规则。
 
 禁止：
 

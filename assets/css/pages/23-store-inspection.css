@@ -131,9 +131,7 @@
 
 .store-inspection-form input,
 .store-inspection-form select,
-.store-inspection-form textarea,
-.store-inspection-filters input,
-.store-inspection-filters select {
+.store-inspection-form textarea {
   width: 100%;
   min-width: 0;
   min-height: var(--spectrum-control-height);
@@ -154,9 +152,7 @@
 
 .store-inspection-form input:focus,
 .store-inspection-form select:focus,
-.store-inspection-form textarea:focus,
-.store-inspection-filters input:focus,
-.store-inspection-filters select:focus {
+.store-inspection-form textarea:focus {
   border-color: var(--spectrum-accent-visual);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--spectrum-focus-ring-color) 14%, transparent);
   outline: 0;
@@ -266,10 +262,6 @@ body:not(.login-body) #store-inspection-report-output.store-inspection-report-ou
   font-weight: 750;
 }
 
-.store-inspection-filters {
-  grid-template-columns: minmax(180px, 1fr) minmax(150px, 0.6fr) minmax(150px, 0.6fr);
-}
-
 .inspection-delete-button {
   height: 30px;
   padding: 0 var(--spectrum-spacing-150);
@@ -297,8 +289,7 @@ body:not(.login-body) #store-inspection-report-output.store-inspection-report-ou
   .store-inspection-kpis,
   .store-inspection-focus,
   .store-inspection-priority,
-  .store-inspection-checklist,
-  .store-inspection-filters {
+  .store-inspection-checklist {
     grid-template-columns: 1fr;
   }
 

@@ -14,20 +14,6 @@ z-index:4;
 padding-bottom:var(--spectrum-spacing-150);
 background:linear-gradient(180deg, var(--tj-page-bg) 0%, var(--tj-page-bg) 86%, color-mix(in srgb, var(--tj-page-bg) 92%, transparent) 100%);
 }
-.factory-inventory-filters {
-grid-template-columns:repeat(2, minmax(150px, 0.75fr)) minmax(190px, 1fr) minmax(260px, 1.4fr) minmax(170px, 0.85fr);
-}
-.factory-inventory-filters .checkbox-label {
-min-height:var(--tj-control-height);
-flex-direction:row;
-align-items:center;
-justify-content:flex-start;
-gap:var(--spectrum-spacing-100);
-}
-.factory-inventory-filters .checkbox-label input {
-width:16px;
-height:16px;
-}
 .factory-inventory-kpi-grid {
 grid-template-columns:repeat(auto-fill, minmax(var(--tj-kpi-card-min-width), var(--tj-kpi-card-width)));
 justify-content:start;

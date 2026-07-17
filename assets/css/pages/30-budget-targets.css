@@ -3,7 +3,6 @@
   min-width: 0;
 }
 
-#view-budget .budget-toolbar,
 #view-budget .budget-upload-box,
 #view-budget .detail-panel {
   min-width: 0;
@@ -16,10 +15,6 @@
 
 #view-budget .budget-target-table-wrap .data-table {
   --tj-table-min-width: 1120px;
-}
-
-#view-budget .budget-toolbar {
-  grid-template-columns: minmax(300px, 1.35fr) 150px 180px 150px minmax(180px, 1fr) auto auto;
 }
 
 .month-multi-select {
@@ -155,7 +150,6 @@
 }
 
 @media (max-width: 900px) {
-  #view-budget .budget-toolbar,
   #view-budget .budget-upload-box {
     grid-template-columns: 1fr;
   }

@@ -1,25 +1,7 @@
 /* Advertising review page */
-.ads-portfolio-filters {
-  grid-template-columns: minmax(160px, 220px) minmax(160px, 220px) minmax(260px, 1fr);
-}
-
 .ads-analysis-panel {
   display: grid;
   gap: 14px;
-}
-
-.ads-analysis-filters {
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  align-items: end;
-}
-
-.ads-analysis-filters label {
-  grid-template-columns: auto minmax(112px, 1fr);
-}
-
-.ads-analysis-filters button {
-  height: 42px;
-  white-space: nowrap;
 }
 
 .ads-analysis-kpis {
@@ -121,16 +103,6 @@
 .ads-keyword-panel {
   display: grid;
   gap: 14px;
-}
-
-.ads-keyword-filters {
-  grid-template-columns: minmax(150px, 190px) minmax(150px, 190px) minmax(240px, 1fr) auto;
-  align-items: end;
-}
-
-.ads-keyword-filters button {
-  height: 42px;
-  white-space: nowrap;
 }
 
 .ads-keyword-kpis {

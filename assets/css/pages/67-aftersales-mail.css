@@ -27,14 +27,6 @@
   gap: var(--spectrum-spacing-150);
   background: var(--tj-page-bg);
 }
-#view-aftersales-mail .aftersales-mail-filters {
-  display: grid;
-  grid-template-columns: minmax(0, .72fr) minmax(0, 1.28fr);
-  gap: var(--spectrum-spacing-100);
-}
-#view-aftersales-mail .aftersales-mail-filters label {
-  min-width: 0;
-}
 .aftersales-mail-kpis {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -31,6 +31,12 @@
   flex: 0 0 220px;
 }
 
+.filters .checkbox-label {
+  flex: 0 0 auto;
+  gap: 8px;
+  font-size: 13px;
+}
+
 .filters :where(input, select, .filter-dropdown-button, .date-range-button) {
   width: 100%;
   min-width: 0;
@@ -121,6 +127,14 @@
   width: 14px;
   height: 14px;
   min-height: 14px;
+  margin: 0;
+}
+
+.filters .checkbox-label input[type="checkbox"] {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  min-height: 16px;
   margin: 0;
 }
 

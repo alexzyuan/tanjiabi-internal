@@ -85,6 +85,27 @@ function pageTableBaselineAlignmentSelectors(cssSource) {
   return selectors;
 }
 
+function pageFilterBaselineOverrides(cssSource) {
+  const overrides = [];
+  const source = cssSource.replace(/\/\*[\s\S]*?\*\//g, "");
+  const filterSelectorPattern = /(?:^|[\s.#])(?:[A-Za-z0-9_-]+-)?filters\b|filter-toolbar|budget-toolbar|fba-freight-toolbar|date-range-control|date-range-button/;
+  const forbiddenDeclarationPattern = /\b(?:display|grid-template(?:-columns|-rows)?|gap|column-gap|row-gap|padding|border|border-color|border-radius|min-height|height|width|flex|align-items|box-shadow|outline|font)\s*:/;
+
+  for (const match of source.matchAll(/([^{}]+)\{([^{}]+)\}/g)) {
+    const body = match[2].trim().replace(/\s+/g, " ");
+    if (!forbiddenDeclarationPattern.test(body)) continue;
+
+    for (const selector of match[1].split(",")) {
+      const normalized = selector.trim().replace(/\s+/g, " ");
+      if (!filterSelectorPattern.test(normalized)) continue;
+      if (normalized === "#sales-global-filters[hidden]" && /display\s*:\s*none\s*!important/.test(body)) continue;
+      if (normalized === "body:not(.sales-view) #sales-global-filters" && /display\s*:\s*none\s*!important/.test(body)) continue;
+      overrides.push(`${normalized} { ${body} }`);
+    }
+  }
+  return overrides;
+}
+
 test("styles.css keeps semantic token roots consolidated", async () => {
   const source = await readFile(new URL("../styles.css", import.meta.url), "utf8");
   const tokenSource = await readFile(new URL("../assets/css/tokens/00-semantic-foundation.css", import.meta.url), "utf8");
@@ -213,6 +234,7 @@ test("shared filters and panel surfaces live outside legacy css", async () => {
   assert.match(componentSource, /display:\s*flex/);
   assert.match(componentSource, /^\.filters\s*\{[\s\S]*column-gap:\s*8px;[\s\S]*row-gap:\s*8px;[\s\S]*border:\s*0;[\s\S]*\}/m);
   assert.match(componentSource, /^\.filters label:has\(\.date-range-control\)\s*\{/m);
+  assert.match(componentSource, /^\.filters \.checkbox-label\s*\{/m);
   assert.match(componentSource, /^\.filters \.filter-dropdown-menu\s*\{/m);
   assert.match(componentSource, /^\.filters select\.enhanced-filter-select\s*\{/m);
   assert.match(componentSource, /^\.panel\s*\{/m);
@@ -297,6 +319,20 @@ test("shared filter toolbar styles live outside page css and use semantic tokens
   assert.match(componentSource, /var\(--tj-text-body\)/);
   assert.equal(/^\.budget-toolbar\s*\{/m.test(budgetPageSource), false);
   assert.equal(legacySource.includes(".budget-toolbar {"), false);
+});
+
+test("page css does not override shared filter toolbar baseline", async () => {
+  const pageFiles = await listCssFiles(new URL("../assets/css/pages/", import.meta.url));
+  const violations = [];
+  for (const fileUrl of pageFiles) {
+    const source = await readFile(fileUrl, "utf8");
+    const relativePath = fileUrl.pathname.replace(/^.*\/assets\/css\//, "assets/css/");
+    for (const override of pageFilterBaselineOverrides(source)) {
+      violations.push(`${relativePath}: ${override}`);
+    }
+  }
+
+  assert.deepEqual(violations, []);
 });
 
 test("shared date range picker styles live outside page css and use semantic tokens", async () => {
@@ -797,7 +833,6 @@ test("sales forecast styles live in the page layer and use design tokens", async
   const legacySource = await readFile(new URL("../assets/css/legacy/current.css", import.meta.url), "utf8");
 
   assert.match(pageSource, /^\/\* Sales forecast table and controls \*\//m);
-  assert.match(pageSource, /^\.sales-forecast-filters\s*\{/m);
   assert.match(pageSource, /^\.sales-forecast-table-wrap\s*\{/m);
   assert.match(pageSource, /^\.sales-forecast-view-toggle\s*\{/m);
   assert.match(pageSource, /^\.sales-daily-input\s*\{/m);
@@ -807,6 +842,7 @@ test("sales forecast styles live in the page layer and use design tokens", async
   assert.match(pageSource, /var\(--tj-text-muted\)/);
   assert.equal(/#(?:c8dcf1|eaf1df|f3ead7|e5edf7|d7e4f1|fbfdff|f8fbff|f2f9ff|fff3df|dbe6f2|f7fbff|526176|aebbd0|a97900|f1b800|fff3bf|d5e0ed|9a4a00|f0bb83|fff2df|e4edf6|cfddea|fffdf5)\b/i.test(pageSource), false);
 
+  assert.equal(pageSource.includes(".sales-forecast-filters {"), false);
   assert.equal(legacySource.includes(".sales-forecast-filters {"), false);
   assert.equal(legacySource.includes(".sales-forecast-table-wrap {"), false);
   assert.equal(legacySource.includes(".sales-forecast-view-toggle {"), false);
@@ -840,7 +876,6 @@ test("budget target table width rules live in the page layer", async () => {
 
   assert.match(pageSource, /^#view-budget\s*\{/m);
   assert.match(pageSource, /^#view-budget \.budget-target-table-wrap\s*\{/m);
-  assert.match(pageSource, /^#view-budget \.budget-toolbar\s*\{/m);
   assert.match(pageSource, /^\.month-chip\s*\{/m);
   assert.match(pageSource, /^\.budget-upload-box\s*\{/m);
   assert.match(pageSource, /^\.file-picker\s*\{/m);
@@ -1032,7 +1067,6 @@ test("payables dashboard styles live in the page layer and use semantic tokens",
 
   assert.match(pageSource, /^\/\* Payables dashboard page\. \*\//m);
   assert.match(pageSource, /^\.payable-hero\s*\{/m);
-  assert.match(pageSource, /^\.payable-filters\s*\{/m);
   assert.match(pageSource, /^\.payable-kpi-grid\s*\{/m);
   assert.match(pageSource, /^\.payable-visual-grid\s*\{/m);
   assert.match(pageSource, /^\.payable-status-row\s*\{/m);
@@ -1050,6 +1084,7 @@ test("payables dashboard styles live in the page layer and use semantic tokens",
   assert.match(pageSource, /var\(--tj-tone-danger-strong\)/);
   assert.equal(/#(?:d92d20|d96b00|5f7089|0b3768|ffb057|e54835|9fb2c8|edf4fb|f8fbff|ffffff|1677ff|2563eb|0b66d8)\b/i.test(pageSource), false);
 
+  assert.equal(pageSource.includes(".payable-filters {"), false);
   [
     ".payable-hero {",
     ".payable-update {",
@@ -1075,7 +1110,6 @@ test("factory inventory styles live in the page layer and use semantic tokens", 
   assert.match(pageSource, /^\.factory-inventory-hero\s*\{/m);
   assert.match(pageSource, /^#view-factory-inventory\.active\s*\{/m);
   assert.match(pageSource, /^\.factory-inventory-sticky\s*\{/m);
-  assert.match(pageSource, /^\.factory-inventory-filters\s*\{/m);
   assert.match(pageSource, /^\.factory-inventory-kpi-grid\s*\{/m);
   assert.match(pageSource, /^\.factory-inventory-table-wrap table\s*\{/m);
   assert.match(pageSource, /^#factory-inventory-table \.factory-order-row td\s*\{/m);
@@ -1099,6 +1133,7 @@ test("factory inventory styles live in the page layer and use semantic tokens", 
   );
   assert.equal(/#(?:d3e4f7|edf4fb|1f6fff|ffffff|f8fbff|1677ff|2563eb|0b66d8)\b/i.test(pageSource), false);
 
+  assert.equal(pageSource.includes(".factory-inventory-filters {"), false);
   [
     ".factory-inventory-hero {",
     "#view-factory-inventory.active {",
@@ -1125,7 +1160,6 @@ test("supplier board styles live in the page layer and use semantic tokens", asy
   assert.match(pageSource, /^\.supplier-board-hero\s*\{/m);
   assert.match(pageSource, /^#view-supplier-board\.active\s*\{/m);
   assert.match(pageSource, /^\.supplier-board-sticky\s*\{/m);
-  assert.match(pageSource, /^\.supplier-board-filters\s*\{/m);
   assert.match(pageSource, /^\.supplier-board-kpi-grid\s*\{/m);
   assert.match(pageSource, /^\.supplier-board-table-wrap table\s*\{/m);
   assert.match(pageSource, /^#supplier-board-table th,/m);
@@ -1142,6 +1176,7 @@ test("supplier board styles live in the page layer and use semantic tokens", asy
   assert.match(pageSource, /var\(--tj-text-muted\)/);
   assert.equal(/#(?:f5faff|dbe8f8|f6f9fd|ffffff|1677ff|2563eb|0b66d8)\b/i.test(pageSource), false);
 
+  assert.equal(pageSource.includes(".supplier-board-filters {"), false);
   [
     ".supplier-board-hero {",
     "#view-supplier-board.active {",
@@ -1165,17 +1200,16 @@ test("supplier detail styles live in the page layer and use semantic tokens", as
   assert.match(pageSource, /^\.supplier-detail-hero\s*\{/m);
   assert.match(pageSource, /^#supplier-detail-table th,/m);
   assert.match(pageSource, /^\.supplier-detail-actions\s*\{/m);
-  assert.match(pageSource, /^\.supplier-detail-filters\s*\{/m);
   assert.match(pageSource, /^\.supplier-detail-kpi-grid\s*\{/m);
   assert.match(pageSource, /^\.supplier-detail-table-wrap table\s*\{/m);
   assert.match(pageSource, /^\.supplier-detail-modal\s*\{/m);
-  assert.match(pageSource, /^@media \(max-width:1180px\)/m);
   assert.match(pageSource, /^@media \(max-width:720px\)/m);
   assert.match(pageSource, /#view-supplier-detail \.supplier-detail-kpi-grid\s*\{/);
   assert.match(pageSource, /var\(--tj-border-subtle\)/);
   assert.match(pageSource, /var\(--tj-content-bg\)/);
   assert.equal(/#(?:d3e4f7|ffffff|1677ff|2563eb|0b66d8)\b/i.test(pageSource), false);
 
+  assert.equal(pageSource.includes(".supplier-detail-filters {"), false);
   [
     ".supplier-detail-hero {",
     ".supplier-detail-actions {",
@@ -1321,7 +1355,6 @@ test("aftersales mail styles live in the page layer and use semantic tokens", as
   assert.match(pageSource, /^\/\* Aftersales mail dashboard page\. \*\//m);
   assert.match(pageSource, /^\.aftersales-mail-workspace\s*\{/m);
   assert.match(pageSource, /^\.aftersales-mail-list-panel,/m);
-  assert.match(pageSource, /^#view-aftersales-mail \.aftersales-mail-filters\s*\{/m);
   assert.match(pageSource, /^\.aftersales-mail-kpis\s*\{/m);
   assert.match(pageSource, /^\.aftersales-mail-item\s*\{/m);
   assert.match(pageSource, /^\.aftersales-mail-avatar\s*\{/m);
@@ -1340,6 +1373,7 @@ test("aftersales mail styles live in the page layer and use semantic tokens", as
   assert.equal(pageSource.includes("--spectrum-accent-color"), false);
   assert.equal(/#(?:ffffff|f8fbff|eef4fb|eaf2ff|1677ff|2563eb|0b66d8)\b/i.test(pageSource), false);
 
+  assert.equal(pageSource.includes(".aftersales-mail-filters {"), false);
   [
     /^\.aftersales-mail-workspace\s*\{/m,
     /^\.aftersales-mail-list-panel,/m,
