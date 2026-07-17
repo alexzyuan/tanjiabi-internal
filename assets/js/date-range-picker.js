@@ -1,4 +1,5 @@
 const dayMs = 24 * 60 * 60 * 1000;
+const maxRangeDays = 30;
 const weekdayLabels = ["日", "一", "二", "三", "四", "五", "六"];
 const defaultPresets = [
   ["today", "今天"],
@@ -56,6 +57,10 @@ function endOfMonth(date) {
   return new Date(date.getFullYear(), date.getMonth() + 1, 0);
 }
 
+function defaultVisibleMonth(today) {
+  return startOfMonth(addDays(today, -(maxRangeDays - 1)));
+}
+
 export function normalizeDateRange(start, end, fallbackDate = new Date()) {
   const fallback = dateText(fallbackDate);
   const startText = parseDateText(start) ? String(start) : fallback;
@@ -87,10 +92,12 @@ export function resolveDateRangePreset(preset, today = new Date()) {
   return { start: dateText(start), end: dateText(end) };
 }
 
-export function buildCalendarMonth({ year, monthIndex, range, todayText = dateText(new Date()) } = {}) {
+export function buildCalendarMonth({ year, monthIndex, range, selectableRange = null, todayText = dateText(new Date()) } = {}) {
   const firstOfMonth = new Date(year, monthIndex, 1);
   const gridStart = addDays(firstOfMonth, -firstOfMonth.getDay());
   const normalized = normalizeDateRange(range?.start, range?.end);
+  const selectableStart = selectableRange?.start || "";
+  const selectableEnd = selectableRange?.end || "";
   const weeks = [];
   for (let weekIndex = 0; weekIndex < 6; weekIndex += 1) {
     const week = [];
@@ -99,6 +106,7 @@ export function buildCalendarMonth({ year, monthIndex, range, todayText = dateTe
       const text = dateText(current);
       const isRangeStart = text === normalized.start;
       const isRangeEnd = text === normalized.end;
+      const isSelectable = !selectableRange || (selectableStart <= text && text <= selectableEnd);
       week.push({
         date: text,
         day: current.getDate(),
@@ -106,6 +114,7 @@ export function buildCalendarMonth({ year, monthIndex, range, todayText = dateTe
         isInRange: normalized.start <= text && text <= normalized.end,
         isRangeEnd,
         isRangeStart,
+        isSelectable,
         isSelected: isRangeStart || isRangeEnd,
         isToday: text === todayText,
       });
@@ -136,6 +145,7 @@ function dayClassName(day) {
     day.isRangeEnd ? "is-range-end" : "",
     day.isSelected ? "is-selected" : "",
     day.isToday ? "is-today" : "",
+    day.isSelectable ? "" : "is-disabled",
   ].filter(Boolean).join(" ");
 }
 
@@ -146,7 +156,7 @@ function renderMonth(month) {
       <div class="date-range-picker__weekdays">${month.weekdays.map((label) => `<span>${escapeHtml(label)}</span>`).join("")}</div>
       <div class="date-range-picker__days">
         ${month.weeks.flat().map((day) => `
-          <button class="${dayClassName(day)}" type="button" data-date-range-day="${escapeHtml(day.date)}" aria-pressed="${day.isSelected ? "true" : "false"}">
+          <button class="${dayClassName(day)}" type="button" data-date-range-day="${escapeHtml(day.date)}" aria-pressed="${day.isSelected ? "true" : "false"}"${day.isSelectable ? "" : ' aria-disabled="true" disabled'}>
             ${escapeHtml(day.day)}
           </button>
         `).join("")}
@@ -181,7 +191,7 @@ export function createDateRangePicker({
   const endInputElement = endInput || doc?.querySelector?.(endInputSelector);
   const todayText = dateText(today);
   let range = normalizeDateRange(startInputElement?.value, endInputElement?.value, today);
-  let visibleMonth = startOfMonth(parseDateText(range.start) || today);
+  let visibleMonth = defaultVisibleMonth(today);
   let selectingStart = true;
   let pendingStart = "";
 
@@ -189,6 +199,33 @@ export function createDateRangePicker({
     if (!popoverElement) return;
     popoverElement.hidden = !open;
     triggerElement?.setAttribute?.("aria-expanded", open ? "true" : "false");
+  }
+
+  function resetSelectionDraft() {
+    selectingStart = true;
+    pendingStart = "";
+  }
+
+  function openPopover() {
+    resetSelectionDraft();
+    visibleMonth = defaultVisibleMonth(today);
+    render();
+    setPopoverOpen(true);
+  }
+
+  function selectableRangeForCurrentStep() {
+    const startDate = parseDateText(pendingStart);
+    if (selectingStart || !startDate) return null;
+    return {
+      start: pendingStart,
+      end: dateText(addDays(startDate, maxRangeDays - 1)),
+    };
+  }
+
+  function isSelectableDate(value) {
+    const selectableRange = selectableRangeForCurrentStep();
+    if (!selectableRange) return true;
+    return selectableRange.start <= value && value <= selectableRange.end;
   }
 
   function syncInputs() {
@@ -199,10 +236,12 @@ export function createDateRangePicker({
 
   function render() {
     if (!popoverElement) return;
+    const selectableRange = selectableRangeForCurrentStep();
     const leftMonth = buildCalendarMonth({
       year: visibleMonth.getFullYear(),
       monthIndex: visibleMonth.getMonth(),
       range,
+      selectableRange,
       todayText,
     });
     const rightDate = addMonths(visibleMonth, 1);
@@ -210,6 +249,7 @@ export function createDateRangePicker({
       year: rightDate.getFullYear(),
       monthIndex: rightDate.getMonth(),
       range,
+      selectableRange,
       todayText,
     });
     popoverElement.classList?.add?.("date-range-picker__popover");
@@ -235,15 +275,15 @@ export function createDateRangePicker({
 
   function applyRange(nextRange) {
     range = normalizeDateRange(nextRange.start, nextRange.end, today);
-    visibleMonth = startOfMonth(parseDateText(range.start) || today);
-    selectingStart = true;
-    pendingStart = "";
+    visibleMonth = defaultVisibleMonth(today);
+    resetSelectionDraft();
     syncInputs();
     render();
     onChange({ ...range });
   }
 
   function handlePopoverClick(event) {
+    event.stopPropagation?.();
     const presetButton = event.target?.closest?.("[data-date-range-preset]");
     if (presetButton) {
       applyRange(resolveDateRangePreset(presetButton.dataset.dateRangePreset, today));
@@ -260,6 +300,7 @@ export function createDateRangePicker({
     const dayButton = event.target?.closest?.("[data-date-range-day]");
     if (!dayButton) return;
     const selectedDate = dayButton.dataset.dateRangeDay;
+    if (!isSelectableDate(selectedDate)) return;
     if (selectingStart) {
       pendingStart = selectedDate;
       range = { start: selectedDate, end: selectedDate };
@@ -284,18 +325,18 @@ export function createDateRangePicker({
     render();
     triggerElement?.setAttribute?.("aria-haspopup", "dialog");
     triggerElement?.setAttribute?.("aria-expanded", "false");
-    triggerElement?.addEventListener?.("click", () => setPopoverOpen(Boolean(popoverElement?.hidden)));
+    triggerElement?.addEventListener?.("click", () => (popoverElement?.hidden ? openPopover() : setPopoverOpen(false)));
     triggerElement?.addEventListener?.("keydown", handleKeydown);
     popoverElement?.addEventListener?.("click", handlePopoverClick);
     popoverElement?.addEventListener?.("keydown", handleKeydown);
-    return { applyRange, close: () => setPopoverOpen(false), open: () => setPopoverOpen(true), refresh: () => { range = normalizeDateRange(startInputElement?.value, endInputElement?.value, today); syncInputs(); render(); } };
+    return { applyRange, close: () => setPopoverOpen(false), open: openPopover, refresh: () => { range = normalizeDateRange(startInputElement?.value, endInputElement?.value, today); syncInputs(); render(); } };
   }
 
   return {
     applyRange,
     close: () => setPopoverOpen(false),
     getRange: () => ({ ...range }),
-    open: () => setPopoverOpen(true),
+    open: openPopover,
     refresh: () => {
       range = normalizeDateRange(startInputElement?.value, endInputElement?.value, today);
       syncInputs();

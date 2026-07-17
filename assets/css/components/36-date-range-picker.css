@@ -55,7 +55,6 @@
 .date-range-picker__shortcuts button {
   height: 36px;
   border: 0;
-  border-radius: 0;
   color: var(--tj-text-body);
   background: transparent;
   padding: 0 var(--spectrum-spacing-300);
@@ -81,7 +80,6 @@
   display: inline-grid;
   place-items: center;
   border: 0;
-  border-radius: var(--tj-control-radius);
   color: var(--tj-text-muted);
   background: transparent;
   cursor: pointer;
@@ -116,7 +114,6 @@
 }
 
 .date-range-picker__day {
-  position: relative;
   height: 38px;
   display: grid;
   place-items: center;
@@ -124,7 +121,6 @@
   border-radius: 0;
   color: var(--tj-text-body);
   background: transparent;
-  font-size: 14px;
   cursor: pointer;
 }
 
@@ -134,7 +130,7 @@
 }
 
 .date-range-picker__day.is-in-range {
-  background: var(--tj-surface-muted);
+  background: var(--tj-action-blue-soft);
 }
 
 .date-range-picker__day.is-selected {
@@ -142,4 +138,8 @@
   color: var(--tj-content-bg);
   background: var(--tj-action-blue);
   border-radius: 999px;
+}
+
+.date-range-picker__day:disabled {
+  color: var(--spectrum-text-disabled);
 }
