@@ -1,14 +1,3 @@
-#view-fba-freight .fba-freight-toolbar {
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-}
-
-#view-fba-freight .fba-freight-toolbar button {
-  width: 100%;
-  min-width: 0;
-  height: var(--tj-control-height);
-  white-space: nowrap;
-}
-
 #view-fba-freight .fba-freight-table-shell {
   max-width: 100%;
   overflow-x: auto;

@@ -205,9 +205,15 @@ test("shared module primitives live outside legacy css", async () => {
 
 test("shared filters and panel surfaces live outside legacy css", async () => {
   const componentSource = await readFile(new URL("../assets/css/components/30-surfaces-and-filters.css", import.meta.url), "utf8");
+  const layoutSource = await readFile(new URL("../assets/css/layout/10-shell.css", import.meta.url), "utf8");
+  const applicationOverrideSource = await readFile(new URL("../assets/css/components/48-application-ui-overrides.css", import.meta.url), "utf8");
   const legacySource = await readFile(new URL("../assets/css/legacy/current.css", import.meta.url), "utf8");
 
   assert.match(componentSource, /^\.filters\s*\{/m);
+  assert.match(componentSource, /display:\s*flex/);
+  assert.match(componentSource, /^\.filters label:has\(\.date-range-control\)\s*\{/m);
+  assert.match(componentSource, /^\.filters \.filter-dropdown-menu\s*\{/m);
+  assert.match(componentSource, /^\.filters select\.enhanced-filter-select\s*\{/m);
   assert.match(componentSource, /^\.panel\s*\{/m);
   assert.match(componentSource, /^\.panel-head\s*\{/m);
   assert.match(componentSource, /^\.form-span-2\s*\{/m);
@@ -222,6 +228,8 @@ test("shared filters and panel surfaces live outside legacy css", async () => {
   assert.equal(componentSource.includes("#d8e4f0"), false);
   assert.equal(componentSource.includes("#fbfdff"), false);
   assert.equal(componentSource.includes("background: white"), false);
+  assert.equal(layoutSource.includes("filters"), false);
+  assert.equal(applicationOverrideSource.includes("body:not(.login-body) .filters"), false);
 
   assert.equal(/^\.filters\s*\{/m.test(legacySource), false);
   assert.equal(/^\.filters,/m.test(legacySource), false);
@@ -257,7 +265,7 @@ test("shared visual component tokens normalize controls, tables, and modals", as
     assert.match(tokenSource, new RegExp(`${token}:`));
   });
 
-  assert.match(surfacesSource, /height:\s*var\(--tj-control-height\)/);
+  assert.match(surfacesSource, /height:\s*var\(--tj-control-height-compact\)/);
   assert.match(surfacesSource, /border-radius:\s*var\(--tj-control-radius\)/);
   assert.match(formSource, /height:\s*var\(--tj-control-height\)/);
   assert.match(formSource, /box-shadow:\s*var\(--tj-focus-ring\)/);
@@ -278,7 +286,9 @@ test("shared filter toolbar styles live outside page css and use semantic tokens
   assert.match(componentSource, /^\/\* Shared compact filter toolbar\. \*\//m);
   assert.match(componentSource, /^\.filter-toolbar\s*\{/m);
   assert.match(componentSource, /^\.filter-toolbar label\s*\{/m);
+  assert.match(componentSource, /^\.filter-toolbar label:has\(\.date-range-control\)\s*\{/m);
   assert.match(componentSource, /^\.filter-toolbar input,/m);
+  assert.match(componentSource, /^\.filter-toolbar > :where\(input, select\)\s*\{/m);
   assert.match(componentSource, /var\(--tj-content-bg\)/);
   assert.match(componentSource, /var\(--tj-border-subtle\)/);
   assert.match(componentSource, /var\(--tj-border-control\)/);
@@ -482,8 +492,6 @@ test("application-wide UI overrides live in components, not shell or legacy css"
     "Application-wide component density and surface overrides",
     "body:not(.login-body) table",
     "body:not(.login-body) th.table-sort-active",
-    "body:not(.login-body) .filters",
-    "body:not(.login-body) .filters .filter-dropdown-menu",
     "body:not(.login-body) .table-wrap",
     "body:not(.login-body) .module-grid",
     "body:not(.login-body) .payable-dashboard-grid",
@@ -503,8 +511,6 @@ test("application-wide UI overrides live in components, not shell or legacy css"
   [
     "body:not(.login-body) table {",
     "body:not(.login-body) th.table-sort-active",
-    "body:not(.login-body) .filters {",
-    "body:not(.login-body) .filters .filter-dropdown",
     "body:not(.login-body) .table-wrap",
     "body:not(.login-body) .module-grid",
     "body:not(.login-body) .payable-dashboard-grid",
@@ -854,11 +860,11 @@ test("budget target table width rules live in the page layer", async () => {
   assert.equal(legacySource.includes(".template-map"), false);
 });
 
-test("FBA freight status wrapping lives in the page layer", async () => {
+test("FBA freight page styles avoid overriding shared filter toolbar", async () => {
   const pageSource = await readFile(new URL("../assets/css/pages/35-fba-freight.css", import.meta.url), "utf8");
   const legacySource = await readFile(new URL("../assets/css/legacy/current.css", import.meta.url), "utf8");
 
-  assert.match(pageSource, /^#view-fba-freight \.fba-freight-toolbar\s*\{/m);
+  assert.equal(pageSource.includes(".fba-freight-toolbar"), false);
   assert.match(pageSource, /^#view-fba-freight \.fba-freight-table\s*\{/m);
   assert.match(pageSource, /^#view-fba-freight \.fba-freight-summary\s*\{/m);
   assert.match(pageSource, /grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(var\(--tj-kpi-card-min-width\),\s*var\(--tj-kpi-card-width\)\)\)/);

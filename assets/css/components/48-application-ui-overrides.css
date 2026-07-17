@@ -40,40 +40,6 @@ body:not(.login-body) td {
   vertical-align: middle;
 }
 
-body:not(.login-body) .filters {
-  gap: 10px;
-  margin-top: 4px;
-  border-radius: 14px;
-}
-
-body:not(.login-body) .filters .filter-dropdown {
-  position: relative;
-  width: 100%;
-  min-width: 0;
-}
-
-body:not(.login-body) .filters .filter-dropdown-menu {
-  right: auto;
-  width: max-content;
-  min-width: max(100%, 220px);
-  max-width: min(360px, calc(100vw - 32px));
-  background: var(--tj-content-bg);
-  border: 1px solid var(--tj-border-subtle);
-}
-
-body:not(.login-body) .filters .filter-dropdown-option {
-  display: flex;
-  grid-template-columns: none;
-  align-items: center;
-  min-height: 30px;
-  height: auto;
-  gap: 8px;
-  padding: 4px 8px;
-  font-size: 13px;
-  line-height: 1.25;
-  white-space: nowrap;
-}
-
 body:not(.login-body) .table-wrap {
   border-color: var(--tj-border-control);
   background: var(--tj-content-bg);

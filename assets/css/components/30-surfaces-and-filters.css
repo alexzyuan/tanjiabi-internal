@@ -1,41 +1,144 @@
 /* Shared dashboard surfaces and filter controls. */
 .filters {
-  display: grid;
-  grid-template-columns: minmax(120px, 0.9fr) minmax(150px, 1fr) minmax(260px, 1.7fr) repeat(3, minmax(150px, 1fr));
-  gap: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
   background: var(--tj-content-bg);
-  padding: 12px;
+  padding: 8px 10px;
   border: 1px solid var(--tj-border-subtle);
-  box-shadow: var(--tj-shadow-soft);
-  border-radius: var(--tj-panel-radius);
-  margin-top: 14px;
+  border-radius: var(--tj-control-radius);
+  margin-top: 4px;
 }
 
 .filters label {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
+  flex: 0 0 116px;
+  min-width: 0;
+  font-size: 0;
   color: var(--tj-text-body);
   white-space: nowrap;
-  font-size: 14px;
 }
 
-.filters input,
-.filters select {
+.filters label:has(.date-range-control) {
+  flex-basis: 240px;
+}
+
+.filters label:has(input[type="search"]) {
+  flex: 0 0 220px;
+}
+
+.filters :where(input, select, .filter-dropdown-button, .date-range-button) {
   width: 100%;
   min-width: 0;
-  height: var(--tj-control-height);
+  height: var(--tj-control-height-compact);
   border: 1px solid var(--tj-border-control);
+  border-radius: var(--tj-control-radius);
+  padding: 0 var(--tj-control-padding-x);
   color: var(--tj-text-body);
   background: var(--tj-content-bg);
-  padding: 0 var(--tj-control-padding-x);
-  border-radius: var(--tj-control-radius);
+  font-size: 13px;
   transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.filters select.enhanced-filter-select {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.filters :where(input, select, .filter-dropdown-button)::placeholder {
+  color: var(--tj-text-muted);
+}
+
+.filters .filter-dropdown {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+
+.filters .date-range-control {
+  width: 100%;
+}
+
+.filters .filter-dropdown-button,
+.filters .date-range-button {
+  height: var(--tj-control-height-compact);
+}
+
+.filters .filter-dropdown-menu {
+  top: 40px;
+  right: auto;
+  width: max-content;
+  min-width: max(100%, 220px);
+  max-width: min(360px, calc(100vw - 32px));
+  gap: 4px;
+  padding: 8px;
+  background: var(--tj-content-bg);
+  border: 1px solid var(--tj-border-subtle);
+}
+
+.filters .filter-dropdown-group {
+  display: grid;
+  gap: 1px;
+  padding: 2px 0;
+}
+
+.filters .filter-dropdown-group strong {
+  padding: 3px 8px 4px;
+  color: var(--tj-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.filters .filter-dropdown-option {
+  display: flex;
+  grid-template-columns: none;
+  align-items: center;
+  min-height: 30px;
+  height: auto;
+  gap: 8px;
+  padding: 4px 8px;
+  font-size: 13px;
+  line-height: 1.25;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.filters .filter-dropdown-option input[type="checkbox"] {
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+  min-height: 14px;
+  margin: 0;
+}
+
+.filters .filter-dropdown-option span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filters .filter-dropdown-empty {
+  padding: 8px;
+  color: var(--tj-text-muted);
+  font-size: 13px;
 }
 
 .filters input:focus,
 .filters select:focus,
+.filters .filter-dropdown-button:focus-visible,
 .form-grid input:focus,
 .form-grid select:focus,
 .inline-date input:focus,

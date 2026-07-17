@@ -565,10 +565,6 @@ body:not(.login-body) .world-clock {
   line-height: 18px;
 }
 
-body:not(.login-body) :where(.filters) {
-  margin-top: 4px;
-}
-
 body:not(.login-body) .account-trigger {
   display: inline-flex;
   align-items: center;
@@ -1204,115 +1200,6 @@ body:not(.login-body) .view > .module-hero {
   padding-bottom: 10px;
 }
 
-body:not(.login-body) :where(.filters) {
-  gap: 10px;
-  border-radius: 14px;
-}
-
-body:not(.login-body) .filters label {
-  gap: 5px;
-  font-size: 13px;
-}
-
-body:not(.login-body) .filters input,
-body:not(.login-body) .filters select,
-body:not(.login-body) .date-range-button {
-  min-height: 34px;
-  height: 34px;
-  border-radius: 9px;
-  font-size: 13px;
-}
-
-body:not(.login-body) .filters select[multiple] {
-  min-height: 82px;
-  height: 82px;
-  padding-block: 6px;
-}
-
-body:not(.login-body) .filters select.enhanced-filter-select {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  min-height: 1px;
-  margin: -1px;
-  padding: 0;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-body:not(.login-body) :where(.filters) .filter-dropdown {
-  position: relative;
-  width: 100%;
-}
-
-body:not(.login-body) :where(.filters) .filter-dropdown-button {
-  height: 36px;
-  min-height: 36px;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-body:not(.login-body) :where(.filters) .filter-dropdown-menu {
-  top: 42px;
-  min-width: 220px;
-  max-width: min(360px, 86vw);
-  gap: 4px;
-  padding: 8px;
-}
-
-body:not(.login-body) :where(.filters) .filter-dropdown-group {
-  display: grid;
-  gap: 1px;
-  padding: 2px 0;
-}
-
-body:not(.login-body) :where(.filters) .filter-dropdown-group strong {
-  padding: 3px 8px 4px;
-  color: var(--tj-muted);
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.2;
-}
-
-body:not(.login-body) :where(.filters) .filter-dropdown-option {
-  display: flex;
-  grid-template-columns: none;
-  align-items: center;
-  min-height: 30px;
-  height: auto;
-  gap: 8px;
-  padding: 4px 8px;
-  font-size: 13px;
-  line-height: 1.25;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-body:not(.login-body) :where(.filters) .filter-dropdown-option input[type="checkbox"] {
-  flex: 0 0 14px;
-  width: 14px;
-  height: 14px;
-  min-height: 14px;
-  margin: 0;
-}
-
-body:not(.login-body) :where(.filters) .filter-dropdown-option span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-body:not(.login-body) :where(.filters) .filter-dropdown-empty {
-  padding: 8px;
-  color: var(--tj-muted);
-  font-size: 13px;
-}
-
 body:not(.login-body) .metric-tile strong,
 body:not(.login-body) .kpi-card strong,
 body:not(.login-body) .home-kpi-card strong {
@@ -1722,10 +1609,6 @@ body:not(.login-body) .module-breadcrumb {
   box-shadow: none;
 }
 
-body:not(.login-body) :where(.filters) {
-  padding: 12px;
-}
-
 body:not(.login-body) .panel,
 body:not(.login-body) .home-panel {
   padding: 14px;
@@ -2118,7 +2001,6 @@ body:not(.login-body) .view.active {
 
 body:not(.login-body) .view > .module-hero,
 body:not(.login-body) .view .module-hero,
-body:not(.login-body) .filters,
 body:not(.login-body) .filter-panel,
 body:not(.login-body) .panel,
 body:not(.login-body) .home-hero,
@@ -2153,7 +2035,6 @@ body:not(.login-body) .mini-card {
 
 body:not(.login-body) .view > .module-hero,
 body:not(.login-body) .view .module-hero,
-body:not(.login-body) .filters,
 body:not(.login-body) :where(.table-wrap),
 body:not(.login-body) .panel,
 body:not(.login-body) .home-panel {
