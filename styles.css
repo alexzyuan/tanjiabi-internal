@@ -525,10 +525,10 @@ svg{width:100%;height:auto;display:block}
 .date-range-picker__month h3{margin:0 0 var(--spectrum-spacing-150);color:var(--tj-text-strong);font-size:18px;font-weight:800;text-align:center}
 .date-range-picker__weekdays,.date-range-picker__days{display:grid;grid-template-columns:repeat(7,minmax(36px,1fr))}
 .date-range-picker__weekdays span{display:grid;height:34px;place-items:center;color:var(--tj-text-body);font-weight:700}
-.date-range-picker__day{height:38px;display:grid;place-items:center;border:0;border-radius:0;color:var(--tj-text-body);background:transparent;cursor:pointer}
+.date-range-picker__day{height:38px;display:grid;place-items:center;border:0;color:var(--tj-text-body);background:transparent;cursor:pointer}
 .date-range-picker__day.is-outside-month{color:var(--tj-text-muted);opacity:0.58}
 .date-range-picker__day.is-in-range{background:var(--tj-action-blue-soft)}
-.date-range-picker__day.is-selected{z-index:1;color:var(--tj-content-bg);background:var(--tj-action-blue);border-radius:999px}
+.date-range-picker__day.is-selected{width:32px;height:32px;place-self:center;color:var(--tj-content-bg);background:var(--tj-action-blue);border-radius:50%}
 .date-range-picker__day:disabled{color:var(--spectrum-text-disabled)}
 .status-pill{display:inline-flex;width:fit-content;min-width:46px;min-height:28px;align-items:center;justify-content:center;padding:0 10px;border-radius:var(--tj-control-radius);color:var(--tj-tone-neutral-text);background:var(--tj-tone-neutral-bg);font-size:12px;font-weight:900}
 .status-pill.active,.status-pill.status-active{color:var(--tj-tone-success-text);background:var(--tj-tone-success-bg)}

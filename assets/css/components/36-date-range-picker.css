@@ -118,7 +118,6 @@
   display: grid;
   place-items: center;
   border: 0;
-  border-radius: 0;
   color: var(--tj-text-body);
   background: transparent;
   cursor: pointer;
@@ -134,10 +133,12 @@
 }
 
 .date-range-picker__day.is-selected {
-  z-index: 1;
+  width: 32px;
+  height: 32px;
+  place-self: center;
   color: var(--tj-content-bg);
   background: var(--tj-action-blue);
-  border-radius: 999px;
+  border-radius: 50%;
 }
 
 .date-range-picker__day:disabled {

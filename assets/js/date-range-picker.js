@@ -61,6 +61,10 @@ function defaultVisibleMonth(today) {
   return startOfMonth(addDays(today, -(maxRangeDays - 1)));
 }
 
+function minDateText(first, second) {
+  return first <= second ? first : second;
+}
+
 export function normalizeDateRange(start, end, fallbackDate = new Date()) {
   const fallback = dateText(fallbackDate);
   const startText = parseDateText(start) ? String(start) : fallback;
@@ -215,10 +219,15 @@ export function createDateRangePicker({
 
   function selectableRangeForCurrentStep() {
     const startDate = parseDateText(pendingStart);
-    if (selectingStart || !startDate) return null;
+    if (selectingStart || !startDate) {
+      return {
+        start: "0000-01-01",
+        end: todayText,
+      };
+    }
     return {
       start: pendingStart,
-      end: dateText(addDays(startDate, maxRangeDays - 1)),
+      end: minDateText(dateText(addDays(startDate, maxRangeDays - 1)), todayText),
     };
   }
 

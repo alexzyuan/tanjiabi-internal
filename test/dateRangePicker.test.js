@@ -170,6 +170,40 @@ test("date range picker requires the end date within 30 days after the selected 
   assert.deepEqual(changes, []);
 });
 
+test("date range picker rejects dates after today for start and end selection", () => {
+  const trigger = createFakeElement();
+  const popover = createFakeElement();
+  const startInput = createFakeElement();
+  const endInput = createFakeElement();
+  const changes = [];
+  const picker = createDateRangePicker({
+    trigger,
+    popover,
+    startInput,
+    endInput,
+    today: new Date("2026-07-17T08:00:00Z"),
+    onChange: (range) => changes.push(range),
+  });
+
+  picker.setup();
+  picker.open();
+  popover.listeners.click(createDateClickEvent("2026-07-18"));
+
+  assert.equal(startInput.value, "2026-07-17");
+  assert.equal(endInput.value, "2026-07-17");
+  assert.equal(popover.hidden, false);
+  assert.deepEqual(changes, []);
+
+  popover.listeners.click(createDateClickEvent("2026-07-01"));
+  popover.listeners.click(createDateClickEvent("2026-07-18"));
+
+  assert.equal(startInput.value, "2026-07-01");
+  assert.equal(endInput.value, "2026-07-01");
+  assert.equal(popover.hidden, false);
+  assert.deepEqual(changes, []);
+  assert.match(popover.innerHTML, /data-date-range-day="2026-07-18"[^>]*disabled/);
+});
+
 test("date range picker stops popover click propagation before rerendering days", () => {
   const trigger = createFakeElement();
   const popover = createFakeElement();
