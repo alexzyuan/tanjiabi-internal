@@ -302,6 +302,8 @@ test("shared date range picker styles live outside page css and use semantic tok
   assert.match(componentSource, /^\.date-range-picker__shortcuts\s*\{/m);
   assert.match(componentSource, /^\.date-range-picker__months\s*\{/m);
   assert.match(componentSource, /^\.date-range-picker__day\.is-selected\s*\{/m);
+  assert.match(componentSource, /^\.date-range-picker__day:is\(\.is-today, \.is-selected\)\s*\{/m);
+  assert.match(componentSource, /^\.date-range-picker__day\.is-today:not\(\.is-selected\)\s*\{/m);
   assert.match(componentSource, /var\(--tj-content-bg\)/);
   assert.match(componentSource, /var\(--tj-border-control\)/);
   assert.match(componentSource, /var\(--tj-action-blue\)/);

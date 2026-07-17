@@ -96,10 +96,11 @@ export function resolveDateRangePreset(preset, today = new Date()) {
   return { start: dateText(start), end: dateText(end) };
 }
 
-export function buildCalendarMonth({ year, monthIndex, range, selectableRange = null, todayText = dateText(new Date()) } = {}) {
+export function buildCalendarMonth({ year, monthIndex, range, previewRange = null, selectableRange = null, todayText = dateText(new Date()) } = {}) {
   const firstOfMonth = new Date(year, monthIndex, 1);
   const gridStart = addDays(firstOfMonth, -firstOfMonth.getDay());
   const normalized = normalizeDateRange(range?.start, range?.end);
+  const normalizedPreview = previewRange ? normalizeDateRange(previewRange.start, previewRange.end) : null;
   const selectableStart = selectableRange?.start || "";
   const selectableEnd = selectableRange?.end || "";
   const weeks = [];
@@ -111,11 +112,13 @@ export function buildCalendarMonth({ year, monthIndex, range, selectableRange = 
       const isRangeStart = text === normalized.start;
       const isRangeEnd = text === normalized.end;
       const isSelectable = !selectableRange || (selectableStart <= text && text <= selectableEnd);
+      const isPreviewInRange = Boolean(normalizedPreview && normalizedPreview.start <= text && text <= normalizedPreview.end);
       week.push({
         date: text,
         day: current.getDate(),
         isCurrentMonth: current.getMonth() === monthIndex,
         isInRange: normalized.start <= text && text <= normalized.end,
+        isPreviewInRange,
         isRangeEnd,
         isRangeStart,
         isSelectable,
@@ -144,7 +147,7 @@ function dayClassName(day) {
   return [
     "date-range-picker__day",
     day.isCurrentMonth ? "" : "is-outside-month",
-    day.isInRange ? "is-in-range" : "",
+    day.isInRange || day.isPreviewInRange ? "is-in-range" : "",
     day.isRangeStart ? "is-range-start" : "",
     day.isRangeEnd ? "is-range-end" : "",
     day.isSelected ? "is-selected" : "",
@@ -198,6 +201,7 @@ export function createDateRangePicker({
   let visibleMonth = defaultVisibleMonth(today);
   let selectingStart = true;
   let pendingStart = "";
+  let previewEnd = "";
 
   function setPopoverOpen(open) {
     if (!popoverElement) return;
@@ -208,6 +212,7 @@ export function createDateRangePicker({
   function resetSelectionDraft() {
     selectingStart = true;
     pendingStart = "";
+    previewEnd = "";
   }
 
   function openPopover() {
@@ -246,10 +251,14 @@ export function createDateRangePicker({
   function render() {
     if (!popoverElement) return;
     const selectableRange = selectableRangeForCurrentStep();
+    const previewRange = !selectingStart && pendingStart && previewEnd
+      ? { start: pendingStart, end: previewEnd }
+      : null;
     const leftMonth = buildCalendarMonth({
       year: visibleMonth.getFullYear(),
       monthIndex: visibleMonth.getMonth(),
       range,
+      previewRange,
       selectableRange,
       todayText,
     });
@@ -258,6 +267,7 @@ export function createDateRangePicker({
       year: rightDate.getFullYear(),
       monthIndex: rightDate.getMonth(),
       range,
+      previewRange,
       selectableRange,
       todayText,
     });
@@ -312,6 +322,7 @@ export function createDateRangePicker({
     if (!isSelectableDate(selectedDate)) return;
     if (selectingStart) {
       pendingStart = selectedDate;
+      previewEnd = "";
       range = { start: selectedDate, end: selectedDate };
       selectingStart = false;
       syncInputs();
@@ -320,6 +331,23 @@ export function createDateRangePicker({
     }
     applyRange(normalizeDateRange(pendingStart, selectedDate, today));
     setPopoverOpen(false);
+  }
+
+  function handlePopoverMouseover(event) {
+    if (selectingStart || !pendingStart) return;
+    const dayButton = event.target?.closest?.("[data-date-range-day]");
+    if (!dayButton) return;
+    const hoveredDate = dayButton.dataset.dateRangeDay;
+    const nextPreviewEnd = isSelectableDate(hoveredDate) ? hoveredDate : "";
+    if (previewEnd === nextPreviewEnd) return;
+    previewEnd = nextPreviewEnd;
+    render();
+  }
+
+  function handlePopoverMouseleave() {
+    if (!previewEnd) return;
+    previewEnd = "";
+    render();
   }
 
   function handleKeydown(event) {
@@ -337,6 +365,9 @@ export function createDateRangePicker({
     triggerElement?.addEventListener?.("click", () => (popoverElement?.hidden ? openPopover() : setPopoverOpen(false)));
     triggerElement?.addEventListener?.("keydown", handleKeydown);
     popoverElement?.addEventListener?.("click", handlePopoverClick);
+    popoverElement?.addEventListener?.("mouseover", handlePopoverMouseover);
+    popoverElement?.addEventListener?.("mousemove", handlePopoverMouseover);
+    popoverElement?.addEventListener?.("mouseleave", handlePopoverMouseleave);
     popoverElement?.addEventListener?.("keydown", handleKeydown);
     return { applyRange, close: () => setPopoverOpen(false), open: openPopover, refresh: () => { range = normalizeDateRange(startInputElement?.value, endInputElement?.value, today); syncInputs(); render(); } };
   }

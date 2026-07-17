@@ -50,6 +50,17 @@ function createDateClickEvent(date) {
   };
 }
 
+function createDateHoverEvent(date) {
+  return {
+    target: {
+      closest(selector) {
+        if (selector === "[data-date-range-day]") return { dataset: { dateRangeDay: date } };
+        return null;
+      },
+    },
+  };
+}
+
 test("date range picker normalizes reversed ranges and labels them consistently", () => {
   assert.deepEqual(normalizeDateRange("2026-07-17", "2026-01-01"), {
     start: "2026-01-01",
@@ -92,6 +103,21 @@ test("date range picker builds a six-week month grid with range states", () => {
   assert.equal(jan10.isInRange, true);
   assert.equal(jan17.isRangeEnd, true);
   assert.equal(jan17.isSelected, true);
+});
+
+test("date range picker marks the pending hover range after a start date is selected", () => {
+  const month = buildCalendarMonth({
+    year: 2026,
+    monthIndex: 6,
+    range: { start: "2026-07-03", end: "2026-07-03" },
+    previewRange: { start: "2026-07-03", end: "2026-07-07" },
+    todayText: "2026-07-17",
+  });
+  const flatDays = month.weeks.flat();
+
+  assert.equal(flatDays.find((day) => day.date === "2026-07-02").isPreviewInRange, false);
+  assert.equal(flatDays.find((day) => day.date === "2026-07-04").isPreviewInRange, true);
+  assert.equal(flatDays.find((day) => day.date === "2026-07-07").isPreviewInRange, true);
 });
 
 test("date range picker closes with Escape", () => {
@@ -168,6 +194,51 @@ test("date range picker requires the end date within 30 days after the selected 
   assert.equal(endInput.value, "2026-07-01");
   assert.equal(popover.hidden, false);
   assert.deepEqual(changes, []);
+});
+
+test("date range picker previews the selectable end range while hovering after start selection", () => {
+  const trigger = createFakeElement();
+  const popover = createFakeElement();
+  const startInput = createFakeElement();
+  const endInput = createFakeElement();
+  const picker = createDateRangePicker({
+    trigger,
+    popover,
+    startInput,
+    endInput,
+    today: new Date("2026-07-17T08:00:00Z"),
+  });
+
+  picker.setup();
+  picker.open();
+  popover.listeners.click(createDateClickEvent("2026-07-03"));
+  popover.listeners.mouseover(createDateHoverEvent("2026-07-07"));
+
+  assert.match(popover.innerHTML, /class="[^"]*\bis-in-range\b[^"]*"[^>]*data-date-range-day="2026-07-04"/);
+  assert.match(popover.innerHTML, /class="[^"]*\bis-in-range\b[^"]*"[^>]*data-date-range-day="2026-07-07"/);
+
+  popover.listeners.mouseover(createDateHoverEvent("2026-07-18"));
+
+  assert.doesNotMatch(popover.innerHTML, /class="[^"]*\bis-in-range\b[^"]*"[^>]*data-date-range-day="2026-07-18"/);
+});
+
+test("date range picker previews the selectable end range on mouse movement", () => {
+  const trigger = createFakeElement();
+  const popover = createFakeElement();
+  const picker = createDateRangePicker({
+    trigger,
+    popover,
+    startInput: createFakeElement(),
+    endInput: createFakeElement(),
+    today: new Date("2026-07-17T08:00:00Z"),
+  });
+
+  picker.setup();
+  picker.open();
+  popover.listeners.click(createDateClickEvent("2026-07-03"));
+  popover.listeners.mousemove(createDateHoverEvent("2026-07-07"));
+
+  assert.match(popover.innerHTML, /class="[^"]*\bis-in-range\b[^"]*"[^>]*data-date-range-day="2026-07-07"/);
 });
 
 test("date range picker rejects dates after today for start and end selection", () => {

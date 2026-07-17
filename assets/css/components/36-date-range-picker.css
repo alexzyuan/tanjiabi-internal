@@ -8,7 +8,6 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--spectrum-spacing-100);
   border: 1px solid var(--tj-border-control);
   color: var(--tj-text-strong);
   background: var(--tj-content-bg);
@@ -19,8 +18,6 @@
 
 .date-range-button::after {
   content: "▣";
-  color: var(--tj-text-muted);
-  font-size: 13px;
 }
 
 .date-range-button:focus-visible {
@@ -49,7 +46,6 @@
   display: grid;
   padding: var(--spectrum-spacing-200) 0;
   border-right: 1px solid var(--tj-border-subtle);
-  background: var(--tj-content-bg);
 }
 
 .date-range-picker__shortcuts button {
@@ -59,7 +55,6 @@
   background: transparent;
   padding: 0 var(--spectrum-spacing-300);
   text-align: left;
-  cursor: pointer;
 }
 
 .date-range-picker__calendar {
@@ -77,12 +72,11 @@
 .date-range-picker__nav button {
   width: 32px;
   height: 32px;
-  display: inline-grid;
+  display: grid;
   place-items: center;
   border: 0;
   color: var(--tj-text-muted);
   background: transparent;
-  cursor: pointer;
 }
 
 .date-range-picker__months {
@@ -132,13 +126,20 @@
   background: var(--tj-action-blue-soft);
 }
 
-.date-range-picker__day.is-selected {
+.date-range-picker__day:is(.is-today, .is-selected) {
   width: 32px;
   height: 32px;
   place-self: center;
+  border-radius: 50%;
+}
+
+.date-range-picker__day.is-today:not(.is-selected) {
+  border: 1px solid var(--tj-action-blue);
+}
+
+.date-range-picker__day.is-selected {
   color: var(--tj-content-bg);
   background: var(--tj-action-blue);
-  border-radius: 50%;
 }
 
 .date-range-picker__day:disabled {
