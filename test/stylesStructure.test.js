@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readdir, readFile, stat } from "node:fs/promises";
 import nodeTest from "node:test";
+import { inferTableColumnKind } from "../assets/js/data-table-manager.js";
 import { isRepositoryMetadataPath } from "../src/utils/pathFilters.js";
 import { minifyCss } from "../scripts/lib/minifyCss.js";
 
@@ -30,6 +31,45 @@ const test = nodeTest;
 
 function countMinifyCssDefinitions(source) {
   return (source.match(new RegExp("function\\s+minifyCss", "g")) || []).length;
+}
+
+function plainTextFromHtml(html = "") {
+  return String(html || "")
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function tableHeadersById(indexSource) {
+  const tables = new Map();
+  for (const match of indexSource.matchAll(/<table\b([^>]*)>([\s\S]*?)<\/table>/gi)) {
+    const id = match[1].match(/\bid="([^"]+)"/)?.[1];
+    if (!id) continue;
+    const headers = Array.from(match[2].matchAll(/<th\b[^>]*>([\s\S]*?)<\/th>/gi), (headerMatch) => plainTextFromHtml(headerMatch[1]));
+    if (headers.length) tables.set(id, headers);
+  }
+  return tables;
+}
+
+function leftAlignedDataColumnSelectors(cssSource) {
+  const selectors = [];
+  for (const match of cssSource.matchAll(/([^{}]+)\{([^{}]*text-align\s*:\s*left[^{}]*)\}/g)) {
+    for (const selector of match[1].split(",")) {
+      const normalized = selector.trim().replace(/\s+/g, " ");
+      const selectorMatch = normalized.match(/#([A-Za-z][\w-]*)[\s\S]*\btd:nth-child\((\d+)\)/);
+      if (!selectorMatch || normalized.includes(":not(.table-cell--number)")) continue;
+      selectors.push({
+        id: selectorMatch[1],
+        columnIndex: Number(selectorMatch[2]),
+        selector: normalized,
+      });
+    }
+  }
+  return selectors;
 }
 
 test("styles.css keeps semantic token roots consolidated", async () => {
@@ -301,6 +341,27 @@ test("shared table controls live outside legacy css and use semantic tokens", as
   );
   assert.equal((generatedSource.match(/body:not\(\.login-body\) \.table-select\{/g) || []).length, 1);
   assert.equal((generatedSource.match(/\.table-action\{/g) || []).length, 1);
+});
+
+test("page table alignment overrides do not target numeric data columns", async () => {
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const headersById = tableHeadersById(indexSource);
+  const sourceFiles = (await Promise.all(cssLayerOrder.map((layer) => (
+    listCssFiles(new URL(`../assets/css/${layer}/`, import.meta.url))
+  )))).flat();
+  const violations = [];
+
+  for (const file of sourceFiles) {
+    const cssSource = await readFile(file, "utf8");
+    for (const entry of leftAlignedDataColumnSelectors(cssSource)) {
+      const headers = headersById.get(entry.id);
+      const label = headers?.[entry.columnIndex - 1];
+      if (!label || inferTableColumnKind(label) !== "number") continue;
+      violations.push(`${file.pathname}:${entry.selector} targets numeric column ${entry.columnIndex} (${label})`);
+    }
+  }
+
+  assert.deepEqual(violations, []);
 });
 
 test("shared dashboard data primitives live outside legacy css and use semantic tokens", async () => {

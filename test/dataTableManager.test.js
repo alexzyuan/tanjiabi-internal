@@ -27,6 +27,14 @@ test("data table manager infers numeric columns from BI headers", () => {
     "FBA 转库",
     "FBA 在途",
     "采购量",
+    "销量统计",
+    "申请中",
+    "未申请",
+    "销售目标(原币)",
+    "退款目标(原币)",
+    "利润目标(原币)",
+    "本月增加计提（当月）",
+    "已计提冲回",
   ].forEach((label) => {
     assert.equal(inferTableColumnKind(label), "number", `${label} should be numeric`);
   });
