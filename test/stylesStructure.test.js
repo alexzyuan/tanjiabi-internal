@@ -72,6 +72,19 @@ function leftAlignedDataColumnSelectors(cssSource) {
   return selectors;
 }
 
+function pageTableBaselineAlignmentSelectors(cssSource) {
+  const selectors = [];
+  for (const match of cssSource.matchAll(/([^{}]+)\{([^{}]*text-align\s*:\s*(?:left|right)[^{}]*)\}/g)) {
+    for (const selector of match[1].split(",")) {
+      const normalized = selector.trim().replace(/\s+/g, " ");
+      if (!/\b[td]h\b/.test(normalized)) continue;
+      if (normalized.includes(".review-rating-table")) continue;
+      selectors.push(normalized);
+    }
+  }
+  return selectors;
+}
+
 test("styles.css keeps semantic token roots consolidated", async () => {
   const source = await readFile(new URL("../styles.css", import.meta.url), "utf8");
   const tokenSource = await readFile(new URL("../assets/css/tokens/00-semantic-foundation.css", import.meta.url), "utf8");
@@ -358,6 +371,23 @@ test("page table alignment overrides do not target numeric data columns", async 
       const label = headers?.[entry.columnIndex - 1];
       if (!label || inferTableColumnKind(label) !== "number") continue;
       violations.push(`${file.pathname}:${entry.selector} targets numeric column ${entry.columnIndex} (${label})`);
+    }
+  }
+
+  assert.deepEqual(violations, []);
+});
+
+test("page css does not redeclare shared table baseline alignment", async () => {
+  const sourceFiles = [
+    ...(await listCssFiles(new URL("../assets/css/pages/", import.meta.url))),
+    new URL("../assets/css/legacy/current.css", import.meta.url),
+  ];
+  const violations = [];
+
+  for (const file of sourceFiles) {
+    const cssSource = await readFile(file, "utf8");
+    for (const selector of pageTableBaselineAlignmentSelectors(cssSource)) {
+      violations.push(`${file.pathname}:${selector}`);
     }
   }
 
@@ -956,7 +986,7 @@ test("payables dashboard styles live in the page layer and use semantic tokens",
   assert.match(pageSource, /^\.payable-status-row\s*\{/m);
   assert.match(pageSource, /^\.payable-flow-card\s*\{/m);
   assert.match(pageSource, /^\.payable-table-wrap table\s*\{/m);
-  assert.match(pageSource, /^#payables-detail-table th:first-child,/m);
+  assert.equal(pageSource.includes("#payables-detail-table th:first-child"), false);
   assert.match(pageSource, /^@media \(max-width:1180px\)/m);
   assert.match(pageSource, /^@media \(max-width:720px\)/m);
   assert.match(pageSource, /\.payable-kpi-grid\s*\{\s*grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(var\(--tj-kpi-card-min-width\),\s*var\(--tj-kpi-card-width\)\)\)/);

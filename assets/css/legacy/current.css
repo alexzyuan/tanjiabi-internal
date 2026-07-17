@@ -26,18 +26,10 @@ th,
 td {
   border: 1px solid #e3edf7;
   padding: 11px 10px;
-  text-align: right;
 }
 
 td {
   background: white;
-}
-
-th:first-child,
-td:first-child,
-td:nth-child(2),
-td:nth-child(3) {
-  text-align: left;
 }
 
 tbody tr:nth-child(even) {
@@ -125,13 +117,8 @@ body:not(.login-body) .sales-review-detail-table-wrap th {
   position: sticky;
   top: 0;
   z-index: 6;
-  text-align: left;
   background: linear-gradient(180deg, #ecf7ff 0%, #dff0ff 100%) !important;
   box-shadow: 0 1px 0 #d8e8f6;
-}
-
-body:not(.login-body) .sales-review-detail-table-wrap td:not(.table-cell--number) {
-  text-align: left;
 }
 
 body:not(.login-body) .sales-review-detail-table-wrap th:not(:last-child)::after {

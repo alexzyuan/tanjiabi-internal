@@ -531,7 +531,6 @@ body:not(.login-body) .knowledge-admin-table-wrap th,
 body:not(.login-body) .knowledge-admin-table-wrap td {
   padding: 10px var(--spectrum-spacing-150);
   border-bottom: 1px solid var(--tj-border-subtle);
-  text-align: left;
   vertical-align: middle;
 }
 

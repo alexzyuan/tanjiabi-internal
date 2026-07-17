@@ -37,16 +37,6 @@ overflow:auto;
 .supplier-board-table-wrap table { --tj-table-min-width: 1680px; }
 #supplier-board-table th,
 #supplier-board-table td { vertical-align:middle; }
-#supplier-board-table th:nth-child(2),
-#supplier-board-table th:nth-child(3),
-#supplier-board-table th:nth-child(4),
-#supplier-board-table th:nth-child(5),
-#supplier-board-table th:nth-child(8),
-#supplier-board-table td:nth-child(2),
-#supplier-board-table td:nth-child(3),
-#supplier-board-table td:nth-child(4),
-#supplier-board-table td:nth-child(5),
-#supplier-board-table td:nth-child(8) { text-align:left; }
 #supplier-board-table td small {
 display:block;
 margin-top:var(--spectrum-spacing-50);

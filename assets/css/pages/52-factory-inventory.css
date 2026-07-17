@@ -48,14 +48,6 @@ overflow:auto;
 .factory-inventory-table-wrap table { --tj-table-min-width: 1840px; }
 #factory-inventory-table th,
 #factory-inventory-table td { vertical-align:middle; }
-#factory-inventory-table th:nth-child(1),
-#factory-inventory-table th:nth-child(2),
-#factory-inventory-table th:nth-child(3),
-#factory-inventory-table th:nth-child(8),
-#factory-inventory-table td:nth-child(1),
-#factory-inventory-table td:nth-child(2),
-#factory-inventory-table td:nth-child(3),
-#factory-inventory-table td:nth-child(8) { text-align:left; }
 #factory-inventory-table .factory-order-row td {
 padding:0;
 border-bottom:0;
