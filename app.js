@@ -47,12 +47,12 @@ import { createAiImageWorkflowFeature } from "./assets/js/features/ai-image-work
 import { createAdminSettingsFeature } from "./assets/js/features/admin-settings.js?v=20260706-frontend-refactor-v1";
 import { createBudgetTargetsFeature } from "./assets/js/features/budget-targets.js?v=20260706-frontend-refactor-v1";
 import { createSyncCenterFeature } from "./assets/js/features/sync-center.js?v=20260706-frontend-refactor-v1";
-import { createFbaFreightFeature } from "./assets/js/features/fba-freight.js?v=20260717-date-range-window-v3";
+import { createFbaFreightFeature } from "./assets/js/features/fba-freight.js?v=20260717-shared-logistics-channels";
 import { createFbaShopsFeature } from "./assets/js/features/fba-shops.js?v=20260706-frontend-refactor-v1";
 import { createFbaMskuFeature } from "./assets/js/features/fba-msku.js?v=20260707-frontend-refactor-v1";
 import { createFbaAutomationFeature } from "./assets/js/features/fba-automation.js?v=20260707-frontend-refactor-v1";
 import { createFbaTaskFormFeature } from "./assets/js/features/fba-task-form.js?v=20260707-frontend-refactor-v1";
-import { createFreightRatesFeature } from "./assets/js/features/freight-rates.js?v=20260713-freight-rates-v1";
+import { createFreightRatesFeature } from "./assets/js/features/freight-rates.js?v=20260717-shared-logistics-channels";
 import { createSalesForecastFeature } from "./assets/js/features/sales-forecast.js?v=20260713-sales-forecast-locator-v2";
 import { createSalesDashboardFeature } from "./assets/js/features/sales-dashboard.js?v=20260707-frontend-refactor-v1";
 import { createSidebarShellFeature } from "./assets/js/features/sidebar-shell.js?v=20260707-frontend-refactor-v1";

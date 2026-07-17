@@ -202,9 +202,10 @@ test("FBA freight row Jiufang button opens country channel picker before dry-run
 
   assert.equal(requests.some((request) => request.url === "/api/fba/jiufang/channels"), false);
   assert.equal(requests.some((request) => request.url === "/api/fba/jiufang/orders/dry-run"), false);
-  assert.match(elements["#fba-freight-jiufang-channel"].innerHTML, /OA直送专线\(包税\)/);
+  assert.match(elements["#fba-freight-jiufang-channel"].innerHTML, /OA直送（包税）/);
   assert.match(elements["#fba-freight-jiufang-channel"].innerHTML, /准时达卡派\(包税\)/);
   assert.match(elements["#fba-freight-jiufang-channel"].innerHTML, /美国空派带电包税\(卡派\)/);
+  assert.match(elements["#fba-freight-jiufang-channel"].innerHTML, /美森闪送卡派（包税）/);
   assert.doesNotMatch(elements["#fba-freight-jiufang-channel"].innerHTML, /加拿大卡派/);
   assert.equal(modalStates.at(-1).open, true);
 

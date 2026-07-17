@@ -2007,7 +2007,7 @@
             <div>
               <span>运费看板</span>
               <h2>运费看板</h2>
-              <p>维护每周国家、仓库、承运商和运输方式对应的运费价格，作为 FBA 货件转发货单的物流费用数据源。</p>
+              <p>维护每周国家、仓库、承运商和渠道名称对应的运费价格，作为 FBA 货件转发货单的物流费用数据源。</p>
             </div>
           </section>
           <article class="panel">
@@ -2039,7 +2039,7 @@
                     <th>国家</th>
                     <th>仓库代码</th>
                     <th>承运商</th>
-                    <th>运输方式</th>
+                    <th>渠道名称</th>
                     <th>价格</th>
                     <th>操作人</th>
                     <th>操作</th>
@@ -2069,12 +2069,7 @@
                       </select>
                     </td>
                     <td>
-                      <select id="freight-rate-inline-transport-method" class="table-select" aria-label="运输方式" required>
-                        <option value="普船">普船</option>
-                        <option value="快船">快船</option>
-                        <option value="空运">空运</option>
-                        <option value="快递">快递</option>
-                      </select>
+                      <select id="freight-rate-inline-transport-method" class="table-select" aria-label="渠道名称" required></select>
                     </td>
                     <td><input id="freight-rate-inline-price" type="number" class="table-select" min="0" step="0.0001" aria-label="价格" placeholder="手填价格" required /></td>
                     <td>-</td>
@@ -2097,7 +2092,7 @@
                 <label>国家<select id="freight-rate-country" required><option value="美国">美国</option><option value="加拿大">加拿大</option><option value="澳洲">澳洲</option><option value="德国">德国</option><option value="英国">英国</option></select></label>
                 <label>仓库代码<select id="freight-rate-warehouse-select" aria-label="仓库代码选项"></select><input id="freight-rate-warehouse-code" placeholder="手填仓库" required hidden disabled /></label>
                 <label>承运商<select id="freight-rate-carrier" required><option value="九方通逊">九方通逊</option><option value="同袍">同袍</option></select></label>
-                <label>运输方式<select id="freight-rate-transport-method" required><option value="普船">普船</option><option value="快船">快船</option><option value="空运">空运</option><option value="快递">快递</option></select></label>
+                <label>渠道名称<select id="freight-rate-transport-method" required></select></label>
                 <label>价格<input id="freight-rate-price" type="number" min="0" step="0.0001" required /></label>
                 <div class="modal-foot">
                   <button class="secondary-button danger" id="freight-rate-delete" type="button" hidden>删除</button>

@@ -10,6 +10,7 @@ import {
   getSharedProductCatalogMap,
 } from "./sharedDataService.js";
 import { getFbaShipmentCandidates } from "./fbaShipmentCandidateService.js";
+import { fbaLogisticsChannelNamesForCountry } from "./fbaLogisticsRules.js";
 import { listJiufangOrdersByShipmentIds } from "./jiufangOrderStore.js";
 import { readZipEntries, writeZipEntries } from "../utils/zipArchive.js";
 
@@ -552,11 +553,7 @@ function setRowValuesXml(row, rowNumber, values) {
 }
 
 function jiufangChannelForCountry(country = "") {
-  const normalized = normalizedCountryName(country);
-  if (normalized === "美国") return "美国海派(包税)";
-  if (normalized === "加拿大") return "加拿大卡派(包税)";
-  if (normalized === "澳洲") return "宁波澳洲卡派(包税)";
-  return "";
+  return fbaLogisticsChannelNamesForCountry(normalizedCountryName(country))[0] || "";
 }
 
 function uniqueNonEmpty(values = []) {

@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import path from "node:path";
+import { allFbaLogisticsChannelNames, fbaLogisticsChannelNamesForCountry, fbaLogisticsChannelsByCountry } from "./fbaLogisticsRules.js";
 import { readJson, updateJsonAtomic } from "../utils/jsonStore.js";
 
 const defaultStoreFile = path.join(process.cwd(), "data-cache", "freight-rates.json");
@@ -9,11 +10,14 @@ export const freightRateOptions = {
   countries: ["美国", "加拿大", "澳洲", "德国", "英国"],
   warehouseCodesByCountry: {
     美国: ["MIT", "GEU", "POC", "TCY", "ONT", "GYR"],
-    加拿大: ["YYZ", "YUX", "YOW", "YYC", "YVR", "YEG"],
+    加拿大: ["YYZ", "YUX", "YOW", "YYC", "YVR", "YEG", "YHM"],
     澳洲: ["BWU", "XAU", "XBW"],
   },
   carriers: ["九方通逊", "同袍"],
-  transportMethods: ["普船", "快船", "空运", "快递"],
+  channelNamesByCountry: Object.fromEntries(
+    Object.entries(fbaLogisticsChannelsByCountry).map(([country, channels]) => [country, channels.map((channel) => channel.name)]),
+  ),
+  transportMethods: allFbaLogisticsChannelNames(),
 };
 
 function nowIso(now = () => new Date()) {
@@ -110,7 +114,8 @@ function normalizeFreightRateRow(input = {}, existing = {}, { now = () => new Da
   const countryWarehouseCodes = freightRateOptions.warehouseCodesByCountry[country] || [];
   if (countryWarehouseCodes.length > 0) assertAllowed(warehouseCode, countryWarehouseCodes, `${country}仓库代码`);
   assertAllowed(carrier, freightRateOptions.carriers, "承运商");
-  assertAllowed(transportMethod, freightRateOptions.transportMethods, "运输方式");
+  const countryChannelNames = fbaLogisticsChannelNamesForCountry(country);
+  assertAllowed(transportMethod, countryChannelNames, "渠道名称");
 
   return {
     id: existing.id || cleanText(input.id) || makeId(),
@@ -233,7 +238,7 @@ export async function exportFreightRateLogsCsv({ storeFile = defaultStoreFile, n
   const store = await readJson(storeFile, fallbackStore);
   const logs = filterRecentFreightRateLogs(Array.isArray(store.logs) ? store.logs : [], now);
   const rows = [
-    ["操作时间", "操作", "操作人", "周数", "日期", "国家", "仓库代码", "承运商", "运输方式", "价格", "变更前价格", "变更后价格", "记录ID"],
+    ["操作时间", "操作", "操作人", "周数", "日期", "国家", "仓库代码", "承运商", "渠道名称", "价格", "变更前价格", "变更后价格", "记录ID"],
     ...logs.map((log) => {
       const row = freightRateLogRow(log);
       const beforePrice = log.before?.price ?? "";
@@ -274,7 +279,7 @@ export async function saveFreightRate(payload = {}, { storeFile = defaultStoreFi
     const before = index >= 0 ? cloneJson(existing) : null;
     const normalized = normalizeFreightRateRow(payload, existing, { now, operator });
     const duplicate = rows.find((row) => row.id !== normalized.id && routeKey(row) === routeKey(normalized));
-    if (duplicate) throw new Error("同一周、国家、仓库、承运商和运输方式已存在运费记录。");
+    if (duplicate) throw new Error("同一周、国家、仓库、承运商和渠道名称已存在运费记录。");
 
     if (index >= 0) rows[index] = normalized;
     else rows.push(normalized);

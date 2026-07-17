@@ -1,3 +1,5 @@
+import { fbaLogisticsChannelNamesForCountry, fbaLogisticsChannelsByCountry } from "../fba-logistics-rules.js";
+
 export function createFreightRatesFeature({
   root = globalThis.document,
   bind,
@@ -18,11 +20,14 @@ export function createFreightRatesFeature({
     countries: ["美国", "加拿大", "澳洲", "德国", "英国"],
     warehouseCodesByCountry: {
       美国: ["MIT", "GEU", "POC", "TCY", "ONT", "GYR"],
-      加拿大: ["YYZ", "YUX", "YOW", "YYC", "YVR", "YEG"],
+      加拿大: ["YYZ", "YUX", "YOW", "YYC", "YVR", "YEG", "YHM"],
       澳洲: ["BWU", "XAU", "XBW"],
     },
     carriers: ["九方通逊", "同袍"],
-    transportMethods: ["普船", "快船", "空运", "快递"],
+    channelNamesByCountry: Object.fromEntries(
+      Object.entries(fbaLogisticsChannelsByCountry).map(([country, channels]) => [country, channels.map((channel) => channel.name)]),
+    ),
+    transportMethods: fbaLogisticsChannelNamesForCountry("美国"),
   };
   let editingFreightRateId = "";
   let freightRatesLoaded = false;
@@ -89,11 +94,15 @@ export function createFreightRatesFeature({
   function renderFreightRateOptions() {
     renderSelectOptions("#freight-rate-inline-country", freightRateOptions.countries);
     renderSelectOptions("#freight-rate-inline-carrier", freightRateOptions.carriers);
-    renderSelectOptions("#freight-rate-inline-transport-method", freightRateOptions.transportMethods);
+    syncInlineChannelControl();
   }
 
   function warehouseOptionsForCountry(country) {
     return freightRateOptions.warehouseCodesByCountry?.[country] || [];
+  }
+
+  function channelOptionsForCountry(country) {
+    return freightRateOptions.channelNamesByCountry?.[country] || fbaLogisticsChannelNamesForCountry(country);
   }
 
   function syncWarehouseControl({ countrySelector, selectSelector, inputSelector, warehouseCode = "" } = {}) {
@@ -132,6 +141,26 @@ export function createFreightRatesFeature({
     });
   }
 
+  function syncChannelElements({ country = "", select, channelName = "" } = {}) {
+    if (!select) return;
+    const options = channelOptionsForCountry(country);
+    renderSelectOptionsElement(select, options);
+    const normalizedChannel = String(channelName || select.value || "").trim();
+    select.value = options.includes(normalizedChannel) ? normalizedChannel : (options[0] || "");
+  }
+
+  function syncInlineChannelControl() {
+    syncChannelElements({
+      country: value("#freight-rate-inline-country"),
+      select: query("#freight-rate-inline-transport-method"),
+    });
+  }
+
+  function syncInlineCountryControls() {
+    syncInlineWarehouseControl();
+    syncInlineChannelControl();
+  }
+
   function resetInlineFreightRateEntry({ keepSelections = true } = {}) {
     const date = todayText();
     setOutput("#freight-rate-inline-date", date);
@@ -141,12 +170,11 @@ export function createFreightRatesFeature({
       if (country) country.value = freightRateOptions.countries[0] || "";
       const carrier = query("#freight-rate-inline-carrier");
       if (carrier) carrier.value = "九方通逊";
-      const transportMethod = query("#freight-rate-inline-transport-method");
-      if (transportMethod) transportMethod.value = "普船";
     }
     const warehouseCode = query("#freight-rate-inline-warehouse-code");
     if (warehouseCode) warehouseCode.value = "";
     syncInlineWarehouseControl();
+    syncInlineChannelControl();
     const price = query("#freight-rate-inline-price");
     if (price) price.value = "";
   }
@@ -183,7 +211,7 @@ export function createFreightRatesFeature({
         <td><select class="table-select" aria-label="国家" data-freight-rate-field="country">${optionsHtml(freightRateOptions.countries, row.country)}</select></td>
         <td>${warehouseEditCellHtml(row)}</td>
         <td><select class="table-select" aria-label="承运商" data-freight-rate-field="carrier">${optionsHtml(freightRateOptions.carriers, row.carrier || "九方通逊")}</select></td>
-        <td><select class="table-select" aria-label="运输方式" data-freight-rate-field="transportMethod">${optionsHtml(freightRateOptions.transportMethods, row.transportMethod || "普船")}</select></td>
+        <td><select class="table-select" aria-label="渠道名称" data-freight-rate-field="transportMethod">${optionsHtml(channelOptionsForCountry(row.country), row.transportMethod)}</select></td>
         <td><input class="table-select" type="number" min="0" step="0.0001" aria-label="价格" data-freight-rate-field="price" value="${escapeHtml(row.price ?? "")}" /></td>
         <td>${escapeHtml(rowOperator(row))}</td>
         <td class="table-actions">
@@ -357,6 +385,12 @@ export function createFreightRatesFeature({
     syncWarehouseElements({ country, select, input, warehouseCode });
   }
 
+  function syncEditChannelControl(rowElement, channelName = "") {
+    const country = rowElement?.querySelector?.('[data-freight-rate-field="country"]')?.value || "";
+    const select = rowElement?.querySelector?.('[data-freight-rate-field="transportMethod"]');
+    syncChannelElements({ country, select, channelName });
+  }
+
   function updateEditWeekPreview(rowElement) {
     const week = rowElement?.querySelector?.('[data-freight-rate-field="week"]');
     const date = rowElement?.querySelector?.('[data-freight-rate-field="date"]');
@@ -402,7 +436,7 @@ export function createFreightRatesFeature({
     bind(root, "#freight-rates-refresh", "click", loadFreightRatesDashboard);
     bind(root, "#freight-rates-export-logs", "click", exportFreightRateLogs);
     bind(root, "#freight-rate-inline-save", "click", saveInlineFreightRate);
-    bind(root, "#freight-rate-inline-country", "change", syncInlineWarehouseControl);
+    bind(root, "#freight-rate-inline-country", "change", syncInlineCountryControls);
     bind(root, "#freight-rates-table", "click", (event) => {
       const editButton = closestTarget(event, "[data-freight-rate-edit]");
       if (editButton) {
@@ -428,7 +462,10 @@ export function createFreightRatesFeature({
     bind(root, "#freight-rates-table", "change", (event) => {
       const rowElement = closestTarget(event, "[data-freight-rate-edit-row]");
       if (!rowElement) return;
-      if (closestTarget(event, '[data-freight-rate-field="country"]')) syncEditWarehouseControl(rowElement);
+      if (closestTarget(event, '[data-freight-rate-field="country"]')) {
+        syncEditWarehouseControl(rowElement);
+        syncEditChannelControl(rowElement);
+      }
       if (closestTarget(event, '[data-freight-rate-field="date"]')) updateEditWeekPreview(rowElement);
     });
   }
