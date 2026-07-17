@@ -113,11 +113,13 @@ export function buildCalendarMonth({ year, monthIndex, range, previewRange = nul
       const isRangeEnd = text === normalized.end;
       const isSelectable = !selectableRange || (selectableStart <= text && text <= selectableEnd);
       const isPreviewInRange = Boolean(normalizedPreview && normalizedPreview.start <= text && text <= normalizedPreview.end);
+      const isPreviewEnd = Boolean(normalizedPreview && text === normalizedPreview.end);
       week.push({
         date: text,
         day: current.getDate(),
         isCurrentMonth: current.getMonth() === monthIndex,
         isInRange: normalized.start <= text && text <= normalized.end,
+        isPreviewEnd,
         isPreviewInRange,
         isRangeEnd,
         isRangeStart,
@@ -148,6 +150,7 @@ function dayClassName(day) {
     "date-range-picker__day",
     day.isCurrentMonth ? "" : "is-outside-month",
     day.isInRange || day.isPreviewInRange ? "is-in-range" : "",
+    day.isPreviewEnd ? "is-preview-end" : "",
     day.isRangeStart ? "is-range-start" : "",
     day.isRangeEnd ? "is-range-end" : "",
     day.isSelected ? "is-selected" : "",
@@ -350,6 +353,19 @@ export function createDateRangePicker({
     render();
   }
 
+  function isInsideDateRangeControl(target) {
+    return Boolean(target?.closest?.(".date-range-control"))
+      || target === triggerElement
+      || target === popoverElement
+      || Boolean(triggerElement?.contains?.(target))
+      || Boolean(popoverElement?.contains?.(target));
+  }
+
+  function handleRootClick(event) {
+    if (popoverElement?.hidden || isInsideDateRangeControl(event?.target)) return;
+    setPopoverOpen(false);
+  }
+
   function handleKeydown(event) {
     if (event?.key !== "Escape" || popoverElement?.hidden) return;
     event.preventDefault?.();
@@ -364,6 +380,7 @@ export function createDateRangePicker({
     triggerElement?.setAttribute?.("aria-expanded", "false");
     triggerElement?.addEventListener?.("click", () => (popoverElement?.hidden ? openPopover() : setPopoverOpen(false)));
     triggerElement?.addEventListener?.("keydown", handleKeydown);
+    doc?.addEventListener?.("click", handleRootClick);
     popoverElement?.addEventListener?.("click", handlePopoverClick);
     popoverElement?.addEventListener?.("mouseover", handlePopoverMouseover);
     popoverElement?.addEventListener?.("mousemove", handlePopoverMouseover);

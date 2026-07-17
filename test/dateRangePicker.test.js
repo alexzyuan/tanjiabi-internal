@@ -61,6 +61,17 @@ function createDateHoverEvent(date) {
   };
 }
 
+function createOutsideClickEvent({ inside = false } = {}) {
+  return {
+    target: {
+      closest(selector) {
+        if (selector === ".date-range-control" && inside) return true;
+        return null;
+      },
+    },
+  };
+}
+
 test("date range picker normalizes reversed ranges and labels them consistently", () => {
   assert.deepEqual(normalizeDateRange("2026-07-17", "2026-01-01"), {
     start: "2026-01-01",
@@ -118,6 +129,7 @@ test("date range picker marks the pending hover range after a start date is sele
   assert.equal(flatDays.find((day) => day.date === "2026-07-02").isPreviewInRange, false);
   assert.equal(flatDays.find((day) => day.date === "2026-07-04").isPreviewInRange, true);
   assert.equal(flatDays.find((day) => day.date === "2026-07-07").isPreviewInRange, true);
+  assert.equal(flatDays.find((day) => day.date === "2026-07-07").isPreviewEnd, true);
 });
 
 test("date range picker closes with Escape", () => {
@@ -216,6 +228,7 @@ test("date range picker previews the selectable end range while hovering after s
 
   assert.match(popover.innerHTML, /class="[^"]*\bis-in-range\b[^"]*"[^>]*data-date-range-day="2026-07-04"/);
   assert.match(popover.innerHTML, /class="[^"]*\bis-in-range\b[^"]*"[^>]*data-date-range-day="2026-07-07"/);
+  assert.match(popover.innerHTML, /class="[^"]*\bis-preview-end\b[^"]*"[^>]*data-date-range-day="2026-07-07"/);
 
   popover.listeners.mouseover(createDateHoverEvent("2026-07-18"));
 
@@ -239,6 +252,29 @@ test("date range picker previews the selectable end range on mouse movement", ()
   popover.listeners.mousemove(createDateHoverEvent("2026-07-07"));
 
   assert.match(popover.innerHTML, /class="[^"]*\bis-in-range\b[^"]*"[^>]*data-date-range-day="2026-07-07"/);
+});
+
+test("date range picker closes when clicking outside the shared date range control", () => {
+  const root = createFakeElement();
+  const trigger = createFakeElement();
+  const popover = createFakeElement();
+  const picker = createDateRangePicker({
+    root,
+    trigger,
+    popover,
+    startInput: createFakeElement(),
+    endInput: createFakeElement(),
+    today: new Date("2026-07-17T08:00:00Z"),
+  });
+
+  picker.setup();
+  picker.open();
+  root.listeners.click(createOutsideClickEvent({ inside: true }));
+  assert.equal(popover.hidden, false);
+
+  root.listeners.click(createOutsideClickEvent());
+  assert.equal(popover.hidden, true);
+  assert.equal(trigger["aria-expanded"], "false");
 });
 
 test("date range picker rejects dates after today for start and end selection", () => {

@@ -299,10 +299,14 @@ test("shared date range picker styles live outside page css and use semantic tok
   assert.match(componentSource, /^\.date-range-control\s*\{/m);
   assert.match(componentSource, /^\.date-range-button\s*\{/m);
   assert.match(componentSource, /^\.date-range-picker__popover\s*\{/m);
+  assert.match(componentSource, /width:\s*min\(760px,\s*96vw\)/);
+  assert.match(componentSource, /grid-template-columns:\s*112px minmax\(0,\s*1fr\)/);
   assert.match(componentSource, /^\.date-range-picker__shortcuts\s*\{/m);
+  assert.match(componentSource, /^\.date-range-picker__shortcuts button:is\(:hover, :focus-visible\)\s*\{/m);
   assert.match(componentSource, /^\.date-range-picker__months\s*\{/m);
-  assert.match(componentSource, /^\.date-range-picker__day\.is-selected\s*\{/m);
-  assert.match(componentSource, /^\.date-range-picker__day:is\(\.is-today, \.is-selected\)\s*\{/m);
+  assert.match(componentSource, /^\.date-range-picker__day\.is-selected,/m);
+  assert.match(componentSource, /\.date-range-picker__day\.is-preview-end/);
+  assert.match(componentSource, /^\.date-range-picker__day:is\(\.is-today, \.is-selected, \.is-preview-end\)\s*\{/m);
   assert.match(componentSource, /^\.date-range-picker__day\.is-today:not\(\.is-selected\)\s*\{/m);
   assert.match(componentSource, /var\(--tj-content-bg\)/);
   assert.match(componentSource, /var\(--tj-border-control\)/);
