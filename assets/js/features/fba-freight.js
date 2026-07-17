@@ -1,3 +1,5 @@
+import { createDateRangePicker } from "../date-range-picker.js";
+
 const commonJiufangChannelsByCountry = {
   "美国": [
     { code: "SEA-OA-03", name: "OA直送专线(包税)" },
@@ -40,6 +42,7 @@ export function createFbaFreightFeature({
   bindBackdropClose,
   cachedSalesImageUrl,
   closestTarget,
+  createDateRangePickerImpl = createDateRangePicker,
   downloadBlob,
   escapeHtml,
   fallbackFbaShops = [],
@@ -70,6 +73,7 @@ export function createFbaFreightFeature({
   let fbaFreightOrderCreating = false;
   let fbaFreightJiufangSubmitting = false;
   let fbaFreightJiufangSuccessReady = false;
+  let fbaFreightDateRangePicker = null;
   const fbaFreightOrderResults = new Map();
   const fbaFreightJiufangResults = new Map();
 
@@ -91,6 +95,7 @@ export function createFbaFreightFeature({
     const endInput = query("#fba-freight-end-date");
     if (startInput && !startInput.value) startInput.value = firstDayOfCurrentMonthText();
     if (endInput && !endInput.value) endInput.value = fbaFreightTodayDateText();
+    fbaFreightDateRangePicker?.refresh?.();
   }
 
   function renderFbaFreightShopOptions() {
@@ -860,6 +865,15 @@ export function createFbaFreightFeature({
   }
 
   function setupFbaFreight() {
+    setDefaultFbaFreightDates();
+    fbaFreightDateRangePicker = createDateRangePickerImpl({
+      root,
+      triggerSelector: "#fba-freight-date-range-button",
+      popoverSelector: "#fba-freight-date-range-popover",
+      startInputSelector: "#fba-freight-start-date",
+      endInputSelector: "#fba-freight-end-date",
+    });
+    fbaFreightDateRangePicker.setup?.();
     bind(root, "#fba-freight-refresh", "click", () => loadFbaFreightShipments({ forceRefresh: true }));
     bind(root, "#fba-freight-export", "click", exportFbaFreightWorkbook);
     bind(root, "#fba-freight-warehouse", "change", updateFbaFreightSelectionState);

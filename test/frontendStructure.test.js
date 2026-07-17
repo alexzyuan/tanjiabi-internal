@@ -1070,9 +1070,14 @@ test("app.js centralizes FBA floating panel visibility", async () => {
 test("sales shell centralizes front date popover visibility", async () => {
   const appSource = await readFile(new URL("../app.js", import.meta.url), "utf8");
   const source = await readFile(new URL("../assets/js/sales-shell.js", import.meta.url), "utf8");
+  assert.match(source, /import \{ createDateRangePicker \} from "\.\/date-range-picker\.js"/);
   assert.match(source, /function setFrontDatePopoverOpen\(open\) \{[\s\S]*?setElementsHidden\(popover, !open\)/);
   assert.match(source, /function toggleFrontDatePopover\(\) \{[\s\S]*?setFrontDatePopoverOpen\(popover.hidden\)/);
-  assert.match(source, /function setupFrontDateRangeControls\(\) \{[\s\S]*?bind\(root, "#front-date-range-button", "click", toggleFrontDatePopover\)/);
+  assert.match(source, /function setupFrontDateRangeControls\(\) \{[\s\S]*?createDateRangePickerImpl\(\{/);
+  assert.match(source, /triggerSelector: "#front-date-range-button"/);
+  assert.match(source, /popoverSelector: "#front-date-range-popover"/);
+  assert.match(source, /startInputSelector: "#front-date-start"/);
+  assert.match(source, /endInputSelector: "#front-date-end"/);
   assert.equal(appSource.includes('bind(document, "#front-date-range-button"'), false);
   assert.equal(appSource.includes('bindAll(document, "[data-range-preset]"'), false);
   assert.equal(appSource.includes('bind(document, "#front-date-apply"'), false);

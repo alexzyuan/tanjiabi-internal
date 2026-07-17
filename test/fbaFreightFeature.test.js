@@ -70,6 +70,31 @@ test("FBA freight refresh button forces API refresh and stays disabled while loa
   assert.equal(elements["#fba-freight-refresh"].disabled, false);
 });
 
+test("FBA freight wires shared date range picker to existing date inputs", () => {
+  const pickerCalls = [];
+  const { feature } = createFeature({
+    createDateRangePickerImpl: (options) => {
+      pickerCalls.push(options);
+      return { setup() {}, refresh() {} };
+    },
+  });
+
+  feature.setupFbaFreight();
+
+  assert.equal(pickerCalls.length, 1);
+  assert.deepEqual({
+    triggerSelector: pickerCalls[0].triggerSelector,
+    popoverSelector: pickerCalls[0].popoverSelector,
+    startInputSelector: pickerCalls[0].startInputSelector,
+    endInputSelector: pickerCalls[0].endInputSelector,
+  }, {
+    triggerSelector: "#fba-freight-date-range-button",
+    popoverSelector: "#fba-freight-date-range-popover",
+    startInputSelector: "#fba-freight-start-date",
+    endInputSelector: "#fba-freight-end-date",
+  });
+});
+
 test("FBA freight initial load does not connect to Jiufang channels", async () => {
   const requestedUrls = [];
   const { feature } = createFeature({
