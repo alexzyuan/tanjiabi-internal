@@ -294,6 +294,11 @@ test("shared table controls live outside legacy css and use semantic tokens", as
   assert.equal(legacySource.includes(".table-action.danger"), false);
   assert.equal(legacySource.includes(".table-actions {"), false);
   assert.equal(legacySource.includes("body:not(.login-body) .table-action"), false);
+  assert.equal(
+    /body:not\(\.login-body\)\s+\.sales-review-detail-table-wrap\s+td\s*\{[\s\S]*?text-align:\s*left\s*!important/.test(legacySource),
+    false,
+    "sales review detail cells must not force every td left; numeric cells need to inherit shared right alignment",
+  );
   assert.equal((generatedSource.match(/body:not\(\.login-body\) \.table-select\{/g) || []).length, 1);
   assert.equal((generatedSource.match(/\.table-action\{/g) || []).length, 1);
 });
