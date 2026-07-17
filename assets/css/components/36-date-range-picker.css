@@ -40,6 +40,8 @@
   color: var(--tj-text-body);
   background: var(--tj-content-bg);
   box-shadow: var(--tj-shadow-floating);
+  font-size: 13px;
+  line-height: 1.35;
 }
 
 .date-range-picker__shortcuts {

@@ -311,6 +311,7 @@ test("shared date range picker styles live outside page css and use semantic tok
   assert.match(componentSource, /^\.date-range-picker__popover\s*\{/m);
   assert.match(componentSource, /width:\s*min\(760px,\s*96vw\)/);
   assert.match(componentSource, /grid-template-columns:\s*112px minmax\(0,\s*1fr\)/);
+  assert.match(componentSource, /\.date-range-picker__popover\s*\{[\s\S]*font-size:\s*13px;[\s\S]*\}/);
   assert.match(componentSource, /^\.date-range-picker__shortcuts\s*\{/m);
   assert.match(componentSource, /^\.date-range-picker__shortcuts button:is\(:hover, :focus-visible\)\s*\{/m);
   assert.match(componentSource, /^\.date-range-picker__months\s*\{/m);

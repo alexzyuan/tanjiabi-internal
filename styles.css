@@ -519,7 +519,7 @@ body:not(.login-body) .filter-toolbar>button.primary-button{min-height:var(--tj-
 .date-range-button{width:100%;height:var(--tj-control-height);display:flex;align-items:center;justify-content:space-between;border:1px solid var(--tj-border-control);color:var(--tj-text-strong);background:var(--tj-content-bg);padding:0 var(--tj-control-padding-x);border-radius:var(--tj-control-radius);cursor:pointer}
 .date-range-button::after{content:"▣"}
 .date-range-button:focus-visible{outline:0;border-color:var(--tj-action-blue);box-shadow:var(--tj-focus-ring)}
-.date-range-picker__popover{position:absolute;top:calc(100%+8px);left:0;z-index:90;width:min(760px,96vw);display:grid;grid-template-columns:112px minmax(0,1fr);overflow:hidden;border:1px solid var(--tj-border-subtle);border-radius:var(--tj-panel-radius);color:var(--tj-text-body);background:var(--tj-content-bg);box-shadow:var(--tj-shadow-floating)}
+.date-range-picker__popover{position:absolute;top:calc(100%+8px);left:0;z-index:90;width:min(760px,96vw);display:grid;grid-template-columns:112px minmax(0,1fr);overflow:hidden;border:1px solid var(--tj-border-subtle);border-radius:var(--tj-panel-radius);color:var(--tj-text-body);background:var(--tj-content-bg);box-shadow:var(--tj-shadow-floating);font-size:13px;line-height:1.35}
 .date-range-picker__shortcuts{display:grid;padding:var(--spectrum-spacing-100) 0;border-right:1px solid var(--tj-border-subtle)}
 .date-range-picker__shortcuts button{height:32px;border:0;background:transparent;padding:0 var(--spectrum-spacing-200);text-align:left}
 .date-range-picker__shortcuts button:is(:hover, :focus-visible){background:var(--tj-action-blue-soft)}
