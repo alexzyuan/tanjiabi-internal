@@ -52,12 +52,10 @@ overflow:auto;
 #factory-inventory-table th:nth-child(2),
 #factory-inventory-table th:nth-child(3),
 #factory-inventory-table th:nth-child(8),
-#factory-inventory-table th:nth-child(9),
 #factory-inventory-table td:nth-child(1),
 #factory-inventory-table td:nth-child(2),
 #factory-inventory-table td:nth-child(3),
-#factory-inventory-table td:nth-child(8),
-#factory-inventory-table td:nth-child(9) { text-align:left; }
+#factory-inventory-table td:nth-child(8) { text-align:left; }
 #factory-inventory-table .factory-order-row td {
 padding:0;
 border-bottom:0;

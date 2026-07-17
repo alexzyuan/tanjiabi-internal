@@ -949,6 +949,11 @@ test("factory inventory styles live in the page layer and use semantic tokens", 
   assert.match(pageSource, /var\(--spectrum-focus-ring-color\)/);
   assert.equal(pageSource.includes("var(--spectrum-accent-background-color-default)"), false);
   assert.equal(pageSource.includes("var(--spectrum-accent-color-900)"), false);
+  assert.equal(
+    /#factory-inventory-table\s+td:nth-child\(9\)[\s\S]*?text-align:\s*left/.test(pageSource),
+    false,
+    "factory inventory shipped quantity cells must inherit numeric right alignment",
+  );
   assert.equal(/#(?:d3e4f7|edf4fb|1f6fff|ffffff|f8fbff|1677ff|2563eb|0b66d8)\b/i.test(pageSource), false);
 
   [

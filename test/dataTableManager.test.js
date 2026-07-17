@@ -22,6 +22,11 @@ test("data table manager infers numeric columns from BI headers", () => {
     "MSKU 数",
     "ACOS",
     "计提比例",
+    "FBA在库",
+    "FBA 可售",
+    "FBA 转库",
+    "FBA 在途",
+    "采购量",
   ].forEach((label) => {
     assert.equal(inferTableColumnKind(label), "number", `${label} should be numeric`);
   });

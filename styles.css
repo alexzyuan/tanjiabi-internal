@@ -1517,7 +1517,7 @@ body:not(.login-body) .view>.module-hero.ai-workflow-hero p{font-size:11px !impo
 .factory-inventory-table-wrap{flex:1 1 auto;max-height:none;min-height:0;overflow:auto}
 .factory-inventory-table-wrap table{--tj-table-min-width:1840px}
 #factory-inventory-table th,#factory-inventory-table td{vertical-align:middle}
-#factory-inventory-table th:nth-child(1),#factory-inventory-table th:nth-child(2),#factory-inventory-table th:nth-child(3),#factory-inventory-table th:nth-child(8),#factory-inventory-table th:nth-child(9),#factory-inventory-table td:nth-child(1),#factory-inventory-table td:nth-child(2),#factory-inventory-table td:nth-child(3),#factory-inventory-table td:nth-child(8),#factory-inventory-table td:nth-child(9){text-align:left}
+#factory-inventory-table th:nth-child(1),#factory-inventory-table th:nth-child(2),#factory-inventory-table th:nth-child(3),#factory-inventory-table th:nth-child(8),#factory-inventory-table td:nth-child(1),#factory-inventory-table td:nth-child(2),#factory-inventory-table td:nth-child(3),#factory-inventory-table td:nth-child(8){text-align:left}
 #factory-inventory-table .factory-order-row td{padding:0;border-bottom:0;background:color-mix(in srgb,var(--tj-action-blue) 8%,var(--tj-content-bg))}
 .factory-order-strip{display:flex;min-height:52px;align-items:center;gap:var(--spectrum-spacing-200);padding:0 var(--spectrum-spacing-200);color:var(--tj-text-muted);font-size:13px;font-weight:700;white-space:nowrap}
 .factory-order-strip strong{min-width:180px;color:var(--tj-action-blue);font-size:14px}
