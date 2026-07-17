@@ -5,7 +5,7 @@ import { inferTableColumnKind } from "../assets/js/data-table-manager.js";
 import { isRepositoryMetadataPath } from "../src/utils/pathFilters.js";
 import { minifyCss } from "../scripts/lib/minifyCss.js";
 
-const cssLayerOrder = ["tokens", "base", "layout", "components", "pages", "legacy"];
+const cssLayerOrder = ["tokens", "base", "layout", "components", "pages", "legacy", "final"];
 
 async function listCssFiles(dirUrl) {
   let entries = [];
@@ -354,6 +354,19 @@ test("shared table controls live outside legacy css and use semantic tokens", as
   );
   assert.equal((generatedSource.match(/body:not\(\.login-body\) \.table-select\{/g) || []).length, 1);
   assert.equal((generatedSource.match(/\.table-action\{/g) || []).length, 1);
+});
+
+test("final table invariants layer locks product table alignment after page css", async () => {
+  const buildScript = await readFile(new URL("../scripts/build-styles.js", import.meta.url), "utf8");
+  const finalSource = await readFile(new URL("../assets/css/final/90-table-invariants.css", import.meta.url), "utf8");
+
+  assert.match(buildScript, /"legacy",\s*"final"/);
+  assert.match(finalSource, /^\/\* Final product table invariants\./m);
+  assert.match(finalSource, /^table\.data-table td\.table-cell--number\s*\{/m);
+  assert.match(finalSource, /text-align:\s*right/);
+  assert.match(finalSource, /font-variant-numeric:\s*tabular-nums/);
+  assert.match(finalSource, /^\.table-state-row td,/m);
+  assert.match(finalSource, /^\.table-resize-handle\s*\{/m);
 });
 
 test("page table alignment overrides do not target numeric data columns", async () => {

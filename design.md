@@ -181,6 +181,12 @@ font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
 | 表格单元格 | 12px - 13px | 400 - 520 | 数字使用 tabular-nums |
 | 按钮文字 | 13px - 14px | 600 - 700 | 保持一行 |
 
+表格列类型契约：
+
+- 新增数据表的数字、金额、百分比列优先在表头声明 `data-column-kind="number"`，或用 `data-column-type="money"` / `data-column-type="percent"` 等语义类型；表格管理器会先尊重显式声明，再使用表头文案推断作为旧表格兼容兜底。
+- 表格基线样式分两层：`assets/css/components/45-table-controls.css` 提供共享表格组件规则，`assets/css/final/90-table-invariants.css` 位于 page/legacy 之后，只放产品级不变量，例如数字列右对齐、`tabular-nums`、状态行对齐和列宽调整手柄基础交互。
+- 页面 CSS 可以调整表格宽度、sticky、密度和页面专属视觉，但不能重新定义普通 `th` / `td` 的左右对齐；文本列默认左对齐，数字列由 `.table-cell--number` 统一右对齐。
+
 禁止：
 
 - 导航和表格使用过高字重。

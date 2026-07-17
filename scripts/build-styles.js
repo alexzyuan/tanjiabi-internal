@@ -15,7 +15,7 @@ function argValue(name) {
 
 const previewOutput = argValue("--output");
 const outputPath = previewOutput ? path.resolve(rootDir, previewOutput) : outputFile;
-const layerOrder = ["tokens", "base", "layout", "components", "pages", "legacy"];
+const layerOrder = ["tokens", "base", "layout", "components", "pages", "legacy", "final"];
 const visualLockMessage = [
   "Legacy visual rollback detected: styles.css is oversized and still contains gradient-heavy rollback styles.",
   "The single CSS target is generated styles.css from assets/css/*.",

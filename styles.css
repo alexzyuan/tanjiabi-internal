@@ -1926,3 +1926,9 @@ body:not(.login-body) :is(button,input,select,textarea):disabled{cursor:not-allo
 .inventory-snapshot-note{align-self:center;color:var(--spectrum-text-secondary);font-size:12px;line-height:1.4;white-space:normal}
 .inventory-formula-note{display:block;margin-top:8px;padding:8px 10px;color:var(--muted);background:var(--bg);border:1px solid var(--line);border-radius:8px;font-size:12px;line-height:1.5}
 .inventory-status-note{display:block;margin-top:6px}
+table.data-table th{text-align:left;font-variant-numeric:tabular-nums}
+table.data-table td{text-align:left}
+table.data-table td.table-cell--number{text-align:right;font-variant-numeric:tabular-nums}
+table.data-table th.table-cell--number{font-variant-numeric:tabular-nums}
+.table-state-row td,.table-state-cell{text-align:left}
+.table-resize-handle{cursor:col-resize;touch-action:none}

@@ -5,6 +5,7 @@ import {
   inferTableColumnKind,
   inferTableStateTone,
   normalizeColumnWidth,
+  resolveTableColumnKind,
 } from "../assets/js/data-table-manager.js";
 
 test("data table manager classifies table variants by business shape", () => {
@@ -50,6 +51,19 @@ test("data table manager infers numeric columns from BI headers", () => {
   ].forEach((label) => {
     assert.equal(inferTableColumnKind(label), "text", `${label} should be text`);
   });
+});
+
+test("data table manager prefers explicit column kind over header inference", () => {
+  assert.equal(resolveTableColumnKind({ explicitKind: "number", label: "MSKU" }), "number");
+  assert.equal(resolveTableColumnKind({ explicitKind: "money", label: "产品名称" }), "number");
+  assert.equal(resolveTableColumnKind({ explicitKind: "percent", label: "店铺" }), "number");
+  assert.equal(resolveTableColumnKind({ explicitKind: "text", label: "销售额" }), "text");
+  assert.equal(resolveTableColumnKind({ explicitKind: "unknown", label: "销售额" }), "number");
+});
+
+test("data table manager ignores its own inferred column marker as an explicit contract", () => {
+  assert.equal(resolveTableColumnKind({ explicitKind: "text", explicitSource: "inferred", label: "销售额" }), "number");
+  assert.equal(resolveTableColumnKind({ explicitKind: "number", explicitSource: "explicit", label: "MSKU" }), "number");
 });
 
 test("data table manager clamps manual column widths to usable minimums", () => {

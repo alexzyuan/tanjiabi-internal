@@ -7,6 +7,8 @@ const numericHeaderPattern = /(金额|销售额|采购额|应付额|实付额|�
 const textHeaderPattern = /(名称|产品|店铺|国家|负责人|供应商|图片|状态|操作|时间|日期|币种|编码|单号|型号|备注|内容|链接|目录|文件夹|标题|账号|角色|来源|阶段|建议|结论|周期|模块|对象|指标|类型|仓库|承运商|运输方式|feedback|review|ASIN|MSKU|SKU|FNSKU)$/i;
 const errorStatePattern = /失败|错误|异常|缺少|missing|error/i;
 const loadingStatePattern = /正在|等待|读取|加载|同步|生成中/;
+const numericColumnKinds = new Set(["number", "money", "currency", "percent", "rate", "integer", "decimal"]);
+const textColumnKinds = new Set(["text", "date", "datetime", "image", "status", "action", "link"]);
 
 export function normalizeColumnWidth(value, fallback = DEFAULT_COLUMN_WIDTH) {
   const number = Number(value);
@@ -21,6 +23,25 @@ export function inferTableColumnKind(label = "") {
   if (textHeaderPattern.test(normalizedText)) return "text";
   if (numericHeaderPattern.test(normalizedText)) return "number";
   return "text";
+}
+
+function normalizeExplicitColumnKind(value = "") {
+  const kind = String(value || "").trim().toLowerCase();
+  if (numericColumnKinds.has(kind)) return "number";
+  if (textColumnKinds.has(kind)) return "text";
+  return "";
+}
+
+function resolveTableColumnKindDetails({ explicitKind = "", explicitType = "", explicitSource = "", label = "" } = {}) {
+  if (explicitSource !== "inferred") {
+    const explicit = normalizeExplicitColumnKind(explicitKind) || normalizeExplicitColumnKind(explicitType);
+    if (explicit) return { kind: explicit, source: "explicit" };
+  }
+  return { kind: inferTableColumnKind(label), source: "inferred" };
+}
+
+export function resolveTableColumnKind(options = {}) {
+  return resolveTableColumnKindDetails(options).kind;
 }
 
 export function inferTableStateTone(message = "") {
@@ -111,10 +132,17 @@ function lockCurrentColumnWidths(table) {
 
 function markColumnKinds(table) {
   const headers = getLeafHeaderCells(table);
-  const kinds = headers.map((header) => inferTableColumnKind(header.textContent || ""));
+  const columns = headers.map((header) => resolveTableColumnKindDetails({
+    explicitKind: header.getAttribute("data-column-kind") || "",
+    explicitType: header.getAttribute("data-column-type") || "",
+    explicitSource: header.getAttribute("data-column-kind-source") || "",
+    label: header.textContent || "",
+  }));
+  const kinds = columns.map((column) => column.kind);
   headers.forEach((header, index) => {
     header.dataset.columnIndex = String(index);
     header.dataset.columnKind = kinds[index];
+    header.dataset.columnKindSource = columns[index]?.source || "inferred";
     header.classList.toggle("table-cell--number", kinds[index] === "number");
   });
   Array.from(table.tBodies || []).forEach((tbody) => {

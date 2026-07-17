@@ -1,0 +1,28 @@
+/* Final product table invariants. Keep after page and legacy CSS. */
+table.data-table th {
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+
+table.data-table td {
+  text-align: left;
+}
+
+table.data-table td.table-cell--number {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+table.data-table th.table-cell--number {
+  font-variant-numeric: tabular-nums;
+}
+
+.table-state-row td,
+.table-state-cell {
+  text-align: left;
+}
+
+.table-resize-handle {
+  cursor: col-resize;
+  touch-action: none;
+}
