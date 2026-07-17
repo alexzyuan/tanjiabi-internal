@@ -16,10 +16,6 @@
   cursor: pointer;
 }
 
-.date-range-button::after {
-  content: "▣";
-}
-
 .date-range-button:focus-visible {
   outline: 0;
   border-color: var(--tj-action-blue);

@@ -434,7 +434,7 @@ button.metric-tile[aria-pressed="true"]{border-color:var(--tj-action-blue);box-s
 .section-title{position:relative;margin-top:12px;padding:6px 0 8px 16px;background:transparent;color:var(--tj-text-strong);font-size:16px;font-weight:850;border-radius:0}
 body:not(.login-body) .section-title{font-size:15px}
 .section-title::before{content:"";position:absolute;left:0;top:9px;width:4px;height:18px;border-radius:999px;background:var(--tj-action-blue)}
-.filters{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-height:48px;background:var(--tj-content-bg);padding:8px 10px;border:1px solid var(--tj-border-subtle);border-radius:var(--tj-control-radius);margin-top:4px}
+.filters{display:flex;flex-wrap:wrap;align-items:center;column-gap:8px;row-gap:8px;min-height:48px;background:var(--tj-content-bg);padding:8px 10px;border:0;border-radius:var(--tj-control-radius);margin-top:4px}
 .filters label{display:inline-flex;align-items:center;flex:0 0 116px;min-width:0;font-size:0;color:var(--tj-text-body);white-space:nowrap}
 .filters label:has(.date-range-control){flex-basis:240px}
 .filters label:has(input[type="search"]){flex:0 0 220px}
@@ -506,9 +506,10 @@ svg{width:100%;height:auto;display:block}
 .sort-button[data-direction="desc"]::after{content:"↓";opacity:1}
 .sort-button:focus-visible{outline:0;box-shadow:var(--tj-focus-ring)}
 .image-placeholder{display:grid;place-items:center;color:var(--tj-text-muted);background:var(--tj-surface-muted)}
-.filter-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;min-height:48px;margin-top:8px;padding:8px 10px;border:1px solid var(--tj-border-subtle);border-radius:var(--tj-control-radius);background:var(--tj-content-bg)}
+.filter-toolbar{display:flex;flex-wrap:wrap;column-gap:8px;row-gap:8px;align-items:center;min-height:48px;margin-top:8px;padding:8px 10px;border:0;border-radius:var(--tj-control-radius);background:var(--tj-content-bg)}
 .filter-toolbar label{display:inline-flex;align-items:center;flex:0 0 150px;min-width:0;font-size:0;color:var(--tj-text-body)}
 .filter-toolbar label:has(.date-range-control){flex-basis:240px}
+.filter-toolbar .date-range-control{width:100%}
 .filter-toolbar input,.filter-toolbar select,.filter-toolbar .date-range-button{width:100%;min-width:0;height:var(--tj-control-height-compact);border:1px solid var(--tj-border-control);border-radius:var(--tj-control-radius);padding:0 var(--tj-control-padding-x);color:var(--tj-text-body);background:var(--tj-content-bg);font-size:13px}
 .filter-toolbar input::placeholder{color:var(--tj-text-muted)}
 .filter-toolbar> :where(input,select){width:150px}
@@ -517,7 +518,6 @@ svg{width:100%;height:auto;display:block}
 body:not(.login-body) .filter-toolbar>button.primary-button{min-height:var(--tj-control-height-compact);height:var(--tj-control-height-compact);border-radius:var(--tj-control-radius)}
 .date-range-control{position:relative}
 .date-range-button{width:100%;height:var(--tj-control-height);display:flex;align-items:center;justify-content:space-between;border:1px solid var(--tj-border-control);color:var(--tj-text-strong);background:var(--tj-content-bg);padding:0 var(--tj-control-padding-x);border-radius:var(--tj-control-radius);cursor:pointer}
-.date-range-button::after{content:"▣"}
 .date-range-button:focus-visible{outline:0;border-color:var(--tj-action-blue);box-shadow:var(--tj-focus-ring)}
 .date-range-picker__popover{position:absolute;top:calc(100%+8px);left:0;z-index:90;width:min(760px,96vw);display:grid;grid-template-columns:112px minmax(0,1fr);overflow:hidden;border:1px solid var(--tj-border-subtle);border-radius:var(--tj-panel-radius);color:var(--tj-text-body);background:var(--tj-content-bg);box-shadow:var(--tj-shadow-floating);font-size:13px;line-height:1.35}
 .date-range-picker__shortcuts{display:grid;padding:var(--spectrum-spacing-100) 0;border-right:1px solid var(--tj-border-subtle)}

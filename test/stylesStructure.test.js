@@ -211,6 +211,7 @@ test("shared filters and panel surfaces live outside legacy css", async () => {
 
   assert.match(componentSource, /^\.filters\s*\{/m);
   assert.match(componentSource, /display:\s*flex/);
+  assert.match(componentSource, /^\.filters\s*\{[\s\S]*column-gap:\s*8px;[\s\S]*row-gap:\s*8px;[\s\S]*border:\s*0;[\s\S]*\}/m);
   assert.match(componentSource, /^\.filters label:has\(\.date-range-control\)\s*\{/m);
   assert.match(componentSource, /^\.filters \.filter-dropdown-menu\s*\{/m);
   assert.match(componentSource, /^\.filters select\.enhanced-filter-select\s*\{/m);
@@ -285,12 +286,13 @@ test("shared filter toolbar styles live outside page css and use semantic tokens
   assert.match(indexSource, /class="filter-toolbar fba-freight-toolbar"/);
   assert.match(componentSource, /^\/\* Shared compact filter toolbar\. \*\//m);
   assert.match(componentSource, /^\.filter-toolbar\s*\{/m);
+  assert.match(componentSource, /^\.filter-toolbar\s*\{[\s\S]*column-gap:\s*8px;[\s\S]*row-gap:\s*8px;[\s\S]*border:\s*0;[\s\S]*\}/m);
   assert.match(componentSource, /^\.filter-toolbar label\s*\{/m);
   assert.match(componentSource, /^\.filter-toolbar label:has\(\.date-range-control\)\s*\{/m);
+  assert.match(componentSource, /^\.filter-toolbar \.date-range-control\s*\{/m);
   assert.match(componentSource, /^\.filter-toolbar input,/m);
   assert.match(componentSource, /^\.filter-toolbar > :where\(input, select\)\s*\{/m);
   assert.match(componentSource, /var\(--tj-content-bg\)/);
-  assert.match(componentSource, /var\(--tj-border-subtle\)/);
   assert.match(componentSource, /var\(--tj-border-control\)/);
   assert.match(componentSource, /var\(--tj-text-body\)/);
   assert.equal(/^\.budget-toolbar\s*\{/m.test(budgetPageSource), false);
@@ -308,6 +310,7 @@ test("shared date range picker styles live outside page css and use semantic tok
   assert.match(indexSource, /id="fba-freight-date-range-button" class="date-range-button date-range-picker__trigger"/);
   assert.match(componentSource, /^\.date-range-control\s*\{/m);
   assert.match(componentSource, /^\.date-range-button\s*\{/m);
+  assert.equal(componentSource.includes(".date-range-button::after"), false);
   assert.match(componentSource, /^\.date-range-picker__popover\s*\{/m);
   assert.match(componentSource, /width:\s*min\(760px,\s*96vw\)/);
   assert.match(componentSource, /grid-template-columns:\s*112px minmax\(0,\s*1fr\)/);

@@ -2,12 +2,13 @@
 .filter-toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  column-gap: 8px;
+  row-gap: 8px;
   align-items: center;
   min-height: 48px;
   margin-top: 8px;
   padding: 8px 10px;
-  border: 1px solid var(--tj-border-subtle);
+  border: 0;
   border-radius: var(--tj-control-radius);
   background: var(--tj-content-bg);
 }
@@ -23,6 +24,10 @@
 
 .filter-toolbar label:has(.date-range-control) {
   flex-basis: 240px;
+}
+
+.filter-toolbar .date-range-control {
+  width: 100%;
 }
 
 .filter-toolbar input,
