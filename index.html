@@ -2019,18 +2019,18 @@
               <h2>每周运价</h2>
               <span><button class="secondary-button compact-button" id="freight-rates-refresh" type="button">刷新</button> <button class="secondary-button compact-button" id="freight-rates-export-logs" type="button">导出日志</button> <span id="freight-rates-count">共 0 条</span></span>
             </div>
-            <div class="table-shell">
-              <table class="data-table" style="min-width: 0; table-layout: fixed; width: 100%">
+            <div class="table-shell" style="max-width: 100%; overflow-x: auto">
+              <table class="data-table" style="min-width: 1160px; table-layout: fixed; width: 100%">
                 <colgroup>
-                  <col style="width: 102px" />
-                  <col style="width: 112px" />
-                  <col style="width: 92px" />
-                  <col style="width: 136px" />
-                  <col style="width: 108px" />
                   <col style="width: 96px" />
                   <col style="width: 108px" />
+                  <col style="width: 88px" />
+                  <col style="width: 132px" />
+                  <col style="width: 104px" />
+                  <col style="width: 252px" />
+                  <col style="width: 104px" />
                   <col style="width: 96px" />
-                  <col style="width: 116px" />
+                  <col style="width: 180px" />
                 </colgroup>
                 <thead>
                   <tr>
@@ -2047,10 +2047,10 @@
                 </thead>
                 <tbody id="freight-rates-create-row">
                   <tr>
-                    <td><output id="freight-rate-inline-week" class="table-select" style="display: inline-flex; align-items: center; white-space: nowrap; width: 92px">-</output></td>
-                    <td><output id="freight-rate-inline-date" class="table-select" style="display: inline-flex; align-items: center; white-space: nowrap; width: 102px">-</output></td>
+                    <td><output id="freight-rate-inline-week" class="table-select" style="display: inline-flex; align-items: center; white-space: nowrap; width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box">-</output></td>
+                    <td><output id="freight-rate-inline-date" class="table-select" style="display: inline-flex; align-items: center; white-space: nowrap; width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box">-</output></td>
                     <td>
-                      <select id="freight-rate-inline-country" class="table-select" aria-label="国家" required>
+                      <select id="freight-rate-inline-country" class="table-select" style="width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box" aria-label="国家" required>
                         <option value="美国">美国</option>
                         <option value="加拿大">加拿大</option>
                         <option value="澳洲">澳洲</option>
@@ -2059,19 +2059,19 @@
                       </select>
                     </td>
                     <td>
-                      <select id="freight-rate-inline-warehouse-select" class="table-select" aria-label="仓库代码选项"></select>
-                      <input id="freight-rate-inline-warehouse-code" class="table-select" aria-label="仓库代码" placeholder="手填仓库" required hidden disabled />
+                      <select id="freight-rate-inline-warehouse-select" class="table-select" style="width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box" aria-label="仓库代码选项"></select>
+                      <input id="freight-rate-inline-warehouse-code" class="table-select" style="width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box" aria-label="仓库代码" placeholder="手填仓库" required hidden disabled />
                     </td>
                     <td>
-                      <select id="freight-rate-inline-carrier" class="table-select" aria-label="承运商" required>
+                      <select id="freight-rate-inline-carrier" class="table-select" style="width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box" aria-label="承运商" required>
                         <option value="九方通逊">九方通逊</option>
                         <option value="同袍">同袍</option>
                       </select>
                     </td>
                     <td>
-                      <select id="freight-rate-inline-transport-method" class="table-select" aria-label="渠道名称" required></select>
+                      <select id="freight-rate-inline-transport-method" class="table-select" style="width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; text-overflow: ellipsis" aria-label="渠道名称" required></select>
                     </td>
-                    <td><input id="freight-rate-inline-price" type="number" class="table-select" min="0" step="0.0001" aria-label="价格" placeholder="手填价格" required /></td>
+                    <td><input id="freight-rate-inline-price" type="number" class="table-select" style="width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box" min="0" step="0.0001" aria-label="价格" placeholder="手填价格" required /></td>
                     <td>-</td>
                     <td class="table-actions"><button class="primary-button compact-button" id="freight-rate-inline-save" type="button">保存</button></td>
                   </tr>

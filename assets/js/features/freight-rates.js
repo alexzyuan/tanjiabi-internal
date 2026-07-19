@@ -31,6 +31,8 @@ export function createFreightRatesFeature({
   };
   let editingFreightRateId = "";
   let freightRatesLoaded = false;
+  const tableCellControlStyle = 'style="width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box;"';
+  const tableCellChannelStyle = 'style="width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; text-overflow: ellipsis;"';
 
   function query(selector) {
     return root?.querySelector?.(selector) || null;
@@ -192,10 +194,10 @@ export function createFreightRatesFeature({
     const selectHidden = options.length > 0 ? "" : " hidden disabled";
     const inputHidden = options.length > 0 ? " hidden disabled" : "";
     return `
-      <select class="table-select" aria-label="仓库代码选项" data-freight-rate-field="warehouseSelect"${selectHidden}>
+      <select class="table-select" ${tableCellControlStyle} aria-label="仓库代码选项" data-freight-rate-field="warehouseSelect"${selectHidden}>
         ${optionsHtml(options, warehouseCode)}
       </select>
-      <input class="table-select" aria-label="仓库代码" placeholder="手填仓库" data-freight-rate-field="warehouseCode" value="${escapeHtml(options.length > 0 ? "" : warehouseCode)}"${inputHidden} />
+      <input class="table-select" ${tableCellControlStyle} aria-label="仓库代码" placeholder="手填仓库" data-freight-rate-field="warehouseCode" value="${escapeHtml(options.length > 0 ? "" : warehouseCode)}"${inputHidden} />
     `;
   }
 
@@ -206,13 +208,13 @@ export function createFreightRatesFeature({
   function editRowHtml(row = {}) {
     return `
       <tr data-freight-rate-edit-row="${escapeHtml(row.id || "")}">
-        <td><output class="table-select" style="display: inline-flex; align-items: center; white-space: nowrap; width: 92px" data-freight-rate-field="week">${escapeHtml(row.week || "-")}</output></td>
-        <td><input class="table-select" type="date" data-freight-rate-field="date" value="${escapeHtml(row.date || todayText())}" /></td>
-        <td><select class="table-select" aria-label="国家" data-freight-rate-field="country">${optionsHtml(freightRateOptions.countries, row.country)}</select></td>
+        <td><output class="table-select" style="display: inline-flex; align-items: center; white-space: nowrap; width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box" data-freight-rate-field="week">${escapeHtml(row.week || "-")}</output></td>
+        <td><input class="table-select" ${tableCellControlStyle} type="date" data-freight-rate-field="date" value="${escapeHtml(row.date || todayText())}" /></td>
+        <td><select class="table-select" ${tableCellControlStyle} aria-label="国家" data-freight-rate-field="country">${optionsHtml(freightRateOptions.countries, row.country)}</select></td>
         <td>${warehouseEditCellHtml(row)}</td>
-        <td><select class="table-select" aria-label="承运商" data-freight-rate-field="carrier">${optionsHtml(freightRateOptions.carriers, row.carrier || "九方通逊")}</select></td>
-        <td><select class="table-select" aria-label="渠道名称" data-freight-rate-field="transportMethod">${optionsHtml(channelOptionsForCountry(row.country), row.transportMethod)}</select></td>
-        <td><input class="table-select" type="number" min="0" step="0.0001" aria-label="价格" data-freight-rate-field="price" value="${escapeHtml(row.price ?? "")}" /></td>
+        <td><select class="table-select" ${tableCellControlStyle} aria-label="承运商" data-freight-rate-field="carrier">${optionsHtml(freightRateOptions.carriers, row.carrier || "九方通逊")}</select></td>
+        <td><select class="table-select" ${tableCellChannelStyle} aria-label="渠道名称" data-freight-rate-field="transportMethod">${optionsHtml(channelOptionsForCountry(row.country), row.transportMethod)}</select></td>
+        <td><input class="table-select" ${tableCellControlStyle} type="number" min="0" step="0.0001" aria-label="价格" data-freight-rate-field="price" value="${escapeHtml(row.price ?? "")}" /></td>
         <td>${escapeHtml(rowOperator(row))}</td>
         <td class="table-actions">
           <button class="primary-button compact-button" type="button" data-freight-rate-edit-save="${escapeHtml(row.id || "")}">保存</button>
