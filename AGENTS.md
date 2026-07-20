@@ -90,3 +90,24 @@ Minimum checks:
 5. Screenshots or DOM checks confirm the UI state that was changed.
 
 For complex components, create an isolated component preview harness as a temporary local page or route, render only the target component/state, inspect layout and DOM there, then remove the harness before final delivery unless the user asks to keep it.
+
+## Deployment Checklist
+
+Before deploying this project, always verify that the deployment source is a committed Git revision and that the target commit contains the production-visible feature surface being preserved. Production-only code must be brought back into Git before deploying; do not overwrite production with a branch that is missing live navigation, views, routes, or services.
+
+Required pre-deploy checks:
+
+1. Compare the current production release against the deployment commit for critical entry files: `index.html`, `app.js`, `routes/*`, `server.js`, `assets/js/features/*`, and any touched `src/services/*` or `src/adapters/*` files.
+2. Confirm critical sidebar groups and views still exist in `index.html`, including existing first-level modules such as sales, FBA, logistics, finance/purchase, BI settings, and admin settings.
+3. Run focused structure tests for preserved navigation and route registration. At minimum, tests must cover any changed module plus known high-risk entries such as `物流 > FBA货件处理`, `物流 > 运费看板`, and `BI设置 > Webhook 助手`.
+4. Run syntax and packaging checks before upload: `npm run check:js`, `npm run build:css -- --check`, `git diff --check`, and the relevant `node --test ...` commands.
+5. Package from a clean worktree at the exact commit being deployed, not from a dirty working directory.
+6. Verify the deployment package does not include real secrets such as `.env`, DingTalk access tokens, or signing secrets.
+
+Required post-deploy smoke checks:
+
+1. Check `/api/health` and PM2 status.
+2. Confirm critical sidebar entries are present in the deployed `index.html`.
+3. Confirm preserved API routes return the expected auth boundary or data response, not `404`.
+4. Browser-check the changed view and at least the adjacent preserved module that could have been overwritten.
+5. If any deployed test files are stale or excluded from the package, do not use server-side test output as proof; verify the live runtime files and update the packaging/test approach separately.
