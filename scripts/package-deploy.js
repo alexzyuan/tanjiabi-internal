@@ -107,6 +107,7 @@ function validateApprovedCssBaseline() {
   if (!includeCss) return;
 
   const indexSource = readText("index.html");
+  const tokenSource = readText("assets/css/tokens/00-semantic-foundation.css");
   const filterToolbarSource = readText("assets/css/components/35-filter-toolbar.css");
   const datePickerSource = readText("assets/css/components/36-date-range-picker.css");
   const salesPageSource = readText("assets/css/pages/22-sales-dashboard.css");
@@ -126,6 +127,16 @@ function validateApprovedCssBaseline() {
     filterToolbarSource,
     /\.filter-toolbar\s*\{[\s\S]*column-gap:\s*8px;[\s\S]*row-gap:\s*8px;[\s\S]*border:\s*0;/,
     "CSS 部署前检查失败：共享筛选栏 baseline 不是 compact 8px 无边框规则。",
+  );
+  requireContains(
+    tokenSource,
+    /--tj-control-height-compact:\s*34px;/,
+    "CSS 部署前检查失败：共享筛选栏紧凑控件高度 token 缺失。",
+  );
+  requireContains(
+    tokenSource,
+    /--tj-filter-action-min-width:\s*96px;/,
+    "CSS 部署前检查失败：共享筛选栏操作按钮最小宽度 token 缺失。",
   );
   requireContains(
     filterToolbarSource,

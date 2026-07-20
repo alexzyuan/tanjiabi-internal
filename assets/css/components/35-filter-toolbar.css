@@ -58,10 +58,13 @@
 
 .filter-toolbar > :where(button, .primary-button, .secondary-button, .ghost-button) {
   width: auto;
+  min-width: var(--tj-filter-action-min-width);
   min-height: var(--tj-control-height-compact);
   height: var(--tj-control-height-compact);
   border-radius: var(--tj-control-radius);
+  padding: 0 14px;
   font-size: 13px;
+  white-space: nowrap;
 }
 
 body:not(.login-body) .filter-toolbar > button.primary-button {

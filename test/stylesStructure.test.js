@@ -93,6 +93,11 @@ test("styles.css keeps semantic token roots consolidated", async () => {
     "semantic tokens should precede legacy compatibility aliases",
   );
   assert.match(tokenSource, /--tj-action-blue:\s*var\(--spectrum-accent-background\)/);
+  assert.match(tokenSource, /--tj-control-height:\s*34px/);
+  assert.match(tokenSource, /--tj-control-height-compact:\s*34px/);
+  assert.match(tokenSource, /--tj-control-padding-x:\s*10px/);
+  assert.match(tokenSource, /--tj-control-radius:\s*var\(--spectrum-control-radius\)/);
+  assert.match(tokenSource, /--tj-filter-action-min-width:\s*96px/);
   assert.match(compatibilitySource, /--tj-brand:\s*var\(--tj-action-blue\)/);
   assert.match(baseSource, /^\*\s*\{\s*box-sizing:\s*border-box;/m);
   assert.match(baseSource, /^\[hidden\]\s*\{/m);
@@ -159,6 +164,7 @@ test("CSS minifier implementation is shared between build and structure tests", 
   assert.equal(definitions, 1, "minifyCss should have exactly one implementation");
   assert.match(buildScript, /scripts\/lib\/minifyCss\.js|\.\/lib\/minifyCss\.js/);
   assert.match(testSource, /scripts\/lib\/minifyCss\.js|\.\.\/scripts\/lib\/minifyCss\.js/);
+  assert.match(minifyCss(".filters :where(input, select) { height: 34px; }"), /^\.filters :where\(input,select\)\{height:34px\}/);
 });
 
 test("styles.css stays within the raw size budget", async () => {
@@ -245,6 +251,7 @@ test("shared filter toolbar styles live outside page css and use semantic tokens
   assert.match(componentSource, /^\.filter-toolbar \.date-range-control\s*\{/m);
   assert.match(componentSource, /^\.filter-toolbar input,/m);
   assert.match(componentSource, /^\.filter-toolbar > :where\(input, select\)\s*\{/m);
+  assert.match(componentSource, /min-width:\s*var\(--tj-filter-action-min-width\)/);
   assert.match(componentSource, /var\(--tj-content-bg\)/);
   assert.match(componentSource, /var\(--tj-border-control\)/);
   assert.match(componentSource, /var\(--tj-text-body\)/);

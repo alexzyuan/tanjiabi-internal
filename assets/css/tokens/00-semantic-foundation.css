@@ -72,6 +72,11 @@
   --tj-border-translucent: rgba(202, 219, 238, 0.94);
   --tj-border-card: rgba(204, 222, 242, 0.88);
   --tj-border-accent-muted: #7e9cc2;
+  --tj-control-height: 34px;
+  --tj-control-height-compact: 34px;
+  --tj-control-padding-x: 10px;
+  --tj-control-radius: var(--spectrum-control-radius);
+  --tj-filter-action-min-width: 96px;
   --tj-focus-ring-soft: rgba(29, 111, 242, 0.1);
   --tj-overlay-backdrop: rgba(15, 23, 42, 0.38);
   --tj-shadow-soft: 0 6px 18px rgba(51, 108, 255, 0.08);

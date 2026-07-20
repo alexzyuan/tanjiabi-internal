@@ -9,6 +9,7 @@ export function minifyCss(source) {
   let output = "";
   let quote = null;
   let pendingSpace = false;
+  let braceDepth = 0;
 
   for (let index = 0; index < source.length; index += 1) {
     const char = source[index];
@@ -48,9 +49,13 @@ export function minifyCss(source) {
     }
 
     if ("{}:;,>+~()[]=".includes(char)) {
-      output = output.trimEnd();
+      const keepSelectorSpace = char === ":" && pendingSpace && braceDepth === 0 && output.at(-1) && !"{}:;,>+~([".includes(output.at(-1));
+      output = keepSelectorSpace ? output : output.trimEnd();
+      if (keepSelectorSpace) output += " ";
       output += char;
       pendingSpace = false;
+      if (char === "{") braceDepth += 1;
+      if (char === "}" && braceDepth > 0) braceDepth -= 1;
       continue;
     }
 
