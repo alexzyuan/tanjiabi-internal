@@ -213,6 +213,10 @@ test("shared filters and panel surfaces live outside legacy css", async () => {
   assert.match(componentSource, /^\.empty-state\s*\{/m);
   assert.match(componentSource, /^\.filters\s*\{[\s\S]*column-gap:\s*8px;[\s\S]*row-gap:\s*8px;[\s\S]*border:\s*0;[\s\S]*\}/m);
   assert.match(componentSource, /^\.filters label:has\(\.date-range-control\)\s*\{/m);
+  assert.match(componentSource, /^\.filters label\s*\{[\s\S]*flex:\s*0 0 116px;[\s\S]*font-size:\s*0;[\s\S]*\}/m);
+  assert.match(componentSource, /^\.filters label:has\(\.date-range-control\)\s*\{[\s\S]*flex-basis:\s*240px;[\s\S]*\}/m);
+  assert.match(componentSource, /^\.filters label:has\(input\[type="search"\]\)\s*\{[\s\S]*flex:\s*0 0 220px;[\s\S]*\}/m);
+  assert.match(componentSource, /^\.filters :where\(input, select, \.filter-dropdown-button, \.date-range-button\)\s*\{[\s\S]*height:\s*var\(--tj-control-height-compact\);[\s\S]*padding:\s*0 var\(--tj-control-padding-x\);[\s\S]*\}/m);
   assert.match(componentSource, /var\(--tj-content-bg\)/);
   assert.match(componentSource, /var\(--tj-border-control\)/);
   assert.match(componentSource, /var\(--tj-border-subtle\)/);
@@ -247,10 +251,15 @@ test("shared filter toolbar styles live outside page css and use semantic tokens
   assert.match(componentSource, /^\.filter-toolbar\s*\{/m);
   assert.match(componentSource, /^\.filter-toolbar\s*\{[\s\S]*column-gap:\s*8px;[\s\S]*row-gap:\s*8px;[\s\S]*border:\s*0;[\s\S]*\}/m);
   assert.match(componentSource, /^\.filter-toolbar label\s*\{/m);
+  assert.match(componentSource, /^\.filter-toolbar label\s*\{[\s\S]*flex:\s*0 0 150px;[\s\S]*font-size:\s*0;[\s\S]*\}/m);
   assert.match(componentSource, /^\.filter-toolbar label:has\(\.date-range-control\)\s*\{/m);
+  assert.match(componentSource, /^\.filter-toolbar label:has\(\.date-range-control\)\s*\{[\s\S]*flex-basis:\s*240px;[\s\S]*\}/m);
   assert.match(componentSource, /^\.filter-toolbar \.date-range-control\s*\{/m);
   assert.match(componentSource, /^\.filter-toolbar input,/m);
+  assert.match(componentSource, /^\.filter-toolbar input,[\s\S]*?height:\s*var\(--tj-control-height-compact\);[\s\S]*?padding:\s*0 var\(--tj-control-padding-x\);/m);
   assert.match(componentSource, /^\.filter-toolbar > :where\(input, select\)\s*\{/m);
+  assert.match(componentSource, /^\.filter-toolbar > :where\(input, select\)\s*\{[\s\S]*width:\s*150px;[\s\S]*\}/m);
+  assert.match(componentSource, /^\.filter-toolbar > input\[type="search"\]\s*\{[\s\S]*width:\s*180px;[\s\S]*\}/m);
   assert.match(componentSource, /min-width:\s*var\(--tj-filter-action-min-width\)/);
   assert.match(componentSource, /var\(--tj-content-bg\)/);
   assert.match(componentSource, /var\(--tj-border-control\)/);
@@ -277,6 +286,22 @@ test("non-owner css does not override shared filter toolbar baseline", async () 
   }
 
   assert.deepEqual(violations, []);
+});
+
+test("filter baseline contract is documented and guarded before css deployment", async () => {
+  const designSource = await readFile(new URL("../design.md", import.meta.url), "utf8");
+  const packageDeploySource = await readFile(new URL("../scripts/package-deploy.js", import.meta.url), "utf8");
+
+  assert.match(designSource, /控件高度[^。\n]*34px/);
+  assert.match(designSource, /操作按钮[^。\n]*96px/);
+  assert.match(designSource, /普通基础筛选[^。\n]*116px - 150px/);
+  assert.match(designSource, /关键词搜索[^。\n]*180px - 220px/);
+  assert.match(designSource, /日期范围控件[^。\n]*240px/);
+
+  assert.match(packageDeploySource, /assets\/css\/components\/30-surfaces-and-filters\.css/);
+  assert.match(packageDeploySource, /--tj-control-height:\\s\*34px;/);
+  assert.match(packageDeploySource, /\\.filters\\s\*\\\{[\s\S]*column-gap/);
+  assert.match(packageDeploySource, /--tj-filter-action-min-width:\\s\*96px;/);
 });
 
 test("shared status pill styles live outside legacy css and use semantic tokens", async () => {

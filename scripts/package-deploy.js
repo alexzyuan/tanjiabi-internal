@@ -108,6 +108,7 @@ function validateApprovedCssBaseline() {
 
   const indexSource = readText("index.html");
   const tokenSource = readText("assets/css/tokens/00-semantic-foundation.css");
+  const surfacesFilterSource = readText("assets/css/components/30-surfaces-and-filters.css");
   const filterToolbarSource = readText("assets/css/components/35-filter-toolbar.css");
   const datePickerSource = readText("assets/css/components/36-date-range-picker.css");
   const salesPageSource = readText("assets/css/pages/22-sales-dashboard.css");
@@ -129,6 +130,16 @@ function validateApprovedCssBaseline() {
     "CSS 部署前检查失败：共享筛选栏 baseline 不是 compact 8px 无边框规则。",
   );
   requireContains(
+    surfacesFilterSource,
+    /\.filters\s*\{[\s\S]*column-gap:\s*8px;[\s\S]*row-gap:\s*8px;[\s\S]*border:\s*0;/,
+    "CSS 部署前检查失败：共享基础筛选栏 baseline 不是 compact 8px 无边框规则。",
+  );
+  requireContains(
+    tokenSource,
+    /--tj-control-height:\s*34px;/,
+    "CSS 部署前检查失败：共享筛选栏控件高度 token 缺失。",
+  );
+  requireContains(
     tokenSource,
     /--tj-control-height-compact:\s*34px;/,
     "CSS 部署前检查失败：共享筛选栏紧凑控件高度 token 缺失。",
@@ -139,9 +150,49 @@ function validateApprovedCssBaseline() {
     "CSS 部署前检查失败：共享筛选栏操作按钮最小宽度 token 缺失。",
   );
   requireContains(
+    surfacesFilterSource,
+    /\.filters label\s*\{[\s\S]*flex:\s*0 0 116px;[\s\S]*font-size:\s*0;/,
+    "CSS 部署前检查失败：共享基础筛选栏普通字段宽度规则缺失。",
+  );
+  requireContains(
+    surfacesFilterSource,
+    /\.filters label:has\(input\[type="search"\]\)\s*\{[\s\S]*flex:\s*0 0 220px;/,
+    "CSS 部署前检查失败：共享基础筛选栏关键词宽度规则缺失。",
+  );
+  requireContains(
+    surfacesFilterSource,
+    /\.filters :where\(input, select, \.filter-dropdown-button, \.date-range-button\)\s*\{[\s\S]*height:\s*var\(--tj-control-height-compact\);/,
+    "CSS 部署前检查失败：共享基础筛选栏控件高度规则缺失。",
+  );
+  requireContains(
+    filterToolbarSource,
+    /\.filter-toolbar label\s*\{[\s\S]*flex:\s*0 0 150px;[\s\S]*font-size:\s*0;/,
+    "CSS 部署前检查失败：共享紧凑筛选栏普通字段宽度规则缺失。",
+  );
+  requireContains(
     filterToolbarSource,
     /\.filter-toolbar label:has\(\.date-range-control\)\s*\{/,
     "CSS 部署前检查失败：共享筛选栏缺少日期控件列宽规则。",
+  );
+  requireContains(
+    filterToolbarSource,
+    /\.filter-toolbar label:has\(\.date-range-control\)\s*\{[\s\S]*flex-basis:\s*240px;/,
+    "CSS 部署前检查失败：共享筛选栏日期控件 240px 宽度规则缺失。",
+  );
+  requireContains(
+    filterToolbarSource,
+    /\.filter-toolbar > :where\(input, select\)\s*\{[\s\S]*width:\s*150px;/,
+    "CSS 部署前检查失败：共享紧凑筛选栏直接输入控件宽度规则缺失。",
+  );
+  requireContains(
+    filterToolbarSource,
+    /\.filter-toolbar > input\[type="search"\]\s*\{[\s\S]*width:\s*180px;/,
+    "CSS 部署前检查失败：共享紧凑筛选栏关键词宽度规则缺失。",
+  );
+  requireContains(
+    filterToolbarSource,
+    /min-width:\s*var\(--tj-filter-action-min-width\);/,
+    "CSS 部署前检查失败：共享筛选栏操作按钮最小宽度规则缺失。",
   );
   requireContains(
     datePickerSource,
