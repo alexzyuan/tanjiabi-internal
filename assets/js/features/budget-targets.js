@@ -168,19 +168,19 @@ export function createBudgetTargetsFeature({
     table.innerHTML = rows
       .map((row) => `
         <tr>
-          <td>${row.month || "-"}</td>
-          <td>${row.platform || "-"}</td>
-          <td>${escapeHtml(row.storeName || "-")}</td>
-          <td>${escapeHtml(row.site || "-")}</td>
-          <td>${escapeHtml(row.status || "-")}</td>
-          <td>${formatNumber(row.skuCount || 0)}</td>
-          <td>${formatNumber(row.salesQty || 0)}</td>
-          <td>${formatMoney(row.salesTarget)}</td>
-          <td>${formatMoney(row.adBudget)}</td>
-          <td>${formatPercent(row.acosTarget)}</td>
-          <td>${formatMoney(row.refundTarget)}</td>
-          <td>${formatMoney(row.profitTarget)}</td>
-          <td>${formatPercent(row.profitRateTarget)}</td>
+          <td class="table-col-date">${row.month || "-"}</td>
+          <td class="table-col-text">${row.platform || "-"}</td>
+          <td class="table-col-text">${escapeHtml(row.storeName || "-")}</td>
+          <td class="table-col-text">${escapeHtml(row.site || "-")}</td>
+          <td class="table-col-status">${escapeHtml(row.status || "-")}</td>
+          <td class="table-col-number">${formatNumber(row.skuCount || 0)}</td>
+          <td class="table-col-number">${formatNumber(row.salesQty || 0)}</td>
+          <td class="table-col-money">${formatMoney(row.salesTarget)}</td>
+          <td class="table-col-money">${formatMoney(row.adBudget)}</td>
+          <td class="table-col-percent">${formatPercent(row.acosTarget)}</td>
+          <td class="table-col-money">${formatMoney(row.refundTarget)}</td>
+          <td class="table-col-money">${formatMoney(row.profitTarget)}</td>
+          <td class="table-col-percent">${formatPercent(row.profitRateTarget)}</td>
         </tr>
       `)
       .join("");
@@ -196,20 +196,20 @@ export function createBudgetTargetsFeature({
     mskuTable.innerHTML = mskuRows
       .map((row) => `
         <tr>
-          <td>${row.month || "-"}</td>
-          <td>${row.platform || "-"}</td>
-          <td>${escapeHtml(row.storeName || "-")}</td>
-          <td>${escapeHtml(row.site || "-")}</td>
-          <td>${escapeHtml(row.status || "-")}</td>
-          <td>${escapeHtml(row.skuOwner || "-")}</td>
-          <td>${escapeHtml(row.msku || "-")}</td>
-          <td>${escapeHtml(row.asin || "-")}</td>
-          <td>${formatNumber(row.salesQty || 0)}</td>
-          <td>${formatMoney(row.salesTarget)}</td>
-          <td>${formatMoney(row.adBudget)}</td>
-          <td>${formatPercent(row.acosTarget)}</td>
-          <td>${formatMoney(row.profitTarget)}</td>
-          <td>${formatPercent(row.profitRateTarget)}</td>
+          <td class="table-col-date">${row.month || "-"}</td>
+          <td class="table-col-text">${row.platform || "-"}</td>
+          <td class="table-col-text">${escapeHtml(row.storeName || "-")}</td>
+          <td class="table-col-text">${escapeHtml(row.site || "-")}</td>
+          <td class="table-col-status">${escapeHtml(row.status || "-")}</td>
+          <td class="table-col-text">${escapeHtml(row.skuOwner || "-")}</td>
+          <td class="table-col-text">${escapeHtml(row.msku || "-")}</td>
+          <td class="table-col-text">${escapeHtml(row.asin || "-")}</td>
+          <td class="table-col-number">${formatNumber(row.salesQty || 0)}</td>
+          <td class="table-col-money">${formatMoney(row.salesTarget)}</td>
+          <td class="table-col-money">${formatMoney(row.adBudget)}</td>
+          <td class="table-col-percent">${formatPercent(row.acosTarget)}</td>
+          <td class="table-col-money">${formatMoney(row.profitTarget)}</td>
+          <td class="table-col-percent">${formatPercent(row.profitRateTarget)}</td>
         </tr>
       `)
       .join("");

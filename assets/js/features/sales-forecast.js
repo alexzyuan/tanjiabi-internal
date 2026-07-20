@@ -104,9 +104,21 @@ function renderSalesForecastHeader() {
     <th class="group-head sales-group" colspan="${salesColumnCount}">销量数据</th>
   `;
   row.innerHTML = salesForecastColumns
-    .map((column) => `<th class="${column.cls || ""} col-${escapeHtml(column.key)}">${escapeHtml(column.label)}</th>`)
+    .map((column) => `<th class="${salesForecastColumnClass(column)}">${escapeHtml(column.label)}</th>`)
     .join("");
   row.dataset.ready = "true";
+}
+
+function salesForecastColumnTypeClass(column) {
+  if (["focus", "hide"].includes(column.key)) return "table-col-actions";
+  if (column.type === "image") return "table-col-text";
+  if (["inboundArrivalDate", "outOfStockDate", "shippingDate", "purchaseDate"].includes(column.key)) return "table-col-date";
+  if (["days", "decimal", "signed", "monthDaily", "monthSales", "recentDaily"].includes(column.type) || column.cls?.includes("compact-number-col")) return "table-col-number";
+  return "table-col-text";
+}
+
+function salesForecastColumnClass(column) {
+  return `${column.cls || ""} ${salesForecastColumnTypeClass(column)} col-${escapeHtml(column.key)}`.trim();
 }
 
 function buildSalesForecastQuery(options = {}) {
@@ -575,13 +587,13 @@ function renderSalesForecast(data = salesForecastData) {
           const referenceText = salesForecastPreviousYearText(row, column);
           const tooltipAttrs = referenceText ? ` tabindex="0" aria-label="${escapeHtml(`${salesForecastCellValue(row, column) || 0}，${referenceText}`)}"` : "";
           return `
-          <td class="${column.cls || ""} col-${escapeHtml(column.key)} ${column.key === "fbaAvailableDays" ? salesForecastRiskClass(row) : ""}"${tooltipAttrs}>
+          <td class="${salesForecastColumnClass(column)} ${column.key === "fbaAvailableDays" ? salesForecastRiskClass(row) : ""}"${tooltipAttrs}>
             ${formatSalesForecastCell(row, column)}
           </td>`;
         }).join("")}
       </tr>
     `).join("")
-    : `<tr><td colspan="${salesForecastColumns.length}">${
+    : `<tr class="table-state-row"><td class="table-state is-empty" colspan="${salesForecastColumns.length}">${
       salesForecastViewMode === "hidden"
         ? "当前没有隐藏产品。"
         : salesForecastViewMode === "focus"

@@ -376,11 +376,20 @@ const tanjiaUiGlobal = globalThis.window || globalThis;
     return schedule;
   }
 
+  function tableStateTone(message) {
+    const text = String(message || "");
+    if (/权限|无权|未授权/.test(text)) return "denied";
+    if (/失败|错误|异常|重试/.test(text)) return "error";
+    if (/正在|加载中|读取|同步/.test(text)) return "loading";
+    return "empty";
+  }
+
   function renderTableMessage(target, colspan, message, root = tanjiaUiGlobal.document) {
     const element = resolveElement(target, root);
     if (!element) return null;
     const span = Math.max(1, Number.parseInt(colspan, 10) || 1);
-    element.innerHTML = `<tr><td colspan="${span}">${escapeHtml(message)}</td></tr>`;
+    const tone = tableStateTone(message);
+    element.innerHTML = `<tr class="table-state-row"><td class="table-state is-${tone}" colspan="${span}">${escapeHtml(message)}</td></tr>`;
     return element;
   }
 

@@ -204,7 +204,7 @@ export function createFactoryInventoryFeature({
     ].filter(Boolean).join("　");
     return `
       <tr class="factory-order-row">
-        <td colspan="13">
+        <td class="table-col-text" colspan="13">
           <div class="factory-order-strip">
             <strong>${escapeHtml(group.purchaseOrderNo || "-")}</strong>
             <span>${orderMeta}</span>
@@ -220,19 +220,19 @@ export function createFactoryInventoryFeature({
       : "未手填";
     return `
       <tr class="factory-item-row">
-        <td>${row.imageUrl ? `<img class="factory-inventory-image" src="${escapeHtml(cachedSalesImageUrl(row.imageUrl))}" alt="">` : `<span class="factory-image-placeholder">-</span>`}</td>
-        <td><strong>${escapeHtml(row.productName || "-")}</strong><small>${escapeHtml(row.sku || "-")}</small></td>
-        <td><strong>${escapeHtml(row.storeName || "-")}</strong><small>${escapeHtml(row.country || "")}</small></td>
-        <td>${formatFactoryInventoryPrice(row.unitPrice)}</td>
-        <td>${formatActualMoney(row.purchaseQuantity || 0)}</td>
-        <td>¥${formatActualMoney(row.purchaseAmount || 0)}</td>
-        <td><span>${escapeHtml(row.orderDate || row.orderTime || "-")}</span>${row.expectedArrivalTime ? `<small>预计 ${escapeHtml(row.expectedArrivalTime)}</small>` : ""}</td>
-        <td><strong>${escapeHtml(row.msku || "-")}</strong></td>
-        <td><input class="factory-shipped-input" data-factory-shipped-key="${escapeHtml(row.manualKey || "")}" inputmode="decimal" value="${escapeHtml(row.shippedQuantity || 0)}" aria-label="已发数量 ${escapeHtml(row.purchaseOrderNo || row.sku || "")}" /><small>${shippedStatus}</small></td>
-        <td><strong>${formatActualMoney(row.factoryRemainingQuantity || 0)}</strong></td>
-        <td>${formatActualMoney(row.fbaAvailable || 0)}</td>
-        <td>${formatActualMoney(row.fbaTransfer || 0)}</td>
-        <td>${formatActualMoney(row.fbaInbound || 0)}</td>
+        <td class="table-col-text">${row.imageUrl ? `<img class="factory-inventory-image" src="${escapeHtml(cachedSalesImageUrl(row.imageUrl))}" alt="">` : `<span class="factory-image-placeholder">-</span>`}</td>
+        <td class="table-col-text"><strong>${escapeHtml(row.productName || "-")}</strong><small>${escapeHtml(row.sku || "-")}</small></td>
+        <td class="table-col-text"><strong>${escapeHtml(row.storeName || "-")}</strong><small>${escapeHtml(row.country || "")}</small></td>
+        <td class="table-col-money">${formatFactoryInventoryPrice(row.unitPrice)}</td>
+        <td class="table-col-number">${formatActualMoney(row.purchaseQuantity || 0)}</td>
+        <td class="table-col-money">¥${formatActualMoney(row.purchaseAmount || 0)}</td>
+        <td class="table-col-date"><span>${escapeHtml(row.orderDate || row.orderTime || "-")}</span>${row.expectedArrivalTime ? `<small>预计 ${escapeHtml(row.expectedArrivalTime)}</small>` : ""}</td>
+        <td class="table-col-text"><strong>${escapeHtml(row.msku || "-")}</strong></td>
+        <td class="table-col-number"><input class="factory-shipped-input" data-factory-shipped-key="${escapeHtml(row.manualKey || "")}" inputmode="decimal" value="${escapeHtml(row.shippedQuantity || 0)}" aria-label="已发数量 ${escapeHtml(row.purchaseOrderNo || row.sku || "")}" /><small>${shippedStatus}</small></td>
+        <td class="table-col-number"><strong>${formatActualMoney(row.factoryRemainingQuantity || 0)}</strong></td>
+        <td class="table-col-number">${formatActualMoney(row.fbaAvailable || 0)}</td>
+        <td class="table-col-number">${formatActualMoney(row.fbaTransfer || 0)}</td>
+        <td class="table-col-number">${formatActualMoney(row.fbaInbound || 0)}</td>
       </tr>
     `;
   }

@@ -283,22 +283,22 @@ export function createSupplierBoardFeature({
     if (!tbody) return;
     tbody.innerHTML = visibleRows.length ? visibleRows.map((row) => `
       <tr>
-        <td>${row.imageUrl ? `<img class="supplier-board-image" src="${escapeHtml(row.imageUrl)}" alt="">` : `<span class="image-placeholder">-</span>`}</td>
-        <td><strong>${escapeHtml(row.storeName || "-")}</strong></td>
-        <td>${escapeHtml(row.country || "-")}</td>
-        <td><strong>${escapeHtml(row.msku || "-")}</strong></td>
-        <td><strong>${escapeHtml(row.productName || "-")}</strong><small>${escapeHtml(row.sku || "-")}</small></td>
-        <td>${escapeHtml(row.model || "-")}</td>
-        <td>${formatActualMoney(row.quantity || 0)}</td>
-        <td><strong>${escapeHtml(row.supplier || "-")}</strong><small>${row.taxFactoryName ? `匹配：${escapeHtml(row.taxFactoryName)}` : "税点未匹配"}</small></td>
-        <td>¥ ${formatActualMoney(row.purchasePrice || 0)}</td>
-        <td>¥ ${formatActualMoney(row.purchaseCostSubtotal || 0)}</td>
-        <td>${row.ordinaryInvoicePurchaseCost === null || row.ordinaryInvoicePurchaseCost === undefined ? "-" : `¥ ${formatActualMoney(row.ordinaryInvoicePurchaseCost || 0)}`}</td>
-        <td>${formatRateNullable(row.ordinaryInvoiceTaxRate)}</td>
-        <td>${row.ordinaryInvoiceCost === null || row.ordinaryInvoiceCost === undefined ? "-" : `¥ ${formatActualMoney(row.ordinaryInvoiceCost || 0)}`}</td>
-        <td>${formatRateNullable(row.specialInvoiceTaxRate)}</td>
+        <td class="table-col-text">${row.imageUrl ? `<img class="supplier-board-image" src="${escapeHtml(row.imageUrl)}" alt="">` : `<span class="image-placeholder">-</span>`}</td>
+        <td class="table-col-text"><strong>${escapeHtml(row.storeName || "-")}</strong></td>
+        <td class="table-col-text">${escapeHtml(row.country || "-")}</td>
+        <td class="table-col-text"><strong>${escapeHtml(row.msku || "-")}</strong></td>
+        <td class="table-col-text"><strong>${escapeHtml(row.productName || "-")}</strong><small>${escapeHtml(row.sku || "-")}</small></td>
+        <td class="table-col-text">${escapeHtml(row.model || "-")}</td>
+        <td class="table-col-number">${formatActualMoney(row.quantity || 0)}</td>
+        <td class="table-col-text"><strong>${escapeHtml(row.supplier || "-")}</strong><small>${row.taxFactoryName ? `匹配：${escapeHtml(row.taxFactoryName)}` : "税点未匹配"}</small></td>
+        <td class="table-col-money">¥ ${formatActualMoney(row.purchasePrice || 0)}</td>
+        <td class="table-col-money">¥ ${formatActualMoney(row.purchaseCostSubtotal || 0)}</td>
+        <td class="table-col-money">${row.ordinaryInvoicePurchaseCost === null || row.ordinaryInvoicePurchaseCost === undefined ? "-" : `¥ ${formatActualMoney(row.ordinaryInvoicePurchaseCost || 0)}`}</td>
+        <td class="table-col-percent">${formatRateNullable(row.ordinaryInvoiceTaxRate)}</td>
+        <td class="table-col-money">${row.ordinaryInvoiceCost === null || row.ordinaryInvoiceCost === undefined ? "-" : `¥ ${formatActualMoney(row.ordinaryInvoiceCost || 0)}`}</td>
+        <td class="table-col-percent">${formatRateNullable(row.specialInvoiceTaxRate)}</td>
       </tr>
-    `).join("") : `<tr><td colspan="14">暂无符合筛选条件的供应商销售数据。</td></tr>`;
+    `).join("") : `<tr class="table-state-row"><td class="table-state is-empty" colspan="14">暂无符合筛选条件的供应商销售数据。</td></tr>`;
   }
 
   function supplierBoardExportValue(row, key) {

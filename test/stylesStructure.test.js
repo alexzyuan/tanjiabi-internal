@@ -316,6 +316,35 @@ test("shared data table baseline defines table class, column types, sticky utili
   assert.match(baselineDoc, /### 1\.6 验收矩阵/);
 });
 
+test("priority BI tables adopt data-table, column type classes, and table state rows", async () => {
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const uiUtilsSource = await readFile(new URL("../assets/js/ui-utils.js", import.meta.url), "utf8");
+  const salesForecastSource = await readFile(new URL("../assets/js/features/sales-forecast.js", import.meta.url), "utf8");
+  const supplierBoardSource = await readFile(new URL("../assets/js/features/supplier-board.js", import.meta.url), "utf8");
+  const inventoryProvisionSource = await readFile(new URL("../assets/js/features/inventory-provision.js", import.meta.url), "utf8");
+  const payablesSource = await readFile(new URL("../assets/js/features/payables-dashboard.js", import.meta.url), "utf8");
+  const budgetSource = await readFile(new URL("../assets/js/features/budget-targets.js", import.meta.url), "utf8");
+
+  [
+    /<table class="data-table sales-forecast-table" id="sales-forecast-table">/,
+    /<table class="data-table" id="supplier-board-table">/,
+    /<table class="data-table" id="payables-detail-table">/,
+    /<tbody id="inventory-bucket-table"><tr class="table-state-row">/,
+    /<tbody id="inventory-detail-table"><tr class="table-state-row">/,
+    /<tbody id="sales-forecast-table-body"><tr class="table-state-row">/,
+    /<th class="table-col-money">销售目标\(原币\)<\/th>/,
+    /<th class="table-col-percent">利润率目标<\/th>/,
+  ].forEach((pattern) => assert.match(indexSource, pattern));
+
+  assert.match(uiUtilsSource, /class="table-state is-\$\{tone\}"/);
+  assert.match(salesForecastSource, /function salesForecastColumnTypeClass/);
+  assert.match(salesForecastSource, /table-col-actions/);
+  assert.match(supplierBoardSource, /<td class="table-col-money">¥ \$\{formatActualMoney\(row\.purchasePrice/);
+  assert.match(inventoryProvisionSource, /<td class="table-col-percent">\$\{Math\.round\(Number\(item\.provisionRate/);
+  assert.match(payablesSource, /<th class="table-col-money">应付金额<\/th>/);
+  assert.match(budgetSource, /<td class="table-col-status">\$\{escapeHtml\(row\.status/);
+});
+
 test("shared dashboard data primitives live outside legacy css and use semantic tokens", async () => {
   const componentSource = await readFile(new URL("../assets/css/components/34-dashboard-data-primitives.css", import.meta.url), "utf8");
   const legacySource = await readFile(new URL("../assets/css/legacy/current.css", import.meta.url), "utf8");

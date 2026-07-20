@@ -194,22 +194,23 @@ export function createInventoryProvisionFeature({
 
     const bucketTable = root?.querySelector?.("#inventory-bucket-table");
     if (bucketTable) {
-      bucketTable.innerHTML = (data.bucketSummary || []).map((item) => `
+      const summaryRows = data.bucketSummary || [];
+      bucketTable.innerHTML = summaryRows.length ? summaryRows.map((item) => `
         <tr class="${item.rate > 0 ? "provision-risk-row" : ""}">
-          <td>${renderChartSwatch({
+          <td class="table-col-text">${renderChartSwatch({
             key: item.key,
             index: Math.max(0, data.buckets?.findIndex?.((bucket) => bucket.key === item.key) ?? 0),
             label: item.label,
           })}</td>
-          <td>${Math.round(Number(item.rate || 0) * 100)}%</td>
-          <td>¥${formatActualMoney(item.amount || 0)}</td>
-          <td>${Number(item.percent || 0).toFixed(2)}%</td>
-          <td>¥${formatActualMoney(item.provisionAmount || 0)}</td>
-          <td>¥${formatActualMoney(item.monthlyProvisionAmount || 0)}</td>
-          <td>¥${formatActualMoney(item.reversalAmount || 0)}</td>
-          <td>¥${formatActualMoney(item.netProvisionAmount || 0)}</td>
+          <td class="table-col-percent">${Math.round(Number(item.rate || 0) * 100)}%</td>
+          <td class="table-col-money">¥${formatActualMoney(item.amount || 0)}</td>
+          <td class="table-col-percent">${Number(item.percent || 0).toFixed(2)}%</td>
+          <td class="table-col-money">¥${formatActualMoney(item.provisionAmount || 0)}</td>
+          <td class="table-col-money">¥${formatActualMoney(item.monthlyProvisionAmount || 0)}</td>
+          <td class="table-col-money">¥${formatActualMoney(item.reversalAmount || 0)}</td>
+          <td class="table-col-money">¥${formatActualMoney(item.netProvisionAmount || 0)}</td>
         </tr>
-      `).join("");
+      `).join("") : `<tr class="table-state-row"><td class="table-state is-empty" colspan="8">暂无库龄汇总数据。</td></tr>`;
     }
 
     const detailTable = root?.querySelector?.("#inventory-detail-table");
@@ -217,23 +218,23 @@ export function createInventoryProvisionFeature({
       const rows = data.detailRows || [];
       detailTable.innerHTML = rows.length ? rows.map((item) => `
         <tr class="${item.provisionRate > 0 ? "provision-risk-row" : ""}">
-          <td>${escapeHtml(item.storeName)}</td>
-          <td>${escapeHtml(item.country)}</td>
-          <td><strong>${escapeHtml(item.msku)}</strong><br /><small>${escapeHtml(item.skuName || "")}</small></td>
-          <td>${escapeHtml(item.listingOwner && item.listingOwner !== "-" ? item.listingOwner : "负责人留空")}</td>
-          <td>${item.ageDays}天 · ${escapeHtml(item.bucketLabel)}</td>
-          <td>${formatNumber(item.quantity || 0)}</td>
-          <td>¥${formatActualMoney(item.purchaseCost || 0)}</td>
-          <td>¥${formatActualMoney(item.firstLegCost || 0)}</td>
-          <td>¥${formatActualMoney(item.unitCost || 0)}</td>
-          <td>¥${formatActualMoney(item.amount || 0)}</td>
-          <td>${Math.round(Number(item.provisionRate || 0) * 100)}%</td>
-          <td>¥${formatActualMoney(item.provisionAmount || 0)}</td>
-          <td>¥${formatActualMoney(item.monthlyProvisionAmount || 0)}</td>
-          <td>¥${formatActualMoney(item.reversalAmount || 0)}</td>
-          <td>¥${formatActualMoney(item.netProvisionAmount || 0)}</td>
+          <td class="table-col-text">${escapeHtml(item.storeName)}</td>
+          <td class="table-col-text">${escapeHtml(item.country)}</td>
+          <td class="table-col-text"><strong>${escapeHtml(item.msku)}</strong><br /><small>${escapeHtml(item.skuName || "")}</small></td>
+          <td class="table-col-text">${escapeHtml(item.listingOwner && item.listingOwner !== "-" ? item.listingOwner : "负责人留空")}</td>
+          <td class="table-col-date">${item.ageDays}天 · ${escapeHtml(item.bucketLabel)}</td>
+          <td class="table-col-number">${formatNumber(item.quantity || 0)}</td>
+          <td class="table-col-money">¥${formatActualMoney(item.purchaseCost || 0)}</td>
+          <td class="table-col-money">¥${formatActualMoney(item.firstLegCost || 0)}</td>
+          <td class="table-col-money">¥${formatActualMoney(item.unitCost || 0)}</td>
+          <td class="table-col-money">¥${formatActualMoney(item.amount || 0)}</td>
+          <td class="table-col-percent">${Math.round(Number(item.provisionRate || 0) * 100)}%</td>
+          <td class="table-col-money">¥${formatActualMoney(item.provisionAmount || 0)}</td>
+          <td class="table-col-money">¥${formatActualMoney(item.monthlyProvisionAmount || 0)}</td>
+          <td class="table-col-money">¥${formatActualMoney(item.reversalAmount || 0)}</td>
+          <td class="table-col-money">¥${formatActualMoney(item.netProvisionAmount || 0)}</td>
         </tr>
-      `).join("") : `<tr><td colspan="15">暂无符合条件的库存计提数据。</td></tr>`;
+      `).join("") : `<tr class="table-state-row"><td class="table-state is-empty" colspan="15">暂无符合条件的库存计提数据。</td></tr>`;
     }
   }
 

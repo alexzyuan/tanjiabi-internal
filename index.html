@@ -858,9 +858,9 @@
               <button type="button" data-detail="metricDoc">指标说明</button>
             </div>
             <div class="table-wrap payable-table-wrap">
-              <table id="payables-detail-table">
-                <thead><tr><th>类别</th><th>名称</th><th>请款维度</th><th>账单月份</th><th>应付金额</th><th>实付金额</th><th>未付金额</th><th>申请中</th><th>未申请</th></tr></thead>
-                <tbody><tr><td colspan="9">等待加载</td></tr></tbody>
+              <table class="data-table" id="payables-detail-table">
+                <thead><tr><th class="table-col-text">类别</th><th class="table-col-text">名称</th><th class="table-col-text">请款维度</th><th class="table-col-date">账单月份</th><th class="table-col-money">应付金额</th><th class="table-col-money">实付金额</th><th class="table-col-money">未付金额</th><th class="table-col-money">申请中</th><th class="table-col-money">未申请</th></tr></thead>
+                <tbody><tr class="table-state-row"><td class="table-state is-loading" colspan="9">等待加载</td></tr></tbody>
               </table>
             </div>
           </article>
@@ -1027,26 +1027,26 @@
 	          <article class="panel supplier-board-panel">
 	            <div class="panel-head"><h2>供应商销售明细</h2><span id="supplier-board-count">等待加载</span></div>
 	            <div class="table-wrap supplier-board-table-wrap">
-	              <table id="supplier-board-table">
+	              <table class="data-table" id="supplier-board-table">
 	                <thead>
 	                  <tr>
-	                    <th data-supplier-sort="imageUrl"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="imageUrl">图片</button></th>
-	                    <th data-supplier-sort="storeName"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="storeName">店铺</button></th>
-	                    <th data-supplier-sort="country"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="country">国家</button></th>
-	                    <th data-supplier-sort="msku"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="msku">MSKU</button></th>
-	                    <th data-supplier-sort="productName"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="productName">品名/SKU</button></th>
-	                    <th data-supplier-sort="model"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="model">型号</button></th>
-	                    <th data-supplier-sort="quantity"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="quantity">销量统计</button></th>
-	                    <th data-supplier-sort="supplier"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="supplier">供应商</button></th>
-	                    <th data-supplier-sort="purchasePrice"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="purchasePrice">采购价</button></th>
-	                    <th data-supplier-sort="purchaseCostSubtotal"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="purchaseCostSubtotal">采购成本小计</button></th>
-	                    <th data-supplier-sort="ordinaryInvoicePurchaseCost"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="ordinaryInvoicePurchaseCost">普票采购成本</button></th>
-	                    <th data-supplier-sort="ordinaryInvoiceTaxRate"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="ordinaryInvoiceTaxRate">普票税点</button></th>
-	                    <th data-supplier-sort="ordinaryInvoiceCost"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="ordinaryInvoiceCost">普票成本</button></th>
-	                    <th data-supplier-sort="specialInvoiceTaxRate"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="specialInvoiceTaxRate">专票税点</button></th>
+	                    <th class="table-col-text" data-supplier-sort="imageUrl"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="imageUrl">图片</button></th>
+	                    <th class="table-col-text" data-supplier-sort="storeName"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="storeName">店铺</button></th>
+	                    <th class="table-col-text" data-supplier-sort="country"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="country">国家</button></th>
+	                    <th class="table-col-text" data-supplier-sort="msku"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="msku">MSKU</button></th>
+	                    <th class="table-col-text" data-supplier-sort="productName"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="productName">品名/SKU</button></th>
+	                    <th class="table-col-text" data-supplier-sort="model"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="model">型号</button></th>
+	                    <th class="table-col-number" data-supplier-sort="quantity"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="quantity">销量统计</button></th>
+	                    <th class="table-col-text" data-supplier-sort="supplier"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="supplier">供应商</button></th>
+	                    <th class="table-col-money" data-supplier-sort="purchasePrice"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="purchasePrice">采购价</button></th>
+	                    <th class="table-col-money" data-supplier-sort="purchaseCostSubtotal"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="purchaseCostSubtotal">采购成本小计</button></th>
+	                    <th class="table-col-money" data-supplier-sort="ordinaryInvoicePurchaseCost"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="ordinaryInvoicePurchaseCost">普票采购成本</button></th>
+	                    <th class="table-col-percent" data-supplier-sort="ordinaryInvoiceTaxRate"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="ordinaryInvoiceTaxRate">普票税点</button></th>
+	                    <th class="table-col-money" data-supplier-sort="ordinaryInvoiceCost"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="ordinaryInvoiceCost">普票成本</button></th>
+	                    <th class="table-col-percent" data-supplier-sort="specialInvoiceTaxRate"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="specialInvoiceTaxRate">专票税点</button></th>
 	                  </tr>
 	                </thead>
-	                <tbody><tr><td colspan="14">等待加载</td></tr></tbody>
+	                <tbody><tr class="table-state-row"><td class="table-state is-loading" colspan="14">等待加载</td></tr></tbody>
 	              </table>
 	            </div>
 	          </article>
@@ -1087,22 +1087,22 @@
 	          <article class="panel factory-inventory-panel">
 	            <div class="panel-head"><h2>工厂库存明细</h2><span id="factory-inventory-count">等待加载</span></div>
 	            <div class="table-wrap factory-inventory-table-wrap">
-	              <table id="factory-inventory-table">
+	              <table class="data-table" id="factory-inventory-table">
 	                <thead>
 	                  <tr>
-	                    <th>图片</th>
-	                    <th data-factory-sort="productName"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="productName">品名 / SKU</button></th>
-	                    <th data-factory-sort="storeName"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="storeName">店铺</button></th>
-	                    <th data-factory-sort="unitPrice"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="unitPrice">单价</button></th>
-	                    <th data-factory-sort="purchaseQuantity"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="purchaseQuantity">采购量</button></th>
-	                    <th data-factory-sort="purchaseAmount"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="purchaseAmount">金额</button></th>
-	                    <th data-factory-sort="orderTime"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="orderTime">采购时间</button></th>
-	                    <th data-factory-sort="msku"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="msku">MSKU / FNSKU</button></th>
-	                    <th data-factory-sort="shippedQuantity"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="shippedQuantity">已发数量</button></th>
-	                    <th data-factory-sort="factoryRemainingQuantity"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="factoryRemainingQuantity">工厂剩余库存</button></th>
-	                    <th data-factory-sort="fbaAvailable"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="fbaAvailable">FBA 可售</button></th>
-	                    <th data-factory-sort="fbaTransfer"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="fbaTransfer">FBA 转库</button></th>
-	                    <th data-factory-sort="fbaInbound"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="fbaInbound">FBA 在途</button></th>
+	                    <th class="table-col-text">图片</th>
+	                    <th class="table-col-text" data-factory-sort="productName"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="productName">品名 / SKU</button></th>
+	                    <th class="table-col-text" data-factory-sort="storeName"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="storeName">店铺</button></th>
+	                    <th class="table-col-money" data-factory-sort="unitPrice"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="unitPrice">单价</button></th>
+	                    <th class="table-col-number" data-factory-sort="purchaseQuantity"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="purchaseQuantity">采购量</button></th>
+	                    <th class="table-col-money" data-factory-sort="purchaseAmount"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="purchaseAmount">金额</button></th>
+	                    <th class="table-col-date" data-factory-sort="orderTime"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="orderTime">采购时间</button></th>
+	                    <th class="table-col-text" data-factory-sort="msku"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="msku">MSKU / FNSKU</button></th>
+	                    <th class="table-col-number" data-factory-sort="shippedQuantity"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="shippedQuantity">已发数量</button></th>
+	                    <th class="table-col-number" data-factory-sort="factoryRemainingQuantity"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="factoryRemainingQuantity">工厂剩余库存</button></th>
+	                    <th class="table-col-number" data-factory-sort="fbaAvailable"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="fbaAvailable">FBA 可售</button></th>
+	                    <th class="table-col-number" data-factory-sort="fbaTransfer"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="fbaTransfer">FBA 转库</button></th>
+	                    <th class="table-col-number" data-factory-sort="fbaInbound"><button class="sort-button factory-inventory-sort-button" type="button" data-factory-sort="fbaInbound">FBA 在途</button></th>
 	                  </tr>
 	                </thead>
 	                <tbody><tr><td colspan="13">等待加载工厂库存。</td></tr></tbody>
@@ -1217,12 +1217,12 @@
 	              </div>
 	            </div>
 	            <div class="table-wrap sales-forecast-table-wrap">
-	              <table class="sales-forecast-table" id="sales-forecast-table">
+	              <table class="data-table sales-forecast-table" id="sales-forecast-table">
 	                <thead>
 	                  <tr id="sales-forecast-group-row"></tr>
 	                  <tr id="sales-forecast-head-row"></tr>
 	                </thead>
-	                <tbody id="sales-forecast-table-body"><tr><td colspan="49">等待加载销售预估。</td></tr></tbody>
+	                <tbody id="sales-forecast-table-body"><tr class="table-state-row"><td class="table-state is-loading" colspan="49">等待加载销售预估。</td></tr></tbody>
               </table>
             </div>
           </article>
@@ -1281,18 +1281,18 @@
             <article class="panel">
               <div class="panel-head"><h2>库龄明细表</h2><span>按库龄区间汇总金额和计提</span></div>
               <div class="table-wrap">
-                <table>
-                  <thead><tr><th>库龄</th><th>计提比例</th><th>库存金额</th><th>占比</th><th>期末计提余额</th><th>本月增加计提（当月）</th><th>已计提冲回</th><th>本月计提金额</th></tr></thead>
-                  <tbody id="inventory-bucket-table"><tr><td colspan="8">等待加载</td></tr></tbody>
+                <table class="data-table">
+                  <thead><tr><th class="table-col-text">库龄</th><th class="table-col-percent">计提比例</th><th class="table-col-money">库存金额</th><th class="table-col-percent">占比</th><th class="table-col-money">期末计提余额</th><th class="table-col-money">本月增加计提（当月）</th><th class="table-col-money">已计提冲回</th><th class="table-col-money">本月计提金额</th></tr></thead>
+                  <tbody id="inventory-bucket-table"><tr class="table-state-row"><td class="table-state is-loading" colspan="8">等待加载</td></tr></tbody>
                 </table>
               </div>
             </article>
             <article class="panel">
               <div class="panel-head"><h2>库存减值明细</h2><span>按 MSKU 展示高风险库存</span></div>
               <div class="table-wrap">
-                <table>
-                  <thead><tr><th>店铺</th><th>国家</th><th>MSKU</th><th>Listing负责人</th><th>库龄</th><th>数量</th><th>单位采购成本</th><th>单位头程费用</th><th id="inventory-unit-cost-head">成本计算单价</th><th>库存金额</th><th>计提比例</th><th>期末计提余额</th><th>本月增加计提（当月）</th><th>已计提冲回</th><th>本月计提金额</th></tr></thead>
-                  <tbody id="inventory-detail-table"><tr><td colspan="15">等待加载</td></tr></tbody>
+                <table class="data-table">
+                  <thead><tr><th class="table-col-text">店铺</th><th class="table-col-text">国家</th><th class="table-col-text">MSKU</th><th class="table-col-text">Listing负责人</th><th class="table-col-date">库龄</th><th class="table-col-number">数量</th><th class="table-col-money">单位采购成本</th><th class="table-col-money">单位头程费用</th><th class="table-col-money" id="inventory-unit-cost-head">成本计算单价</th><th class="table-col-money">库存金额</th><th class="table-col-percent">计提比例</th><th class="table-col-money">期末计提余额</th><th class="table-col-money">本月增加计提（当月）</th><th class="table-col-money">已计提冲回</th><th class="table-col-money">本月计提金额</th></tr></thead>
+                  <tbody id="inventory-detail-table"><tr class="table-state-row"><td class="table-state is-loading" colspan="15">等待加载</td></tr></tbody>
                 </table>
               </div>
             </article>
@@ -1674,19 +1674,19 @@
               <table class="data-table">
                 <thead>
                   <tr>
-                    <th>月份</th>
-                    <th>平台</th>
-                    <th>店铺</th>
-                    <th>站点</th>
-                    <th>状态</th>
-                    <th>SKU数</th>
-                    <th>本月销量</th>
-                    <th>销售目标(原币)</th>
-                    <th>广告预算(原币)</th>
-                    <th>目标ACOS</th>
-                    <th>退款目标(原币)</th>
-                    <th>利润目标(原币)</th>
-                    <th>利润率目标</th>
+                    <th class="table-col-date">月份</th>
+                    <th class="table-col-text">平台</th>
+                    <th class="table-col-text">店铺</th>
+                    <th class="table-col-text">站点</th>
+                    <th class="table-col-status">状态</th>
+                    <th class="table-col-number">SKU数</th>
+                    <th class="table-col-number">本月销量</th>
+                    <th class="table-col-money">销售目标(原币)</th>
+                    <th class="table-col-money">广告预算(原币)</th>
+                    <th class="table-col-percent">目标ACOS</th>
+                    <th class="table-col-money">退款目标(原币)</th>
+                    <th class="table-col-money">利润目标(原币)</th>
+                    <th class="table-col-percent">利润率目标</th>
                   </tr>
                 </thead>
                 <tbody id="budget-target-table"></tbody>
@@ -1702,20 +1702,20 @@
               <table class="data-table">
                 <thead>
                   <tr>
-                    <th>月份</th>
-                    <th>平台</th>
-                    <th>店铺</th>
-                    <th>站点</th>
-                    <th>状态</th>
-                    <th>负责人</th>
-                    <th>MSKU</th>
-                    <th>ASIN</th>
-                    <th>本月销量</th>
-                    <th>销售目标(原币)</th>
-                    <th>广告预算(原币)</th>
-                    <th>目标ACOS</th>
-                    <th>利润目标(原币)</th>
-                    <th>利润率目标</th>
+                    <th class="table-col-date">月份</th>
+                    <th class="table-col-text">平台</th>
+                    <th class="table-col-text">店铺</th>
+                    <th class="table-col-text">站点</th>
+                    <th class="table-col-status">状态</th>
+                    <th class="table-col-text">负责人</th>
+                    <th class="table-col-text">MSKU</th>
+                    <th class="table-col-text">ASIN</th>
+                    <th class="table-col-number">本月销量</th>
+                    <th class="table-col-money">销售目标(原币)</th>
+                    <th class="table-col-money">广告预算(原币)</th>
+                    <th class="table-col-percent">目标ACOS</th>
+                    <th class="table-col-money">利润目标(原币)</th>
+                    <th class="table-col-percent">利润率目标</th>
                   </tr>
                 </thead>
                 <tbody id="budget-msku-target-table"></tbody>

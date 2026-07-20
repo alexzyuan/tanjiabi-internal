@@ -964,10 +964,14 @@ test("ui table message helper renders escaped colspan rows", async () => {
   };
 
   assert.equal(utils.renderTableMessage("#target-table", 4, "<加载失败 & 重试>", documentLike), tableBody);
-  assert.equal(tableBody.innerHTML, '<tr><td colspan="4">&lt;加载失败 &amp; 重试&gt;</td></tr>');
+  assert.equal(tableBody.innerHTML, '<tr class="table-state-row"><td class="table-state is-error" colspan="4">&lt;加载失败 &amp; 重试&gt;</td></tr>');
 
   assert.equal(utils.renderTableMessage(tableBody, 0, "空数据"), tableBody);
-  assert.equal(tableBody.innerHTML, '<tr><td colspan="1">空数据</td></tr>');
+  assert.equal(tableBody.innerHTML, '<tr class="table-state-row"><td class="table-state is-empty" colspan="1">空数据</td></tr>');
+  assert.equal(utils.renderTableMessage(tableBody, 2, "正在加载数据"), tableBody);
+  assert.equal(tableBody.innerHTML, '<tr class="table-state-row"><td class="table-state is-loading" colspan="2">正在加载数据</td></tr>');
+  assert.equal(utils.renderTableMessage(tableBody, 2, "无权限查看"), tableBody);
+  assert.equal(tableBody.innerHTML, '<tr class="table-state-row"><td class="table-state is-denied" colspan="2">无权限查看</td></tr>');
   assert.equal(utils.renderTableMessage("#missing", 3, "不会写入", documentLike), null);
 });
 
