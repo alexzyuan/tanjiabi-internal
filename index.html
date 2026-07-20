@@ -1583,6 +1583,10 @@
                 <label>发送时间
                   <input id="webhook-send-time" type="time" value="09:30" />
                 </label>
+                <label class="form-span-2">消息内容
+                  <textarea id="webhook-message" rows="4" placeholder="输入要发送到钉钉群的消息内容" required></textarea>
+                </label>
+                <label class="multi-select-option"><input id="webhook-at-all" type="checkbox" /> @ 所有人</label>
                 <div class="admin-account-actions">
                   <button class="primary-button" id="webhook-task-save" type="submit">新增任务</button>
                   <button class="secondary-button" id="webhook-task-reset" type="button">清空</button>

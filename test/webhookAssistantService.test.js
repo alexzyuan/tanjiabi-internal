@@ -28,6 +28,8 @@ test("webhook assistant creates tasks from built-in targets without storing webh
     const created = await service.createWebhookTask({
       name: "FBA刷仓提醒",
       targetKey: "fba-sta",
+      message: "请检查 FBA 刷仓任务",
+      atAll: false,
       scheduleMode: "daily",
       sendTime: "09:30",
       enabled: true,
@@ -36,7 +38,8 @@ test("webhook assistant creates tasks from built-in targets without storing webh
 
     assert.equal(created.task.name, "FBA刷仓提醒");
     assert.equal(created.task.targetKey, "fba-sta");
-    assert.equal(created.task.message, undefined);
+    assert.equal(created.task.message, "请检查 FBA 刷仓任务");
+    assert.equal(created.task.atAll, false);
     assert.equal(listed.targets.length, 2);
     assert.equal(listed.tasks.length, 1);
     assert.equal(listed.tasks[0].targetLabel, "FBA刷仓");
@@ -46,7 +49,7 @@ test("webhook assistant creates tasks from built-in targets without storing webh
   });
 });
 
-test("webhook assistant sends task name through the selected built-in target", async () => {
+test("webhook assistant sends message content through the selected built-in target and supports at all", async () => {
   await withService(async (dir) => {
     const sent = [];
     let currentTime = new Date("2026-07-20T09:55:00.000+08:00");
@@ -65,6 +68,8 @@ test("webhook assistant sends task name through the selected built-in target", a
     await service.createWebhookTask({
       name: "FBA刷仓提醒",
       targetKey: "fba-sta",
+      message: "请检查 FBA 刷仓任务",
+      atAll: true,
       scheduleMode: "daily",
       sendTime: "10:00",
       enabled: true,
@@ -77,7 +82,8 @@ test("webhook assistant sends task name through the selected built-in target", a
     assert.equal(result.sent, 1);
     assert.equal(sent.length, 1);
     assert.equal(new URL(sent[0].url).searchParams.get("access_token"), "fba-token");
-    assert.equal(sent[0].body.text.content, "FBA刷仓提醒");
+    assert.equal(sent[0].body.text.content, "请检查 FBA 刷仓任务");
+    assert.equal(sent[0].body.at.isAtAll, true);
     assert.equal(listed.tasks[0].enabled, true);
     assert.equal(listed.tasks[0].lastStatus, "发送成功");
   });
@@ -95,6 +101,7 @@ test("webhook assistant calculates weekly and monthly schedules in Beijing time"
     const weekly = await service.createWebhookTask({
       name: "每周任务",
       targetKey: "default",
+      message: "每周任务内容",
       scheduleMode: "weekly",
       weekday: 3,
       sendTime: "09:00",
@@ -102,6 +109,7 @@ test("webhook assistant calculates weekly and monthly schedules in Beijing time"
     const monthly = await service.createWebhookTask({
       name: "每月任务",
       targetKey: "default",
+      message: "每月任务内容",
       scheduleMode: "monthly",
       monthDay: 25,
       sendTime: "09:00",
@@ -128,7 +136,8 @@ test("webhook assistant exposes configured built-in targets without accepting ra
       targetKey: "default",
       webhook: "https://example.invalid/should-not-store",
       secret: "should-not-store",
-      message: "should-not-store",
+      message: "企业总群日报内容",
+      atAll: true,
       scheduleMode: "daily",
       sendTime: "09:00",
     });
@@ -137,6 +146,8 @@ test("webhook assistant exposes configured built-in targets without accepting ra
 
     assert.deepEqual(listed.targets.map((target) => target.key), ["default", "fba-sta"]);
     assert.equal(listed.tasks[0].targetLabel, "企业总群");
+    assert.equal(listed.tasks[0].message, "企业总群日报内容");
+    assert.equal(listed.tasks[0].atAll, true);
     assert.equal(serialized.includes("should-not-store"), false);
     assert.equal(serialized.includes("default-secret"), false);
     assert.equal(serialized.includes("default-token"), false);

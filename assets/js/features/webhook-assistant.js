@@ -58,10 +58,10 @@ export function createWebhookAssistantFeature({
     }
     table.innerHTML = tasks.map((task) => `
       <tr>
-        <td><strong>${escapeHtml(task.name || "-")}</strong><br /><small>${escapeHtml(task.id || "-")}</small></td>
+        <td><strong>${escapeHtml(task.name || "-")}</strong><br /><small>${escapeHtml(task.message || task.id || "-")}</small></td>
         <td><span class="status-pill ${task.enabled ? "active" : "disabled"}">${task.enabled ? "启用" : "暂停"}</span></td>
         <td>${escapeHtml(scheduleText(task))}<br /><small>下次：${escapeHtml(task.nextRunAt || "-")}</small></td>
-        <td>${escapeHtml(task.targetLabel || task.targetKey || "-")}<br /><small>${task.targetConfigured ? "已配置" : "未配置"}</small></td>
+        <td>${escapeHtml(task.targetLabel || task.targetKey || "-")}<br /><small>${task.atAll ? "@ 所有人" : "不 @ 所有人"} · ${task.targetConfigured ? "已配置" : "未配置"}</small></td>
         <td>${escapeHtml(task.lastStatus || "-")}<br /><small>${escapeHtml(task.lastRunAt || task.lastError || "-")}</small></td>
         <td>${escapeHtml(String(task.runCount || 0))}</td>
         <td>
@@ -90,6 +90,8 @@ export function createWebhookAssistantFeature({
     const mode = fieldValue("#webhook-schedule-mode", "", root) || "daily";
     const payload = {
       name: trimmedFieldValue("#webhook-task-name", "", root),
+      message: trimmedFieldValue("#webhook-message", "", root),
+      atAll: query("#webhook-at-all")?.checked === true,
       targetKey: fieldValue("#webhook-target", "", root),
       scheduleMode: mode,
       sendTime: fieldValue("#webhook-send-time", "", root),

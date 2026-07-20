@@ -62,22 +62,22 @@ test("webhook assistant uses built-in DingTalk targets instead of raw webhook in
   assert.match(indexSource, /value="default">企业总群/);
   assert.match(indexSource, /value="weekly">每周/);
   assert.match(indexSource, /value="monthly">每月/);
+  assert.match(indexSource, /id="webhook-message"/);
+  assert.match(indexSource, /id="webhook-at-all"/);
   assert.equal(indexSource.includes('id="webhook-url"'), false);
   assert.equal(indexSource.includes('id="webhook-secret"'), false);
-  assert.equal(indexSource.includes('id="webhook-message"'), false);
   assert.equal(indexSource.includes('id="webhook-run-at"'), false);
   assert.equal(indexSource.includes('id="webhook-interval-minutes"'), false);
-  assert.equal(indexSource.includes('id="webhook-at-all"'), false);
   assert.equal(indexSource.includes('id="webhook-at-mobiles"'), false);
   assert.equal(indexSource.includes('id="webhook-at-user-ids"'), false);
 
   assert.match(featureSource, /targetKey: fieldValue\("#webhook-target"/);
+  assert.match(featureSource, /message: trimmedFieldValue\("#webhook-message"/);
+  assert.match(featureSource, /atAll: query\("#webhook-at-all"\)/);
   assert.equal(featureSource.includes("webhook: trimmedFieldValue"), false);
   assert.equal(featureSource.includes("secret: trimmedFieldValue"), false);
-  assert.equal(featureSource.includes("message: trimmedFieldValue"), false);
   assert.equal(featureSource.includes("atMobiles"), false);
   assert.equal(featureSource.includes("atUserIds"), false);
-  assert.equal(featureSource.includes("atAll"), false);
 });
 
 test("modal close buttons and dialogs expose accessible names", async () => {

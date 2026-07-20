@@ -20,6 +20,11 @@ function requireValue(value, label) {
   return text;
 }
 
+function normalizeMessage(value, previous = null) {
+  if (value === undefined && previous?.message) return previous.message;
+  return requireValue(value, "消息内容");
+}
+
 function normalizeSendTime(value) {
   const text = String(value || "").trim();
   if (!/^\d{2}:\d{2}$/.test(text)) throw new Error("发送时间格式必须是 HH:mm。");
@@ -156,7 +161,7 @@ function inferTargetKeyFromTask(task, targets = {}) {
 }
 
 function sanitizeTask(task, targets = {}) {
-  const { secret: _secret, webhook: _webhook, rawWebhook: _rawWebhook, message: _message, ...safe } = task;
+  const { secret: _secret, webhook: _webhook, rawWebhook: _rawWebhook, ...safe } = task;
   const targetKey = inferTargetKeyFromTask(task, targets);
   const target = targets[targetKey] || {};
   return {
@@ -181,6 +186,8 @@ function normalizeTaskPayload(payload = {}, previous = null, now = new Date(), t
   const next = {
     ...(previous || {}),
     name: requireValue(payload.name ?? previous?.name, "任务名称"),
+    message: normalizeMessage(payload.message, previous),
+    atAll: payload.atAll === undefined ? previous?.atAll === true : payload.atAll === true,
     targetKey: normalizeTargetKey(payload.targetKey, previous, targets),
     scheduleMode,
     enabled: payload.enabled === undefined ? previous?.enabled !== false : payload.enabled === true,
@@ -284,7 +291,7 @@ export function createWebhookAssistantService({
       secret: target.secret,
       atMobiles: [],
       atUserIds: [],
-    }, task.name, {}, "WEBHOOK", fetchImpl);
+    }, task.message || task.name, { atAll: task.atAll === true }, "WEBHOOK", fetchImpl);
   }
 
   async function persistSendResult(id, result, error, trigger) {
