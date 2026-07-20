@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { isRepositoryMetadataPath } from "../src/utils/pathFilters.js";
@@ -93,6 +93,65 @@ function isCssPath(path) {
   return path === "styles.css" || path.startsWith("assets/css/");
 }
 
+function readText(path) {
+  return readFileSync(join(ROOT, path), "utf8");
+}
+
+function requireContains(source, pattern, message) {
+  if (pattern instanceof RegExp ? !pattern.test(source) : !source.includes(pattern)) {
+    fail(message);
+  }
+}
+
+function validateApprovedCssBaseline() {
+  if (!includeCss) return;
+
+  const indexSource = readText("index.html");
+  const filterToolbarSource = readText("assets/css/components/35-filter-toolbar.css");
+  const datePickerSource = readText("assets/css/components/36-date-range-picker.css");
+  const salesPageSource = readText("assets/css/pages/22-sales-dashboard.css");
+  const fbaPageSource = readText("assets/css/pages/35-fba-freight.css");
+
+  requireContains(
+    indexSource,
+    /id="front-date-range-button" class="date-range-button date-range-picker__trigger"/,
+    "CSS 部署前检查失败：销售复盘日期控件未使用共享 date-range-picker。",
+  );
+  requireContains(
+    indexSource,
+    /id="fba-freight-date-range-button" class="date-range-button date-range-picker__trigger"/,
+    "CSS 部署前检查失败：FBA 货件日期控件未使用共享 date-range-picker。",
+  );
+  requireContains(
+    filterToolbarSource,
+    /\.filter-toolbar\s*\{[\s\S]*column-gap:\s*8px;[\s\S]*row-gap:\s*8px;[\s\S]*border:\s*0;/,
+    "CSS 部署前检查失败：共享筛选栏 baseline 不是 compact 8px 无边框规则。",
+  );
+  requireContains(
+    filterToolbarSource,
+    /\.filter-toolbar label:has\(\.date-range-control\)\s*\{/,
+    "CSS 部署前检查失败：共享筛选栏缺少日期控件列宽规则。",
+  );
+  requireContains(
+    datePickerSource,
+    /width:\s*min\(760px,\s*96vw\)/,
+    "CSS 部署前检查失败：共享日期弹层宽度规则缺失。",
+  );
+
+  const forbiddenRuntimePatterns = [
+    ["front-date-apply", "旧销售日期确认按钮仍存在。"],
+    ["data-range-preset", "旧销售日期快捷项仍存在。"],
+    [".date-range-button::after", "旧日期按钮伪元素仍存在。"],
+    [".date-presets", "旧日期快捷项样式仍存在。"],
+    [".date-range-fields", "旧日期输入框面板样式仍存在。"],
+  ];
+  for (const [pattern, message] of forbiddenRuntimePatterns) {
+    if ([indexSource, salesPageSource, fbaPageSource, datePickerSource].some((source) => source.includes(pattern))) {
+      fail(`CSS 部署前检查失败：${message}`);
+    }
+  }
+}
+
 if (args.has("--help") || args.has("-h")) {
   console.log([
     "Usage: node scripts/package-deploy.js [--include-css|--full]",
@@ -125,6 +184,8 @@ const cssFiles = manifest.filter(isCssPath);
 if (cssFiles.length > 0 && !allowCssDeploy) {
   fail(`部署包包含 CSS：${cssFiles.join(", ")}。如确需部署样式，请设置 ALLOW_CSS_DEPLOY=1。`);
 }
+
+validateApprovedCssBaseline();
 
 for (const requiredFile of ["server.js", "app.js", "package.json", "deploy.sh"]) {
   if (!manifest.includes(requiredFile)) {

@@ -31,10 +31,6 @@
   cursor: pointer;
 }
 
-.supplier-detail-filters {
-  grid-template-columns: minmax(220px, 1.4fr) repeat(3, minmax(150px, 0.9fr)) auto minmax(180px, 1fr);
-}
-
 .supplier-detail-kpi-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
@@ -59,14 +55,12 @@
 }
 
 @media (max-width:1180px) {
-  .supplier-detail-filters,
   .supplier-detail-kpi-grid {
     grid-template-columns: repeat(2, minmax(160px, 1fr));
   }
 }
 
 @media (max-width:720px) {
-  .supplier-detail-filters,
   .supplier-detail-kpi-grid {
     grid-template-columns: 1fr;
   }

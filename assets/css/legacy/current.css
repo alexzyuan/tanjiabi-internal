@@ -315,7 +315,6 @@ body:not(.login-body) .sales-review-detail-table-wrap :where(.sort-button) {
     margin-top: 14px;
   }
 
-  .filters,
   .metric-grid,
   .dual-chart-grid,
   .inventory-chart-grid,

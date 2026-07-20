@@ -191,6 +191,14 @@ font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
 - 选中开始/结束日期使用蓝色圆形填充，今天使用蓝色细圆边框，范围预览使用淡蓝底。
 - 日期按钮不使用额外伪元素图标；弹层必须显式设置字体大小，不能继承外层 label 的隐藏文字规则。
 
+筛选栏契约：
+
+- 新增筛选区优先使用共享 `.filters` 或 `.filter-toolbar`，不要在页面 CSS 中重写筛选框布局基线。
+- 筛选项采用紧凑横向换行布局，控件间距固定为 `8px`，筛选栏自身不使用实线外框。
+- 控件高度使用 `--tj-control-height-compact`，圆角使用 `--tj-control-radius`，输入、下拉、日期按钮保持同一视觉高度。
+- 日期范围控件在筛选栏中使用 240px 基准宽度；关键词搜索可使用 180px - 220px；普通基础筛选使用 116px - 150px。
+- 页面级 CSS 只能处理业务区块、表格宽度、KPI 和特殊状态，不允许覆盖 `.filters`、`.filter-toolbar`、`.date-range-control`、`.date-range-button` 的宽度、高度、间距、边框和字体基线。
+
 禁止：
 
 - 导航和表格使用过高字重。
