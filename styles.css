@@ -513,15 +513,33 @@ svg{width:100%;height:auto;display:block}
 .risk-high{color:var(--tj-tone-danger-text);background:var(--tj-tone-danger-bg)}
 .risk-mid{color:var(--tj-tone-warning-text);background:var(--tj-tone-warning-bg)}
 .risk-low{color:var(--tj-tone-info-text);background:var(--tj-tone-info-bg)}
+body:not(.login-body) .data-table,body:not(.login-body) table{width:100%;border-collapse:separate;border-spacing:0;color:var(--tj-text-strong);font-size:13px}
+body:not(.login-body) .data-table th,body:not(.login-body) th{position:sticky;top:0;z-index:2;height:38px;padding:9px 10px;border-color:var(--tj-border-subtle);background:var(--tj-action-blue-soft);color:var(--tj-text-strong);font-weight:850;white-space:nowrap;cursor:pointer}
+body:not(.login-body) .data-table td,body:not(.login-body) td{padding:9px 10px;border-color:var(--tj-border-subtle);color:var(--tj-text-strong);vertical-align:middle}
+.data-table .table-col-text{min-width:140px;text-align:left}
+.data-table .table-col-number,.data-table .table-col-money,.data-table .table-col-percent,.data-table[data-col-type="number"],.data-table[data-col-type="money"],.data-table[data-col-type="percent"]{text-align:right;font-variant-numeric:tabular-nums}
+.data-table .table-col-number,.data-table[data-col-type="number"]{min-width:96px}
+.data-table .table-col-money,.data-table[data-col-type="money"]{min-width:112px}
+.data-table .table-col-percent,.data-table[data-col-type="percent"]{min-width:88px}
+.data-table .table-col-date,.data-table[data-col-type="date"]{min-width:112px;text-align:left;font-variant-numeric:tabular-nums;white-space:nowrap}
+.data-table .table-col-status,.data-table[data-col-type="status"]{min-width:96px;text-align:center;white-space:nowrap}
+.data-table .table-col-actions,.data-table[data-col-type="actions"]{min-width:112px;text-align:right;white-space:nowrap}
+.data-table .table-cell-truncate{max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.data-table .table-sticky-start,.data-table .table-sticky-end{position:sticky;z-index:3;background:var(--tj-content-bg)}
+.data-table th.table-sticky-start,.data-table th.table-sticky-end{z-index:4;background:var(--tj-action-blue-soft)}
+.data-table .table-sticky-start{left:var(--table-sticky-left,0)}
+.data-table .table-sticky-end{right:var(--table-sticky-right,0)}
+.table-state-row{height:96px}
+.data-table .table-state{padding:22px 14px;color:var(--tj-text-muted);text-align:center;line-height:1.5;background:var(--tj-content-bg)}
+.data-table .table-state.is-loading{color:var(--tj-text-body)}
+.data-table .table-state.is-error,.data-table .table-state.is-denied{color:var(--tj-tone-danger-text);background:var(--tj-tone-danger-bg)}
+.data-table .table-state.is-empty{color:var(--tj-text-muted);background:var(--tj-content-bg)}
 body:not(.login-body) .table-select{min-width:104px;min-height:36px;height:36px;padding:0 28px 0 10px;border:1px solid var(--tj-border-control);border-radius:7px;color:var(--tj-text-strong);background:var(--tj-content-bg);font:inherit;font-size:13px;font-weight:700}
 .table-action{padding:4px 8px;border:0;border-radius:7px;color:var(--tj-action-blue);background:transparent;font:inherit;font-weight:800;cursor:pointer}
 .table-action.danger{color:var(--tj-tone-danger-strong)}
 .table-actions{white-space:nowrap}
-body:not(.login-body) table{width:100%;border-collapse:separate;border-spacing:0;color:var(--tj-text-strong);font-size:13px}
-body:not(.login-body) th{position:sticky;top:0;z-index:2;height:38px;padding:9px 10px;border-color:var(--tj-border-subtle);background:var(--tj-action-blue-soft);color:var(--tj-text-strong);font-weight:850;white-space:nowrap;cursor:pointer}
 body:not(.login-body) th.table-sort-active{padding-right:24px}
 body:not(.login-body) th.table-sort-active::after{position:absolute;right:8px;color:var(--tj-action-blue);font-size:12px;font-weight:900}
-body:not(.login-body) td{padding:9px 10px;border-color:var(--tj-border-subtle);color:var(--tj-text-strong);vertical-align:middle}
 body:not(.login-body) .filters{gap:10px;margin-top:4px;border-radius:14px}
 body:not(.login-body) .filters .filter-dropdown-menu{background:var(--tj-content-bg);border:1px solid var(--tj-border-subtle)}
 body:not(.login-body) .filters .filter-dropdown-option{display:flex;grid-template-columns:none;align-items:center;min-height:30px;height:auto;gap:8px;padding:4px 8px;font-size:13px;line-height:1.25;white-space:nowrap}

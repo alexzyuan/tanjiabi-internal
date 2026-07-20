@@ -285,6 +285,37 @@ test("shared table controls live outside legacy css and use semantic tokens", as
   assert.equal((generatedSource.match(/\.table-action\{/g) || []).length, 1);
 });
 
+test("shared data table baseline defines table class, column types, sticky utilities, and states", async () => {
+  const componentSource = await readFile(new URL("../assets/css/components/44-data-table.css", import.meta.url), "utf8");
+  const overrideSource = await readFile(new URL("../assets/css/components/48-application-ui-overrides.css", import.meta.url), "utf8");
+  const legacySource = await readFile(new URL("../assets/css/legacy/current.css", import.meta.url), "utf8");
+  const baselineDoc = await readFile(new URL("../BI_VISUAL_COMPONENT_BASELINE_V1.md", import.meta.url), "utf8");
+
+  assert.match(componentSource, /^\/\* Shared BI data table baseline/m);
+  assert.match(componentSource, /^body:not\(\.login-body\) \.data-table,/m);
+  assert.match(componentSource, /^\.data-table \.table-col-text\s*\{/m);
+  assert.match(componentSource, /^\.data-table \.table-col-number,/m);
+  assert.match(componentSource, /^\.data-table \.table-col-money,/m);
+  assert.match(componentSource, /^\.data-table \.table-col-percent,/m);
+  assert.match(componentSource, /^\.data-table \.table-col-date,/m);
+  assert.match(componentSource, /^\.data-table \.table-col-status,/m);
+  assert.match(componentSource, /^\.data-table \.table-col-actions,/m);
+  assert.match(componentSource, /^\.data-table \.table-cell-truncate\s*\{/m);
+  assert.match(componentSource, /^\.data-table \.table-sticky-start,/m);
+  assert.match(componentSource, /^\.table-state-row\s*\{/m);
+  assert.match(componentSource, /^\.data-table \.table-state\s*\{/m);
+  assert.match(componentSource, /font-variant-numeric:\s*tabular-nums/);
+  assert.match(componentSource, /var\(--tj-content-bg\)/);
+  assert.match(componentSource, /var\(--tj-action-blue-soft\)/);
+  assert.match(componentSource, /var\(--tj-tone-danger-bg\)/);
+  assert.equal(/#(?:fff|ffffff|eaf4ff|ef4444|111827|e5e7eb)\b/i.test(componentSource), false);
+  assert.equal(/^body:not\(\.login-body\) table\s*\{/m.test(overrideSource), false);
+  assert.equal(legacySource.includes(".data-table .table-col-number"), false);
+  assert.match(baselineDoc, /### 1\.2 列类型/);
+  assert.match(baselineDoc, /### 1\.5 大数据量性能/);
+  assert.match(baselineDoc, /### 1\.6 验收矩阵/);
+});
+
 test("shared dashboard data primitives live outside legacy css and use semantic tokens", async () => {
   const componentSource = await readFile(new URL("../assets/css/components/34-dashboard-data-primitives.css", import.meta.url), "utf8");
   const legacySource = await readFile(new URL("../assets/css/legacy/current.css", import.meta.url), "utf8");
@@ -319,7 +350,6 @@ test("application-wide UI overrides live in components, not shell or legacy css"
 
   [
     "Application-wide component density and surface overrides",
-    "body:not(.login-body) table",
     "body:not(.login-body) th.table-sort-active",
     "body:not(.login-body) .filters",
     "body:not(.login-body) .filters .filter-dropdown-menu",
@@ -333,14 +363,11 @@ test("application-wide UI overrides live in components, not shell or legacy css"
   assert.match(componentSource, /var\(--tj-content-bg\)/);
   assert.match(componentSource, /var\(--tj-border-control\)/);
   assert.match(componentSource, /var\(--tj-border-subtle\)/);
-  assert.match(componentSource, /var\(--tj-text-strong\)/);
   assert.match(componentSource, /var\(--tj-action-blue\)/);
-  assert.match(componentSource, /var\(--tj-action-blue-soft\)/);
   assert.equal(/#(?:102039|d8e8f6|ecf7ff|dff0ff|0d213b|1d5cff|e1ebf5)\b/i.test(componentSource), false);
   assert.equal(/rgba\(255,\s*255,\s*255,\s*0\.96\)/i.test(componentSource), false);
 
   [
-    "body:not(.login-body) table {",
     "body:not(.login-body) th.table-sort-active",
     "body:not(.login-body) .filters {",
     "body:not(.login-body) .filters .filter-dropdown",
