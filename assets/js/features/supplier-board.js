@@ -312,7 +312,7 @@ export function createSupplierBoardFeature({
   }
 
   function buildSupplierBoardExportHtml(rows) {
-    const headerHtml = exportHeaders.map(([, label]) => `<th>${escapeHtml(label)}</th>`).join("");
+    const headerHtml = exportHeaders.map(([, label]) => `<th scope="col">${escapeHtml(label)}</th>`).join("");
     const rowsHtml = rows.map((row) => `
       <tr>
         ${exportHeaders.map(([key]) => `<td>${escapeHtml(supplierBoardExportValue(row, key))}</td>`).join("")}

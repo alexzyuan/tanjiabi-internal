@@ -259,7 +259,7 @@ export function createPayablesDashboardFeature({
       const docs = payableDashboardData.metricDocs || [];
       setText("#payables-detail-title", "指标说明", root);
       setText("#payables-detail-count", `共 ${docs.length} 条说明`, root);
-      thead.innerHTML = `<tr><th class="table-col-text">指标名称</th><th class="table-col-text">说明</th></tr>`;
+      thead.innerHTML = `<tr><th scope="col" class="table-col-text">指标名称</th><th scope="col" class="table-col-text">说明</th></tr>`;
       tbody.innerHTML = docs.length
         ? docs.map((row) => `<tr><td class="table-col-text"><strong>${escapeHtml(row[0])}</strong></td><td class="table-col-text">${escapeHtml(row[1])}</td></tr>`).join("")
         : `<tr class="table-state-row"><td class="table-state is-empty" colspan="2">暂无指标说明。</td></tr>`;
@@ -270,7 +270,7 @@ export function createPayablesDashboardFeature({
     setText("#payables-detail-title", config.title, root);
     setText("#payables-detail-count", `共 ${config.rows.length} 条数据`, root);
     const nameTitle = config.type === "carrier" ? "承运商名称" : config.type === "other" ? "对象名称" : "供应商名称";
-    thead.innerHTML = `<tr><th class="table-col-text">类别</th><th class="table-col-text">${nameTitle}</th><th class="table-col-text">请款维度</th><th class="table-col-date">账单月份</th><th class="table-col-money">应付金额</th><th class="table-col-money">实付金额</th><th class="table-col-money">未付金额</th><th class="table-col-money">申请中</th><th class="table-col-money">未申请</th></tr>`;
+    thead.innerHTML = `<tr><th scope="col" class="table-col-text">类别</th><th scope="col" class="table-col-text">${nameTitle}</th><th scope="col" class="table-col-text">请款维度</th><th scope="col" class="table-col-date">账单月份</th><th scope="col" class="table-col-money">应付金额</th><th scope="col" class="table-col-money">实付金额</th><th scope="col" class="table-col-money">未付金额</th><th scope="col" class="table-col-money">申请中</th><th scope="col" class="table-col-money">未申请</th></tr>`;
     tbody.innerHTML = config.rows.length ? config.rows.map((row) => `
       <tr><td class="table-col-text">${escapeHtml(row.category || "-")}</td><td class="table-col-text"><strong>${escapeHtml(row.name || "-")}</strong></td><td class="table-col-text">${escapeHtml(row.accountType || "全部")}</td><td class="table-col-date">${escapeHtml(row.month || "全部")}</td><td class="table-col-money">${formatPayableMoney(row.payable)}</td><td class="table-col-money">${formatPayableMoney(row.paid)}</td><td class="table-col-money"><strong>${formatPayableMoney(row.unpaid)}</strong></td><td class="table-col-money">${formatPayableMoney(row.applying || row.reconciled || 0)}</td><td class="table-col-money">${formatPayableMoney(row.unapplied || row.unreconciled || 0)}</td></tr>
     `).join("") : `<tr class="table-state-row"><td class="table-state is-empty" colspan="9">暂无符合筛选条件的应付账款数据。</td></tr>`;

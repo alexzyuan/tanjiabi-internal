@@ -4,6 +4,7 @@ export function createStoreInspectionFeature({
   checkedField,
   escapeHtml,
   fieldValue,
+  renderTableMessage,
   redirectToLogin,
   setButtonBusy,
   setText,
@@ -128,8 +129,10 @@ export function createStoreInspectionFeature({
     setText("#store-inspection-table-count", riskRows.length ? `共 ${riskRows.length} 条待处理` : latest ? "未发现待处理记录" : "暂无巡检结果", root);
     const table = root?.querySelector?.("#store-inspection-table");
     if (table) {
-      table.innerHTML = riskRows.length
-        ? riskRows.map((item) => `
+      if (!riskRows.length) {
+        renderTableMessage?.(table, 7, latest ? "未发现 feedback、review、买家之声、Account Health 或售后邮件待处理记录。" : "等待自动巡检结果。", root, { tone: latest ? "empty" : "loading" });
+      } else {
+        table.innerHTML = riskRows.map((item) => `
           <tr>
             <td>${escapeHtml(item.type)}</td>
             <td>${escapeHtml(item.storeName || "-")}</td>
@@ -139,14 +142,16 @@ export function createStoreInspectionFeature({
             <td>${escapeHtml(item.createdAt || "-")}</td>
             <td><span class="inspection-table-badge inspection-badge-high">${escapeHtml(item.status)}</span></td>
           </tr>
-        `).join("")
-        : `<tr><td colspan="7">${latest ? "未发现 feedback、review、买家之声、Account Health 或售后邮件待处理记录。" : "等待自动巡检结果。"}</td></tr>`;
+        `).join("");
+      }
     }
     setText("#store-inspection-history-count", history.length ? `最近 ${history.length} 次` : "暂无历史", root);
     const historyTable = root?.querySelector?.("#store-inspection-history");
     if (historyTable) {
-      historyTable.innerHTML = history.length
-        ? history.map((item) => `
+      if (!history.length) {
+        renderTableMessage?.(historyTable, 7, "暂无历史巡检。", root, { tone: "empty" });
+      } else {
+        historyTable.innerHTML = history.map((item) => `
           <tr>
             <td>${escapeHtml(item.meta?.updatedAt || "-")}</td>
             <td><span class="inspection-table-badge ${autoInspectionBadgeClass(item.overall)}">${escapeHtml(item.overallLabel || "-")}</span></td>
@@ -156,8 +161,8 @@ export function createStoreInspectionFeature({
             <td>${escapeHtml(item.voiceOfBuyer?.count ?? 0)}</td>
             <td>${escapeHtml(item.accountHealth?.count ?? 0)}</td>
           </tr>
-        `).join("")
-        : `<tr><td colspan="7">暂无历史巡检。</td></tr>`;
+        `).join("");
+      }
     }
   }
 

@@ -224,8 +224,10 @@ export function createFbaAutomationFeature({
     fbaHistoryPage = Math.min(Math.max(1, fbaHistoryPage), totalPages);
     const start = (fbaHistoryPage - 1) * fbaHistoryPageSize;
     const pageRows = rows.slice(start, start + fbaHistoryPageSize);
-    table.innerHTML = rows.length
-      ? pageRows.map((item) => {
+    if (!rows.length) {
+      renderTableMessage(table, 9, "暂无最近60次刷仓结果", root, { tone: "empty" });
+    } else {
+      table.innerHTML = pageRows.map((item) => {
           const actualWarehouseText = [((item.warehouseCodes || [])[0] || item.actualWarehouseCode || ""), item.actualWarehouseRegion || ""].filter(Boolean).join("，") || "-";
           const shipmentText = item.status === "matched_confirmed" ? ((item.shipmentNames || []).join(", ") || (item.shipmentIds || []).join(", ") || "无") : "无";
           const statusText = item.status === "matched_confirmed" ? (item.message || "已命中目标仓并确认货件方案") : `未命中目标仓，实际仓：${actualWarehouseText}`;
@@ -242,8 +244,8 @@ export function createFbaAutomationFeature({
               <td>${escapeHtml(statusText)}</td>
             </tr>
           `;
-        }).join("")
-      : `<tr><td colspan="9">暂无最近60次刷仓结果</td></tr>`;
+        }).join("");
+    }
     const pager = query("#fba-result-pagination");
     if (pager) {
       pager.innerHTML = rows.length

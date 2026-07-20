@@ -39,6 +39,7 @@ export function createSalesForecastFeature({
   const SALES_FORECAST_MONTH_DAYS_2026 = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   const SALES_FORECAST_CURRENT_MONTH_INDEX = new Date().getMonth();
   const SALES_FORECAST_REFERENCE_YEAR = 2025;
+  const SALES_FORECAST_VISIBLE_LIMIT = 300;
   let salesForecastManualDaily = loadSalesForecastManualDaily();
   let salesForecastFocusedRows = loadSalesForecastFocusedRows();
   let salesForecastHiddenRows = loadSalesForecastHiddenRows();
@@ -98,13 +99,13 @@ function renderSalesForecastHeader() {
   if (!row || !groupRow || row.dataset.ready === "true") return;
   const salesColumnCount = salesForecastColumns.filter((column) => ["monthDaily", "monthSales", "recentDaily"].includes(column.type) || column.key === "daysRemainingInMonth").length;
   groupRow.innerHTML = `
-    <th class="group-head product-group sticky-product-group" colspan="7">产品信息</th>
-    <th class="group-head inventory-group" colspan="6">库存信息</th>
-    <th class="group-head action-group" colspan="9">预测与动作</th>
-    <th class="group-head sales-group" colspan="${salesColumnCount}">销量数据</th>
+    <th scope="colgroup" class="group-head product-group sticky-product-group" colspan="7">产品信息</th>
+    <th scope="colgroup" class="group-head inventory-group" colspan="6">库存信息</th>
+    <th scope="colgroup" class="group-head action-group" colspan="9">预测与动作</th>
+    <th scope="colgroup" class="group-head sales-group" colspan="${salesColumnCount}">销量数据</th>
   `;
   row.innerHTML = salesForecastColumns
-    .map((column) => `<th class="${salesForecastColumnClass(column)}">${escapeHtml(column.label)}</th>`)
+    .map((column) => `<th scope="col" class="${salesForecastColumnClass(column)}">${escapeHtml(column.label)}</th>`)
     .join("");
   row.dataset.ready = "true";
 }
@@ -576,12 +577,13 @@ function renderSalesForecast(data = salesForecastData) {
   setText("#sales-forecast-inbound", formatNumber(summary.fbaInbound || 0));
   setText("#sales-forecast-low-stock", formatNumber(summary.lowStockCount || 0));
   setText("#sales-forecast-replenishment", formatNumber(summary.replenishmentCount || 0));
-  setText("#sales-forecast-status", `${salesForecastData.meta?.source || "领星 ERP"} · ${salesForecastData.meta?.syncStatus || ""} · ${salesForecastData.meta?.updatedAt || ""}`);
+  const visibleRowsText = visibleRows.length > SALES_FORECAST_VISIBLE_LIMIT ? ` · 共 ${visibleRows.length} 条，当前显示前 ${SALES_FORECAST_VISIBLE_LIMIT} 条` : "";
+  setText("#sales-forecast-status", `${salesForecastData.meta?.source || "领星 ERP"} · ${salesForecastData.meta?.syncStatus || ""} · ${salesForecastData.meta?.updatedAt || ""}${visibleRowsText}`);
 
   const table = query("#sales-forecast-table-body");
   if (!table) return;
   table.innerHTML = visibleRows.length
-    ? visibleRows.slice(0, 300).map((row) => `
+    ? visibleRows.slice(0, SALES_FORECAST_VISIBLE_LIMIT).map((row) => `
       <tr data-sales-row-key="${escapeHtml(row.manualKey || salesForecastRowKey(row))}">
         ${salesForecastColumns.map((column) => {
           const referenceText = salesForecastPreviousYearText(row, column);
@@ -624,7 +626,7 @@ async function loadSalesForecast(options = {}) {
   const restoreButton = !silent ? setButtonBusy(button, "加载中", "刷新预估") : () => {};
   if (!silent) {
     setText("#sales-forecast-status", options.force ? "正在刷新领星 ERP 补货建议" : "正在读取销售预估缓存");
-    renderTableMessage(table, salesForecastColumns.length, "正在加载销售预估...");
+    renderTableMessage(table, salesForecastColumns.length, "正在加载销售预估...", root, { tone: "loading" });
   }
   try {
     const response = await fetchImpl(`/api/dashboard/sales-forecast?${buildSalesForecastQuery(options)}`, { cache: "no-store" });
@@ -639,7 +641,7 @@ async function loadSalesForecast(options = {}) {
   } catch (error) {
     if (!silent) {
       setText("#sales-forecast-status", `销售预估加载失败：${error.message}`);
-      renderTableMessage(table, salesForecastColumns.length, "加载失败，请稍后重试。");
+      renderTableMessage(table, salesForecastColumns.length, "加载失败，请稍后重试。", root, { tone: "error" });
     }
   } finally {
     restoreButton();

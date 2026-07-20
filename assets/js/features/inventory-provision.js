@@ -272,8 +272,8 @@ export function createInventoryProvisionFeature({
         setText("#inventory-provision-status", `库存计提加载失败：${error.message}`, root);
         const bucketTable = root?.querySelector?.("#inventory-bucket-table");
         const detailTable = root?.querySelector?.("#inventory-detail-table");
-        renderTableMessage(bucketTable, 8, "加载失败，请稍后重试。");
-        renderTableMessage(detailTable, 15, "加载失败，请稍后重试。");
+        renderTableMessage(bucketTable, 8, "加载失败，请稍后重试。", root, { tone: "error" });
+        renderTableMessage(detailTable, 15, "加载失败，请稍后重试。", root, { tone: "error" });
       },
       root,
     });

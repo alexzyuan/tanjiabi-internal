@@ -258,7 +258,7 @@ export function createFreightRatesFeature({
     if (!table) return;
     setText("#freight-rates-count", `共 ${freightRateRows.length} 条`, root);
     if (!freightRateRows.length) {
-      renderTableMessage(table, 9, "暂无运费记录，可直接在第一行录入。");
+      renderTableMessage(table, 9, "暂无运费记录，可直接在第一行录入。", root, { tone: "empty" });
       return;
     }
     table.innerHTML = groupedRowsHtml(freightRateRows);

@@ -370,6 +370,7 @@ let makeUnavailableDashboard = (message) => ({
   parseNumber,
   redirectToLogin,
   renderDataValueButtonsHtml,
+  renderTableMessage,
   setTableSortButtonGroupState,
   setText,
 }));
@@ -439,6 +440,7 @@ async function refreshDashboardFromFilters() {
   formatMetricNumber,
   formatMoney,
   formatRateNullable,
+  renderTableMessage,
   setText,
   trimmedFieldValue,
 }));
@@ -468,6 +470,7 @@ async function refreshDashboardFromFilters() {
   formatDate,
   formatMetricNumber,
   formatRateNullable,
+  renderTableMessage,
   setText,
   trimmedFieldValue,
 }));
@@ -483,6 +486,7 @@ async function refreshDashboardFromFilters() {
   formatNumber,
   formatPercent,
   getPacificTodayText,
+  renderTableMessage,
   setText,
   trimmedFieldValue,
 }));
@@ -638,6 +642,7 @@ async function refreshDashboardFromFilters() {
   fieldValue,
   formatActualMoney,
   readFileAsBase64,
+  renderTableMessage,
   setText,
   trimmedFieldValue,
 }));
@@ -939,6 +944,7 @@ async function refreshDashboardFromFilters() {
   formatNumber,
   selectedFilterValue,
   selectedFilterValues,
+  renderTableMessage,
   setButtonBusy,
   setSelectOptions,
   setText,
@@ -962,6 +968,7 @@ async function refreshDashboardFromFilters() {
   checkedField,
   escapeHtml,
   fieldValue,
+  renderTableMessage,
   redirectToLogin,
   setButtonBusy,
   setText,

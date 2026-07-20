@@ -83,7 +83,10 @@ export function createCashflowDashboardFeature({
     const storeTable = root?.querySelector?.("#cashflow-store-table");
     if (storeTable) {
       const rows = data.storeRows || [];
-      storeTable.innerHTML = rows.length ? rows.map((row) => `
+      if (!rows.length) {
+        renderTableMessage(storeTable, 12, "暂无结算汇总数据。", root, { tone: "empty" });
+      } else {
+        storeTable.innerHTML = rows.map((row) => `
         <tr>
           <td><strong>${escapeHtml(row.storeName)}</strong></td>
           <td>${escapeHtml(row.country || "-")}</td>
@@ -98,7 +101,8 @@ export function createCashflowDashboardFeature({
           <td>${escapeHtml(row.settlementStart || "-")}</td>
           <td>${escapeHtml(row.estimatedTransferDate || row.transferDate || "-")}</td>
         </tr>
-      `).join("") : `<tr><td colspan="12">暂无结算汇总数据。</td></tr>`;
+      `).join("");
+      }
     }
 
     const historyTable = root?.querySelector?.("#cashflow-history-table");
@@ -133,7 +137,10 @@ export function createCashflowDashboardFeature({
         }));
       });
 
-      historyTable.innerHTML = rows.length ? rows.map((item) => `
+      if (!rows.length) {
+        renderTableMessage(historyTable, 14, "暂无留存记录。系统会在每周二、周五自动留存，也可以手动留存一次。", root, { tone: "empty" });
+      } else {
+        historyTable.innerHTML = rows.map((item) => `
         <tr>
           <td>${escapeHtml(item.capturedAt || item.captureDate || "-")}</td>
           <td>${escapeHtml(item.periodText || "-")}</td>
@@ -150,7 +157,8 @@ export function createCashflowDashboardFeature({
           <td>${escapeHtml(item.settlementStart || "-")}</td>
           <td>${escapeHtml(item.estimatedTransferDate || item.transferDate || "-")}</td>
         </tr>
-      `).join("") : `<tr><td colspan="14">暂无留存记录。系统会在每周二、周五自动留存，也可以手动留存一次。</td></tr>`;
+      `).join("");
+      }
     }
   }
 
@@ -171,7 +179,7 @@ export function createCashflowDashboardFeature({
         setText("#cashflow-status-text", `平台回款加载失败：${error.message}`, root);
         root?.querySelector?.("#cashflow-store-table")?.replaceChildren();
         const storeTable = root?.querySelector?.("#cashflow-store-table");
-        renderTableMessage(storeTable, 12, "加载失败，请稍后重试。");
+        renderTableMessage(storeTable, 12, "加载失败，请稍后重试。", root, { tone: "error" });
       },
       root,
     });

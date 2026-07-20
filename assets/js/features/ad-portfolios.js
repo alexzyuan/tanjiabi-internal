@@ -11,6 +11,7 @@ export function createAdPortfolioFeature({
   formatMetricNumber,
   formatMoney,
   formatRateNullable,
+  renderTableMessage,
   setText,
   trimmedFieldValue,
   storage = globalThis.localStorage,
@@ -66,6 +67,15 @@ export function createAdPortfolioFeature({
     { key: "costRate", label: "花费%", group: "业绩", default: true, value: (row, totals) => formatRateNullable(totals.cost ? (row.report?.cost || 0) / totals.cost : 0) },
     { key: "campaignCount", label: "广告活动数", group: "业绩", value: (row) => formatMetricNumber(row.report?.campaignCount) },
   ];
+
+  function adPortfolioColumnClass(column) {
+    if (["servingStatus"].includes(column.key)) return "table-col-status";
+    if (["createdAt", "startDate", "endDate"].includes(column.key)) return "table-col-date";
+    if (/Rate|acos|roas|cvr|ctr|percent|Rate$/i.test(column.key)) return "table-col-percent";
+    if (/budget|sales|cost|cpa|cpc|price|UnitPrice/i.test(column.key)) return "table-col-money";
+    if (/orders|units|clicks|impressions|Count/i.test(column.key)) return "table-col-number";
+    return "table-col-text";
+  }
 
   function setDefaultAdPortfolioDate() {
     const input = root?.querySelector?.("#ads-portfolio-report-date");
@@ -151,14 +161,18 @@ export function createAdPortfolioFeature({
     const columns = adPortfolioColumns.filter((column) => selectedKeys.includes(column.key));
     const totals = adPortfolioTotals(adPortfolioRows);
     const header = root?.querySelector?.("#ads-portfolio-table thead tr");
-    if (header) header.innerHTML = columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("");
+    if (header) header.innerHTML = columns.map((column) => `<th scope="col" class="${adPortfolioColumnClass(column)}">${escapeHtml(column.label)}</th>`).join("");
     const table = root?.querySelector?.("#ads-portfolio-table tbody");
     if (!table) return;
-    table.innerHTML = adPortfolioRows.length ? adPortfolioRows.map((row) => `
+    if (!adPortfolioRows.length) {
+      renderTableMessage?.(table, Math.max(columns.length, 1), "当前筛选条件下没有广告组合。", root, { tone: "empty" });
+      return;
+    }
+    table.innerHTML = adPortfolioRows.map((row) => `
       <tr>
         ${columns.map((column) => `<td>${column.value(row, totals)}</td>`).join("")}
       </tr>
-    `).join("") : `<tr><td colspan="${Math.max(columns.length, 1)}">当前筛选条件下没有广告组合。</td></tr>`;
+    `).join("");
   }
 
   async function loadAdPortfolios() {

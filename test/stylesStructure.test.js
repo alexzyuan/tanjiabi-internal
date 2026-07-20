@@ -345,6 +345,10 @@ test("shared data table baseline defines table class, column types, sticky utili
   assert.match(componentSource, /^\.data-table \.table-sticky-start,/m);
   assert.match(componentSource, /^\.table-state-row\s*\{/m);
   assert.match(componentSource, /^\.data-table \.table-state\s*\{/m);
+  assert.match(componentSource, /body:not\(\.login-body\) \.data-table th,[\s\S]*text-align:\s*left;/);
+  assert.match(componentSource, /^\.data-table td\.table-col-number,/m);
+  assert.match(componentSource, /^\.data-table td\.table-col-money,/m);
+  assert.match(componentSource, /^\.data-table td\.table-col-percent,/m);
   assert.match(componentSource, /font-variant-numeric:\s*tabular-nums/);
   assert.match(componentSource, /var\(--tj-content-bg\)/);
   assert.match(componentSource, /var\(--tj-action-blue-soft\)/);
@@ -353,6 +357,8 @@ test("shared data table baseline defines table class, column types, sticky utili
   assert.equal(/^body:not\(\.login-body\) table\s*\{/m.test(overrideSource), false);
   assert.equal(legacySource.includes(".data-table .table-col-number"), false);
   assert.match(baselineDoc, /### 1\.2 列类型/);
+  assert.match(baselineDoc, /表头统一左对齐/);
+  assert.match(baselineDoc, /数据单元格对齐/);
   assert.match(baselineDoc, /### 1\.5 大数据量性能/);
   assert.match(baselineDoc, /### 1\.6 验收矩阵/);
 });
@@ -373,8 +379,8 @@ test("priority BI tables adopt data-table, column type classes, and table state 
     /<tbody id="inventory-bucket-table"><tr class="table-state-row">/,
     /<tbody id="inventory-detail-table"><tr class="table-state-row">/,
     /<tbody id="sales-forecast-table-body"><tr class="table-state-row">/,
-    /<th class="table-col-money">销售目标\(原币\)<\/th>/,
-    /<th class="table-col-percent">利润率目标<\/th>/,
+    /<th scope="col" class="table-col-money">销售目标\(原币\)<\/th>/,
+    /<th scope="col" class="table-col-percent">利润率目标<\/th>/,
   ].forEach((pattern) => assert.match(indexSource, pattern));
 
   assert.match(uiUtilsSource, /class="table-state is-\$\{tone\}"/);
@@ -382,7 +388,7 @@ test("priority BI tables adopt data-table, column type classes, and table state 
   assert.match(salesForecastSource, /table-col-actions/);
   assert.match(supplierBoardSource, /<td class="table-col-money">¥ \$\{formatActualMoney\(row\.purchasePrice/);
   assert.match(inventoryProvisionSource, /<td class="table-col-percent">\$\{Math\.round\(Number\(item\.provisionRate/);
-  assert.match(payablesSource, /<th class="table-col-money">应付金额<\/th>/);
+  assert.match(payablesSource, /<th scope="col" class="table-col-money">应付金额<\/th>/);
   assert.match(budgetSource, /<td class="table-col-status">\$\{escapeHtml\(row\.status/);
 });
 

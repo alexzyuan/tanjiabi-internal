@@ -56,7 +56,11 @@ export function createLowInventoryFeeFeature({
     const table = root?.querySelector?.("#lowfee-table");
     if (!table) return;
     const rows = data.rows || [];
-    table.innerHTML = rows.length ? rows.map((item) => `
+    if (!rows.length) {
+      renderTableMessage(table, 12, "暂无符合条件的低库存费预警。", root, { tone: "empty" });
+      return;
+    }
+    table.innerHTML = rows.map((item) => `
       <tr class="${item.eligible ? `lowfee-warning-row ${riskClassName(item.riskLevel)}` : ""}">
         <td><span class="risk-badge ${riskClassName(item.riskLevel)}">${escapeHtml(item.riskLevel || "正常")}</span></td>
         <td>${escapeHtml(item.storeName || "-")}</td>
@@ -71,7 +75,7 @@ export function createLowInventoryFeeFeature({
         <td>${escapeHtml(item.feeApplied || "-")}</td>
         <td>${escapeHtml(item.reason || "-")}</td>
       </tr>
-    `).join("") : `<tr><td colspan="12">暂无符合条件的低库存费预警。</td></tr>`;
+    `).join("");
   }
 
   function buildLowFeeQuery() {
@@ -106,7 +110,7 @@ export function createLowInventoryFeeFeature({
       onError: (error) => {
         setText("#lowfee-status", `低库存费预警加载失败：${error.message}`, root);
         const table = root?.querySelector?.("#lowfee-table");
-        renderTableMessage(table, 12, "加载失败，请稍后重试。");
+        renderTableMessage(table, 12, "加载失败，请稍后重试。", root, { tone: "error" });
       },
       root,
     });

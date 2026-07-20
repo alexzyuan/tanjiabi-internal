@@ -384,11 +384,18 @@ const tanjiaUiGlobal = globalThis.window || globalThis;
     return "empty";
   }
 
-  function renderTableMessage(target, colspan, message, root = tanjiaUiGlobal.document) {
-    const element = resolveElement(target, root);
+  function renderTableMessage(target, colspan, message, root = tanjiaUiGlobal.document, options = {}) {
+    let lookupRoot = root;
+    let renderOptions = options;
+    if (root && typeof root.querySelector !== "function" && typeof root.tone === "string") {
+      lookupRoot = tanjiaUiGlobal.document;
+      renderOptions = root;
+    }
+    const element = resolveElement(target, lookupRoot);
     if (!element) return null;
     const span = Math.max(1, Number.parseInt(colspan, 10) || 1);
-    const tone = tableStateTone(message);
+    const explicitTone = String(renderOptions?.tone || "");
+    const tone = /^(loading|error|denied|empty)$/.test(explicitTone) ? explicitTone : tableStateTone(message);
     element.innerHTML = `<tr class="table-state-row"><td class="table-state is-${tone}" colspan="${span}">${escapeHtml(message)}</td></tr>`;
     return element;
   }

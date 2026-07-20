@@ -9,6 +9,7 @@ export function createSupplierDetailFeature({
   fieldValue,
   formatActualMoney,
   readFileAsBase64,
+  renderTableMessage,
   setText,
   trimmedFieldValue,
   windowApi = globalThis.window,
@@ -70,7 +71,11 @@ export function createSupplierDetailFeature({
     setText("#supplier-detail-table-count", `共 ${rows.length} 条数据`, root);
     const tbody = root?.querySelector?.("#supplier-detail-table tbody");
     if (!tbody) return;
-    tbody.innerHTML = rows.length ? rows.map((row) => `
+    if (!rows.length) {
+      renderTableMessage?.(tbody, 6, "暂无供应商明细，请手动填写或导入模板。", root, { tone: "empty" });
+      return;
+    }
+    tbody.innerHTML = rows.map((row) => `
       <tr>
         <td><strong>${escapeHtml(row.supplier || "-")}</strong></td>
         <td>${escapeHtml(row.qualification || "-")}</td>
@@ -79,7 +84,7 @@ export function createSupplierDetailFeature({
         <td>${formatSupplierDetailTaxRate(row.taxRate)}</td>
         <td><button class="table-action" type="button" data-supplier-detail-edit="${escapeHtml(row.id)}">编辑</button></td>
       </tr>
-    `).join("") : `<tr><td colspan="6">暂无供应商明细，请手动填写或导入模板。</td></tr>`;
+    `).join("");
   }
 
   function handleSupplierDetailTableClick(event) {
@@ -179,7 +184,7 @@ export function createSupplierDetailFeature({
   }
 
   function supplierDetailWorkbookHtml(rows) {
-    const headerHtml = supplierDetailColumns.map(([, label]) => `<th>${escapeHtml(label)}</th>`).join("");
+    const headerHtml = supplierDetailColumns.map(([, label]) => `<th scope="col">${escapeHtml(label)}</th>`).join("");
     const rowsHtml = rows.map((row) => `<tr>${supplierDetailColumns.map(([key]) => `<td>${escapeHtml(key === "taxRate" ? formatSupplierDetailTaxRate(row[key]).replace("-", "") : row[key] || "")}</td>`).join("")}</tr>`).join("");
     return `<html><head><meta charset="UTF-8"></head><body><table border="1"><thead><tr>${headerHtml}</tr></thead><tbody>${rowsHtml}</tbody></table></body></html>`;
   }

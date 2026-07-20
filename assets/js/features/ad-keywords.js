@@ -9,6 +9,7 @@ export function createAdKeywordFeature({
   formatDate,
   formatMetricNumber,
   formatRateNullable,
+  renderTableMessage,
   setText,
   trimmedFieldValue,
 } = {}) {
@@ -75,7 +76,11 @@ export function createAdKeywordFeature({
 
     const table = root?.querySelector?.("#ads-keyword-table tbody");
     if (!table) return;
-    table.innerHTML = adKeywordRows.length ? adKeywordRows.map((row) => {
+    if (!adKeywordRows.length) {
+      renderTableMessage?.(table, 6, "当前筛选条件下没有需要处理的关键词。", root, { tone: "empty" });
+      return;
+    }
+    table.innerHTML = adKeywordRows.map((row) => {
       const current = row.current || {};
       const trend = row.trend || {};
       const categoryClass = adKeywordCategoryClass(row.actionCategory);
@@ -89,7 +94,7 @@ export function createAdKeywordFeature({
           <td><strong>${escapeHtml(row.actionTitle || "-")}</strong><small>${escapeHtml(row.recommendation || "-")}</small></td>
         </tr>
       `;
-    }).join("") : `<tr><td colspan="6">当前筛选条件下没有需要处理的关键词。</td></tr>`;
+    }).join("");
   }
 
   async function loadAdKeywordDashboard() {

@@ -19,6 +19,7 @@ body:not(.login-body) th {
   background: var(--tj-action-blue-soft);
   color: var(--tj-text-strong);
   font-weight: 850;
+  text-align: left;
   white-space: nowrap;
   cursor: pointer;
 }
@@ -36,12 +37,12 @@ body:not(.login-body) td {
   text-align: left;
 }
 
-.data-table .table-col-number,
-.data-table .table-col-money,
-.data-table .table-col-percent,
-.data-table [data-col-type="number"],
-.data-table [data-col-type="money"],
-.data-table [data-col-type="percent"] {
+.data-table td.table-col-number,
+.data-table td.table-col-money,
+.data-table td.table-col-percent,
+.data-table td[data-col-type="number"],
+.data-table td[data-col-type="money"],
+.data-table td[data-col-type="percent"] {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }

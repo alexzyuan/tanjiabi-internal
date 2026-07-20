@@ -40,7 +40,7 @@ export async function loadDashboardSection({
   const restoreButton = setButtonBusy(button, busyText, restoreText || button?.textContent || "", buttonBusyOptions);
 
   if (statusSelector && loadingStatus) setText(statusSelector, loadingStatus, root);
-  if (table && loadingMessage) renderTableMessage(table, tableColspan, loadingMessage, root);
+  if (table && loadingMessage) renderTableMessage(table, tableColspan, loadingMessage, root, { tone: "loading" });
 
   try {
     const response = await fetchApi(endpoint, fetchOptions);

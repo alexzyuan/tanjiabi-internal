@@ -9,6 +9,7 @@ export function createAftersalesDashboardFeature({
   formatNumber,
   formatPercent,
   getPacificTodayText,
+  renderTableMessage,
   setText,
   trimmedFieldValue,
 } = {}) {
@@ -79,7 +80,11 @@ export function createAftersalesDashboardFeature({
     const rows = data?.rows || [];
     setText("#aftersales-table-count", `共 ${rows.length} 个产品信号，按三源风险评分排序`, root);
     if (!table) return;
-    table.innerHTML = rows.length ? rows.map((row) => `
+    if (!rows.length) {
+      renderTableMessage?.(table, 9, "当前筛选条件下暂无售后风险数据。", root, { tone: "empty" });
+      return;
+    }
+    table.innerHTML = rows.map((row) => `
       <tr>
         <td>
           <strong>${escapeHtml(row.msku || row.asin || row.localSku || "-")}</strong>
@@ -94,7 +99,7 @@ export function createAftersalesDashboardFeature({
         <td><span class="risk-badge ${aftersalesRiskClass(row.riskLevel)}">${escapeHtml(row.riskLevel || "观察")}</span><br /><small>${formatNumber(row.riskScore || 0)}分</small></td>
         <td>${escapeHtml(row.action || "保持观察")}</td>
       </tr>
-    `).join("") : `<tr><td colspan="9">当前筛选条件下暂无售后风险数据。</td></tr>`;
+    `).join("");
   }
 
   async function loadAftersalesDashboard() {

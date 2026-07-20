@@ -212,7 +212,7 @@ export function createFbaFreightFeature({
     setText("#fba-freight-quantity", formatNumber(rows.reduce((sum, row) => sum + Number(row.shippedQuantity || 0), 0)), root);
     setText("#fba-freight-store-count", formatNumber(new Set(rows.map((row) => row.sid || row.storeName).filter(Boolean)).size), root);
     if (!rows.length) {
-      renderTableMessage(table, 12, "当前筛选没有货件。");
+      renderTableMessage(table, 12, "当前筛选没有货件。", root, { tone: "empty" });
       updateFbaFreightSelectionState();
       return;
     }
@@ -252,7 +252,7 @@ export function createFbaFreightFeature({
     setText("#fba-freight-count", "0", root);
     setText("#fba-freight-quantity", "0", root);
     setText("#fba-freight-store-count", "0", root);
-    renderTableMessage(table, 12, `读取失败：${message}`);
+    renderTableMessage(table, 12, `读取失败：${message}`, root, { tone: "error" });
     updateFbaFreightSelectionState();
   }
 
@@ -342,7 +342,7 @@ export function createFbaFreightFeature({
       <div class="fba-freight-items">
         <h3>发货产品</h3>
         <table class="data-table">
-          <thead><tr><th>图片</th><th>MSKU</th><th>ASIN/FNSKU</th><th>发货数量</th></tr></thead>
+          <thead><tr><th scope="col" class="table-col-text">图片</th><th scope="col" class="table-col-text">MSKU</th><th scope="col" class="table-col-text">ASIN/FNSKU</th><th scope="col" class="table-col-number">发货数量</th></tr></thead>
           <tbody>${items.length ? items
             .map((item) => `
               <tr>
@@ -352,7 +352,7 @@ export function createFbaFreightFeature({
                 <td>${formatNumber(item.shippedQuantity || item.quantity || 0)}</td>
               </tr>
             `)
-            .join("") : `<tr><td colspan="4">领星列表未返回产品明细。</td></tr>`}</tbody>
+            .join("") : `<tr class="table-state-row"><td class="table-state is-empty" colspan="4">领星列表未返回产品明细。</td></tr>`}</tbody>
         </table>
       </div>
     `;

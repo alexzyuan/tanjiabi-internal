@@ -275,7 +275,7 @@ export function createFactoryInventoryFeature({
     const tbody = root?.querySelector?.("#factory-inventory-table tbody");
     if (!tbody) return;
     if (!visibleRows.length) {
-      renderTableMessage(tbody, 13, "暂无符合筛选条件的工厂库存数据。", root);
+      renderTableMessage(tbody, 13, "暂无符合筛选条件的工厂库存数据。", root, { tone: "empty" });
       return;
     }
     tbody.innerHTML = groupFactoryInventoryRows(visibleRows)
@@ -359,7 +359,7 @@ export function createFactoryInventoryFeature({
   }
 
   function buildFactoryInventoryExportHtml(rows) {
-    const headerHtml = exportHeaders.map(([, label]) => `<th>${escapeHtml(label)}</th>`).join("");
+    const headerHtml = exportHeaders.map(([, label]) => `<th scope="col">${escapeHtml(label)}</th>`).join("");
     const rowsHtml = rows.map((row) => `
       <tr>
         ${exportHeaders.map(([key]) => `<td>${escapeHtml(row[key] ?? "")}</td>`).join("")}

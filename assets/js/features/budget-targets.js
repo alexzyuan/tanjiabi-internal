@@ -161,7 +161,7 @@ export function createBudgetTargetsFeature({
     if (!table) return;
 
     if (!rows.length) {
-      renderTableMessage(table, 13, "暂无预算目标，请先上传预算模板。");
+      renderTableMessage(table, 13, "暂无预算目标，请先上传预算模板。", root, { tone: "empty" });
       return;
     }
 
@@ -189,7 +189,7 @@ export function createBudgetTargetsFeature({
     if (!mskuTable) return;
 
     if (!mskuRows.length) {
-      renderTableMessage(mskuTable, 14, "暂无 MSKU 预算明细，请先上传预算模板。");
+      renderTableMessage(mskuTable, 14, "暂无 MSKU 预算明细，请先上传预算模板。", root, { tone: "empty" });
       return;
     }
 

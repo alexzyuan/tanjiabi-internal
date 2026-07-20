@@ -30,6 +30,7 @@ export function createClearanceCalculatorFeature({
   formatNumber,
   selectedFilterValue,
   selectedFilterValues,
+  renderTableMessage,
   setButtonBusy,
   setSelectOptions,
   setText,
@@ -198,7 +199,11 @@ export function createClearanceCalculatorFeature({
 
     const table = root?.querySelector?.("#clearance-table");
     if (!table) return;
-    table.innerHTML = results.length ? results.map((row) => {
+    if (!results.length) {
+      renderTableMessage?.(table, 13, "未读取到近30天均毛利为负且库存>10的库存行。", root, { tone: "empty" });
+      return;
+    }
+    table.innerHTML = results.map((row) => {
       const isHighRisk = row.riskLevel === "建议清" || row.riskLevel === "无销量";
       const hasLandedCost = Number(row.landedUnitCost || 0) > 0;
       return `
@@ -218,7 +223,7 @@ export function createClearanceCalculatorFeature({
           <td>${hasLandedCost ? clearanceCurrency(row.inventoryCost) : "-"}</td>
         </tr>
       `;
-    }).join("") : `<tr><td colspan="13">未读取到近30天均毛利为负且库存>10的库存行。</td></tr>`;
+    }).join("");
   }
 
   function resetClearanceCalculator() {

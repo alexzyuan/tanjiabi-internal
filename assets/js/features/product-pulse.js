@@ -110,8 +110,11 @@ export function createProductPulseFeature({
     const table = root?.querySelector?.("#pulse-product-table");
     const rows = data.rows || [];
     if (!table) return;
-    table.innerHTML = rows.length
-      ? rows.slice(0, 100).map((item) => {
+    if (!rows.length) {
+      renderTableMessage(table, 16, "当前日期暂无产品数据。", root, { tone: "empty" });
+      return;
+    }
+    table.innerHTML = rows.slice(0, 100).map((item) => {
         const inventoryClass = inventoryRiskClass(item);
         const adCostClass = noSalesAdCostClass(item);
         return `
@@ -134,8 +137,7 @@ export function createProductPulseFeature({
             <td><span class="risk-badge ${riskClass(item.anomaly?.level)}" title="${escapeHtml((item.anomaly?.signals || []).join("；") || "未命中异动规则")}">${escapeHtml(item.anomaly?.level || "正常")}</span></td>
           </tr>
         `;
-      }).join("")
-      : `<tr><td colspan="16">当前日期暂无产品数据。</td></tr>`;
+      }).join("");
   }
 
   async function loadProductPulse() {
@@ -154,7 +156,7 @@ export function createProductPulseFeature({
       onData: renderProductPulse,
       onError(error) {
         setText("#pulse-status", `即时表现加载失败：${error.message}`, root);
-        renderTableMessage("#pulse-product-table", 16, "加载失败，请稍后重试。", root);
+        renderTableMessage("#pulse-product-table", 16, "加载失败，请稍后重试。", root, { tone: "error" });
       },
       root,
     });

@@ -13,6 +13,7 @@ export function createSalesDashboardFeature({
   parseDisplayPercent,
   parseNumber,
   renderDataValueButtonsHtml,
+  renderTableMessage,
   redirectToLogin,
   setTableSortButtonGroupState,
   setText,
@@ -252,8 +253,11 @@ export function createSalesDashboardFeature({
     if (!detailTable) return;
     const rows = filteredMskuDetailRows();
     renderMskuSortState();
-    detailTable.innerHTML = rows.length
-      ? rows.map((row) => `
+    if (!rows.length) {
+      renderTableMessage?.(detailTable, 17, "当前筛选周期暂无 MSKU 明细。", root, { tone: "empty" });
+      return;
+    }
+    detailTable.innerHTML = rows.map((row) => `
         <tr>
           <td>${escapeHtml(row.budgetStoreName || "-")}</td>
           <td><strong>${escapeHtml(row.msku || "-")}</strong></td>
@@ -273,8 +277,7 @@ export function createSalesDashboardFeature({
           ${mskuRateCell("purchaseCostRate", row.purchaseCostRate)}
           ${mskuRateCell("firstLegCostRate", row.firstLegCostRate)}
         </tr>
-      `).join("")
-      : `<tr><td colspan="17">当前筛选周期暂无 MSKU 明细。</td></tr>`;
+      `).join("");
   }
 
   function normalizeSiteCells(cells) {
@@ -334,15 +337,17 @@ export function createSalesDashboardFeature({
     const dailyTable = root?.querySelector?.("#daily-table");
     if (dailyTable) {
       const rows = data.dailyRows || [];
-      dailyTable.innerHTML = rows.length
-        ? rows
+      if (!rows.length) {
+        renderTableMessage?.(dailyTable, 11, "当前筛选周期暂无每日数据", root, { tone: "empty" });
+      } else {
+        dailyTable.innerHTML = rows
           .map((row) => `
             <tr>
               ${row.map((cell, index) => `<td class="${index === 4 && parseNumber(cell) < 0 ? "warning-cell" : ""}">${formatNumber(cell)}</td>`).join("")}
             </tr>
           `)
-          .join("")
-        : `<tr><td colspan="11">当前筛选周期暂无每日数据</td></tr>`;
+          .join("");
+      }
     }
   }
 
