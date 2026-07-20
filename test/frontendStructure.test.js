@@ -123,6 +123,38 @@ test("ui-utils.js exposes ES module exports while keeping the legacy global", as
   assert.equal(source.includes("(function initTanjiaUiUtils"), false);
 });
 
+test("webhook assistant uses built-in DingTalk targets instead of raw webhook inputs", async () => {
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const appSource = await readFile(new URL("../app.js", import.meta.url), "utf8");
+  const featureSource = await readFile(new URL("../assets/js/features/webhook-assistant.js", import.meta.url), "utf8");
+
+  assert.match(indexSource, /data-view="webhook-assistant" data-permission="admin"/);
+  assert.match(indexSource, /id="webhook-target"/);
+  assert.match(indexSource, /value="fba-sta">FBA刷仓/);
+  assert.match(indexSource, /value="default">企业总群/);
+  assert.match(indexSource, /value="weekly">每周/);
+  assert.match(indexSource, /value="monthly">每月/);
+  assert.match(indexSource, /id="webhook-message"/);
+  assert.match(indexSource, /id="webhook-at-all"/);
+  assert.equal(indexSource.includes('id="webhook-url"'), false);
+  assert.equal(indexSource.includes('id="webhook-secret"'), false);
+  assert.equal(indexSource.includes('id="webhook-run-at"'), false);
+  assert.equal(indexSource.includes('id="webhook-interval-minutes"'), false);
+  assert.equal(indexSource.includes('id="webhook-at-mobiles"'), false);
+  assert.equal(indexSource.includes('id="webhook-at-user-ids"'), false);
+
+  assert.match(appSource, /import \{ createWebhookAssistantFeature \} from "\.\/assets\/js\/features\/webhook-assistant\.js/);
+  assert.match(appSource, /createWebhookAssistantFeature\(\{/);
+  assert.match(appSource, /if \(view === "webhook-assistant"\) \{[\s\S]*await loadWebhookTasks\(\)/);
+  assert.match(featureSource, /targetKey: fieldValue\("#webhook-target"/);
+  assert.match(featureSource, /message: trimmedFieldValue\("#webhook-message"/);
+  assert.match(featureSource, /atAll: query\("#webhook-at-all"\)/);
+  assert.equal(featureSource.includes("webhook: trimmedFieldValue"), false);
+  assert.equal(featureSource.includes("secret: trimmedFieldValue"), false);
+  assert.equal(featureSource.includes("atMobiles"), false);
+  assert.equal(featureSource.includes("atUserIds"), false);
+});
+
 test("modal close buttons and dialogs expose accessible names", async () => {
   const source = await readFile(new URL("../index.html", import.meta.url), "utf8");
   const modalCloseButtons = [...source.matchAll(/<button class="modal-close-button"[^>]*>/g)].map((match) => match[0]);

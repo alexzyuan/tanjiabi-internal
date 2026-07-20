@@ -33,14 +33,14 @@ function appendMentionText(content, at = {}) {
   return `${content}\n${missingMentions.join(" ")}`;
 }
 
-export async function sendDingTalkText(content, { atAll = false, atMobiles = [], atUserIds = [] } = {}) {
-  const { webhook, secret, ...configAt } = getConfig().dingtalk;
+async function sendConfiguredDingTalkText(config, content, options = {}, missingWebhookName = "DINGTALK_WEBHOOK", fetchImpl = globalThis.fetch) {
+  const { webhook, secret, ...configAt } = config;
   if (!webhook) {
-    return { ok: false, skipped: true, message: "DINGTALK_WEBHOOK 未配置，已跳过钉钉通知。" };
+    return { ok: false, skipped: true, message: `${missingWebhookName} 未配置，已跳过钉钉通知。` };
   }
-  const at = buildAtPayload(configAt, { atAll, atMobiles, atUserIds });
+  const at = buildAtPayload(configAt, options);
 
-  const response = await fetch(buildDingTalkWebhookUrl(webhook, secret), {
+  const response = await fetchImpl(buildDingTalkWebhookUrl(webhook, secret), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
@@ -55,6 +55,14 @@ export async function sendDingTalkText(content, { atAll = false, atMobiles = [],
     status: response.status,
     payload,
   };
+}
+
+export async function sendDingTalkText(content, { atAll = false, atMobiles = [], atUserIds = [] } = {}) {
+  return sendConfiguredDingTalkText(getConfig().dingtalk, content, { atAll, atMobiles, atUserIds });
+}
+
+export async function sendDingTalkTextToWebhook(config, content, options = {}, missingWebhookName = "WEBHOOK", fetchImpl = globalThis.fetch) {
+  return sendConfiguredDingTalkText(config, content, options, missingWebhookName, fetchImpl);
 }
 
 export async function sendDingTalkMarkdown({ title, text, atAll = false, atMobiles = [], atUserIds = [] }) {

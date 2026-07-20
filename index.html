@@ -146,6 +146,7 @@
               <span class="nav-group-caret" aria-hidden="true">⌄</span>
             </button>
             <button class="nav-item" data-view="admin" hidden><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.5-2.4 1a7 7 0 0 0-2-1.1L14 3h-4l-.5 2.7a7 7 0 0 0-2 1.1l-2.4-1-2 3.5 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.5 2.4-1a7 7 0 0 0 2 1.1L10 21h4l.5-2.7a7 7 0 0 0 2-1.1l2.4 1 2-3.5-2-1.5c.1-.4.1-.8.1-1.2z"/></svg></span><span class="nav-label">后台管理</span></button>
+            <button class="nav-item" data-view="webhook-assistant" data-permission="admin" hidden><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M5 12h4"/><path d="M15 12h4"/><path d="M9 12a3 3 0 0 1 3-3h1"/><path d="M15 12a3 3 0 0 1-3 3h-1"/><path d="M7 5v3"/><path d="M17 16v3"/><path d="M4 5h6"/><path d="M14 19h6"/></svg></span><span class="nav-label">Webhook 助手</span></button>
             <button class="nav-item" data-view="sync"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M20 7h-9a4 4 0 0 0-4 4v1"/><path d="M16 3l4 4-4 4"/><path d="M4 17h9a4 4 0 0 0 4-4v-1"/><path d="M8 21l-4-4 4-4"/></svg></span><span class="nav-label">同步中心</span></button>
           </section>
         </nav>
@@ -1529,6 +1530,73 @@
             <article class="panel"><div class="panel-head"><h2>用户与角色</h2><span>角色规划与查看范围</span></div><div id="admin-users" class="config-list"></div></article>
             <article class="panel"><div class="panel-head"><h2>店铺权限</h2><span>控制用户可查看的店铺和站点</span></div><div id="admin-shops" class="config-list"></div></article>
             <article class="panel"><div class="panel-head"><h2>目标配置</h2><span>月目标、销售目标、利润目标</span></div><div id="admin-targets" class="config-list"></div></article>
+          </section>
+        </section>
+
+        <section class="view" id="view-webhook-assistant">
+          <section class="module-hero">
+            <div>
+              <span>Webhook 助手</span>
+              <h2>钉钉群机器人发送任务</h2>
+              <p>选择系统已配置的钉钉群机器人，创建每日、每周或每月定时发送任务。</p>
+            </div>
+          </section>
+          <section class="admin-grid">
+            <article class="panel admin-account-panel">
+              <div class="panel-head"><h2>新增发送任务</h2><span id="webhook-assistant-status">可新增钉钉群机器人发送任务</span></div>
+              <form class="form-grid admin-account-form" id="webhook-task-form">
+                <label>任务名称
+                  <input id="webhook-task-name" type="text" autocomplete="off" placeholder="例如 FBA 刷仓提醒" required />
+                </label>
+                <label>发送目标
+                  <select id="webhook-target" required>
+                    <option value="fba-sta">FBA刷仓</option>
+                    <option value="default">企业总群</option>
+                  </select>
+                </label>
+                <label>发送方式
+                  <select id="webhook-schedule-mode">
+                    <option value="daily">每日</option>
+                    <option value="weekly">每周</option>
+                    <option value="monthly">每月</option>
+                  </select>
+                </label>
+                <label data-webhook-schedule-field="weekly" hidden>每周发送日
+                  <select id="webhook-weekday">
+                    <option value="1">周一</option>
+                    <option value="2">周二</option>
+                    <option value="3">周三</option>
+                    <option value="4">周四</option>
+                    <option value="5">周五</option>
+                    <option value="6">周六</option>
+                    <option value="7">周日</option>
+                  </select>
+                </label>
+                <label data-webhook-schedule-field="monthly" hidden>每月发送日
+                  <input id="webhook-month-day" type="number" min="1" max="31" step="1" value="1" />
+                </label>
+                <label>发送时间
+                  <input id="webhook-send-time" type="time" value="09:30" />
+                </label>
+                <label class="form-span-2">消息内容
+                  <textarea id="webhook-message" rows="4" placeholder="输入要发送到钉钉群的消息内容" required></textarea>
+                </label>
+                <label class="multi-select-option"><input id="webhook-at-all" type="checkbox" /> @ 所有人</label>
+                <div class="admin-account-actions">
+                  <button class="primary-button" id="webhook-task-save" type="submit">新增任务</button>
+                  <button class="secondary-button" id="webhook-task-reset" type="button">清空</button>
+                </div>
+              </form>
+            </article>
+            <article class="panel admin-account-panel">
+              <div class="panel-head"><h2>发送任务</h2><span>Webhook 地址和密钥由服务器配置，页面只显示发送目标</span></div>
+              <div class="table-wrap admin-account-table-wrap">
+                <table class="data-table">
+                  <thead><tr><th>任务</th><th>状态</th><th>计划</th><th>目标</th><th>最近结果</th><th>次数</th><th>操作</th></tr></thead>
+                  <tbody id="webhook-task-table"><tr><td colspan="7">正在读取 webhook 任务...</td></tr></tbody>
+                </table>
+              </div>
+            </article>
           </section>
         </section>
 
