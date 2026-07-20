@@ -75,6 +75,22 @@ import {
   listFbaForwarderTemplates,
 } from "./src/services/fbaFreightSheetService.js";
 import {
+  deleteFreightRate,
+  exportFreightRateLogsCsv,
+  listFreightRates,
+  saveFreightRate,
+} from "./src/services/freightRateService.js";
+import { getFbaShipmentCandidates } from "./src/services/fbaShipmentCandidateService.js";
+import {
+  createReadySendFbaShipmentOrders,
+  listFbaShipmentOrderWarehouses,
+} from "./src/services/fbaShipmentOrderService.js";
+import {
+  createJiufangFbaOrders,
+  dryRunJiufangFbaOrders,
+  listJiufangChannels,
+} from "./src/services/jiufangFbaOrderService.js";
+import {
   createFbaStaTasks,
   deleteFbaStaTask,
   getFbaStaAutomationState,
@@ -632,6 +648,7 @@ function readFbaFreightFilters(url) {
     shipmentStatus: url.searchParams.get("shipmentStatus") || url.searchParams.get("shipment_status") || "",
     offset: url.searchParams.get("offset") || "",
     length: url.searchParams.get("length") || "",
+    forceRefresh: ["1", "true"].includes(String(url.searchParams.get("forceRefresh") || "").toLowerCase()),
   };
 }
 
@@ -796,9 +813,19 @@ const apiRoutes = createApiRoutes(buildApiRoutes({
   getFbaShopOptions,
   searchFbaMskus,
   getFbaFreightShipments,
+  getFbaShipmentCandidates,
   listFbaForwarderTemplates,
   exportFbaFreightShipments,
   convertFbaFreightShipmentsToForwarderTemplate,
+  listFreightRates,
+  saveFreightRate,
+  deleteFreightRate,
+  exportFreightRateLogsCsv,
+  listFbaShipmentOrderWarehouses,
+  createReadySendFbaShipmentOrders,
+  listJiufangChannels,
+  dryRunJiufangFbaOrders,
+  createJiufangFbaOrders,
   saveFbaBoxTemplate,
   getFbaStaAutomationState,
   updateFbaStaAutomation,

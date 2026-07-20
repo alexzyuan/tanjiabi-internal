@@ -80,6 +80,19 @@ test("webhook assistant uses built-in DingTalk targets instead of raw webhook in
   assert.equal(featureSource.includes("atUserIds"), false);
 });
 
+test("logistics navigation exposes FBA shipment handling and freight rates", async () => {
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const breadcrumbSource = await readFile(new URL("../assets/js/features/breadcrumb-shell.js", import.meta.url), "utf8");
+
+  assert.match(indexSource, /<section class="nav-group" aria-label="物流">/);
+  assert.match(indexSource, /data-view="fba-freight"[\s\S]*FBA货件处理/);
+  assert.match(indexSource, /data-view="freight-rates"[\s\S]*运费看板/);
+  assert.match(indexSource, /id="view-fba-freight"/);
+  assert.match(indexSource, /id="view-freight-rates"/);
+  assert.match(breadcrumbSource, /"fba-freight": \["首页", "物流", "FBA货件处理"\]/);
+  assert.match(breadcrumbSource, /"freight-rates": \["首页", "物流", "运费看板"\]/);
+});
+
 test("modal close buttons and dialogs expose accessible names", async () => {
   const source = await readFile(new URL("../index.html", import.meta.url), "utf8");
   const modalCloseButtons = [...source.matchAll(/<button class="modal-close-button"[^>]*>/g)].map((match) => match[0]);

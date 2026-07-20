@@ -57,8 +57,18 @@
             </button>
             <button class="nav-item" data-view="review-rating"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1L12 16.9 6.6 19.8l1-6.1-4.4-4.3 6.1-.9z"/></svg></span><span class="nav-label">review计算</span></button>
             <button class="nav-item" data-view="ai-image-workflow"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 5h7v6H4z"/><path d="M13 13h7v6h-7z"/><path d="M14 4h6"/><path d="M17 4v6"/><path d="m6 18 2 2 4-5"/></svg></span><span class="nav-label">AI图片工作流</span></button>
-            <button class="nav-item" data-view="fba-freight"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 6h16v12H4z"/><path d="M7 10h10"/><path d="M7 14h6"/><path d="M17 18l3 3"/><path d="M20 18l-3 3"/></svg></span><span class="nav-label">货代表格</span></button>
             <button class="nav-item" data-view="fba"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 8l8-4 8 4-8 4z"/><path d="M4 8v8l8 4 8-4V8"/></svg></span><span class="nav-label">FBA刷仓</span></button>
+          </section>
+          <section class="nav-group" aria-label="物流">
+            <button class="nav-group-title" type="button" aria-expanded="false">
+              <span class="nav-group-icon inventory-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M4 7h10v10H4z"/><path d="M14 10h4l2 3v4h-6z"/><path d="M7 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/><path d="M17 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/></svg>
+              </span>
+              <span>物流</span>
+              <span class="nav-group-caret" aria-hidden="true">⌄</span>
+            </button>
+            <button class="nav-item" data-view="fba-freight"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 6h16v12H4z"/><path d="M7 10h10"/><path d="M7 14h6"/><path d="M17 18l3 3"/><path d="M20 18l-3 3"/></svg></span><span class="nav-label">FBA货件处理</span></button>
+            <button class="nav-item" data-view="freight-rates"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h10"/><path d="M17 14l3 3-3 3"/></svg></span><span class="nav-label">运费看板</span></button>
           </section>
           <section class="nav-group" aria-label="产品">
             <button class="nav-group-title" type="button" aria-expanded="false">
@@ -1949,9 +1959,9 @@
         <section class="view" id="view-fba-freight">
           <section class="module-hero">
             <div>
-              <span>货代表格</span>
-              <h2>FBA货代发货表格</h2>
-              <p>直接读取领星 FBA 货件 fbaCargo 数据，按货件汇总发货数量并生成货代表格。</p>
+              <span>FBA货件处理</span>
+              <h2>FBA货件处理</h2>
+              <p>读取领星 FBA 货件，同一批货件可批量转货代表格，也可直接创建领星待发货发货单。</p>
             </div>
           </section>
           <article class="panel fba-freight-panel">
@@ -1960,8 +1970,14 @@
               <span id="fba-freight-status">等待读取货件</span>
             </div>
             <section class="filter-toolbar fba-freight-toolbar">
-              <label>开始日期<input id="fba-freight-start-date" type="date" /></label>
-              <label>结束日期<input id="fba-freight-end-date" type="date" /></label>
+              <label>日期
+                <div class="date-range-control date-range-control--inline">
+                  <button id="fba-freight-date-range-button" class="date-range-button date-range-picker__trigger" type="button">选择日期</button>
+                  <input id="fba-freight-start-date" type="hidden" />
+                  <input id="fba-freight-end-date" type="hidden" />
+                  <div class="date-range-popover date-range-picker__popover" id="fba-freight-date-range-popover" hidden></div>
+                </div>
+              </label>
               <label>店铺
                 <select id="fba-freight-sid">
                   <option value="">全部核心店铺</option>
@@ -1980,6 +1996,11 @@
                   <option value="RECEIVING">RECEIVING</option>
                   <option value="CLOSED">CLOSED</option>
                   <option value="CANCELLED">CANCELLED</option>
+                </select>
+              </label>
+              <label>发货仓库
+                <select id="fba-freight-warehouse">
+                  <option value="">请选择发货仓库</option>
                 </select>
               </label>
               <button class="secondary-button" id="fba-freight-refresh" type="button">读取货件</button>
@@ -2005,10 +2026,11 @@
                     <th>货件状态</th>
                     <th>物流中心编码</th>
                     <th>创建时间</th>
+                    <th>处理结果</th>
                     <th>操作</th>
                   </tr>
                 </thead>
-                <tbody id="fba-freight-table"><tr><td colspan="11">请选择条件后读取货件。</td></tr></tbody>
+                <tbody id="fba-freight-table"><tr><td colspan="12">请选择条件后读取货件。</td></tr></tbody>
               </table>
             </div>
           </article>
@@ -2039,6 +2061,128 @@
                 <button class="secondary-button" id="fba-freight-template-cancel" type="button">取消</button>
                 <button class="primary-button" id="fba-freight-template-confirm" type="button" disabled>生成表格</button>
               </div>
+            </article>
+          </div>
+          <div class="modal-backdrop" id="fba-freight-jiufang-modal" hidden>
+            <article class="fba-jiufang-order-dialog" role="dialog" aria-modal="true" aria-labelledby="fba-freight-jiufang-title">
+              <div class="modal-head">
+                <h2 id="fba-freight-jiufang-title">确认提交九方</h2>
+                <button class="modal-close-button" id="fba-freight-jiufang-close" type="button" aria-label="关闭九方下单弹窗">×</button>
+              </div>
+              <div class="modal-body">
+                <label class="fba-forwarder-template-field">九方渠道
+                  <select id="fba-freight-jiufang-channel">
+                    <option value="">请选择九方渠道</option>
+                  </select>
+                </label>
+                <div class="fba-jiufang-summary" id="fba-freight-jiufang-summary"></div>
+              </div>
+              <div class="modal-foot">
+                <button class="secondary-button" id="fba-freight-jiufang-cancel" type="button">取消</button>
+                <button class="primary-button" id="fba-freight-jiufang-confirm" type="button" disabled>确认下单</button>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="view-freight-rates">
+          <section class="module-hero">
+            <div>
+              <span>运费看板</span>
+              <h2>运费看板</h2>
+              <p>维护每周国家、仓库、承运商和渠道名称对应的运费价格，作为 FBA 货件转发货单的物流费用数据源。</p>
+            </div>
+          </section>
+          <article class="panel">
+            <div class="panel-head">
+              <h2>运费数据</h2>
+              <span id="freight-rates-status">等待加载</span>
+            </div>
+            <div class="panel-head">
+              <h2>每周运价</h2>
+              <span><button class="secondary-button compact-button" id="freight-rates-refresh" type="button">刷新</button> <button class="secondary-button compact-button" id="freight-rates-export-logs" type="button">导出日志</button> <span id="freight-rates-count">共 0 条</span></span>
+            </div>
+            <div class="table-shell" style="max-width: 100%; overflow-x: auto">
+              <table class="data-table" style="min-width: 1160px; table-layout: fixed; width: 100%">
+                <colgroup>
+                  <col style="width: 96px" />
+                  <col style="width: 108px" />
+                  <col style="width: 88px" />
+                  <col style="width: 132px" />
+                  <col style="width: 104px" />
+                  <col style="width: 252px" />
+                  <col style="width: 104px" />
+                  <col style="width: 96px" />
+                  <col style="width: 180px" />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th>周数</th>
+                    <th>日期</th>
+                    <th>国家</th>
+                    <th>仓库代码</th>
+                    <th>承运商</th>
+                    <th>渠道名称</th>
+                    <th>价格</th>
+                    <th>操作人</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="freight-rates-create-row">
+                  <tr>
+                    <td><output id="freight-rate-inline-week" class="table-select" style="display: inline-flex; align-items: center; white-space: nowrap; width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box">-</output></td>
+                    <td><output id="freight-rate-inline-date" class="table-select" style="display: inline-flex; align-items: center; white-space: nowrap; width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box">-</output></td>
+                    <td>
+                      <select id="freight-rate-inline-country" class="table-select" style="width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box" aria-label="国家" required>
+                        <option value="美国">美国</option>
+                        <option value="加拿大">加拿大</option>
+                        <option value="澳洲">澳洲</option>
+                        <option value="德国">德国</option>
+                        <option value="英国">英国</option>
+                      </select>
+                    </td>
+                    <td>
+                      <select id="freight-rate-inline-warehouse-select" class="table-select" style="width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box" aria-label="仓库代码选项"></select>
+                      <input id="freight-rate-inline-warehouse-code" class="table-select" style="width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box" aria-label="仓库代码" placeholder="手填仓库" required hidden disabled />
+                    </td>
+                    <td>
+                      <select id="freight-rate-inline-carrier" class="table-select" style="width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box" aria-label="承运商" required>
+                        <option value="九方通逊">九方通逊</option>
+                        <option value="同袍">同袍</option>
+                      </select>
+                    </td>
+                    <td>
+                      <select id="freight-rate-inline-transport-method" class="table-select" style="width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; text-overflow: ellipsis" aria-label="渠道名称" required></select>
+                    </td>
+                    <td><input id="freight-rate-inline-price" type="number" class="table-select" style="width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box" min="0" step="0.0001" aria-label="价格" placeholder="手填价格" required /></td>
+                    <td>-</td>
+                    <td class="table-actions"><button class="primary-button compact-button" id="freight-rate-inline-save" type="button">保存</button></td>
+                  </tr>
+                </tbody>
+                <tbody id="freight-rates-table"><tr><td colspan="9">正在读取运费记录。</td></tr></tbody>
+              </table>
+            </div>
+          </article>
+          <div class="modal-backdrop" id="freight-rate-modal" hidden>
+            <article class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="freight-rate-modal-title">
+              <div class="modal-title-row">
+                <h2 id="freight-rate-modal-title">新增运费</h2>
+                <button class="modal-close-button" id="freight-rate-close" type="button" aria-label="关闭运费编辑弹窗">×</button>
+              </div>
+              <form id="freight-rate-form" class="modal-body">
+                <label>周数<output id="freight-rate-week-preview">-</output></label>
+                <label>日期<input id="freight-rate-date" type="date" required /></label>
+                <label>国家<select id="freight-rate-country" required><option value="美国">美国</option><option value="加拿大">加拿大</option><option value="澳洲">澳洲</option><option value="德国">德国</option><option value="英国">英国</option></select></label>
+                <label>仓库代码<select id="freight-rate-warehouse-select" aria-label="仓库代码选项"></select><input id="freight-rate-warehouse-code" placeholder="手填仓库" required hidden disabled /></label>
+                <label>承运商<select id="freight-rate-carrier" required><option value="九方通逊">九方通逊</option><option value="同袍">同袍</option></select></label>
+                <label>渠道名称<select id="freight-rate-transport-method" required></select></label>
+                <label>价格<input id="freight-rate-price" type="number" min="0" step="0.0001" required /></label>
+                <div class="modal-foot">
+                  <button class="secondary-button danger" id="freight-rate-delete" type="button" hidden>删除</button>
+                  <button class="secondary-button" id="freight-rate-cancel" type="button">取消</button>
+                  <button class="primary-button" type="submit">保存</button>
+                </div>
+              </form>
             </article>
           </div>
         </section>
