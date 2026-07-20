@@ -1,8 +1,9 @@
-import { mkdir, readdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
+import { readdir, stat, unlink } from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
+import { readJsonWithRecovery, writeJsonAtomic } from "./jsonStore.js";
 
-const cacheDir = path.join(process.cwd(), "data-cache");
+const cacheDir = process.env.TANJIA_BI_CACHE_DIR || path.join(process.cwd(), "data-cache");
 const salesDashboardFile = path.join(cacheDir, "sales-weekly-dashboard.json");
 const lingxingSellersFile = path.join(cacheDir, "lingxing-sellers.json");
 const mskuDetailDir = path.join(cacheDir, "msku-detail");
@@ -30,138 +31,71 @@ function normalizedSnapshotDate(date) {
 }
 
 export async function saveSalesDashboardCache(data) {
-  await mkdir(cacheDir, { recursive: true });
-  await writeFile(salesDashboardFile, JSON.stringify(data, null, 2), "utf8");
+  await writeJsonAtomic(salesDashboardFile, data);
 }
 
 export async function readSalesDashboardCache() {
-  try {
-    const content = await readFile(salesDashboardFile, "utf8");
-    return JSON.parse(content);
-  } catch {
-    return null;
-  }
+  return readJsonWithRecovery(salesDashboardFile, null);
 }
 
 export async function saveLingxingSellersCache(data) {
-  await mkdir(cacheDir, { recursive: true });
-  await writeFile(
-    lingxingSellersFile,
-    JSON.stringify(
-      {
-        updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
-        sellers: data,
-      },
-      null,
-      2,
-    ),
-    "utf8",
-  );
+  await writeJsonAtomic(lingxingSellersFile, {
+    updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
+    sellers: data,
+  });
 }
 
 export async function readLingxingSellersCache() {
-  try {
-    const content = await readFile(lingxingSellersFile, "utf8");
-    return JSON.parse(content);
-  } catch {
-    return { updatedAt: null, sellers: [] };
-  }
+  return readJsonWithRecovery(lingxingSellersFile, { updatedAt: null, sellers: [] });
 }
 
 export async function saveMskuDetailCache(key, data) {
-  await mkdir(mskuDetailDir, { recursive: true });
-  await writeFile(
-    path.join(mskuDetailDir, `${hashKey(key)}.json`),
-    JSON.stringify(
-      {
-        updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
-        updatedAtMs: Date.now(),
-        data,
-      },
-      null,
-      2,
-    ),
-    "utf8",
-  );
+  await writeJsonAtomic(path.join(mskuDetailDir, `${hashKey(key)}.json`), {
+    updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
+    updatedAtMs: Date.now(),
+    data,
+  });
 }
 
 export async function readMskuDetailCache(key, ttlMs = 6 * 60 * 60 * 1000) {
-  try {
-    const content = await readFile(path.join(mskuDetailDir, `${hashKey(key)}.json`), "utf8");
-    const cached = JSON.parse(content);
-    if (!cached.updatedAtMs || Date.now() - cached.updatedAtMs > ttlMs) return null;
-    return cached;
-  } catch {
-    return null;
-  }
+  const cached = await readJsonWithRecovery(path.join(mskuDetailDir, `${hashKey(key)}.json`), null);
+  if (!cached || !cached.updatedAtMs || Date.now() - cached.updatedAtMs > ttlMs) return null;
+  return cached;
 }
 
 export async function saveOrderProfitCache(key, data) {
-  await mkdir(orderProfitDir, { recursive: true });
-  await writeFile(
-    path.join(orderProfitDir, `${hashKey(key)}.json`),
-    JSON.stringify(
-      {
-        updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
-        updatedAtMs: Date.now(),
-        data,
-      },
-      null,
-      2,
-    ),
-    "utf8",
-  );
+  await writeJsonAtomic(path.join(orderProfitDir, `${hashKey(key)}.json`), {
+    updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
+    updatedAtMs: Date.now(),
+    data,
+  });
 }
 
 export async function readOrderProfitCache(key, ttlMs = 30 * 60 * 1000) {
-  try {
-    const content = await readFile(path.join(orderProfitDir, `${hashKey(key)}.json`), "utf8");
-    const cached = JSON.parse(content);
-    if (!cached.updatedAtMs || Date.now() - cached.updatedAtMs > ttlMs) return null;
-    return cached;
-  } catch {
-    return null;
-  }
+  const cached = await readJsonWithRecovery(path.join(orderProfitDir, `${hashKey(key)}.json`), null);
+  if (!cached || !cached.updatedAtMs || Date.now() - cached.updatedAtMs > ttlMs) return null;
+  return cached;
 }
 
 export async function readStaleOrderProfitCache(key) {
-  try {
-    const content = await readFile(path.join(orderProfitDir, `${hashKey(key)}.json`), "utf8");
-    return JSON.parse(content);
-  } catch {
-    return null;
-  }
+  return readJsonWithRecovery(path.join(orderProfitDir, `${hashKey(key)}.json`), null);
 }
 
 export async function saveInventoryProvisionSnapshot(date, data) {
   const snapshotDate = normalizedSnapshotDate(date);
   if (!snapshotDate) throw new Error("库存计提快照日期格式无效");
-  await mkdir(inventoryProvisionSnapshotDir, { recursive: true });
-  await writeFile(
-    path.join(inventoryProvisionSnapshotDir, `${snapshotDate}.json`),
-    JSON.stringify(
-      {
-        snapshotDate,
-        updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
-        updatedAtMs: Date.now(),
-        data,
-      },
-      null,
-      2,
-    ),
-    "utf8",
-  );
+  await writeJsonAtomic(path.join(inventoryProvisionSnapshotDir, `${snapshotDate}.json`), {
+    snapshotDate,
+    updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
+    updatedAtMs: Date.now(),
+    data,
+  });
 }
 
 export async function readInventoryProvisionSnapshot(date) {
   const snapshotDate = normalizedSnapshotDate(date);
   if (!snapshotDate) return null;
-  try {
-    const content = await readFile(path.join(inventoryProvisionSnapshotDir, `${snapshotDate}.json`), "utf8");
-    return JSON.parse(content);
-  } catch {
-    return null;
-  }
+  return readJsonWithRecovery(path.join(inventoryProvisionSnapshotDir, `${snapshotDate}.json`), null);
 }
 
 export async function listInventoryProvisionSnapshots() {
@@ -185,20 +119,11 @@ export async function readInventoryProvisionHistoryCache(month) {
 }
 
 async function saveNamedCache(dir, key, data) {
-  await mkdir(dir, { recursive: true });
-  await writeFile(
-    path.join(dir, `${hashKey(key)}.json`),
-    JSON.stringify(
-      {
-        updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
-        updatedAtMs: Date.now(),
-        data,
-      },
-      null,
-      2,
-    ),
-    "utf8",
-  );
+  await writeJsonAtomic(path.join(dir, `${hashKey(key)}.json`), {
+    updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
+    updatedAtMs: Date.now(),
+    data,
+  });
 }
 
 async function cleanupCacheDir(dir, { maxBytes = Infinity, maxAgeMs = Infinity } = {}) {
@@ -239,14 +164,9 @@ async function cleanupCacheDir(dir, { maxBytes = Infinity, maxAgeMs = Infinity }
 }
 
 async function readNamedCache(dir, key, ttlMs) {
-  try {
-    const content = await readFile(path.join(dir, `${hashKey(key)}.json`), "utf8");
-    const cached = JSON.parse(content);
-    if (ttlMs !== Infinity && (!cached.updatedAtMs || Date.now() - cached.updatedAtMs > ttlMs)) return null;
-    return cached;
-  } catch {
-    return null;
-  }
+  const cached = await readJsonWithRecovery(path.join(dir, `${hashKey(key)}.json`), null);
+  if (!cached || (ttlMs !== Infinity && (!cached.updatedAtMs || Date.now() - cached.updatedAtMs > ttlMs))) return null;
+  return cached;
 }
 
 export async function saveSupplierBoardCache(key, data) {

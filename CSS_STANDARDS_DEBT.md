@@ -47,23 +47,23 @@ Initial scan before low-risk token cleanup:
 | Legacy token | 96 |
 | Legacy CSS selector | 123 |
 
-Current G0-6 baseline after low-risk token cleanup:
+Current baseline after the 2026-07-20 low-risk token cleanup:
 
 | Category | Count |
 | --- | ---: |
 | `!important` | 618 |
-| Hardcoded color | 193 |
-| Gradient | 84 |
-| Legacy token | 76 |
+| Hardcoded color | 173 |
+| Gradient | 82 |
+| Legacy token | 61 |
 | Legacy CSS selector | 123 |
 
-Reduction in this pass:
+Total reduction since the initial scan:
 
 | Category | Reduced By |
 | --- | ---: |
-| Hardcoded color | 37 |
-| Gradient | 2 |
-| Legacy token | 20 |
+| Hardcoded color | 57 |
+| Gradient | 4 |
+| Legacy token | 35 |
 
 ## Category Breakdown
 
@@ -90,10 +90,8 @@ Main files:
 
 - `assets/css/layout/10-shell.css`: 86
 - `assets/css/pages/20-login.css`: 58
-- `assets/css/legacy/current.css`: 20
 - `assets/css/legacy/98-shell-topbar-parity.css`: 9
-- `assets/css/pages/68-knowledge-library.css`: 8
-- `assets/css/pages/40-ai-image-workflow.css`: 6
+- `assets/css/legacy/current.css`: 20
 
 Can directly fix: yes, in small batches.
 
@@ -105,7 +103,7 @@ Notes: Prefer existing semantic tokens first. Add a new semantic token only when
 
 Main files:
 
-- `styles.css`: 37 generated occurrences
+- `styles.css`: 36 generated occurrences
 - `assets/css/pages/20-login.css`: 26
 - `assets/css/pages/22-sales-dashboard.css`: 6
 - `assets/css/layout/10-shell.css`: 5
@@ -122,10 +120,9 @@ Notes: Decorative gradients should become semantic solid surfaces. If a gradient
 
 Main files:
 
-- `styles.css`: 25 generated occurrences
+- `styles.css`: 19 generated occurrences
 - `assets/css/tokens/10-legacy-compatibility.css`: 20
 - `assets/css/legacy/current.css`: 11
-- `assets/css/components/20-module-primitives.css`: 9
 - `assets/css/pages/20-login.css`: 7
 - `assets/css/layout/10-shell.css`: 4
 
@@ -157,6 +154,14 @@ This pass only tokenized existing values and did not redesign UI structure:
 - Replaced obvious hardcoded colors in low-risk component/page files.
 - Removed a small number of decorative gradients by using existing semantic surfaces.
 - Replaced several legacy token references with semantic tokens.
+
+## 2026-07-20 Low-Risk CSS Cleanup
+
+This pass reduced 37 additional tracked debt items without changing page structure:
+
+- Moved repeated dashboard/card/modal/focus shadows and image overlay colors into semantic tokens.
+- Replaced legacy tokens in `assets/css/components/20-module-primitives.css` with project semantic tokens.
+- Removed the decorative gradient from shared metric tiles in favor of the primary action token.
 
 ## Required Verification
 

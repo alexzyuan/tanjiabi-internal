@@ -51,7 +51,7 @@
   overflow: hidden;
   border-radius: 8px;
   background: var(--tj-content-bg);
-  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.28);
+  box-shadow: var(--tj-shadow-modal-strong);
 }
 
 #view-fba-freight .fba-forwarder-template-dialog {
@@ -59,7 +59,7 @@
   overflow: hidden;
   border-radius: 8px;
   background: var(--tj-content-bg);
-  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.28);
+  box-shadow: var(--tj-shadow-modal-strong);
 }
 
 #view-fba-freight .fba-forwarder-template-field {

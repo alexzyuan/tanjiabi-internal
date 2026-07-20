@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-11T00:50:37.028Z",
+  "generatedAt": "2026-07-20T03:05:06.403Z",
   "policy": [
     "This file is a ceiling for known CSS standards debt.",
     "The standards check fails when any category/file count exceeds this baseline.",
@@ -15,22 +15,13 @@
     ]
   },
   "totals": {
-    "gradient": 84,
-    "hardcoded-color": 193,
+    "gradient": 82,
+    "hardcoded-color": 173,
     "important": 618,
     "legacy-selector": 123,
-    "legacy-token": 76
+    "legacy-token": 61
   },
   "entries": [
-    {
-      "category": "gradient",
-      "file": "assets/css/components/20-module-primitives.css",
-      "count": 1,
-      "sampleLines": [
-        100
-      ],
-      "message": "avoid decorative gradients; use a semantic solid color or tokenized surface"
-    },
     {
       "category": "gradient",
       "file": "assets/css/layout/10-shell.css",
@@ -134,16 +125,16 @@
     {
       "category": "gradient",
       "file": "styles.css",
-      "count": 37,
+      "count": 36,
       "sampleLines": [
         14,
         34,
         87,
         126,
         179,
-        441,
         542,
-        544
+        544,
+        545
       ],
       "message": "avoid decorative gradients; use a semantic solid color or tokenized surface"
     },
@@ -208,74 +199,6 @@
         41,
         42,
         62
-      ],
-      "message": "replace hardcoded colors with semantic tokens"
-    },
-    {
-      "category": "hardcoded-color",
-      "file": "assets/css/pages/22-sales-dashboard.css",
-      "count": 1,
-      "sampleLines": [
-        52
-      ],
-      "message": "replace hardcoded colors with semantic tokens"
-    },
-    {
-      "category": "hardcoded-color",
-      "file": "assets/css/pages/24-review-rating.css",
-      "count": 2,
-      "sampleLines": [
-        58,
-        121
-      ],
-      "message": "replace hardcoded colors with semantic tokens"
-    },
-    {
-      "category": "hardcoded-color",
-      "file": "assets/css/pages/35-fba-freight.css",
-      "count": 2,
-      "sampleLines": [
-        54,
-        62
-      ],
-      "message": "replace hardcoded colors with semantic tokens"
-    },
-    {
-      "category": "hardcoded-color",
-      "file": "assets/css/pages/36-fba-automation.css",
-      "count": 1,
-      "sampleLines": [
-        17
-      ],
-      "message": "replace hardcoded colors with semantic tokens"
-    },
-    {
-      "category": "hardcoded-color",
-      "file": "assets/css/pages/40-ai-image-workflow.css",
-      "count": 6,
-      "sampleLines": [
-        308,
-        1027,
-        1176,
-        1179,
-        1386,
-        1393
-      ],
-      "message": "replace hardcoded colors with semantic tokens"
-    },
-    {
-      "category": "hardcoded-color",
-      "file": "assets/css/pages/68-knowledge-library.css",
-      "count": 8,
-      "sampleLines": [
-        18,
-        95,
-        190,
-        287,
-        301,
-        480,
-        645,
-        769
       ],
       "message": "replace hardcoded colors with semantic tokens"
     },
@@ -475,22 +398,6 @@
     },
     {
       "category": "legacy-token",
-      "file": "assets/css/components/20-module-primitives.css",
-      "count": 9,
-      "sampleLines": [
-        10,
-        11,
-        13,
-        26,
-        57,
-        85,
-        87,
-        100
-      ],
-      "message": "replace legacy visual language tokens with semantic tokens"
-    },
-    {
-      "category": "legacy-token",
       "file": "assets/css/layout/10-shell.css",
       "count": 4,
       "sampleLines": [
@@ -551,16 +458,16 @@
     {
       "category": "legacy-token",
       "file": "styles.css",
-      "count": 25,
+      "count": 19,
       "sampleLines": [
         2,
         406,
         408,
         409,
-        429,
-        431,
-        435,
-        440
+        590,
+        591,
+        596,
+        600
       ],
       "message": "replace legacy visual language tokens with semantic tokens"
     }

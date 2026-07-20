@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readdir, readFile, stat } from "node:fs/promises";
 import nodeTest from "node:test";
 import { isRepositoryMetadataPath } from "../src/utils/pathFilters.js";
+import { minifyCss } from "../scripts/lib/minifyCss.js";
 
 const cssLayerOrder = ["tokens", "base", "layout", "components", "pages", "legacy"];
 const visualLockReason = "temporary visual lock is active; rerun CSS structure gates after generated CSS reaches sidebar/topbar visual parity";
@@ -24,70 +25,6 @@ async function listCssFiles(dirUrl) {
       return entry.isFile() && entry.name.endsWith(".css") ? [childUrl] : [];
     }));
   return files.flat();
-}
-
-function shouldKeepCssSpace(before, after) {
-  if (!before || !after) return false;
-  if ("{}:;,>+~([".includes(before)) return false;
-  if ("{}:;,>+~)]".includes(after)) return false;
-  return true;
-}
-
-function minifyCss(source) {
-  let output = "";
-  let quote = null;
-  let pendingSpace = false;
-
-  for (let index = 0; index < source.length; index += 1) {
-    const char = source[index];
-    const next = source[index + 1];
-
-    if (quote) {
-      output += char;
-      if (char === "\\" && index + 1 < source.length) {
-        index += 1;
-        output += source[index];
-      } else if (char === quote) {
-        quote = null;
-      }
-      continue;
-    }
-
-    if (char === "\"" || char === "'") {
-      if (pendingSpace && shouldKeepCssSpace(output.at(-1), char)) output += " ";
-      pendingSpace = false;
-      quote = char;
-      output += char;
-      continue;
-    }
-
-    if (char === "/" && next === "*") {
-      index += 2;
-      while (index < source.length && !(source[index] === "*" && source[index + 1] === "/")) {
-        index += 1;
-      }
-      index += 1;
-      continue;
-    }
-
-    if (/\s/.test(char)) {
-      pendingSpace = true;
-      continue;
-    }
-
-    if ("{}:;,>+~()[]=".includes(char)) {
-      output = output.trimEnd();
-      output += char;
-      pendingSpace = false;
-      continue;
-    }
-
-    if (pendingSpace && shouldKeepCssSpace(output.at(-1), char)) output += " ";
-    pendingSpace = false;
-    output += char;
-  }
-
-  return `${output.replace(/;}/g, "}").replace(/}/g, "}\n").trim()}\n`;
 }
 
 async function isLegacyVisualRollback() {
@@ -188,6 +125,19 @@ test("styles.css is generated from layered CSS sources", async () => {
   const generated = minifyCss((await Promise.all(sourceFiles.map((file) => readFile(file, "utf8")))).join("\n\n"));
   const styles = await readFile(new URL("../styles.css", import.meta.url), "utf8");
   assert.equal(styles, generated, "styles.css must match npm run build:css output");
+});
+
+test("CSS minifier implementation is shared between build and structure tests", async () => {
+  const buildScript = await readFile(new URL("../scripts/build-styles.js", import.meta.url), "utf8");
+  const testSource = await readFile(new URL("./stylesStructure.test.js", import.meta.url), "utf8");
+  const sharedMinifier = await readFile(new URL("../scripts/lib/minifyCss.js", import.meta.url), "utf8");
+  const definitions = [buildScript, testSource, sharedMinifier]
+    .map((source) => (source.match(/function\s+minifyCss\b/g) || []).length)
+    .reduce((total, count) => total + count, 0);
+
+  assert.equal(definitions, 1, "minifyCss should have exactly one implementation");
+  assert.match(buildScript, /scripts\/lib\/minifyCss\.js|\.\/lib\/minifyCss\.js/);
+  assert.match(testSource, /scripts\/lib\/minifyCss\.js|\.\.\/scripts\/lib\/minifyCss\.js/);
 });
 
 test("styles.css stays within the raw size budget", async () => {

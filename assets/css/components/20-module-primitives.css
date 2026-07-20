@@ -7,10 +7,10 @@
   margin-top: 14px;
   padding: 14px 16px;
   background: var(--tj-content-bg);
-  border: 1px solid var(--line);
-  border-left: 4px solid var(--blue-800);
+  border: 1px solid var(--tj-border-subtle);
+  border-left: 4px solid var(--tj-action-blue);
   border-radius: 8px;
-  box-shadow: var(--shadow-soft);
+  box-shadow: var(--tj-shadow-soft);
 }
 
 .module-hero span {
@@ -23,7 +23,7 @@
   margin: 4px 0;
   font-size: 20px;
   line-height: 1.2;
-  color: var(--blue-950);
+  color: var(--tj-text-strong);
 }
 
 .module-hero p {
@@ -54,7 +54,7 @@
   border: 1px solid var(--tj-border-control);
   border-radius: 8px;
   padding: 0 10px;
-  color: var(--text);
+  color: var(--tj-text-body);
   background: var(--tj-content-bg);
   font: inherit;
 }
@@ -82,9 +82,9 @@
   min-height: 96px;
   padding: 14px 16px;
   background: var(--tj-content-bg);
-  border: 1px solid var(--line);
+  border: 1px solid var(--tj-border-subtle);
   border-radius: 8px;
-  box-shadow: var(--shadow-soft);
+  box-shadow: var(--tj-shadow-soft);
   position: relative;
   overflow: hidden;
 }
@@ -97,7 +97,7 @@
   width: 34px;
   height: 3px;
   border-radius: 0 0 4px 4px;
-  background: linear-gradient(90deg, var(--blue-800), var(--teal));
+  background: var(--tj-action-blue);
 }
 
 .metric-tile span,
@@ -110,5 +110,5 @@
   display: block;
   margin: 9px 0 6px;
   font-size: 24px;
-  color: var(--blue-900);
+  color: var(--tj-action-blue);
 }

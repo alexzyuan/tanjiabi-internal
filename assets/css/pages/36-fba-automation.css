@@ -14,7 +14,7 @@
   --fba-surface: var(--tj-content-bg);
   --fba-surface-soft: var(--tj-surface-muted);
   --fba-skeleton: color-mix(in srgb, var(--tj-action-blue) 8%, var(--tj-content-bg));
-  --fba-modal-shadow: 0 30px 80px rgba(15, 23, 42, 0.28);
+  --fba-modal-shadow: var(--tj-shadow-modal-strong);
 }
 .fba-board-head,
 .fba-board-actions,

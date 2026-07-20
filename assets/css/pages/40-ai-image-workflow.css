@@ -305,7 +305,7 @@
 .ai-workflow-form select:focus,
 .ai-workflow-form textarea:focus {
   border-color: var(--tj-action-blue);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.09);
+  box-shadow: var(--tj-focus-ring-form);
 }
 
 .ai-workflow-form label > small {
@@ -1024,7 +1024,7 @@
 .ai-copy-form textarea:focus,
 .ai-listing-block textarea:focus {
   border-color: var(--tj-action-blue);
-  box-shadow: 0 0 0 3px rgba(60, 110, 220, 0.1);
+  box-shadow: var(--tj-focus-ring-form);
 }
 
 .ai-copy-form label > small {
@@ -1173,10 +1173,10 @@
   height: 24px;
   padding: 0;
   place-items: center;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--tj-image-control-border);
   border-radius: 50%;
   color: var(--tj-content-bg);
-  background: rgba(34, 34, 34, 0.72);
+  background: var(--tj-image-control-bg);
   font-size: 16px;
   line-height: 1;
   cursor: pointer;
@@ -1383,14 +1383,14 @@
 #view-ai-image-workflow {
   --ai-copy-accent: var(--tj-action-blue);
   --ai-copy-accent-soft: var(--tj-action-blue-soft);
-  --ai-copy-accent-shadow: 0 5px 12px rgba(36, 87, 213, 0.2);
+  --ai-copy-accent-shadow: var(--tj-shadow-accent-raised);
   --ai-copy-border-muted: var(--tj-border-subtle);
   --ai-copy-border-subtle: var(--tj-border-subtle);
   --ai-copy-control-border: var(--tj-border-control);
   --ai-copy-divider: var(--tj-border-subtle);
   --ai-copy-on-accent: var(--tj-content-bg);
   --ai-copy-panel-border: var(--tj-border-subtle);
-  --ai-copy-panel-shadow: 0 7px 22px rgba(28, 43, 72, 0.045);
+  --ai-copy-panel-shadow: var(--tj-shadow-soft);
   --ai-copy-surface: var(--tj-content-bg);
   --ai-content-font-size: 13px;
   --ai-meta-font-size: 11px;
