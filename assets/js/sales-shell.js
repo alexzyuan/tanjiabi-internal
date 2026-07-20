@@ -1,8 +1,11 @@
+import { createDateRangePicker } from "./date-range-picker.js";
+
 export function createSalesShell({
   root = globalThis.document,
   bind,
   bindAll,
   bindClickOutside,
+  createDateRangePickerImpl = createDateRangePicker,
   fieldValue,
   formatDate,
   getDateRangeByPreset,
@@ -22,6 +25,7 @@ export function createSalesShell({
   if (typeof setText !== "function") throw new Error("createSalesShell requires setText.");
 
   let frontDateRange = getDefaultFrontDateRange();
+  let frontDateRangePicker = null;
 
   function getFrontDateRange() {
     return { ...frontDateRange };
@@ -53,6 +57,7 @@ export function createSalesShell({
     if (startInput) startInput.value = start;
     if (endInput) endInput.value = end;
     setText("#front-date-range-button", `${start} - ${end}`, root);
+    frontDateRangePicker?.refresh?.();
     return getFrontDateRange();
   }
 
@@ -67,6 +72,7 @@ export function createSalesShell({
   }
 
   function closeFrontDatePopover() {
+    frontDateRangePicker?.close?.();
     return setFrontDatePopoverOpen(false);
   }
 
@@ -104,15 +110,18 @@ export function createSalesShell({
   }
 
   function setupFrontDateRangeControls() {
-    bind(root, "#front-date-range-button", "click", toggleFrontDatePopover);
-    bindAll(root, "[data-range-preset]", "click", function handleDateRangePresetClick() {
-      applyFrontDatePreset(this.dataset.rangePreset);
-      onDateRangeChange();
+    frontDateRangePicker = createDateRangePickerImpl({
+      root,
+      triggerSelector: "#front-date-range-button",
+      popoverSelector: "#front-date-range-popover",
+      startInputSelector: "#front-date-start",
+      endInputSelector: "#front-date-end",
+      onChange: (range) => {
+        frontDateRange = { ...range };
+        onDateRangeChange();
+      },
     });
-    bind(root, "#front-date-apply", "click", () => {
-      applyFrontDateInputs();
-      onDateRangeChange();
-    });
+    frontDateRangePicker.setup?.();
     bindClickOutside(root, ".date-range-control", () => {
       if (!root.querySelector(".date-range-control")) return;
       closeFrontDatePopover();

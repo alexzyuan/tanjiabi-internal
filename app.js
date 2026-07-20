@@ -21,7 +21,7 @@ import {
   getPacificTodayDate,
   getPacificTodayText,
 } from "./assets/js/date-utils.js?v=20260707-frontend-refactor-v1";
-import { createSalesShell } from "./assets/js/sales-shell.js?v=20260707-frontend-refactor-v1";
+import { createSalesShell } from "./assets/js/sales-shell.js?v=20260720-date-range-picker-v1";
 import { createNavigationUtils } from "./assets/js/navigation-utils.js?v=20260707-frontend-refactor-v1";
 import { compareTableSortableValues, createTableSorter } from "./assets/js/table-sorter.js?v=20260707-frontend-refactor-v1";
 import { createAftersalesDashboardFeature } from "./assets/js/features/aftersales-dashboard.js?v=20260706-frontend-refactor-v1";

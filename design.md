@@ -182,6 +182,15 @@ font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
 | 表格单元格 | 12px - 13px | 400 - 520 | 数字使用 tabular-nums |
 | 按钮文字 | 13px - 14px | 600 - 700 | 保持一行 |
 
+日期控件契约：
+
+- 新增日期范围筛选优先使用 `assets/js/date-range-picker.js` 和 `assets/css/components/36-date-range-picker.css` 的共享双月日期控件。
+- 销售复盘和 FBA 货件这类日期范围筛选必须使用 `.date-range-button date-range-picker__trigger`，弹层内容由 JS 渲染，不在页面 HTML 中手写快捷项和 `<input type="date">` 面板。
+- 默认展开视图是前 30 天到今天；开始日期选中后，结束日期只能在开始日期起 30 天内，并且不能超过今天。
+- 日期弹层宽度为 `min(760px, 96vw)`，左侧快捷项宽度 112px；快捷项 hover/focus 使用淡蓝底。
+- 选中开始/结束日期使用蓝色圆形填充，今天使用蓝色细圆边框，范围预览使用淡蓝底。
+- 日期按钮不使用额外伪元素图标；弹层必须显式设置字体大小，不能继承外层 label 的隐藏文字规则。
+
 禁止：
 
 - 导航和表格使用过高字重。

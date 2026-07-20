@@ -259,25 +259,10 @@
           <label>
             日期
             <div class="date-range-control">
-              <button id="front-date-range-button" class="date-range-button" type="button">本月</button>
-              <div class="date-range-popover" id="front-date-range-popover" hidden>
-                <div class="date-presets">
-                  <button type="button" data-range-preset="today">今日</button>
-                  <button type="button" data-range-preset="yesterday">昨日</button>
-                  <button type="button" data-range-preset="last7">近7天</button>
-                  <button type="button" data-range-preset="last30">近30天</button>
-                  <button type="button" data-range-preset="thisWeek">本周</button>
-                  <button type="button" data-range-preset="lastWeek">上周</button>
-                  <button type="button" data-range-preset="thisMonth">本月</button>
-                  <button type="button" data-range-preset="lastMonth">上月</button>
-                </div>
-                <div class="date-range-fields">
-                  <input id="front-date-start" type="date" />
-                  <span>至</span>
-                  <input id="front-date-end" type="date" />
-                  <button id="front-date-apply" class="primary-button" type="button">确定</button>
-                </div>
-              </div>
+              <button id="front-date-range-button" class="date-range-button date-range-picker__trigger" type="button">本月</button>
+              <input id="front-date-start" type="hidden" />
+              <input id="front-date-end" type="hidden" />
+              <div class="date-range-popover date-range-picker__popover" id="front-date-range-popover" hidden></div>
             </div>
           </label>
           <label>

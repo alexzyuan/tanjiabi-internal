@@ -285,6 +285,47 @@ test("shared table controls live outside legacy css and use semantic tokens", as
   assert.equal((generatedSource.match(/\.table-action\{/g) || []).length, 1);
 });
 
+test("shared date range picker styles live outside page css and use semantic tokens", async () => {
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const componentSource = await readFile(new URL("../assets/css/components/36-date-range-picker.css", import.meta.url), "utf8");
+  const salesPageSource = await readFile(new URL("../assets/css/pages/22-sales-dashboard.css", import.meta.url), "utf8");
+  const fbaPageSource = await readFile(new URL("../assets/css/pages/35-fba-freight.css", import.meta.url), "utf8");
+  const legacySource = await readFile(new URL("../assets/css/legacy/current.css", import.meta.url), "utf8");
+
+  assert.match(indexSource, /id="front-date-range-button" class="date-range-button date-range-picker__trigger"/);
+  assert.match(indexSource, /id="fba-freight-date-range-button" class="date-range-button date-range-picker__trigger"/);
+  assert.match(componentSource, /^\.date-range-control\s*\{/m);
+  assert.match(componentSource, /^\.date-range-button\s*\{/m);
+  assert.equal(componentSource.includes(".date-range-button::after"), false);
+  assert.match(componentSource, /^\.date-range-picker__popover\s*\{/m);
+  assert.match(componentSource, /width:\s*min\(760px,\s*96vw\)/);
+  assert.match(componentSource, /grid-template-columns:\s*112px minmax\(0,\s*1fr\)/);
+  assert.match(componentSource, /\.date-range-picker__popover\s*\{[\s\S]*font-size:\s*13px;[\s\S]*\}/);
+  assert.match(componentSource, /^\.date-range-picker__shortcuts\s*\{/m);
+  assert.match(componentSource, /^\.date-range-picker__shortcuts button:is\(:hover, :focus-visible\)\s*\{/m);
+  assert.match(componentSource, /^\.date-range-picker__months\s*\{/m);
+  assert.match(componentSource, /^\.date-range-picker__day\.is-selected,/m);
+  assert.match(componentSource, /\.date-range-picker__day\.is-preview-end/);
+  assert.match(componentSource, /^\.date-range-picker__day:is\(\.is-today, \.is-selected, \.is-preview-end\)\s*\{/m);
+  assert.match(componentSource, /^\.date-range-picker__day\.is-today:not\(\.is-selected\)\s*\{/m);
+  assert.match(componentSource, /var\(--tj-content-bg\)/);
+  assert.match(componentSource, /var\(--tj-border-control\)/);
+  assert.match(componentSource, /var\(--tj-action-blue\)/);
+  assert.match(componentSource, /var\(--tj-focus-ring\)/);
+
+  [
+    /^\.date-range-control\s*\{/m,
+    /^\.date-range-button\s*\{/m,
+    /^\.date-range-popover\s*\{/m,
+    /^\.date-presets\s*\{/m,
+    /^\.date-range-fields\s*\{/m,
+  ].forEach((selectorPattern) => {
+    assert.equal(selectorPattern.test(salesPageSource), false, `${selectorPattern} should be owned by shared date range picker CSS`);
+    assert.equal(selectorPattern.test(fbaPageSource), false, `${selectorPattern} should be owned by shared date range picker CSS`);
+    assert.equal(selectorPattern.test(legacySource), false, `${selectorPattern} should stay out of legacy css`);
+  });
+});
+
 test("shared data table baseline defines table class, column types, sticky utilities, and states", async () => {
   const componentSource = await readFile(new URL("../assets/css/components/44-data-table.css", import.meta.url), "utf8");
   const overrideSource = await readFile(new URL("../assets/css/components/48-application-ui-overrides.css", import.meta.url), "utf8");
@@ -593,9 +634,6 @@ test("sales dashboard overview styles live in the page layer and use semantic to
 
   assert.match(pageSource, /^\/\* Sales dashboard filter controls and overview metrics\. \*\//m);
   assert.match(pageSource, /^#sales-global-filters\[hidden\]\s*\{/m);
-  assert.match(pageSource, /^\.date-range-control\s*\{/m);
-  assert.match(pageSource, /^\.date-range-button\s*\{/m);
-  assert.match(pageSource, /^\.date-range-popover\s*\{/m);
   assert.match(pageSource, /^\.insight-row\s*\{/m);
   assert.match(pageSource, /^\.insight-card\s*\{/m);
   assert.match(pageSource, /^\.overview-grid\s*\{/m);
@@ -604,7 +642,6 @@ test("sales dashboard overview styles live in the page layer and use semantic to
   assert.match(pageSource, /^\.mini-card\s*\{/m);
   assert.match(pageSource, /^@media \(max-width: 1180px\)/m);
   assert.match(pageSource, /var\(--tj-content-bg\)/);
-  assert.match(pageSource, /var\(--tj-border-control\)/);
   assert.match(pageSource, /var\(--tj-text-muted\)/);
   assert.match(pageSource, /var\(--tj-action-blue\)/);
   assert.match(pageSource, /var\(--spectrum-accent-visual\)/);
@@ -612,11 +649,6 @@ test("sales dashboard overview styles live in the page layer and use semantic to
 
   [
     /^#sales-global-filters\[hidden\]\s*\{/m,
-    /^\.date-range-control\s*\{/m,
-    /^\.date-range-button\s*\{/m,
-    /^\.date-range-popover\s*\{/m,
-    /^\.date-presets\s*\{/m,
-    /^\.date-range-fields\s*\{/m,
     /^\.insight-row\s*\{/m,
     /^\.insight-card\s*\{/m,
     /^\.card-title\s*\{/m,
