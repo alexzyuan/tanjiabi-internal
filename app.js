@@ -47,7 +47,7 @@ import { createAdminSettingsFeature } from "./assets/js/features/admin-settings.
 import { createWebhookAssistantFeature } from "./assets/js/features/webhook-assistant.js?v=20260720-webhook-assistant-v1";
 import { createBudgetTargetsFeature } from "./assets/js/features/budget-targets.js?v=20260706-frontend-refactor-v1";
 import { createSyncCenterFeature } from "./assets/js/features/sync-center.js?v=20260706-frontend-refactor-v1";
-import { createFbaFreightFeature } from "./assets/js/features/fba-freight.js?v=20260706-frontend-refactor-v1";
+import { createFbaFreightFeature } from "./assets/js/features/fba-freight.js?v=20260720-logistics-rules-v2";
 import { createFbaShopsFeature } from "./assets/js/features/fba-shops.js?v=20260706-frontend-refactor-v1";
 import { createFbaMskuFeature } from "./assets/js/features/fba-msku.js?v=20260707-frontend-refactor-v1";
 import { createFbaAutomationFeature } from "./assets/js/features/fba-automation.js?v=20260707-frontend-refactor-v1";

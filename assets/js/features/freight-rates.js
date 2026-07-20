@@ -1,4 +1,4 @@
-import { fbaLogisticsChannelNamesForCountry, fbaLogisticsChannelsByCountry } from "../fba-logistics-rules.js";
+import { fbaLogisticsChannelNamesForCountry, fbaLogisticsChannelsByCountry } from "../fba-logistics-rules.js?v=20260720-logistics-rules-v2";
 
 export function createFreightRatesFeature({
   root = globalThis.document,

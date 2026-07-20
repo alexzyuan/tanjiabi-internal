@@ -1,5 +1,5 @@
 import { createDateRangePicker } from "../date-range-picker.js";
-import { fbaLogisticsChannelsForCountry, normalizeFbaLogisticsCountry } from "../fba-logistics-rules.js";
+import { fbaLogisticsChannelsForCountry, normalizeFbaLogisticsCountry } from "../fba-logistics-rules.js?v=20260720-logistics-rules-v2";
 
 export function createFbaFreightFeature({
   root = globalThis.document,

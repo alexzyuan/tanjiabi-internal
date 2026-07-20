@@ -82,7 +82,11 @@ test("webhook assistant uses built-in DingTalk targets instead of raw webhook in
 
 test("logistics navigation exposes FBA shipment handling and freight rates", async () => {
   const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const appSource = await readFile(new URL("../app.js", import.meta.url), "utf8");
   const breadcrumbSource = await readFile(new URL("../assets/js/features/breadcrumb-shell.js", import.meta.url), "utf8");
+  const fbaFreightSource = await readFile(new URL("../assets/js/features/fba-freight.js", import.meta.url), "utf8");
+  const freightRatesSource = await readFile(new URL("../assets/js/features/freight-rates.js", import.meta.url), "utf8");
+  const logisticsRulesSource = await readFile(new URL("../assets/js/fba-logistics-rules.js", import.meta.url), "utf8");
 
   assert.match(indexSource, /<section class="nav-group" aria-label="物流">/);
   assert.match(indexSource, /data-view="fba-freight"[\s\S]*FBA货件处理/);
@@ -91,6 +95,20 @@ test("logistics navigation exposes FBA shipment handling and freight rates", asy
   assert.match(indexSource, /id="view-freight-rates"/);
   assert.match(breadcrumbSource, /"fba-freight": \["首页", "物流", "FBA货件处理"\]/);
   assert.match(breadcrumbSource, /"freight-rates": \["首页", "物流", "运费看板"\]/);
+  assert.match(appSource, /features\/fba-freight\.js\?v=20260720-logistics-rules-v2/);
+  assert.doesNotMatch(appSource, /features\/fba-freight\.js\?v=20260706-frontend-refactor-v1/);
+  assert.match(fbaFreightSource, /fba-logistics-rules\.js\?v=20260720-logistics-rules-v2/);
+  assert.match(freightRatesSource, /fba-logistics-rules\.js\?v=20260720-logistics-rules-v2/);
+  assert.match(fbaFreightSource, /fbaLogisticsChannelsForCountry/);
+  assert.match(freightRatesSource, /fbaLogisticsChannelNamesForCountry/);
+  assert.match(logisticsRulesSource, /OA直送（包税）/);
+  assert.match(logisticsRulesSource, /准时达卡派\(包税\)/);
+  assert.match(logisticsRulesSource, /美国空派带电包税\(卡派\)/);
+  assert.match(logisticsRulesSource, /美森闪送卡派（包税）/);
+  assert.match(logisticsRulesSource, /加拿大卡派（包税）/);
+  assert.match(logisticsRulesSource, /加东闪送（包税）/);
+  assert.match(logisticsRulesSource, /欧盟递延卡派\(不包税\)/);
+  assert.match(logisticsRulesSource, /澳洲卡派（包税）/);
 });
 
 test("modal close buttons and dialogs expose accessible names", async () => {
