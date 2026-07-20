@@ -891,6 +891,20 @@ test("FBA freight page styles avoid overriding shared filter toolbar", async () 
   assert.equal(legacySource.includes(".fba-freight-toolbar"), false);
 });
 
+test("FBA Jiufang order modal uses an opaque dialog instead of a page cover", async () => {
+  const generatedSource = await readFile(new URL("../styles.css", import.meta.url), "utf8");
+  const pageSource = await readFile(new URL("../assets/css/pages/35-fba-freight.css", import.meta.url), "utf8");
+
+  assert.match(pageSource, /^#fba-freight-jiufang-modal\s*\{/m);
+  assert.match(pageSource, /background:\s*transparent/);
+  assert.match(pageSource, /^#view-fba-freight \.fba-jiufang-order-dialog\s*\{/m);
+  assert.match(pageSource, /background:\s*var\(--tj-content-bg\)/);
+  assert.match(pageSource, /box-shadow:\s*var\(--tj-shadow-modal-strong\)/);
+  assert.match(generatedSource, /#fba-freight-jiufang-modal\{/);
+  assert.match(generatedSource, /#fba-freight-jiufang-modal\{background:transparent\}/);
+  assert.match(generatedSource, /#view-fba-freight \.fba-jiufang-order-dialog\{[^}]*background:var\(--tj-content-bg\)/);
+});
+
 test("FBA automation board styles live in the page layer and use semantic tokens", async () => {
   const pageSource = await readFile(new URL("../assets/css/pages/36-fba-automation.css", import.meta.url), "utf8");
   const legacySource = await readFile(new URL("../assets/css/legacy/current.css", import.meta.url), "utf8");

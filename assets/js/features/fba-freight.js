@@ -497,7 +497,7 @@ export function createFbaFreightFeature({
   }
 
   function renderFbaFreightJiufangResult(result = {}) {
-    if (result.status === "ready") return `预检通过：${formatNumber(result.summary?.boxCount || 0)} 箱`;
+    if (result.status === "ready") return `资料检查通过：${formatNumber(result.summary?.boxCount || 0)} 箱`;
     if (result.status === "created") return `下单成功 ${result.jiufangOrderNumber || ""}`.trim();
     if (result.status === "skipped") return `跳过：${result.reason || "已存在"} ${result.jiufangOrderNumber || ""}`.trim();
     const missing = Array.isArray(result.missingFields) && result.missingFields.length ? result.missingFields.join("；") : "";
@@ -509,16 +509,16 @@ export function createFbaFreightFeature({
     if (countries.length !== 1) return "<p class=\"modal-tip\">请选择同一个国家的货件后再提交九方。</p>";
     if (!pendingFbaFreightJiufangChannelOptions.length) return `<p class="modal-tip">${escapeHtml(countries[0])} 暂无常用九方渠道配置。</p>`;
     const ids = rows.map((row) => fbaFreightRowId(row)).filter(Boolean);
-    return `<p class="modal-tip">已选择 ${escapeHtml(formatNumber(ids.length))} 个 ${escapeHtml(countries[0])} 货件。请选择渠道后点击确认下单，系统会先自动预检。</p>`;
+    return `<p class="modal-tip">已选择 ${escapeHtml(formatNumber(ids.length))} 个 ${escapeHtml(countries[0])} 货件。请选择渠道后点击确认下单，系统会自动完成资料检查，并继续提交九方下单。</p>`;
   }
 
   function renderFbaFreightJiufangSummary(data = {}) {
     const results = Array.isArray(data.results) ? data.results : [];
-    if (!results.length) return "<p class=\"modal-tip\">九方预检没有返回结果。</p>";
+    if (!results.length) return "<p class=\"modal-tip\">九方下单检查没有返回结果。</p>";
     return `
       <div class="fba-jiufang-summary-grid">
-        <span>可提交 <strong>${escapeHtml(formatNumber(data.readyCount || 0))}</strong></span>
-        <span>已跳过 <strong>${escapeHtml(formatNumber(data.skippedCount || 0))}</strong></span>
+        <span>可下单 <strong>${escapeHtml(formatNumber(data.readyCount || 0))}</strong></span>
+        <span>已存在 <strong>${escapeHtml(formatNumber(data.skippedCount || 0))}</strong></span>
         <span>失败 <strong>${escapeHtml(formatNumber(data.failedCount || 0))}</strong></span>
       </div>
       <div class="fba-jiufang-result-list">
@@ -536,24 +536,16 @@ export function createFbaFreightFeature({
   }
 
   function updateFbaFreightJiufangActionState(data = {}) {
-    const precheckButton = query("#fba-freight-jiufang-precheck");
     const confirmButton = query("#fba-freight-jiufang-confirm");
     if (fbaFreightJiufangSuccessReady) {
-      if (precheckButton) precheckButton.hidden = true;
       if (confirmButton) {
         confirmButton.disabled = false;
         confirmButton.textContent = "关闭页面";
       }
       return;
     }
-    if (precheckButton) {
-      precheckButton.hidden = true;
-      precheckButton.disabled = !pendingFbaFreightJiufangShipmentIds.length
-        || !selectedFbaFreightJiufangChannel()
-        || fbaFreightJiufangSubmitting
-        || !pendingFbaFreightJiufangChannelOptions.length;
-    }
     if (confirmButton) {
+      confirmButton.textContent = fbaFreightJiufangSubmitting ? "处理中" : "确认下单";
       confirmButton.disabled = !pendingFbaFreightJiufangShipmentIds.length
         || !selectedFbaFreightJiufangChannel()
         || fbaFreightJiufangSubmitting
@@ -654,7 +646,7 @@ export function createFbaFreightFeature({
     });
     const data = await response.json().catch(() => ({}));
     const results = Array.isArray(data.results) ? data.results : null;
-    if (!results) throw new Error(data.error || "接口没有返回九方预检结果");
+    if (!results) throw new Error(data.error || "接口没有返回九方下单检查结果");
     return { data, results };
   }
 
@@ -675,41 +667,6 @@ export function createFbaFreightFeature({
     return { data, results };
   }
 
-  async function dryRunFbaFreightJiufangOrders(shipmentIds = pendingFbaFreightJiufangShipmentIds) {
-    const ids = [...shipmentIds].filter(Boolean);
-    if (!ids.length) {
-      setFbaFreightStatus("请先选择要提交九方的货件。");
-      return;
-    }
-    fbaFreightJiufangSubmitting = true;
-    updateFbaFreightSelectionState();
-    setFbaFreightJiufangResults(ids, "预检中");
-    try {
-      const channelCode = await ensureFbaFreightJiufangChannelSelected();
-      setFbaFreightStatus(`九方下单预检中：${formatNumber(ids.length)} 个货件`);
-      setFbaFreightJiufangSummaryHtml(`<p class="modal-tip">1. 预检中：正在检查地址、装箱明细和报关字段。</p>`);
-      const { data, results } = await requestFbaFreightJiufangDryRun(ids, channelCode);
-      results.forEach((result) => setFbaFreightJiufangResultCell(result.shipmentId, renderFbaFreightJiufangResult(result)));
-      pendingFbaFreightJiufangShipmentIds = results
-        .filter((result) => result.status === "ready")
-        .map((result) => result.shipmentId)
-        .filter(Boolean);
-      pendingFbaFreightJiufangDryRunResult = data;
-      setFbaFreightJiufangSummaryHtml(renderFbaFreightJiufangSummary(data));
-      updateFbaFreightJiufangActionState(data);
-      setModalOpenState(query("#fba-freight-jiufang-modal"), true);
-      setFbaFreightStatus(`九方预检完成：可提交 ${formatNumber(data.readyCount || 0)}，失败 ${formatNumber(data.failedCount || 0)}`);
-    } catch (error) {
-      const message = `失败：${error.message || error}`;
-      setFbaFreightJiufangResults(ids, message);
-      setFbaFreightStatus(`九方预检失败：${error.message || error}`);
-    } finally {
-      fbaFreightJiufangSubmitting = false;
-      updateFbaFreightSelectionState();
-      updateFbaFreightJiufangActionState(pendingFbaFreightJiufangDryRunResult || {});
-    }
-  }
-
   async function createFbaFreightJiufangOrders() {
     if (fbaFreightJiufangSuccessReady) {
       closeFbaFreightJiufangModal();
@@ -721,10 +678,10 @@ export function createFbaFreightFeature({
     fbaFreightJiufangSubmitting = true;
     updateFbaFreightSelectionState();
     updateFbaFreightJiufangActionState();
-    setFbaFreightJiufangResults(ids, "预检中");
+    setFbaFreightJiufangResults(ids, "资料检查中");
     try {
-      setFbaFreightStatus(`九方预检中：${formatNumber(ids.length)} 个货件`);
-      setFbaFreightJiufangSummaryHtml(`<p class="modal-tip">1. 预检中：正在检查地址、装箱明细和报关字段。</p>`);
+      setFbaFreightStatus(`九方资料检查中：${formatNumber(ids.length)} 个货件`);
+      setFbaFreightJiufangSummaryHtml(`<p class="modal-tip">1. 资料检查中：正在检查地址、装箱明细和报关字段。</p>`);
       const { data: dryRunData, results: dryRunResults } = await requestFbaFreightJiufangDryRun(ids, channelCode);
       dryRunResults.forEach((result) => setFbaFreightJiufangResultCell(result.shipmentId, renderFbaFreightJiufangResult(result)));
       const readyIds = dryRunResults
@@ -735,14 +692,14 @@ export function createFbaFreightFeature({
       pendingFbaFreightJiufangDryRunResult = dryRunData;
       if (!readyIds.length || Number(dryRunData.failedCount || 0) > 0) {
         setFbaFreightJiufangSummaryHtml(renderFbaFreightJiufangSummary(dryRunData));
-        setFbaFreightStatus(`九方预检完成：可提交 ${formatNumber(dryRunData.readyCount || 0)}，失败 ${formatNumber(dryRunData.failedCount || 0)}`);
+        setFbaFreightStatus(`九方资料检查完成：可下单 ${formatNumber(dryRunData.readyCount || 0)}，失败 ${formatNumber(dryRunData.failedCount || 0)}`);
         updateFbaFreightJiufangActionState(dryRunData);
         return;
       }
       setFbaFreightJiufangResults(readyIds, "提交中");
-      setFbaFreightStatus(`九方预检通过，正在提交：${formatNumber(readyIds.length)} 个货件`);
+      setFbaFreightStatus(`九方资料检查通过，正在提交：${formatNumber(readyIds.length)} 个货件`);
       setFbaFreightJiufangSummaryHtml(`
-        <p class="modal-tip">1. 预检通过：${escapeHtml(formatNumber(readyIds.length))} 个货件可提交。</p>
+        <p class="modal-tip">1. 资料检查通过：${escapeHtml(formatNumber(readyIds.length))} 个货件可下单。</p>
         <p class="modal-tip">2. 正在下单：等待九方返回单号。</p>
         ${renderFbaFreightJiufangSummary(dryRunData)}
       `);
@@ -755,7 +712,7 @@ export function createFbaFreightFeature({
         setFbaFreightJiufangSuccessState(results);
       } else {
         setFbaFreightJiufangSummaryHtml(`
-          <p class="modal-tip">1. 预检通过：${escapeHtml(formatNumber(readyIds.length))} 个货件可提交。</p>
+          <p class="modal-tip">1. 资料检查通过：${escapeHtml(formatNumber(readyIds.length))} 个货件可下单。</p>
           <p class="modal-tip">2. 下单完成：已收到九方返回结果。</p>
           ${renderFbaFreightJiufangSummary(data)}
         `);
@@ -853,7 +810,6 @@ export function createFbaFreightFeature({
     bind(root, "#fba-freight-batch-convert", "click", () => {
       openFbaFreightTemplateModal([...selectedFbaFreightShipmentIds]);
     });
-    bind(root, "#fba-freight-jiufang-precheck", "click", () => dryRunFbaFreightJiufangOrders([...pendingFbaFreightJiufangShipmentIds]));
     bind(root, "#fba-freight-jiufang-confirm", "click", createFbaFreightJiufangOrders);
     bind(root, "#fba-freight-jiufang-cancel", "click", closeFbaFreightJiufangModal);
     bind(root, "#fba-freight-jiufang-close", "click", closeFbaFreightJiufangModal);

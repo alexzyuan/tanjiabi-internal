@@ -1062,6 +1062,8 @@ body:not(.login-body) #view-clearance>.module-hero .hero-actions{justify-content
 #view-fba-freight .fba-freight-product-image{width:44px;height:44px;object-fit:contain;border:1px solid var(--tj-border-subtle);border-radius:6px;background:var(--tj-content-bg)}
 #view-fba-freight .fba-freight-detail-dialog{width:min(1080px,96vw);max-height:92vh;display:grid;grid-template-rows:auto 1fr;overflow:hidden;border-radius:8px;background:var(--tj-content-bg);box-shadow:var(--tj-shadow-modal-strong)}
 #view-fba-freight .fba-forwarder-template-dialog{width:min(480px,94vw);overflow:hidden;border-radius:8px;background:var(--tj-content-bg);box-shadow:var(--tj-shadow-modal-strong)}
+#fba-freight-jiufang-modal{background:transparent}
+#view-fba-freight .fba-jiufang-order-dialog{width:min(720px,94vw);max-height:92vh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden;border:1px solid var(--tj-border-subtle);border-radius:8px;background:var(--tj-content-bg);box-shadow:var(--tj-shadow-modal-strong)}
 #view-fba-freight .fba-forwarder-template-field{display:grid;gap:8px;color:var(--tj-text-muted);font-size:13px;font-weight:700}
 #view-fba-freight .fba-forwarder-template-field select{width:100%;height:42px;border:1px solid var(--tj-border-subtle);border-radius:8px;background:var(--tj-content-bg);color:var(--tj-text-body);font-size:14px}
 #view-fba-freight .fba-freight-detail-content{display:grid;gap:18px;overflow:auto;padding:22px 24px}

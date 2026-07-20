@@ -51,6 +51,22 @@
   box-shadow: var(--tj-shadow-modal-strong);
 }
 
+#fba-freight-jiufang-modal {
+  background: transparent;
+}
+
+#view-fba-freight .fba-jiufang-order-dialog {
+  width: min(720px, 94vw);
+  max-height: 92vh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  border: 1px solid var(--tj-border-subtle);
+  border-radius: 8px;
+  background: var(--tj-content-bg);
+  box-shadow: var(--tj-shadow-modal-strong);
+}
+
 #view-fba-freight .fba-forwarder-template-field {
   display: grid;
   gap: 8px;

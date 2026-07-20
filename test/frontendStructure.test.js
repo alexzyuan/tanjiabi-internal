@@ -95,7 +95,7 @@ test("logistics navigation exposes FBA shipment handling and freight rates", asy
   assert.match(indexSource, /id="view-freight-rates"/);
   assert.match(breadcrumbSource, /"fba-freight": \["首页", "物流", "FBA货件处理"\]/);
   assert.match(breadcrumbSource, /"freight-rates": \["首页", "物流", "运费看板"\]/);
-  assert.match(appSource, /features\/fba-freight\.js\?v=20260720-logistics-rules-v2/);
+  assert.match(appSource, /features\/fba-freight\.js\?v=20260720-jiufang-flow-v2/);
   assert.doesNotMatch(appSource, /features\/fba-freight\.js\?v=20260706-frontend-refactor-v1/);
   assert.match(fbaFreightSource, /fba-logistics-rules\.js\?v=20260720-logistics-rules-v2/);
   assert.match(freightRatesSource, /fba-logistics-rules\.js\?v=20260720-logistics-rules-v2/);
@@ -109,6 +109,21 @@ test("logistics navigation exposes FBA shipment handling and freight rates", asy
   assert.match(logisticsRulesSource, /加东闪送（包税）/);
   assert.match(logisticsRulesSource, /欧盟递延卡派\(不包税\)/);
   assert.match(logisticsRulesSource, /澳洲卡派（包税）/);
+});
+
+test("FBA Jiufang modal uses the current confirm-and-progress ordering flow", async () => {
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const fbaFreightSource = await readFile(new URL("../assets/js/features/fba-freight.js", import.meta.url), "utf8");
+
+  assert.match(indexSource, /id="fba-freight-jiufang-channel"/);
+  assert.match(indexSource, /id="fba-freight-jiufang-confirm"[^>]*>确认下单<\/button>/);
+  assert.doesNotMatch(indexSource, /id="fba-freight-jiufang-precheck"/);
+  assert.doesNotMatch(fbaFreightSource, /#fba-freight-jiufang-precheck/);
+  assert.doesNotMatch(fbaFreightSource, /九方预检没有返回结果/);
+  assert.doesNotMatch(fbaFreightSource, /资料预检/);
+  assert.match(fbaFreightSource, /系统会自动完成资料检查，并继续提交九方下单/);
+  assert.match(fbaFreightSource, /货件号 \$\{escapeHtml\(result\.shipmentId\)\} 已在九方物流系统下单成功，九方单号：/);
+  assert.match(fbaFreightSource, /confirmButton\.textContent = "关闭页面"/);
 });
 
 test("modal close buttons and dialogs expose accessible names", async () => {
