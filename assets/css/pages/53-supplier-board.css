@@ -44,8 +44,7 @@ overflow:auto;
 #supplier-board-table td:nth-child(3),
 #supplier-board-table td:nth-child(4),
 #supplier-board-table td:nth-child(5),
-#supplier-board-table td:nth-child(8),
-#supplier-board-table td:nth-child(9) { text-align:left; }
+#supplier-board-table td:nth-child(8) { text-align:left; }
 #supplier-board-table td small {
 display:block;
 margin-top:var(--spectrum-spacing-50);
