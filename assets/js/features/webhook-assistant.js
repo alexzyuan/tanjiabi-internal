@@ -13,6 +13,7 @@ export function createWebhookAssistantFeature({
   if (typeof bind !== "function") throw new Error("createWebhookAssistantFeature requires bind.");
 
   let webhookTaskRows = [];
+  const weekdayNames = ["", "周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 
   function query(selector) {
     return root?.querySelector?.(selector) || null;
@@ -23,10 +24,28 @@ export function createWebhookAssistantFeature({
   }
 
   function scheduleText(task = {}) {
-    if (task.scheduleMode === "once") return `一次性 · ${task.runAt || task.nextRunAt || "-"}`;
     if (task.scheduleMode === "daily") return `每日 · ${task.sendTime || "-"}`;
-    if (task.scheduleMode === "interval") return `循环 · 每 ${task.intervalMinutes || "-"} 分钟`;
+    if (task.scheduleMode === "weekly") return `每周 ${weekdayNames[Number(task.weekday || 0)] || "-"} · ${task.sendTime || "-"}`;
+    if (task.scheduleMode === "monthly") return `每月 ${task.monthDay || "-"} 号 · ${task.sendTime || "-"}`;
     return "-";
+  }
+
+  function renderWebhookTargets(targets = []) {
+    const select = query("#webhook-target");
+    if (!select) return;
+    const options = targets.length ? targets : [
+      { key: "fba-sta", label: "FBA刷仓", configured: false },
+      { key: "default", label: "企业总群", configured: false },
+    ];
+    select.innerHTML = options.map((target) => `
+      <option value="${escapeHtml(target.key || "")}" ${target.configured ? "" : "disabled"}>
+        ${escapeHtml(target.label || target.key || "-")}${target.configured ? "" : "（未配置）"}
+      </option>
+    `).join("");
+    const preferred = options.find((target) => target.key === "fba-sta" && target.configured)
+      || options.find((target) => target.configured)
+      || options[0];
+    if (preferred?.key) select.value = preferred.key;
   }
 
   function renderWebhookTasks(tasks = []) {
@@ -42,7 +61,7 @@ export function createWebhookAssistantFeature({
         <td><strong>${escapeHtml(task.name || "-")}</strong><br /><small>${escapeHtml(task.id || "-")}</small></td>
         <td><span class="status-pill ${task.enabled ? "active" : "disabled"}">${task.enabled ? "启用" : "暂停"}</span></td>
         <td>${escapeHtml(scheduleText(task))}<br /><small>下次：${escapeHtml(task.nextRunAt || "-")}</small></td>
-        <td><small>${escapeHtml(task.webhook || "-")}</small><br /><small>${task.secretConfigured ? "密钥已配置" : "未配置密钥"}</small></td>
+        <td>${escapeHtml(task.targetLabel || task.targetKey || "-")}<br /><small>${task.targetConfigured ? "已配置" : "未配置"}</small></td>
         <td>${escapeHtml(task.lastStatus || "-")}<br /><small>${escapeHtml(task.lastRunAt || task.lastError || "-")}</small></td>
         <td>${escapeHtml(String(task.runCount || 0))}</td>
         <td>
@@ -55,7 +74,7 @@ export function createWebhookAssistantFeature({
   }
 
   function syncScheduleFields() {
-    const mode = fieldValue("#webhook-schedule-mode", "", root) || "once";
+    const mode = fieldValue("#webhook-schedule-mode", "", root) || "daily";
     root?.querySelectorAll?.("[data-webhook-schedule-field]").forEach((field) => {
       setElementsHidden(field, field.dataset.webhookScheduleField !== mode, root);
     });
@@ -68,21 +87,17 @@ export function createWebhookAssistantFeature({
   }
 
   function webhookPayload() {
-    const mode = fieldValue("#webhook-schedule-mode", "", root) || "once";
-    return {
+    const mode = fieldValue("#webhook-schedule-mode", "", root) || "daily";
+    const payload = {
       name: trimmedFieldValue("#webhook-task-name", "", root),
-      webhook: trimmedFieldValue("#webhook-url", "", root),
-      secret: trimmedFieldValue("#webhook-secret", "", root),
-      message: trimmedFieldValue("#webhook-message", "", root),
+      targetKey: fieldValue("#webhook-target", "", root),
       scheduleMode: mode,
-      runAt: fieldValue("#webhook-run-at", "", root),
       sendTime: fieldValue("#webhook-send-time", "", root),
-      intervalMinutes: Number(fieldValue("#webhook-interval-minutes", "0", root) || 0),
-      enabled: query("#webhook-enabled")?.checked !== false,
-      atAll: query("#webhook-at-all")?.checked === true,
-      atMobiles: trimmedFieldValue("#webhook-at-mobiles", "", root),
-      atUserIds: trimmedFieldValue("#webhook-at-user-ids", "", root),
+      enabled: true,
     };
+    if (mode === "weekly") payload.weekday = Number(fieldValue("#webhook-weekday", "1", root) || 1);
+    if (mode === "monthly") payload.monthDay = Number(fieldValue("#webhook-month-day", "1", root) || 1);
+    return payload;
   }
 
   async function loadWebhookTasks() {
@@ -90,6 +105,7 @@ export function createWebhookAssistantFeature({
       const response = await fetch("/api/webhook-assistant/tasks", { cache: "no-store" });
       const data = await response.json();
       if (!response.ok || data.ok === false) throw new Error(data.error || `API ${response.status}`);
+      renderWebhookTargets(data.targets || []);
       renderWebhookTasks(data.tasks || []);
       setWebhookStatus("Webhook 发送任务已刷新。", "success");
     } catch (error) {
@@ -128,7 +144,7 @@ export function createWebhookAssistantFeature({
       const response = await fetch(`/api/webhook-assistant/tasks/${encodeURIComponent(id)}`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...task, webhook: undefined, secret: undefined, enabled }),
+        body: JSON.stringify({ targetKey: task.targetKey, enabled }),
       });
       const data = await response.json();
       if (!response.ok || data.ok === false) throw new Error(data.error || `API ${response.status}`);

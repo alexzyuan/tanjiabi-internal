@@ -1,29 +1,17 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
+import { getConfig } from "../config/index.js";
 import { readJson, updateJsonAtomic } from "../utils/jsonStore.js";
 import { sendDingTalkTextToWebhook } from "./dingtalkService.js";
 
 const schedulerPollMs = 30 * 1000;
-const scheduleModes = new Set(["once", "daily", "interval"]);
+const scheduleModes = new Set(["daily", "weekly", "monthly"]);
+const defaultTargetKey = "fba-sta";
 let defaultService = null;
 let schedulerStarted = false;
 
 function nowIso(now) {
   return now.toISOString();
-}
-
-function listValue(value) {
-  if (Array.isArray(value)) return value.map((item) => String(item || "").trim()).filter(Boolean);
-  return String(value || "")
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function requireText(payload, key, label) {
-  const value = String(payload?.[key] || "").trim();
-  if (!value) throw new Error(`${label}不能为空。`);
-  return value;
 }
 
 function requireValue(value, label) {
@@ -32,36 +20,24 @@ function requireValue(value, label) {
   return text;
 }
 
-function normalizeWebhook(value) {
-  const text = String(value || "").trim();
-  if (!text) throw new Error("Webhook 地址不能为空。");
-  const url = new URL(text);
-  if (!["http:", "https:"].includes(url.protocol)) throw new Error("Webhook 地址必须是 http 或 https。");
-  return url.toString();
-}
-
 function normalizeSendTime(value) {
   const text = String(value || "").trim();
-  if (!/^\d{2}:\d{2}$/.test(text)) throw new Error("每日定时发送时间格式必须是 HH:mm。");
+  if (!/^\d{2}:\d{2}$/.test(text)) throw new Error("发送时间格式必须是 HH:mm。");
   const [hour, minute] = text.split(":").map(Number);
-  if (hour > 23 || minute > 59) throw new Error("每日定时发送时间不合法。");
+  if (hour > 23 || minute > 59) throw new Error("发送时间不合法。");
   return text;
 }
 
-function normalizeRunAt(value) {
-  const text = String(value || "").trim();
-  if (!text) throw new Error("一次性发送时间不能为空。");
-  const date = new Date(text);
-  if (Number.isNaN(date.getTime())) throw new Error("一次性发送时间不合法。");
-  return date.toISOString();
+function normalizeWeekday(value) {
+  const weekday = Number(value || 0);
+  if (!Number.isInteger(weekday) || weekday < 1 || weekday > 7) throw new Error("每周发送日必须是 1 到 7。");
+  return weekday;
 }
 
-function normalizeIntervalMinutes(value) {
-  const minutes = Number(value || 0);
-  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 10080) {
-    throw new Error("循环发送间隔必须是 1 到 10080 分钟。");
-  }
-  return minutes;
+function normalizeMonthDay(value) {
+  const day = Number(value || 0);
+  if (!Number.isInteger(day) || day < 1 || day > 31) throw new Error("每月发送日期必须是 1 到 31。");
+  return day;
 }
 
 function beijingDateParts(date) {
@@ -82,6 +58,15 @@ function addBeijingDays(dateText, days) {
   return beijingDateParts(new Date(date.getTime() + days * 24 * 60 * 60 * 1000));
 }
 
+function beijingWeekday(dateText) {
+  const day = new Date(`${dateText}T12:00:00+08:00`).getUTCDay();
+  return day === 0 ? 7 : day;
+}
+
+function daysInBeijingMonth(year, month) {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
 function nextDailyRun(sendTime, now) {
   const today = beijingDateParts(now);
   const candidate = `${today}T${sendTime}:00+08:00`;
@@ -89,65 +74,128 @@ function nextDailyRun(sendTime, now) {
   return `${addBeijingDays(today, 1)}T${sendTime}:00+08:00`;
 }
 
-function calculateNextRunAt(task, now = new Date()) {
-  if (task.scheduleMode === "once") return task.runAt || "";
-  if (task.scheduleMode === "daily") return nextDailyRun(task.sendTime, now);
-  if (task.scheduleMode === "interval") {
-    return new Date(now.getTime() + task.intervalMinutes * 60 * 1000).toISOString();
+function nextWeeklyRun(weekday, sendTime, now) {
+  const today = beijingDateParts(now);
+  const currentWeekday = beijingWeekday(today);
+  const offset = (weekday - currentWeekday + 7) % 7;
+  const candidateDate = addBeijingDays(today, offset);
+  const candidate = `${candidateDate}T${sendTime}:00+08:00`;
+  if (new Date(candidate).getTime() > now.getTime()) return candidate;
+  return `${addBeijingDays(candidateDate, 7)}T${sendTime}:00+08:00`;
+}
+
+function nextMonthlyRun(monthDay, sendTime, now) {
+  const today = beijingDateParts(now);
+  const [yearText, monthText] = today.split("-");
+  let year = Number(yearText);
+  let month = Number(monthText);
+  for (let attempt = 0; attempt < 14; attempt += 1) {
+    const clampedDay = Math.min(monthDay, daysInBeijingMonth(year, month));
+    const candidateDate = `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(clampedDay).padStart(2, "0")}`;
+    const candidate = `${candidateDate}T${sendTime}:00+08:00`;
+    if (new Date(candidate).getTime() > now.getTime()) return candidate;
+    month += 1;
+    if (month > 12) {
+      month = 1;
+      year += 1;
+    }
   }
+  throw new Error("无法计算下次每月发送时间。");
+}
+
+function calculateNextRunAt(task, now = new Date()) {
+  if (task.scheduleMode === "daily") return nextDailyRun(task.sendTime, now);
+  if (task.scheduleMode === "weekly") return nextWeeklyRun(task.weekday, task.sendTime, now);
+  if (task.scheduleMode === "monthly") return nextMonthlyRun(task.monthDay, task.sendTime, now);
   return "";
 }
 
-function maskWebhook(webhook) {
-  try {
-    const url = new URL(webhook);
-    const token = url.searchParams.get("access_token");
-    if (token) url.searchParams.set("access_token", `${token.slice(0, 4)}...${token.slice(-4)}`);
-    return url.toString();
-  } catch {
-    return webhook ? "已配置" : "";
-  }
-}
-
-function sanitizeTask(task) {
-  const { secret: _secret, rawWebhook: _rawWebhook, ...safe } = task;
+function resolveDefaultWebhookTargets(config = getConfig()) {
   return {
-    ...safe,
-    webhook: maskWebhook(task.webhook),
-    secretConfigured: Boolean(task.secret),
+    "fba-sta": {
+      key: "fba-sta",
+      label: "FBA刷仓",
+      webhook: config.dingtalk?.fba?.webhook || "",
+      secret: config.dingtalk?.fba?.secret || "",
+    },
+    default: {
+      key: "default",
+      label: "企业总群",
+      webhook: config.dingtalk?.webhook || "",
+      secret: config.dingtalk?.secret || "",
+    },
   };
 }
 
-function normalizeTaskPayload(payload = {}, previous = null, now = new Date()) {
-  const scheduleMode = String(payload.scheduleMode || previous?.scheduleMode || "once").trim();
-  if (!scheduleModes.has(scheduleMode)) throw new Error("发送方式必须是 once、daily 或 interval。");
+function normalizeTargets(targets) {
+  return Object.entries(targets || {}).reduce((acc, [key, target]) => {
+    acc[key] = {
+      key,
+      label: String(target?.label || key).trim(),
+      webhook: String(target?.webhook || "").trim(),
+      secret: String(target?.secret || "").trim(),
+    };
+    return acc;
+  }, {});
+}
+
+function sanitizeTargets(targets) {
+  return Object.values(targets).map((target) => ({
+    key: target.key,
+    label: target.label,
+    configured: Boolean(target.webhook),
+    secretConfigured: Boolean(target.secret),
+  }));
+}
+
+function inferTargetKeyFromTask(task, targets = {}) {
+  if (task.targetKey && targets[task.targetKey]) return task.targetKey;
+  const webhook = String(task.webhook || "").trim();
+  if (!webhook) return "";
+  return Object.values(targets).find((target) => target.webhook === webhook)?.key || "";
+}
+
+function sanitizeTask(task, targets = {}) {
+  const { secret: _secret, webhook: _webhook, rawWebhook: _rawWebhook, message: _message, ...safe } = task;
+  const targetKey = inferTargetKeyFromTask(task, targets);
+  const target = targets[targetKey] || {};
+  return {
+    ...safe,
+    targetKey,
+    targetLabel: target.label || targetKey || "",
+    targetConfigured: Boolean(target.webhook),
+  };
+}
+
+function normalizeTargetKey(value, previous, targets) {
+  const targetKey = String(value || previous?.targetKey || defaultTargetKey).trim();
+  const target = targets[targetKey];
+  if (!target) throw new Error("Webhook 目标不存在。");
+  if (!target.webhook) throw new Error(`${target.label} webhook 未配置。`);
+  return targetKey;
+}
+
+function normalizeTaskPayload(payload = {}, previous = null, now = new Date(), targets = {}) {
+  const scheduleMode = String(payload.scheduleMode || previous?.scheduleMode || "daily").trim();
+  if (!scheduleModes.has(scheduleMode)) throw new Error("发送方式必须是 daily、weekly 或 monthly。");
   const next = {
     ...(previous || {}),
     name: requireValue(payload.name ?? previous?.name, "任务名称"),
-    webhook: payload.webhook ? normalizeWebhook(payload.webhook) : previous?.webhook || normalizeWebhook(payload.webhook),
-    secret: payload.secret === undefined || payload.secret === "" ? previous?.secret || "" : String(payload.secret || "").trim(),
-    message: requireValue(payload.message ?? previous?.message, "发送内容"),
+    targetKey: normalizeTargetKey(payload.targetKey, previous, targets),
     scheduleMode,
-    atAll: payload.atAll === undefined ? previous?.atAll === true : payload.atAll === true,
-    atMobiles: payload.atMobiles === undefined ? previous?.atMobiles || [] : listValue(payload.atMobiles),
-    atUserIds: payload.atUserIds === undefined ? previous?.atUserIds || [] : listValue(payload.atUserIds),
     enabled: payload.enabled === undefined ? previous?.enabled !== false : payload.enabled === true,
+    sendTime: payload.sendTime === undefined && previous?.sendTime ? previous.sendTime : normalizeSendTime(payload.sendTime),
   };
 
-  if (scheduleMode === "once") {
-    next.runAt = payload.runAt === undefined && previous?.runAt ? previous.runAt : normalizeRunAt(payload.runAt);
-    next.sendTime = "";
-    next.intervalMinutes = 0;
-  } else if (scheduleMode === "daily") {
-    next.sendTime = payload.sendTime === undefined && previous?.sendTime ? previous.sendTime : normalizeSendTime(payload.sendTime);
-    next.runAt = "";
-    next.intervalMinutes = 0;
+  if (scheduleMode === "weekly") {
+    next.weekday = payload.weekday === undefined && previous?.weekday ? previous.weekday : normalizeWeekday(payload.weekday);
+    next.monthDay = 0;
+  } else if (scheduleMode === "monthly") {
+    next.monthDay = payload.monthDay === undefined && previous?.monthDay ? previous.monthDay : normalizeMonthDay(payload.monthDay);
+    next.weekday = 0;
   } else {
-    next.intervalMinutes = payload.intervalMinutes === undefined && previous?.intervalMinutes
-      ? previous.intervalMinutes
-      : normalizeIntervalMinutes(payload.intervalMinutes);
-    next.runAt = "";
-    next.sendTime = "";
+    next.weekday = 0;
+    next.monthDay = 0;
   }
   next.nextRunAt = calculateNextRunAt(next, now);
   return next;
@@ -157,8 +205,11 @@ export function createWebhookAssistantService({
   dataDir = path.join(process.cwd(), "data-cache"),
   fetchImpl = globalThis.fetch,
   now = () => new Date(),
+  webhookTargets = null,
+  config = getConfig(),
 } = {}) {
   const storePath = path.join(dataDir, "webhook-assistant-tasks.json");
+  const targets = normalizeTargets(webhookTargets || resolveDefaultWebhookTargets(config));
 
   async function readState() {
     const state = await readJson(storePath, { tasks: [] });
@@ -175,7 +226,7 @@ export function createWebhookAssistantService({
 
   async function listWebhookTasks() {
     const state = await readState();
-    return { ok: true, tasks: state.tasks.map(sanitizeTask) };
+    return { ok: true, targets: sanitizeTargets(targets), tasks: state.tasks.map((task) => sanitizeTask(task, targets)) };
   }
 
   async function createWebhookTask(payload = {}) {
@@ -184,7 +235,7 @@ export function createWebhookAssistantService({
     await updateState((draft) => {
       task = {
         id: randomUUID(),
-        ...normalizeTaskPayload(payload, null, now()),
+        ...normalizeTaskPayload(payload, null, now(), targets),
         status: "idle",
         lastStatus: "等待发送",
         lastError: "",
@@ -195,7 +246,7 @@ export function createWebhookAssistantService({
       };
       draft.tasks.unshift(task);
     });
-    return { ok: true, task: sanitizeTask(task) };
+    return { ok: true, task: sanitizeTask(task, targets) };
   }
 
   async function updateWebhookTask(id, payload = {}) {
@@ -204,14 +255,14 @@ export function createWebhookAssistantService({
       const index = draft.tasks.findIndex((item) => item.id === id);
       if (index === -1) throw new Error("Webhook 任务不存在。");
       task = {
-        ...normalizeTaskPayload(payload, draft.tasks[index], now()),
+        ...normalizeTaskPayload(payload, draft.tasks[index], now(), targets),
         id: draft.tasks[index].id,
         createdAt: draft.tasks[index].createdAt,
         updatedAt: nowIso(now()),
       };
       draft.tasks[index] = task;
     });
-    return { ok: true, task: sanitizeTask(task) };
+    return { ok: true, task: sanitizeTask(task, targets) };
   }
 
   async function deleteWebhookTask(id) {
@@ -221,16 +272,19 @@ export function createWebhookAssistantService({
       if (index === -1) throw new Error("Webhook 任务不存在。");
       [removed] = draft.tasks.splice(index, 1);
     });
-    return { ok: true, task: sanitizeTask(removed) };
+    return { ok: true, task: sanitizeTask(removed, targets) };
   }
 
   async function sendWebhookTask(task, trigger = "manual") {
+    const targetKey = inferTargetKeyFromTask(task, targets);
+    const target = targets[targetKey];
+    if (!target?.webhook) throw new Error(`${target?.label || targetKey || "Webhook 目标"} webhook 未配置。`);
     return sendDingTalkTextToWebhook({
-      webhook: task.webhook,
-      secret: task.secret,
-      atMobiles: task.atMobiles,
-      atUserIds: task.atUserIds,
-    }, task.message, { atAll: task.atAll }, "WEBHOOK", fetchImpl);
+      webhook: target.webhook,
+      secret: target.secret,
+      atMobiles: [],
+      atUserIds: [],
+    }, task.name, {}, "WEBHOOK", fetchImpl);
   }
 
   async function persistSendResult(id, result, error, trigger) {
@@ -243,7 +297,7 @@ export function createWebhookAssistantService({
       const ok = !error && result?.ok;
       task = {
         ...current,
-        enabled: current.scheduleMode === "once" && ok ? false : current.enabled,
+        enabled: current.enabled,
         status: ok ? "success" : "failed",
         lastStatus: ok ? "发送成功" : "发送失败",
         lastError: ok ? "" : error?.message || result?.payload?.errmsg || "钉钉返回失败",
@@ -254,7 +308,7 @@ export function createWebhookAssistantService({
       task.nextRunAt = task.enabled ? calculateNextRunAt(task, now()) : "";
       draft.tasks[index] = task;
     });
-    return sanitizeTask(task);
+    return sanitizeTask(task, targets);
   }
 
   async function sendWebhookTaskNow(id, trigger = "manual") {

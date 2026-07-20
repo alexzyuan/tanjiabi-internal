@@ -15,14 +15,19 @@ async function withService(fn) {
   }
 }
 
-test("webhook assistant stores tasks but lists only masked webhook and secret state", async () => {
+test("webhook assistant creates tasks from built-in targets without storing webhook secrets", async () => {
   await withService(async (dir) => {
-    const service = createWebhookAssistantService({ dataDir: dir });
+    const service = createWebhookAssistantService({
+      dataDir: dir,
+      webhookTargets: {
+        default: { label: "企业总群", webhook: "https://oapi.dingtalk.com/robot/send?access_token=default-token", secret: "default-secret" },
+        "fba-sta": { label: "FBA刷仓", webhook: "https://oapi.dingtalk.com/robot/send?access_token=fba-token", secret: "fba-secret" },
+      },
+      now: () => new Date("2026-07-20T01:00:00.000Z"),
+    });
     const created = await service.createWebhookTask({
       name: "FBA刷仓提醒",
-      webhook: "https://oapi.dingtalk.com/robot/send?access_token=secret-token",
-      secret: "SECsecret",
-      message: "刷仓任务已命中",
+      targetKey: "fba-sta",
       scheduleMode: "daily",
       sendTime: "09:30",
       enabled: true,
@@ -30,41 +35,110 @@ test("webhook assistant stores tasks but lists only masked webhook and secret st
     const listed = await service.listWebhookTasks();
 
     assert.equal(created.task.name, "FBA刷仓提醒");
+    assert.equal(created.task.targetKey, "fba-sta");
+    assert.equal(created.task.message, undefined);
+    assert.equal(listed.targets.length, 2);
     assert.equal(listed.tasks.length, 1);
-    assert.equal(listed.tasks[0].secretConfigured, true);
-    assert.equal(listed.tasks[0].webhook.includes("secret-token"), false);
-    assert.equal(JSON.stringify(listed).includes("SECsecret"), false);
-    assert.equal(listed.tasks[0].nextRunAt.includes("09:30"), true);
+    assert.equal(listed.tasks[0].targetLabel, "FBA刷仓");
+    assert.equal(JSON.stringify(listed).includes("fba-secret"), false);
+    assert.equal(JSON.stringify(listed).includes("fba-token"), false);
+    assert.equal(listed.tasks[0].nextRunAt, "2026-07-20T09:30:00+08:00");
   });
 });
 
-test("webhook assistant sends due once tasks and disables them after success", async () => {
+test("webhook assistant sends task name through the selected built-in target", async () => {
   await withService(async (dir) => {
     const sent = [];
+    let currentTime = new Date("2026-07-20T09:55:00.000+08:00");
     const service = createWebhookAssistantService({
       dataDir: dir,
+      webhookTargets: {
+        default: { label: "企业总群", webhook: "https://oapi.dingtalk.com/robot/send?access_token=default-token", secret: "default-secret" },
+        "fba-sta": { label: "FBA刷仓", webhook: "https://oapi.dingtalk.com/robot/send?access_token=fba-token", secret: "fba-secret" },
+      },
       fetchImpl: async (url, options) => {
         sent.push({ url: String(url), body: JSON.parse(options.body) });
         return { ok: true, status: 200, json: async () => ({ errcode: 0 }) };
       },
-      now: () => new Date("2026-07-20T10:05:00.000Z"),
+      now: () => currentTime,
     });
     await service.createWebhookTask({
-      name: "一次性提醒",
-      webhook: "https://oapi.dingtalk.com/robot/send?access_token=once-token",
-      message: "一次性发送内容",
-      scheduleMode: "once",
-      runAt: "2026-07-20T10:00:00.000Z",
+      name: "FBA刷仓提醒",
+      targetKey: "fba-sta",
+      scheduleMode: "daily",
+      sendTime: "10:00",
       enabled: true,
     });
 
+    currentTime = new Date("2026-07-20T10:05:00.000+08:00");
     const result = await service.runDueWebhookTasks();
     const listed = await service.listWebhookTasks();
 
     assert.equal(result.sent, 1);
     assert.equal(sent.length, 1);
-    assert.equal(sent[0].body.text.content, "一次性发送内容");
-    assert.equal(listed.tasks[0].enabled, false);
+    assert.equal(new URL(sent[0].url).searchParams.get("access_token"), "fba-token");
+    assert.equal(sent[0].body.text.content, "FBA刷仓提醒");
+    assert.equal(listed.tasks[0].enabled, true);
     assert.equal(listed.tasks[0].lastStatus, "发送成功");
+  });
+});
+
+test("webhook assistant calculates weekly and monthly schedules in Beijing time", async () => {
+  await withService(async (dir) => {
+    const service = createWebhookAssistantService({
+      dataDir: dir,
+      webhookTargets: {
+        default: { label: "企业总群", webhook: "https://oapi.dingtalk.com/robot/send?access_token=default-token" },
+      },
+      now: () => new Date("2026-07-20T01:00:00.000Z"),
+    });
+    const weekly = await service.createWebhookTask({
+      name: "每周任务",
+      targetKey: "default",
+      scheduleMode: "weekly",
+      weekday: 3,
+      sendTime: "09:00",
+    });
+    const monthly = await service.createWebhookTask({
+      name: "每月任务",
+      targetKey: "default",
+      scheduleMode: "monthly",
+      monthDay: 25,
+      sendTime: "09:00",
+    });
+
+    assert.equal(weekly.task.nextRunAt, "2026-07-22T09:00:00+08:00");
+    assert.equal(monthly.task.nextRunAt, "2026-07-25T09:00:00+08:00");
+  });
+});
+
+test("webhook assistant exposes configured built-in targets without accepting raw webhook payload fields", async () => {
+  await withService(async (dir) => {
+    const service = createWebhookAssistantService({
+      dataDir: dir,
+      webhookTargets: {
+        default: { label: "企业总群", webhook: "https://oapi.dingtalk.com/robot/send?access_token=default-token", secret: "default-secret" },
+        "fba-sta": { label: "FBA刷仓", webhook: "https://oapi.dingtalk.com/robot/send?access_token=fba-token", secret: "fba-secret" },
+      },
+      now: () => new Date("2026-07-20T01:00:00.000Z"),
+    });
+
+    await service.createWebhookTask({
+      name: "企业总群日报",
+      targetKey: "default",
+      webhook: "https://example.invalid/should-not-store",
+      secret: "should-not-store",
+      message: "should-not-store",
+      scheduleMode: "daily",
+      sendTime: "09:00",
+    });
+    const listed = await service.listWebhookTasks();
+    const serialized = JSON.stringify(listed);
+
+    assert.deepEqual(listed.targets.map((target) => target.key), ["default", "fba-sta"]);
+    assert.equal(listed.tasks[0].targetLabel, "企业总群");
+    assert.equal(serialized.includes("should-not-store"), false);
+    assert.equal(serialized.includes("default-secret"), false);
+    assert.equal(serialized.includes("default-token"), false);
   });
 });
