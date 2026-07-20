@@ -13,6 +13,7 @@ const routeFiles = [
   "finance-purchase.js",
   "fba.js",
   "admin.js",
+  "webhook-assistant.js",
   "sync-store-inspection.js",
   "debug-knowledge.js",
 ];
@@ -46,6 +47,8 @@ test("route table requires every API route to declare auth", () => {
   assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/purchase/supplier-details")?.auth, "session");
   assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/admin/budget/uploads")?.auth, "session");
   assert.equal(routes.find((route) => route.method === "POST" && route.path === "/api/admin/budget/upload")?.auth, "session");
+  assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/webhook-assistant/tasks")?.auth, "admin");
+  assert.equal(routes.find((route) => route.method === "POST" && route.path === "/api/webhook-assistant/tasks")?.auth, "admin");
 });
 
 test("server router no longer contains legacy API if-else branches", async () => {

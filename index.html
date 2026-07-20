@@ -136,6 +136,7 @@
               <span class="nav-group-caret" aria-hidden="true">⌄</span>
             </button>
             <button class="nav-item" data-view="admin" hidden><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.5-2.4 1a7 7 0 0 0-2-1.1L14 3h-4l-.5 2.7a7 7 0 0 0-2 1.1l-2.4-1-2 3.5 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.5 2.4-1a7 7 0 0 0 2 1.1L10 21h4l.5-2.7a7 7 0 0 0 2-1.1l2.4 1 2-3.5-2-1.5c.1-.4.1-.8.1-1.2z"/></svg></span><span class="nav-label">后台管理</span></button>
+            <button class="nav-item" data-view="webhook-assistant" data-permission="admin" hidden><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M5 12h4"/><path d="M15 12h4"/><path d="M9 12a3 3 0 0 1 3-3h1"/><path d="M15 12a3 3 0 0 1-3 3h-1"/><path d="M7 5v3"/><path d="M17 16v3"/><path d="M4 5h6"/><path d="M14 19h6"/></svg></span><span class="nav-label">Webhook 助手</span></button>
             <button class="nav-item" data-view="sync"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M20 7h-9a4 4 0 0 0-4 4v1"/><path d="M16 3l4 4-4 4"/><path d="M4 17h9a4 4 0 0 0 4-4v-1"/><path d="M8 21l-4-4 4-4"/></svg></span><span class="nav-label">同步中心</span></button>
           </section>
         </nav>
@@ -1534,6 +1535,72 @@
             <article class="panel"><div class="panel-head"><h2>用户与角色</h2><span>角色规划与查看范围</span></div><div id="admin-users" class="config-list"></div></article>
             <article class="panel"><div class="panel-head"><h2>店铺权限</h2><span>控制用户可查看的店铺和站点</span></div><div id="admin-shops" class="config-list"></div></article>
             <article class="panel"><div class="panel-head"><h2>目标配置</h2><span>月目标、销售目标、利润目标</span></div><div id="admin-targets" class="config-list"></div></article>
+          </section>
+        </section>
+
+        <section class="view" id="view-webhook-assistant">
+          <section class="module-hero">
+            <div>
+              <span>Webhook 助手</span>
+              <h2>钉钉群机器人发送任务</h2>
+              <p>配置钉钉 webhook 后，可以创建一次性、每日定时或按间隔循环发送的消息任务。</p>
+            </div>
+          </section>
+          <section class="admin-grid">
+            <article class="panel admin-account-panel">
+              <div class="panel-head"><h2>新增发送任务</h2><span id="webhook-assistant-status">可新增钉钉群机器人发送任务</span></div>
+              <form class="form-grid admin-account-form" id="webhook-task-form">
+                <label>任务名称
+                  <input id="webhook-task-name" type="text" autocomplete="off" placeholder="例如 FBA 刷仓提醒" required />
+                </label>
+                <label>Webhook 地址
+                  <input id="webhook-url" type="url" autocomplete="off" placeholder="https://oapi.dingtalk.com/robot/send?access_token=..." required />
+                </label>
+                <label>加签密钥
+                  <input id="webhook-secret" type="password" autocomplete="new-password" placeholder="SEC..." />
+                </label>
+                <label>发送方式
+                  <select id="webhook-schedule-mode">
+                    <option value="once">一次性发送</option>
+                    <option value="daily">每日定时</option>
+                    <option value="interval">循环发送</option>
+                  </select>
+                </label>
+                <label data-webhook-schedule-field="once">一次性发送时间
+                  <input id="webhook-run-at" type="datetime-local" />
+                </label>
+                <label data-webhook-schedule-field="daily" hidden>每日发送时间
+                  <input id="webhook-send-time" type="time" value="09:30" />
+                </label>
+                <label data-webhook-schedule-field="interval" hidden>循环间隔（分钟）
+                  <input id="webhook-interval-minutes" type="number" min="1" max="10080" step="1" value="60" />
+                </label>
+                <label>手机号 @
+                  <input id="webhook-at-mobiles" type="text" autocomplete="off" placeholder="多个用英文逗号分隔" />
+                </label>
+                <label>UserId @
+                  <input id="webhook-at-user-ids" type="text" autocomplete="off" placeholder="多个用英文逗号分隔" />
+                </label>
+                <label class="form-span-2">发送内容
+                  <textarea id="webhook-message" rows="4" placeholder="输入要发送到钉钉群的消息内容" required></textarea>
+                </label>
+                <label class="multi-select-option"><input id="webhook-enabled" type="checkbox" checked /> 启用任务</label>
+                <label class="multi-select-option"><input id="webhook-at-all" type="checkbox" /> @ 所有人</label>
+                <div class="admin-account-actions">
+                  <button class="primary-button" id="webhook-task-save" type="submit">新增任务</button>
+                  <button class="secondary-button" id="webhook-task-reset" type="button">清空</button>
+                </div>
+              </form>
+            </article>
+            <article class="panel admin-account-panel">
+              <div class="panel-head"><h2>发送任务</h2><span>敏感 webhook 和密钥只在服务器保存，列表中会自动脱敏</span></div>
+              <div class="table-wrap admin-account-table-wrap">
+                <table class="data-table">
+                  <thead><tr><th>任务</th><th>状态</th><th>计划</th><th>Webhook</th><th>最近结果</th><th>次数</th><th>操作</th></tr></thead>
+                  <tbody id="webhook-task-table"><tr><td colspan="7">正在读取 webhook 任务...</td></tr></tbody>
+                </table>
+              </div>
+            </article>
           </section>
         </section>
 

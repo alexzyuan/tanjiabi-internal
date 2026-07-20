@@ -1,7 +1,7 @@
 import { getLingxingAdapter } from "../adapters/lingxingAdapter.js";
 import { findLingxingShop } from "../data/lingxingShopMap.js";
 import { getFbaAddressProfile } from "../data/fbaAddressBook.js";
-import { sendDingTalkText } from "./dingtalkService.js";
+import { sendFbaDingTalkText } from "./dingtalkService.js";
 import { assertFbaMskuPackMatchesErp } from "./fbaCatalogService.js";
 import { hasCompleteBoxSpec, saveFbaBoxTemplate } from "./fbaBoxTemplateService.js";
 
@@ -813,7 +813,7 @@ export async function runSingleStaWarehouseProbe(payload) {
     });
 	    const shouldNotify = request.notificationPolicy !== "none" && request.notificationEnabled && (request.notificationPolicy === "all" || targetMatched);
     const dingTalk = shouldNotify
-      ? await sendDingTalkText(notice)
+      ? await sendFbaDingTalkText(notice)
       : { ok: false, skipped: true, message: request.notificationEnabled ? "钉钉通知策略为命中后通知，本次未命中已跳过。" : "钉钉通知开关已关闭。" };
 
     return {

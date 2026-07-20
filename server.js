@@ -84,6 +84,14 @@ import {
   updateFbaStaTask,
 } from "./src/services/fbaStaTaskService.js";
 import {
+  createWebhookTask,
+  deleteWebhookTask,
+  listWebhookTasks,
+  sendWebhookTaskNow,
+  startWebhookAssistantScheduler,
+  updateWebhookTask,
+} from "./src/services/webhookAssistantService.js";
+import {
   createAuthUser,
   deleteDingtalkAuthUser,
   deleteAuthUser,
@@ -799,6 +807,11 @@ const apiRoutes = createApiRoutes(buildApiRoutes({
   updateFbaStaTask,
   deleteFbaStaTask,
   runStaWarehouseProbe,
+  listWebhookTasks,
+  createWebhookTask,
+  updateWebhookTask,
+  deleteWebhookTask,
+  sendWebhookTaskNow,
   listAuthUsers,
   listDingtalkAuthUsers,
   updateDingtalkAuthUser,
@@ -876,6 +889,7 @@ startSyncScheduler();
 startPlatformCashflowScheduler();
 startFbaStaScheduler();
 startStoreInspectionScheduler();
+startWebhookAssistantScheduler();
 
 const server = http.createServer((req, res) => {
   router(req, res).catch((error) => {

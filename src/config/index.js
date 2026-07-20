@@ -215,6 +215,12 @@ export function getConfig() {
       secret: readEnv("DINGTALK_SECRET"),
       atMobiles: readList("DINGTALK_AT_MOBILES"),
       atUserIds: readList("DINGTALK_AT_USER_IDS"),
+      fba: {
+        webhook: readEnv("FBA_DINGTALK_WEBHOOK"),
+        secret: readEnv("FBA_DINGTALK_SECRET"),
+        atMobiles: readList("FBA_DINGTALK_AT_MOBILES"),
+        atUserIds: readList("FBA_DINGTALK_AT_USER_IDS"),
+      },
       login: {
         clientId: dingtalkClientId,
         clientSecret: dingtalkClientSecret,

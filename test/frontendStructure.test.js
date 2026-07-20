@@ -101,6 +101,7 @@ test("app.js starts using shared dashboard section loader", async () => {
   const salesShellSource = await readFile(new URL("../assets/js/sales-shell.js", import.meta.url), "utf8");
   const tableSorterSource = await readFile(new URL("../assets/js/table-sorter.js", import.meta.url), "utf8");
   const adminSettingsFeatureSource = await readFile(new URL("../assets/js/features/admin-settings.js", import.meta.url), "utf8");
+  const webhookAssistantFeatureSource = await readFile(new URL("../assets/js/features/webhook-assistant.js", import.meta.url), "utf8");
   const aftersalesFeatureSource = await readFile(new URL("../assets/js/features/aftersales-dashboard.js", import.meta.url), "utf8");
   const aftersalesMailFeatureSource = await readFile(new URL("../assets/js/features/aftersales-mail.js", import.meta.url), "utf8");
   const aiImageWorkflowFeatureSource = await readFile(new URL("../assets/js/features/ai-image-workflow.js", import.meta.url), "utf8");
@@ -292,6 +293,7 @@ test("app.js starts using shared dashboard section loader", async () => {
   assert.match(appSource, /import \{ cachedSalesImageUrl, normalizedSalesImageUrl \} from "\.\/assets\/js\/image-url\.js/);
   assert.match(appSource, /import \{ compareTableSortableValues, createTableSorter \} from "\.\/assets\/js\/table-sorter\.js/);
   assert.match(appSource, /import \{ createAdminSettingsFeature \} from "\.\/assets\/js\/features\/admin-settings\.js/);
+  assert.match(appSource, /import \{ createWebhookAssistantFeature \} from "\.\/assets\/js\/features\/webhook-assistant\.js/);
   assert.match(appSource, /import \{ createAftersalesDashboardFeature \} from "\.\/assets\/js\/features\/aftersales-dashboard\.js/);
   assert.match(appSource, /import \{ createAftersalesMailFeature \} from "\.\/assets\/js\/features\/aftersales-mail\.js/);
   assert.match(appSource, /import \{ createAiImageWorkflowFeature \} from "\.\/assets\/js\/features\/ai-image-workflow\.js/);
@@ -330,6 +332,7 @@ test("app.js starts using shared dashboard section loader", async () => {
   assert.match(appSource, /createAuthShellFeature\(\{/);
   assert.match(appSource, /createBudgetTargetsFeature\(\{/);
   assert.match(appSource, /createAdminSettingsFeature\(\{/);
+  assert.match(appSource, /createWebhookAssistantFeature\(\{/);
   assert.match(appSource, /createCashflowDashboardFeature\(\{/);
   assert.match(appSource, /createAdKeywordFeature\(\{/);
   assert.match(appSource, /createAdPerformanceReviewFeature\(\{/);
@@ -820,6 +823,9 @@ test("app.js starts using shared dashboard section loader", async () => {
   assert.equal(appSource.includes("let adminAccountRows"), false);
   assert.equal(adminSettingsSource.includes("bind(document, \"#admin"), false);
   assert.equal(adminSettingsSource.includes("bind(document, \"#dingtalk"), false);
+  assert.equal(appSource.includes("function renderWebhookTasks"), false);
+  assert.equal(appSource.includes("async function loadWebhookTasks"), false);
+  assert.equal(webhookAssistantFeatureSource.includes("bind(document, \"#webhook"), false);
 
   assert.equal(appSource.includes("function formatSidebarSyncTime"), false);
   assert.equal(appSource.includes("function renderSyncStatus"), false);

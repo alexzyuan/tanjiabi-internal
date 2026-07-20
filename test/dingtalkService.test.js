@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { sendDingTalkMarkdown, sendDingTalkText } from "../src/services/dingtalkService.js";
+import { sendDingTalkMarkdown, sendDingTalkText, sendFbaDingTalkText } from "../src/services/dingtalkService.js";
 
 test("sendDingTalkText includes configured atMobiles and mention text", async () => {
   const originalFetch = globalThis.fetch;
@@ -76,5 +76,33 @@ test("sendDingTalkMarkdown does not append mentions already placed in markdown",
     globalThis.fetch = originalFetch;
     delete process.env.DINGTALK_WEBHOOK;
     delete process.env.DINGTALK_SECRET;
+  }
+});
+
+test("sendFbaDingTalkText uses the FBA webhook instead of the default webhook", async () => {
+  const originalFetch = globalThis.fetch;
+  process.env.DINGTALK_WEBHOOK = "https://oapi.dingtalk.com/robot/send?access_token=default";
+  process.env.DINGTALK_SECRET = "";
+  process.env.FBA_DINGTALK_WEBHOOK = "https://oapi.dingtalk.com/robot/send?access_token=fba";
+  process.env.FBA_DINGTALK_SECRET = "fba-secret";
+  let requestedUrl = "";
+  globalThis.fetch = async (url, options) => {
+    requestedUrl = String(url);
+    assert.equal(JSON.parse(options.body).text.content, "FBA刷仓提醒");
+    return { ok: true, status: 200, json: async () => ({ errcode: 0 }) };
+  };
+  try {
+    const result = await sendFbaDingTalkText("FBA刷仓提醒");
+    assert.equal(result.ok, true);
+    const url = new URL(requestedUrl);
+    assert.equal(url.searchParams.get("access_token"), "fba");
+    assert.ok(url.searchParams.get("timestamp"));
+    assert.ok(url.searchParams.get("sign"));
+  } finally {
+    globalThis.fetch = originalFetch;
+    delete process.env.DINGTALK_WEBHOOK;
+    delete process.env.DINGTALK_SECRET;
+    delete process.env.FBA_DINGTALK_WEBHOOK;
+    delete process.env.FBA_DINGTALK_SECRET;
   }
 });

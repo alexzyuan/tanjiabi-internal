@@ -41,6 +41,7 @@ export function createBreadcrumbShellFeature({
     cashflow: ["首页", "财务", "平台回款"],
     guide: ["首页", "知识库"],
     admin: ["首页", "设置", "后台管理"],
+    "webhook-assistant": ["首页", "设置", "Webhook 助手"],
     sync: ["首页", "设置", "同步中心"],
   };
 

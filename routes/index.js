@@ -7,6 +7,7 @@ import { createInventoryRoutes } from "./inventory.js";
 import { createFinancePurchaseRoutes } from "./finance-purchase.js";
 import { createFbaRoutes } from "./fba.js";
 import { createAdminRoutes } from "./admin.js";
+import { createWebhookAssistantRoutes } from "./webhook-assistant.js";
 import { createSyncStoreInspectionRoutes } from "./sync-store-inspection.js";
 import { createDebugKnowledgeRoutes } from "./debug-knowledge.js";
 
@@ -21,6 +22,7 @@ export function buildApiRoutes(deps) {
     ...createFinancePurchaseRoutes(deps),
     ...createFbaRoutes(deps),
     ...createAdminRoutes(deps),
+    ...createWebhookAssistantRoutes(deps),
     ...createSyncStoreInspectionRoutes(deps),
     ...createDebugKnowledgeRoutes(deps),
   ];

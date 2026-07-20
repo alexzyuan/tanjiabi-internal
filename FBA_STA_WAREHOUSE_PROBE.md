@@ -28,7 +28,7 @@ POST /api/fba/sta/warehouse-probe
 4. 查询货件方案。
 5. 提取 `wareHouseId`。
 6. 默认取消这次 STA 任务，避免留下无用任务。
-7. 如果配置了 `DINGTALK_WEBHOOK`，会发送钉钉通知。
+7. 如果配置了 `FBA_DINGTALK_WEBHOOK`，会发送钉钉通知。
 
 ## 测试请求示例
 
@@ -84,7 +84,8 @@ curl -s -X POST http://127.0.0.1:4173/api/fba/sta/warehouse-probe \
 服务器 `.env` 中增加：
 
 ```text
-DINGTALK_WEBHOOK=
+FBA_DINGTALK_WEBHOOK=
+FBA_DINGTALK_SECRET=
 ```
 
 真实 webhook 不要写进代码。

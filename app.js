@@ -44,6 +44,7 @@ import { createClearanceCalculatorFeature } from "./assets/js/features/clearance
 import { createKnowledgeLibraryFeature } from "./assets/js/features/knowledge-library.js?v=20260706-frontend-refactor-v1";
 import { createAiImageWorkflowFeature } from "./assets/js/features/ai-image-workflow.js?v=20260706-frontend-refactor-v1";
 import { createAdminSettingsFeature } from "./assets/js/features/admin-settings.js?v=20260706-frontend-refactor-v1";
+import { createWebhookAssistantFeature } from "./assets/js/features/webhook-assistant.js?v=20260720-webhook-assistant-v1";
 import { createBudgetTargetsFeature } from "./assets/js/features/budget-targets.js?v=20260706-frontend-refactor-v1";
 import { createSyncCenterFeature } from "./assets/js/features/sync-center.js?v=20260706-frontend-refactor-v1";
 import { createFbaFreightFeature } from "./assets/js/features/fba-freight.js?v=20260706-frontend-refactor-v1";
@@ -217,6 +218,7 @@ let loadAdKeywordDashboard = async () => {};
 let setupAdKeywordDashboard = () => {};
 let loadAdminAccounts = async () => {};
 let loadAdminOverview = async () => {};
+let loadWebhookTasks = async () => {};
 let loadAftersalesDashboard = async () => {};
 let loadAftersalesMailDashboard = async () => {};
 let loadBudgetUploads = async () => {};
@@ -257,6 +259,7 @@ let setupClearanceCalculator = () => {};
 let setupKnowledgeLibrary = () => {};
 let setupAiImageWorkflow = () => {};
 let setupAdminSettings = () => {};
+let setupWebhookAssistant = () => {};
 let setupBreadcrumbNavigation = () => {};
 let setupBudgetTargets = () => {};
 let setupFbaFreight = () => {};
@@ -667,6 +670,19 @@ async function refreshDashboardFromFilters() {
   renderTableMessage,
   setButtonBusy,
   setElementsDisabled,
+  setStatusMessage,
+  trimmedFieldValue,
+}));
+
+({ loadWebhookTasks, setupWebhookAssistant } = createWebhookAssistantFeature({
+  root: document,
+  bind,
+  closestTarget,
+  escapeHtml,
+  fieldValue,
+  renderTableMessage,
+  setButtonBusy,
+  setElementsHidden,
   setStatusMessage,
   trimmedFieldValue,
 }));
@@ -1103,6 +1119,9 @@ function setupNavigation() {
       loadDingtalkAuthUsers();
       loadKnowledgeLibrary({ renderAdmin: true });
     }
+    if (view === "webhook-assistant") {
+      await loadWebhookTasks();
+    }
     if (view === "budget") {
       loadBudgetUploads();
       loadBudgetTargets();
@@ -1154,6 +1173,7 @@ function setupNavigation() {
   initializeFilterDropdowns();
   setupTableSortBridge();
   setupAdminSettings();
+  setupWebhookAssistant();
 
   setupSyncCenter();
   setupFbaFreight();
