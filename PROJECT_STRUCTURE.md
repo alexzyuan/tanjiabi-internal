@@ -111,8 +111,8 @@ npm test
 
 | 路径 | 作用 |
 | --- | --- |
-| `scripts/package-deploy.js` | 生成部署包。默认不包含 CSS；需要部署样式时使用 `ALLOW_CSS_DEPLOY=1` 和 `--include-css`。 |
-| `deploy.sh` | 部署脚本。 |
+| `scripts/package-deploy.js` | 生成部署包。默认不包含 CSS；需要部署样式时使用 `ALLOW_CSS_DEPLOY=1` 和 `--include-css`。正式部署必须设置 `DEPLOY_CONFIRM_BRANCH`，并会写入 `.deploy-manifest.json`。 |
+| `deploy.sh` | 部署脚本。部署前校验 `.deploy-manifest.json` 的分支、提交和二次确认，默认只接受 `codex/yesterday-plus-webhook`。 |
 | `rollback.sh` | 回滚脚本。 |
 
 打包规则：

@@ -76,6 +76,14 @@ cd /opt/tanjia-bi
 bash deploy.sh
 ```
 
+正式部署包必须从当前生产分支打包，并显式确认分支：
+
+```bash
+DEPLOY_CONFIRM_BRANCH=codex/yesterday-plus-webhook npm run package:deploy
+```
+
+服务器会校验部署包内的 `.deploy-manifest.json`，确认分支、提交和干净工作区状态，避免从错误分支覆盖线上版本。
+
 如果新版异常，执行：
 
 ```bash
