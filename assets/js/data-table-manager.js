@@ -10,6 +10,98 @@ const errorStatePattern = /失败|错误|异常|缺少|missing|error/i;
 const loadingStatePattern = /正在|等待|读取|加载|同步|生成中/;
 const numericColumnKinds = new Set(["number", "money", "currency", "percent", "rate", "integer", "decimal"]);
 const textColumnKinds = new Set(["text", "date", "datetime", "image", "status", "action", "link"]);
+const SMART_COLUMN_SAMPLE_LIMIT = 30;
+
+const SMART_COLUMN_PROFILES = Object.freeze({
+  selection: Object.freeze({ min: 44, preferred: 48, max: 56, padding: 12, align: "center" }),
+  image: Object.freeze({ min: 52, preferred: 56, max: 64, padding: 8, align: "center" }),
+  "compact-dimension": Object.freeze({ min: 56, preferred: 64, max: 80, padding: 20, align: "left" }),
+  number: Object.freeze({ min: 64, preferred: 76, max: 96, padding: 20, align: "right" }),
+  "money-rate": Object.freeze({ min: 80, preferred: 92, max: 112, padding: 20, align: "right" }),
+  "date-time": Object.freeze({ min: 96, preferred: 112, max: 136, padding: 20, align: "left" }),
+  status: Object.freeze({ min: 84, preferred: 96, max: 128, padding: 20, align: "left" }),
+  identifier: Object.freeze({ min: 112, preferred: 136, max: 180, padding: 20, align: "left" }),
+  "code-order": Object.freeze({ min: 128, preferred: 152, max: 200, padding: 20, align: "left" }),
+  name: Object.freeze({ min: 140, preferred: 176, max: 240, padding: 20, align: "left" }),
+  narrative: Object.freeze({ min: 160, preferred: 200, max: 280, padding: 20, align: "left" }),
+  action: Object.freeze({ min: 72, preferred: 104, max: 320, padding: 16, align: "left" }),
+  text: Object.freeze({ min: 80, preferred: 112, max: 180, padding: 20, align: "left" }),
+});
+
+const SMART_COLUMN_PROFILE_PATTERNS = [
+  ["selection", /^(选择|全选|勾选|关注|隐藏|序号)$/i],
+  ["image", /(图片|产品图|主图|缩略图|image|photo)/i],
+  ["action", /^(操作|动作|管理)$/i],
+  ["narrative", /(处理结果|结果|说明|备注|内容|建议|结论|原因|描述|下一步|共性信号)/i],
+  ["code-order", /(单号|订单号|货件号|编号|编码|仓库代码|物流中心|shipment\s*id|order\s*id)/i],
+  ["identifier", /(^|[\s/])(MSKU|SKU|ASIN|FNSKU|SID|Profile)([\s/]|$)/i],
+  ["date-time", /(日期|时间|月份|周期|周数|到期|签发|登录|更新)/i],
+  ["status", /(状态|风险|优先级|阶段|类型|标记)/i],
+  ["money-rate", /(金额|销售额|采购额|成本|费用|费率|利润|收入|支出|回款|结算|余额|单价|价格|采购价|税点|比例|占比|达成率|退款率|毛利率|净利率|ACOS|ROAS|CPC|CTR|CVR|预算)/i],
+  ["number", /(数量|销量|库存|在库|可售|转库|在途|天数|订单|目标|实际|统计|申请中|未申请|总数|小计|合计|排名|次数|review数)/i],
+  ["compact-dimension", /^(国家|站点|币种|平台)$/i],
+  ["name", /(名称|产品|品名|店铺|供应商|负责人|所有者|账号|承运商|渠道)/i],
+];
+
+function normalizeColumnLabel(label = "") {
+  return String(label || "")
+    .replace(/调整\s*.*?\s*列宽/g, "")
+    .replace(/[（(][^（）()]*[）)]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function inferSmartColumnProfile(label = "", explicitProfile = "") {
+  const explicit = String(explicitProfile || "").trim().toLowerCase();
+  if (SMART_COLUMN_PROFILES[explicit]) return explicit;
+  const normalized = normalizeColumnLabel(label);
+  for (const [profile, pattern] of SMART_COLUMN_PROFILE_PATTERNS) {
+    if (pattern.test(normalized)) return profile;
+  }
+  return "text";
+}
+
+function measuredTextWidth(measureText, value) {
+  const measured = measureText(String(value || ""));
+  const width = typeof measured === "number" ? measured : measured?.width;
+  return Number.isFinite(width) ? Math.max(0, width) : 0;
+}
+
+export function estimateSmartColumnWidth({
+  label = "",
+  values = [],
+  explicitProfile = "",
+  measureText = (value) => String(value || "").length * 8,
+  controlWidth = 0,
+} = {}) {
+  const profileName = inferSmartColumnProfile(label, explicitProfile);
+  const profile = SMART_COLUMN_PROFILES[profileName];
+  const samples = Array.from(values || []).slice(0, SMART_COLUMN_SAMPLE_LIMIT);
+  const measuredSamples = samples
+    .map((value) => measuredTextWidth(measureText, value))
+    .sort((left, right) => left - right);
+  const percentileIndex = measuredSamples.length ? Math.floor((measuredSamples.length - 1) * 0.9) : -1;
+  const measuredContentWidth = percentileIndex >= 0 ? measuredSamples[percentileIndex] : 0;
+  const measuredHeaderWidth = measuredTextWidth(measureText, normalizeColumnLabel(label));
+  let contentTarget = Math.max(measuredHeaderWidth, measuredContentWidth) + profile.padding;
+
+  if (profileName === "selection" || profileName === "image") {
+    contentTarget = profile.preferred;
+  } else if (profileName === "action" && Number.isFinite(Number(controlWidth)) && Number(controlWidth) > 0) {
+    contentTarget = Math.max(contentTarget, Number(controlWidth) + profile.padding);
+  }
+
+  return {
+    profile: profileName,
+    align: profile.align,
+    minWidth: profile.min,
+    maxWidth: profile.max,
+    measuredContentWidth: Math.round(measuredContentWidth),
+    measuredHeaderWidth: Math.round(measuredHeaderWidth),
+    sampleCount: samples.length,
+    width: Math.min(profile.max, Math.max(profile.min, Math.round(contentTarget))),
+  };
+}
 
 export function normalizeColumnWidth(value, fallback = DEFAULT_COLUMN_WIDTH) {
   const number = Number(value);

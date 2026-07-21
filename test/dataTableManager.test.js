@@ -3,6 +3,8 @@ import test from "node:test";
 import {
   classifyDataTableVariant,
   createDataTableManager,
+  estimateSmartColumnWidth,
+  inferSmartColumnProfile,
   inferTableColumnKind,
   inferTableStateTone,
   normalizeColumnWidth,
@@ -122,6 +124,53 @@ test("data table manager classifies table variants by business shape", () => {
   assert.equal(classifyDataTableVariant({ className: "sales-forecast-table", columnCount: 49 }), "matrix");
   assert.equal(classifyDataTableVariant({ className: "data-table", columnCount: 15 }), "wide");
   assert.equal(classifyDataTableVariant({ className: "data-table", columnCount: 8 }), "standard");
+});
+
+test("smart table widths classify BI column semantics", () => {
+  const cases = new Map([
+    ["关注", "selection"],
+    ["发货产品图片", "image"],
+    ["国家", "compact-dimension"],
+    ["FBA可售", "number"],
+    ["采购成本小计", "money-rate"],
+    ["创建时间", "date-time"],
+    ["货件状态", "status"],
+    ["MSKU / FNSKU", "identifier"],
+    ["货件单号", "code-order"],
+    ["产品名称", "name"],
+    ["处理结果", "narrative"],
+    ["操作", "action"],
+  ]);
+
+  for (const [label, expected] of cases) {
+    assert.equal(inferSmartColumnProfile(label), expected, label);
+  }
+});
+
+test("smart width estimator samples 30 rows and resists one long outlier", () => {
+  const values = Array.from({ length: 30 }, () => "TJ033");
+  values[29] = "X".repeat(200);
+  values.push("Y".repeat(300));
+
+  const result = estimateSmartColumnWidth({
+    label: "MSKU",
+    values,
+    measureText: (value) => String(value).length * 8,
+  });
+
+  assert.equal(result.profile, "identifier");
+  assert.equal(result.sampleCount, 30);
+  assert.equal(result.measuredContentWidth, 40);
+  assert.equal(result.width, 112);
+});
+
+test("smart width estimator clamps each semantic profile", () => {
+  const measureText = (value) => String(value).length * 8;
+
+  assert.equal(estimateSmartColumnWidth({ label: "国家", values: ["美国"], measureText }).width, 56);
+  assert.equal(estimateSmartColumnWidth({ label: "产品名称", values: ["X".repeat(80)], measureText }).width, 240);
+  assert.equal(estimateSmartColumnWidth({ label: "发货产品图片", values: ["很长的图片占位文字"], measureText }).width, 56);
+  assert.equal(estimateSmartColumnWidth({ label: "操作", values: [], controlWidth: 248, measureText }).width, 264);
 });
 
 test("data table manager infers numeric columns from BI headers", () => {
