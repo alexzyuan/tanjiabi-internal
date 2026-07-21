@@ -567,6 +567,10 @@ th:hover>.table-resize-handle::after,.table-resize-handle:focus-visible::after,.
 body:not(.login-body).is-table-column-resizing,body:not(.login-body).is-table-column-resizing *{cursor:col-resize;user-select:none}
 .data-table-wrap.has-horizontal-overflow::after{content:attr(data-scroll-hint);position:sticky;right:10px;bottom:8px;z-index:12;float:right;display:inline-flex;align-items:center;min-height:24px;margin:0 8px 8px auto;padding:3px 8px;border:1px solid var(--tj-border-subtle);border-radius:999px;color:var(--tj-text-muted);background:color-mix(in srgb,var(--tj-content-bg) 92%,var(--tj-action-blue-soft));box-shadow:var(--tj-shadow-soft);font-size:12px;font-weight:700;line-height:1;pointer-events:none}
 .data-table-wrap.has-horizontal-overflow.is-scrolled-end::after{content:"";display:none}
+.table-width-reset{position:sticky;left:calc(100% - 40px);bottom:8px;z-index:14;float:right;width:32px;height:32px;margin:8px;padding:0;border:1px solid var(--tj-border-control);border-radius:var(--tj-control-radius);color:var(--tj-action-blue);background:var(--tj-content-bg);box-shadow:var(--tj-shadow-soft);font:inherit;font-size:18px;line-height:1;cursor:pointer}
+.table-width-reset:hover{border-color:var(--tj-action-blue);background:var(--tj-action-blue-soft)}
+.table-width-reset:focus-visible{outline:0;box-shadow:var(--tj-focus-ring)}
+.table-width-reset[hidden]{display:none}
 body:not(.login-body) .table-select{min-width:104px;min-height:var(--tj-control-height-compact);height:var(--tj-control-height-compact);padding:0 28px 0 10px;border:1px solid var(--tj-border-control);border-radius:var(--tj-control-radius);color:var(--tj-text-strong);background:var(--tj-content-bg);font:inherit;font-size:13px;font-weight:700}
 .table-action{min-height:var(--tj-control-height-compact);padding:4px 8px;border:0;border-radius:var(--tj-control-radius);color:var(--tj-action-blue);background:transparent;font:inherit;font-weight:800;cursor:pointer}
 body:not(.login-body) .table-select:focus-visible,.table-action:focus-visible{outline:0;box-shadow:var(--tj-focus-ring)}

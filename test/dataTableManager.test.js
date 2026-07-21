@@ -16,6 +16,10 @@ function createResizeInteractionHarness({
   headerLabel = "销售额",
   explicitWidth = "128",
   rowValues = [],
+  tableId = "test-table",
+  tableKey = "",
+  columnKey = "sales",
+  viewId = "view-test",
 } = {}) {
   const rootListeners = new Map();
   const windowListeners = new Map();
@@ -23,6 +27,7 @@ function createResizeInteractionHarness({
   const storage = {
     getItem: (key) => storageData.get(key) || null,
     setItem: (key, value) => storageData.set(key, String(value)),
+    removeItem: (key) => storageData.delete(key),
   };
   let widthWriteCount = 0;
   const colStyle = {};
@@ -54,9 +59,9 @@ function createResizeInteractionHarness({
     },
   };
   const table = {
-    id: "test-table",
+    id: tableId,
     className: "data-table",
-    dataset: {},
+    dataset: { tableKey },
     style: {
       setProperty(name, value) {
         this[name] = value;
@@ -67,7 +72,10 @@ function createResizeInteractionHarness({
       remove: (...names) => names.forEach((name) => tableClassNames.delete(name)),
     },
     ownerDocument: { defaultView: { localStorage: storage } },
-    closest: () => null,
+    closest(selector) {
+      if (selector === ".view[id]") return view;
+      return null;
+    },
     querySelector(selector) {
       if (selector === ":scope > colgroup") return colgroup;
       if (selector.includes("colgroup col")) return col;
@@ -86,7 +94,7 @@ function createResizeInteractionHarness({
         else headerClassNames.delete(name);
       },
     },
-    dataset: { columnIndex: "0", columnKey: "sales", columnWidth: explicitWidth },
+    dataset: { columnIndex: "0", columnKey, columnWidth: explicitWidth },
     getAttribute(name) {
       if (name === "data-column-key") return this.dataset.columnKey;
       if (name === "data-column-width") return this.dataset.columnWidth || "";
@@ -101,6 +109,10 @@ function createResizeInteractionHarness({
     },
     tagName: "TH",
     textContent: headerLabel,
+  };
+  const view = {
+    id: viewId,
+    querySelectorAll: () => [table],
   };
   table.tHead = { rows: [{ cells: [header] }] };
   const bodyCells = rowValues.map((textContent) => ({
@@ -143,6 +155,7 @@ function createResizeInteractionHarness({
     rootListeners,
     scheduledTimers,
     storageData,
+    table,
     widthWriteCount: () => widthWriteCount,
     windowListeners,
   };
@@ -376,4 +389,57 @@ test("data table manager does not rewrite unchanged smart widths", () => {
   harness.manager.setupDataTables();
 
   assert.equal(harness.widthWriteCount(), writesAfterFirstEnhancement);
+});
+
+test("data table manager assigns stable keys and migrates legacy widths", (t) => {
+  const migrationLogs = [];
+  t.mock.method(console, "info", (...args) => migrationLogs.push(args));
+  const storageData = new Map();
+  const legacyStorageKey = "tanjia:tableColumnWidths:v1:产品名称";
+  storageData.set(legacyStorageKey, JSON.stringify({ widths: { "0:产品名称": 188 } }));
+
+  const { col, header, table } = createResizeInteractionHarness({
+    columnKey: "",
+    explicitWidth: "",
+    headerLabel: "产品名称",
+    rowValues: ["双支蜘蛛船"],
+    storageData,
+    tableId: "",
+    viewId: "view-products",
+  });
+
+  assert.equal(table.dataset.tableKey, "view-products:table-1");
+  assert.equal(header.dataset.columnKey, "column-1");
+  assert.equal(col.style.width, "188px");
+  assert.equal(col.dataset.widthSource, "user");
+  assert.ok(storageData.has(legacyStorageKey), "legacy record must remain as a backup");
+  const migrated = JSON.parse(storageData.get("tanjia:tableColumnWidths:v1:view-products:table-1"));
+  assert.equal(migrated.widths["column-1"], 188);
+  assert.equal(migrated.migratedFrom, legacyStorageKey);
+  assert.equal(migrationLogs[0][0], "[data-table-manager] migrated saved column widths");
+});
+
+test("data table manager restores only the current table to smart widths", (t) => {
+  const restoreLogs = [];
+  t.mock.method(console, "info", (...args) => restoreLogs.push(args));
+  const storageData = new Map([
+    ["tanjia:tableColumnWidths:v1:test-table", JSON.stringify({ widths: { sales: 188 } })],
+    ["tanjia:tableColumnWidths:v1:other-table", JSON.stringify({ widths: { country: 144 } })],
+  ]);
+  const { col, manager, table } = createResizeInteractionHarness({
+    explicitWidth: "",
+    headerLabel: "国家",
+    rowValues: ["美国", "加拿大"],
+    storageData,
+  });
+  assert.equal(col.style.width, "188px");
+
+  manager.restoreSmartWidths(table);
+
+  assert.equal(storageData.has("tanjia:tableColumnWidths:v1:test-table"), false);
+  assert.equal(storageData.has("tanjia:tableColumnWidths:v1:other-table"), true);
+  assert.equal(col.dataset.userWidth, "");
+  assert.equal(col.dataset.widthSource, "smart");
+  assert.equal(col.style.width, "56px");
+  assert.equal(restoreLogs[0][0], "[data-table-manager] restored smart column widths");
 });

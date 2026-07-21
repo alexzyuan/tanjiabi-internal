@@ -124,6 +124,41 @@ body:not(.login-body).is-table-column-resizing * {
   display: none;
 }
 
+.table-width-reset {
+  position: sticky;
+  left: calc(100% - 40px);
+  bottom: 8px;
+  z-index: 14;
+  float: right;
+  width: 32px;
+  height: 32px;
+  margin: 8px;
+  padding: 0;
+  border: 1px solid var(--tj-border-control);
+  border-radius: var(--tj-control-radius);
+  color: var(--tj-action-blue);
+  background: var(--tj-content-bg);
+  box-shadow: var(--tj-shadow-soft);
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.table-width-reset:hover {
+  border-color: var(--tj-action-blue);
+  background: var(--tj-action-blue-soft);
+}
+
+.table-width-reset:focus-visible {
+  outline: 0;
+  box-shadow: var(--tj-focus-ring);
+}
+
+.table-width-reset[hidden] {
+  display: none;
+}
+
 body:not(.login-body) .table-select {
   min-width: 104px;
   min-height: var(--tj-control-height-compact);

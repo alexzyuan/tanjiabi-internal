@@ -420,6 +420,10 @@ test("shared table controls live outside legacy css and use semantic tokens", as
   assert.match(componentSource, /^table\.data-table\s*\{/m);
   assert.match(componentSource, /^table\.data-table--matrix\s*\{/m);
   assert.match(componentSource, /^\.table-resize-handle\s*\{/m);
+  assert.match(componentSource, /^\.table-width-reset\s*\{/m);
+  assert.match(componentSource, /^\.table-width-reset:hover\s*\{/m);
+  assert.match(componentSource, /^\.table-width-reset:focus-visible\s*\{/m);
+  assert.match(componentSource, /^\.table-width-reset\[hidden\]\s*\{/m);
   assert.match(componentSource, /^\.table-state-cell--error\s*\{/m);
   assert.match(componentSource, /^body:not\(\.login-body\) \.table-select\s*\{/m);
   assert.match(componentSource, /^\.table-action\s*\{/m);

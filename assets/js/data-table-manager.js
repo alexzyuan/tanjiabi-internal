@@ -4,6 +4,7 @@ const DEFAULT_COLUMN_WIDTH = 112;
 const DEFAULT_SCROLL_HINT = "横向滚动查看更多列";
 const COLUMN_WIDTH_STORAGE_PREFIX = "tanjia:tableColumnWidths:v1";
 const SMART_WIDTH_DEBUG_STORAGE_KEY = "tanjia:tableWidthDiagnostics";
+const WIDTH_MIGRATION_MARKER_SUFFIX = ":migration-complete";
 const smartWidthSignatures = new WeakMap();
 
 const numericHeaderPattern = /(金额|销售额|采购额|应付额|实付额|未付额|数量|销量|采购量|库存|在库|可售|转库|在途|成本|费用|费率|毛利率|净利率|退款率|达成率|占比|税点|采购价|单价|价格|天数|ACOS|ROAS|CPC|CTR|CVR|订单|目标|实际|利润|收入|支出|回款|结算|余额|计提|冲回|统计|申请中|未申请|货件数|店铺数|MSKU\s*数|SKU\s*数|总数|小计|合计|比例|率)$/i;
@@ -181,6 +182,12 @@ function tableStorageKey(table) {
   return `${COLUMN_WIDTH_STORAGE_PREFIX}:${headers.join("|").slice(0, 180)}`;
 }
 
+function legacyTableStorageKey(table) {
+  const headers = getLeafHeaderCells(table).map((header) => normalizeColumnLabel(header.textContent || ""));
+  if (!headers.length) return "";
+  return `${COLUMN_WIDTH_STORAGE_PREFIX}:${headers.join("|").slice(0, 180)}`;
+}
+
 function columnStorageKey(header, index) {
   const explicit = header?.dataset?.columnKey || header?.getAttribute?.("data-column-key") || "";
   if (explicit) return String(explicit).trim();
@@ -188,18 +195,92 @@ function columnStorageKey(header, index) {
   return label ? `${index}:${label}` : String(index);
 }
 
+function datasetBusinessKey(dataset = {}) {
+  const entry = Object.entries(dataset).find(([key, value]) => value && (key === "columnKey" || key.endsWith("Sort")));
+  return entry ? String(entry[1]).trim() : "";
+}
+
+function ensureStableTableIdentity(table) {
+  const existing = String(table?.dataset?.tableKey || table?.id || "").trim();
+  if (existing) return existing;
+  const view = table?.closest?.(".view[id]");
+  if (!view?.id) {
+    throw new Error("[data-table-manager] managed table requires an id, data-table-key, or containing view id");
+  }
+  const tables = Array.from(view.querySelectorAll?.(TABLE_SELECTOR) || []);
+  const index = tables.indexOf(table);
+  if (index < 0) {
+    throw new Error("[data-table-manager] managed table identity could not be resolved");
+  }
+  table.dataset.tableKey = `${view.id}:table-${index + 1}`;
+  return table.dataset.tableKey;
+}
+
+function ensureStableColumnIdentities(headers) {
+  headers.forEach((header, index) => {
+    if (String(header?.dataset?.columnKey || "").trim()) return;
+    const control = header?.querySelector?.("button, [data-column-key]");
+    header.dataset.columnKey = datasetBusinessKey(header.dataset)
+      || datasetBusinessKey(control?.dataset)
+      || `column-${index + 1}`;
+  });
+}
+
+function assertUniqueTableIdentity(table) {
+  const key = String(table?.dataset?.tableKey || table?.id || "").trim();
+  const allTables = Array.from(table?.ownerDocument?.querySelectorAll?.(TABLE_SELECTOR) || []);
+  const duplicates = allTables.filter((candidate) => candidate !== table && String(candidate.dataset?.tableKey || candidate.id || "").trim() === key);
+  if (duplicates.length) {
+    throw new Error(`[data-table-manager] duplicate managed table key: ${key}`);
+  }
+}
+
+function parseSavedWidthRecord(raw, key) {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && parsed.widths && typeof parsed.widths === "object" ? parsed : null;
+  } catch (error) {
+    console.warn("[data-table-manager] ignored invalid saved column widths", { key, error: error.message });
+    return null;
+  }
+}
+
 function readSavedColumnWidths(table, storage) {
   const key = tableStorageKey(table);
   if (!key || !storage?.getItem) return {};
-  const raw = storage.getItem(key);
-  if (!raw) return {};
-  try {
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" && parsed.widths && typeof parsed.widths === "object" ? parsed.widths : {};
-  } catch (error) {
-    console.warn("[data-table-manager] ignored invalid saved column widths", { key, error: error.message });
-    return {};
-  }
+  return parseSavedWidthRecord(storage.getItem(key), key)?.widths || {};
+}
+
+function migrateLegacyColumnWidths(table, headers, storage, legacyKey) {
+  const stableKey = tableStorageKey(table);
+  if (!stableKey || !legacyKey || stableKey === legacyKey || !storage?.getItem || !storage?.setItem) return;
+  const markerKey = `${stableKey}${WIDTH_MIGRATION_MARKER_SUFFIX}`;
+  if (storage.getItem(stableKey) || storage.getItem(markerKey)) return;
+  const legacyRecord = parseSavedWidthRecord(storage.getItem(legacyKey), legacyKey);
+  if (!legacyRecord) return;
+
+  const widths = {};
+  headers.forEach((header, index) => {
+    const stableColumnKey = columnStorageKey(header, index);
+    const legacyLabelKey = `${index}:${normalizeColumnLabel(header?.textContent || "")}`;
+    const legacyWidth = legacyRecord.widths[stableColumnKey] ?? legacyRecord.widths[legacyLabelKey] ?? legacyRecord.widths[String(index)];
+    if (legacyWidth === undefined) return;
+    widths[stableColumnKey] = normalizeColumnWidth(legacyWidth);
+  });
+  if (!Object.keys(widths).length) return;
+
+  storage.setItem(stableKey, JSON.stringify({
+    widths,
+    migratedAt: new Date().toISOString(),
+    migratedFrom: legacyKey,
+  }));
+  storage.setItem(markerKey, JSON.stringify({ migratedFrom: legacyKey, migratedAt: new Date().toISOString() }));
+  console.info("[data-table-manager] migrated saved column widths", {
+    tableKey: stableKey,
+    legacyKey,
+    columnCount: Object.keys(widths).length,
+  });
 }
 
 function writeSavedColumnWidths(table, storage) {
@@ -298,6 +379,34 @@ function smartWidthSignature(headers, columns, samples, savedWidths) {
 
 function smartWidthDebugEnabled(table, storage) {
   return table?.dataset?.tableWidthDebug === "true" || storage?.getItem?.(SMART_WIDTH_DEBUG_STORAGE_KEY) === "1";
+}
+
+function hasSavedUserWidths(table, storage) {
+  if (Array.from(table.querySelectorAll(":scope > colgroup > col")).some((column) => column.dataset.userWidth)) return true;
+  return Object.keys(readSavedColumnWidths(table, storage)).length > 0;
+}
+
+function syncSmartWidthResetControl(table, storage) {
+  const wrap = getTableWrap(table);
+  const documentRef = table?.ownerDocument;
+  if (!wrap?.appendChild || !documentRef?.createElement) return null;
+  const tableKey = String(table.dataset.tableKey || table.id || "");
+  let control = Array.from(wrap.querySelectorAll?.(":scope > .table-width-reset") || [])
+    .find((candidate) => candidate.dataset.tableKey === tableKey);
+  if (!control) {
+    control = documentRef.createElement("button");
+    control.className = "table-width-reset";
+    control.type = "button";
+    control.dataset.tableKey = tableKey;
+    control.setAttribute("aria-label", "恢复智能列宽");
+    control.setAttribute("title", "恢复智能列宽");
+    control.textContent = "↺";
+    wrap.appendChild(control);
+  }
+  const hasUserWidths = hasSavedUserWidths(table, storage);
+  control.hidden = !hasUserWidths;
+  wrap.classList?.toggle?.("has-user-column-widths", hasUserWidths);
+  return control;
 }
 
 export function applySmartColumnWidths(table, storage, { force = false } = {}) {
@@ -536,6 +645,13 @@ function enhanceTable(table) {
   if (!table || table.closest(".login-body")) return null;
   const columnCount = getColumnCount(table);
   if (!columnCount) return null;
+  const headers = getLeafHeaderCells(table);
+  const legacyKey = legacyTableStorageKey(table);
+  ensureStableTableIdentity(table);
+  ensureStableColumnIdentities(headers);
+  assertUniqueTableIdentity(table);
+  const storage = table.ownerDocument?.defaultView?.localStorage || globalThis.localStorage;
+  migrateLegacyColumnWidths(table, headers, storage, legacyKey);
   const wrap = getTableWrap(table);
   const variant = classifyDataTableVariant({ className: table.className, columnCount });
   table.classList.add("data-table", `data-table--${variant}`);
@@ -547,11 +663,12 @@ function enhanceTable(table) {
   }
   ensureColGroup(table, columnCount);
   markColumnKinds(table);
-  applySmartColumnWidths(table, table.ownerDocument?.defaultView?.localStorage || globalThis.localStorage);
+  applySmartColumnWidths(table, storage);
   markStateRows(table);
   ensureResizeHandles(table);
   updateStickyOffsets(table);
   updateScrollHint(table);
+  syncSmartWidthResetControl(table, storage);
   return table;
 }
 
@@ -574,6 +691,29 @@ export function createDataTableManager({
     const enhanced = enhanceTable(table);
     if (enhanced) updateStickyOffsets(enhanced);
     return enhanced;
+  }
+
+  function restoreSmartWidths(table) {
+    if (!table) throw new Error("[data-table-manager] restore requires a managed table");
+    const storage = table.ownerDocument?.defaultView?.localStorage || windowRef?.localStorage || globalThis.localStorage;
+    const key = tableStorageKey(table);
+    if (!key || !storage?.removeItem) {
+      throw new Error("[data-table-manager] restore requires writable column-width storage");
+    }
+    storage.removeItem(key);
+    Array.from(table.querySelectorAll(":scope > colgroup > col")).forEach((column) => {
+      column.dataset.userWidth = "";
+    });
+    smartWidthSignatures.delete(table);
+    const details = applySmartColumnWidths(table, storage, { force: true });
+    updateStickyOffsets(table);
+    updateScrollHint(table);
+    syncSmartWidthResetControl(table, storage);
+    console.info("[data-table-manager] restored smart column widths", {
+      tableKey: table.dataset.tableKey || table.id || "",
+      columnCount: details.length,
+    });
+    return details;
   }
 
   function handlePointerDown(event) {
@@ -618,6 +758,16 @@ export function createDataTableManager({
   }
 
   function handleClick(event) {
+    const resetControl = event.target?.closest?.(".table-width-reset");
+    if (resetControl) {
+      const tableKey = resetControl.dataset.tableKey || "";
+      const table = Array.from(root?.querySelectorAll?.(tableSelector) || [])
+        .find((candidate) => String(candidate.dataset?.tableKey || candidate.id || "") === tableKey);
+      if (!table) throw new Error(`[data-table-manager] reset table not found: ${tableKey}`);
+      restoreSmartWidths(table);
+      event.preventDefault?.();
+      return;
+    }
     if (event.target?.closest?.(".table-resize-handle")) {
       clearResizeClickSuppression();
       stopResizeClick(event);
@@ -642,6 +792,7 @@ export function createDataTableManager({
     writeSavedColumnWidths(activeResize.table, activeResize.table.ownerDocument?.defaultView?.localStorage || windowRef?.localStorage || globalThis.localStorage);
     updateStickyOffsets(activeResize.table);
     updateScrollHint(activeResize.table);
+    syncSmartWidthResetControl(activeResize.table, activeResize.table.ownerDocument?.defaultView?.localStorage || windowRef?.localStorage || globalThis.localStorage);
     activeResize = null;
     root?.body?.classList?.remove("is-table-column-resizing");
     scheduleResizeClickSuppression();
@@ -683,6 +834,7 @@ export function createDataTableManager({
     return {
       enhanceAll,
       refreshTable,
+      restoreSmartWidths,
       teardown,
     };
   }
@@ -700,6 +852,7 @@ export function createDataTableManager({
   return {
     enhanceAll,
     refreshTable,
+    restoreSmartWidths,
     setupDataTables,
     teardown,
   };
