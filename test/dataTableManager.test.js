@@ -9,20 +9,44 @@ import {
   resolveTableColumnKind,
 } from "../assets/js/data-table-manager.js";
 
-function createResizeInteractionHarness() {
+function createResizeInteractionHarness({ storageData = new Map() } = {}) {
   const rootListeners = new Map();
   const windowListeners = new Map();
   const scheduledTimers = [];
+  const storage = {
+    getItem: (key) => storageData.get(key) || null,
+    setItem: (key, value) => storageData.set(key, String(value)),
+  };
   const col = { dataset: {}, style: {} };
   const tableClassNames = new Set();
   const headerClassNames = new Set();
+  const handle = {
+    dataset: { columnIndex: "0" },
+    closest(selector) {
+      if (selector === ".table-resize-handle") return handle;
+      if (selector === "table") return table;
+      if (selector === "th") return header;
+      return null;
+    },
+  };
+  const colgroup = {
+    children: [col],
+    appendChild(child) {
+      this.children.push(child);
+    },
+  };
   const table = {
+    id: "test-table",
+    className: "data-table",
+    dataset: {},
     classList: {
       add: (...names) => names.forEach((name) => tableClassNames.add(name)),
       remove: (...names) => names.forEach((name) => tableClassNames.delete(name)),
     },
+    ownerDocument: { defaultView: { localStorage: storage } },
     closest: () => null,
     querySelector(selector) {
+      if (selector === ":scope > colgroup") return colgroup;
       if (selector.includes("colgroup col")) return col;
       return null;
     },
@@ -34,22 +58,28 @@ function createResizeInteractionHarness() {
   const header = {
     classList: {
       contains: (name) => headerClassNames.has(name),
+      toggle(name, enabled) {
+        if (enabled) headerClassNames.add(name);
+        else headerClassNames.delete(name);
+      },
     },
-    dataset: { columnIndex: "0" },
+    dataset: { columnIndex: "0", columnKey: "sales" },
+    getAttribute(name) {
+      if (name === "data-column-key") return this.dataset.columnKey;
+      if (name === "data-column-width") return this.dataset.columnWidth || "";
+      return "";
+    },
     getBoundingClientRect: () => ({ width: 128 }),
     offsetWidth: 128,
+    querySelector(selector) {
+      if (selector === ":scope > .table-resize-handle") return handle;
+      return null;
+    },
+    tagName: "TH",
     textContent: "销售额",
   };
   table.tHead = { rows: [{ cells: [header] }] };
-  const handle = {
-    dataset: { columnIndex: "0" },
-    closest(selector) {
-      if (selector === ".table-resize-handle") return handle;
-      if (selector === "table") return table;
-      if (selector === "th") return header;
-      return null;
-    },
-  };
+  table.tBodies = [];
   header.closest = (selector) => (selector === "th" ? header : null);
   const root = {
     body: { classList: { add() {}, remove() {} } },
@@ -57,9 +87,10 @@ function createResizeInteractionHarness() {
       rootListeners.set(eventName, listener);
     },
     removeEventListener() {},
-    querySelectorAll: () => [],
+    querySelectorAll: (selector) => (selector === ".table-wrap, .table-scroll" ? [] : selector.includes("table") ? [table] : []),
   };
   const windowRef = {
+    localStorage: storage,
     addEventListener(eventName, listener) {
       windowListeners.set(eventName, listener);
     },
@@ -72,7 +103,7 @@ function createResizeInteractionHarness() {
   };
   const manager = createDataTableManager({ root, windowRef });
   manager.setupDataTables();
-  return { handle, header, rootListeners, scheduledTimers, windowListeners };
+  return { col, handle, header, manager, rootListeners, scheduledTimers, storageData, windowListeners };
 }
 
 function createCancelableEvent(target, extra = {}) {
@@ -179,4 +210,40 @@ test("data table manager does not suppress ordinary header clicks", () => {
   rootListeners.get("click")(clickEvent);
 
   assert.deepEqual(clickEvent.calls, []);
+});
+
+test("data table manager persists user resized column widths", () => {
+  const { col, handle, rootListeners, storageData, windowListeners } = createResizeInteractionHarness();
+  const pointerDownEvent = createCancelableEvent(handle, { clientX: 100 });
+
+  rootListeners.get("pointerdown")(pointerDownEvent);
+  windowListeners.get("pointermove")({ clientX: 142 });
+  windowListeners.get("pointerup")();
+
+  assert.equal(col.style.width, "170px");
+  const stored = JSON.parse(storageData.get("tanjia:tableColumnWidths:v1:test-table"));
+  assert.equal(stored.widths.sales, 170);
+});
+
+test("data table manager restores saved column widths during enhancement", () => {
+  const storageData = new Map();
+  storageData.set("tanjia:tableColumnWidths:v1:test-table", JSON.stringify({ widths: { sales: 188 } }));
+
+  const { col: restoredCol } = createResizeInteractionHarness({ storageData });
+
+  assert.equal(restoredCol.style.width, "188px");
+  assert.equal(restoredCol.dataset.userWidth, "188");
+});
+
+test("data table manager keeps active user widths when enhancement reruns", () => {
+  const storageData = new Map();
+  storageData.set("tanjia:tableColumnWidths:v1:test-table", JSON.stringify({ widths: { sales: 188 } }));
+
+  const { col: restoredCol, manager } = createResizeInteractionHarness({ storageData });
+  restoredCol.style.width = "170px";
+  restoredCol.dataset.userWidth = "170";
+  manager.setupDataTables();
+
+  assert.equal(restoredCol.style.width, "170px");
+  assert.equal(restoredCol.dataset.userWidth, "170");
 });

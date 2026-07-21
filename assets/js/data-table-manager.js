@@ -2,6 +2,7 @@ const TABLE_SELECTOR = ".table-wrap table, .table-scroll table, table.data-table
 const MIN_COLUMN_WIDTH = 44;
 const DEFAULT_COLUMN_WIDTH = 112;
 const DEFAULT_SCROLL_HINT = "横向滚动查看更多列";
+const COLUMN_WIDTH_STORAGE_PREFIX = "tanjia:tableColumnWidths:v1";
 
 const numericHeaderPattern = /(金额|销售额|采购额|应付额|实付额|未付额|数量|销量|采购量|库存|在库|可售|转库|在途|成本|费用|费率|毛利率|净利率|退款率|达成率|占比|税点|采购价|单价|价格|天数|ACOS|ROAS|CPC|CTR|CVR|订单|目标|实际|利润|收入|支出|回款|结算|余额|计提|冲回|统计|申请中|未申请|货件数|店铺数|MSKU\s*数|SKU\s*数|总数|小计|合计|比例|率)$/i;
 const textHeaderPattern = /(名称|产品|店铺|国家|负责人|供应商|图片|状态|操作|时间|日期|币种|编码|单号|型号|备注|内容|链接|目录|文件夹|标题|账号|角色|来源|阶段|建议|结论|周期|模块|对象|指标|类型|仓库|承运商|运输方式|feedback|review|ASIN|MSKU|SKU|FNSKU)$/i;
@@ -76,6 +77,74 @@ function getColumnCount(table) {
   const leafHeaders = getLeafHeaderCells(table);
   if (leafHeaders.length) return leafHeaders.length;
   return Math.max(0, ...Array.from(table?.rows || []).map((row) => Array.from(row.cells || []).reduce((sum, cell) => sum + Number(cell.colSpan || 1), 0)));
+}
+
+function tableStorageKey(table) {
+  const explicit = table?.dataset?.tableKey || table?.id || "";
+  if (explicit) return `${COLUMN_WIDTH_STORAGE_PREFIX}:${explicit}`;
+  const headers = getLeafHeaderCells(table).map((header) => String(header.textContent || "").replace(/\s+/g, " ").trim());
+  if (!headers.length) return "";
+  return `${COLUMN_WIDTH_STORAGE_PREFIX}:${headers.join("|").slice(0, 180)}`;
+}
+
+function columnStorageKey(header, index) {
+  const explicit = header?.dataset?.columnKey || header?.getAttribute?.("data-column-key") || "";
+  if (explicit) return String(explicit).trim();
+  const label = String(header?.textContent || "").replace(/\s+/g, " ").trim();
+  return label ? `${index}:${label}` : String(index);
+}
+
+function readSavedColumnWidths(table, storage) {
+  const key = tableStorageKey(table);
+  if (!key || !storage?.getItem) return {};
+  const raw = storage.getItem(key);
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && parsed.widths && typeof parsed.widths === "object" ? parsed.widths : {};
+  } catch (error) {
+    console.warn("[data-table-manager] ignored invalid saved column widths", { key, error: error.message });
+    return {};
+  }
+}
+
+function writeSavedColumnWidths(table, storage) {
+  const key = tableStorageKey(table);
+  if (!key || !storage?.setItem) return;
+  const headers = getLeafHeaderCells(table);
+  const columns = Array.from(table.querySelectorAll(":scope > colgroup > col"));
+  const widths = {};
+  columns.forEach((col, index) => {
+    if (!col.dataset.userWidth) return;
+    const header = headers[index];
+    widths[columnStorageKey(header, index)] = normalizeColumnWidth(col.dataset.userWidth);
+  });
+  storage.setItem(key, JSON.stringify({ widths, updatedAt: new Date().toISOString() }));
+}
+
+function applyInitialColumnWidths(table, storage) {
+  const headers = getLeafHeaderCells(table);
+  const columns = Array.from(table.querySelectorAll(":scope > colgroup > col"));
+  const savedWidths = readSavedColumnWidths(table, storage);
+  let hasExplicitWidth = false;
+
+  columns.forEach((col, index) => {
+    if (col.dataset.userWidth) {
+      hasExplicitWidth = true;
+      return;
+    }
+    const header = headers[index];
+    const savedWidth = savedWidths[columnStorageKey(header, index)];
+    const defaultWidth = header?.dataset?.columnWidth || header?.getAttribute?.("data-column-width") || "";
+    const width = savedWidth || defaultWidth;
+    if (!width) return;
+    const normalized = normalizeColumnWidth(width);
+    col.style.width = `${normalized}px`;
+    col.dataset.userWidth = savedWidth ? String(normalized) : "";
+    hasExplicitWidth = true;
+  });
+
+  if (hasExplicitWidth) table.classList.add("is-column-resized");
 }
 
 function getTableWrap(table) {
@@ -245,6 +314,7 @@ function enhanceTable(table) {
   }
   ensureColGroup(table, columnCount);
   markColumnKinds(table);
+  applyInitialColumnWidths(table, table.ownerDocument?.defaultView?.localStorage || globalThis.localStorage);
   markStateRows(table);
   ensureResizeHandles(table);
   updateStickyOffsets(table);
@@ -336,6 +406,7 @@ export function createDataTableManager({
   function finishResize() {
     if (!activeResize) return;
     activeResize.table.classList.remove("is-resizing-column");
+    writeSavedColumnWidths(activeResize.table, activeResize.table.ownerDocument?.defaultView?.localStorage || windowRef?.localStorage || globalThis.localStorage);
     updateStickyOffsets(activeResize.table);
     updateScrollHint(activeResize.table);
     activeResize = null;
