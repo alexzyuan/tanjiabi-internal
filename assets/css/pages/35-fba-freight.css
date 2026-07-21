@@ -3,21 +3,8 @@
   overflow-x: auto;
 }
 
-#view-fba-freight .fba-freight-table {
-  --tj-table-min-width: 1360px;
-}
-
-#view-fba-freight .fba-freight-table th:nth-child(11),
 #view-fba-freight .fba-freight-table td[data-fba-freight-order-result] {
-  width: 130px;
-  min-width: 130px;
   white-space: normal;
-}
-
-#view-fba-freight .fba-freight-table th:nth-child(12),
-#view-fba-freight .fba-freight-table .table-actions {
-  width: 380px;
-  min-width: 380px;
 }
 
 #view-fba-freight .fba-freight-table .table-actions {

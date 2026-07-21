@@ -19,7 +19,6 @@
 }
 
 .sales-forecast-table {
-  --tj-table-min-width: 2540px;
   font-size: 12px;
 }
 
@@ -74,59 +73,12 @@
 
 .sales-forecast-table .sticky-product-group {
   position: sticky;
-  left: 0;
-  min-width: 614px;
   box-shadow: 1px 0 0 var(--sales-forecast-sticky-border);
 }
 
 .sales-forecast-table thead tr:first-child th.sticky-product-group {
   z-index: 70;
   background: var(--sales-forecast-product-bg);
-}
-
-.sales-forecast-table .sticky-focus {
-  left: 0;
-  width: 38px;
-  min-width: 38px;
-  text-align: center;
-}
-
-.sales-forecast-table .sticky-image {
-  left: 106px;
-  width: 52px;
-  min-width: 52px;
-  text-align: center;
-}
-
-.sales-forecast-table .sticky-hide {
-  left: 48px;
-  width: 54px;
-  min-width: 54px;
-  text-align: center;
-}
-
-.sales-forecast-table .sticky-store {
-  left: 162px;
-  width: 92px;
-  min-width: 92px;
-}
-
-.sales-forecast-table .sticky-country {
-  left: 254px;
-  width: 62px;
-  min-width: 62px;
-}
-
-.sales-forecast-table .sticky-product {
-  left: 316px;
-  width: 160px;
-  min-width: 160px;
-}
-
-.sales-forecast-table .sticky-msku {
-  left: 476px;
-  width: 128px;
-  min-width: 128px;
 }
 
 .sales-forecast-table th.sticky-col,
@@ -157,24 +109,7 @@
   color: var(--tj-text-strong);
 }
 
-.sales-forecast-table .compact-number-col {
-  width: 64px;
-  min-width: 64px;
-}
-
-.sales-forecast-table .compact-date-col {
-  width: 86px;
-  min-width: 86px;
-}
-
-.sales-forecast-table .month-daily-col {
-  width: 48px;
-  min-width: 48px;
-}
-
 .sales-forecast-table .month-sales-col {
-  width: 54px;
-  min-width: 54px;
   background: var(--sales-forecast-month-bg) !important;
 }
 

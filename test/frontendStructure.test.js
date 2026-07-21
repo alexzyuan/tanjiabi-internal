@@ -43,6 +43,15 @@ test("frontend module cache-bust versions stay aligned", async () => {
   assert.equal(dashboardLoaderUiUtilsVersion, indexUiUtilsVersion);
 });
 
+test("sales forecast delegates default column widths to the shared table manager", async () => {
+  const source = await readFile(new URL("../assets/js/features/sales-forecast.js", import.meta.url), "utf8");
+  const columnsSource = source.slice(source.indexOf("const salesForecastColumns"), source.indexOf("function renderSalesForecastHeader"));
+
+  assert.equal(/\bwidth:\s*\d+/.test(columnsSource), false);
+  assert.equal(source.includes("data-column-width="), false);
+  assert.match(source, /data-column-key=/);
+});
+
 test("FBA logistics views stay grouped under logistics metadata", async () => {
   const breadcrumbShellSource = await readFile(new URL("../assets/js/features/breadcrumb-shell.js", import.meta.url), "utf8");
   const homeQuickLinksSource = await readFile(new URL("../assets/js/features/home-quick-links.js", import.meta.url), "utf8");

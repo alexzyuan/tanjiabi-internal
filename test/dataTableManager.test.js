@@ -185,12 +185,20 @@ test("smart table widths classify BI column semantics", () => {
     ["发货产品图片", "image"],
     ["国家", "compact-dimension"],
     ["FBA可售", "number"],
+    ["AWD", "number"],
+    ["日销建议", "number"],
+    ["补货建议", "number"],
+    ["7月日销", "number"],
+    ["货件数", "number"],
     ["采购成本小计", "money-rate"],
+    ["销售目标(原币)", "money-rate"],
+    ["退款目标(原币)", "money-rate"],
     ["创建时间", "date-time"],
     ["货件状态", "status"],
     ["MSKU / FNSKU", "identifier"],
     ["货件单号", "code-order"],
     ["产品名称", "name"],
+    ["操作人", "name"],
     ["处理结果", "narrative"],
     ["操作", "action"],
   ]);
@@ -364,7 +372,9 @@ test("data table manager applies smart widths from sampled table content", () =>
   assert.equal(col.dataset.widthProfile, "name");
   assert.equal(col.dataset.widthSource, "smart");
   assert.equal(header.dataset.widthProfile, "name");
+  assert.equal(header.dataset.widthAlign, "left");
   assert.equal(bodyCells[0].dataset.widthProfile, "name");
+  assert.equal(bodyCells[0].dataset.widthAlign, "left");
 });
 
 test("data table manager keeps explicit widths ahead of smart widths", () => {

@@ -57,40 +57,40 @@ export function createSalesForecastFeature({
   }
 
 const salesForecastColumns = [
-  { key: "focus", label: "关注", cls: "sticky-col sticky-focus text-cell", type: "focus", width: 44 },
-  { key: "hide", label: "隐藏", cls: "sticky-col sticky-hide text-cell", type: "hide", width: 52 },
-  { key: "imageUrl", label: "图片", cls: "sticky-col sticky-image text-cell", type: "image", width: 54 },
-  { key: "storeName", label: "店铺", cls: "sticky-col sticky-store text-cell", width: 92 },
-  { key: "country", label: "国家", cls: "sticky-col sticky-country text-cell", width: 52 },
-  { key: "productName", label: "产品名称", cls: "sticky-col sticky-product text-cell", width: 160 },
-  { key: "msku", label: "msku", cls: "sticky-col sticky-msku text-cell", width: 128 },
-  { key: "fbaAvailable", label: "FBA可售", cls: "compact-number-col", width: 64 },
-  { key: "fbaTransfer", label: "FBA转库", cls: "compact-number-col", width: 64 },
-  { key: "fbaReserved", label: "FBA预留", cls: "compact-number-col", width: 64 },
-  { key: "awd", label: "AWD", cls: "compact-number-col", width: 54 },
-  { key: "fbaInbound", label: "FBA在途", cls: "compact-number-col", width: 64 },
-  { key: "totalStock", label: "总库存", cls: "compact-number-col", width: 64 },
-  { key: "salesForecast", label: "销量预测", cls: "forecast-emphasis compact-number-col", width: 66 },
-  { key: "peakSeasonForecast", label: "旺季预测", cls: "forecast-emphasis compact-number-col", width: 66 },
-  { key: "fbaAvailableDays", label: "FBA可售天数", type: "days", cls: "compact-number-col", width: 76 },
-  { key: "inboundArrivalDate", label: "在途送达时间", type: "text", cls: "compact-date-col", width: 88 },
-  { key: "outOfStockDate", label: "断货日期", type: "text", cls: "compact-date-col", width: 78 },
-  { key: "shippingDate", label: "发货日期", type: "text", cls: "compact-date-col", width: 78 },
-  { key: "purchaseDate", label: "采购日期", type: "text", cls: "compact-date-col", width: 78 },
-  { key: "recommendedDaily", label: "日销建议", type: "decimal", cls: "compact-number-col", width: 64 },
-  { key: "replenishmentSuggestion", label: "补货建议", type: "signed", cls: "compact-number-col", width: 64 },
+  { key: "focus", label: "关注", cls: "sticky-col sticky-focus text-cell", type: "focus" },
+  { key: "hide", label: "隐藏", cls: "sticky-col sticky-hide text-cell", type: "hide" },
+  { key: "imageUrl", label: "图片", cls: "sticky-col sticky-image text-cell", type: "image" },
+  { key: "storeName", label: "店铺", cls: "sticky-col sticky-store text-cell" },
+  { key: "country", label: "国家", cls: "sticky-col sticky-country text-cell" },
+  { key: "productName", label: "产品名称", cls: "sticky-col sticky-product text-cell" },
+  { key: "msku", label: "msku", cls: "sticky-col sticky-msku text-cell" },
+  { key: "fbaAvailable", label: "FBA可售", cls: "compact-number-col" },
+  { key: "fbaTransfer", label: "FBA转库", cls: "compact-number-col" },
+  { key: "fbaReserved", label: "FBA预留", cls: "compact-number-col" },
+  { key: "awd", label: "AWD", cls: "compact-number-col" },
+  { key: "fbaInbound", label: "FBA在途", cls: "compact-number-col" },
+  { key: "totalStock", label: "总库存", cls: "compact-number-col" },
+  { key: "salesForecast", label: "销量预测", cls: "forecast-emphasis compact-number-col" },
+  { key: "peakSeasonForecast", label: "旺季预测", cls: "forecast-emphasis compact-number-col" },
+  { key: "fbaAvailableDays", label: "FBA可售天数", type: "days", cls: "compact-number-col" },
+  { key: "inboundArrivalDate", label: "在途送达时间", type: "text", cls: "compact-date-col" },
+  { key: "outOfStockDate", label: "断货日期", type: "text", cls: "compact-date-col" },
+  { key: "shippingDate", label: "发货日期", type: "text", cls: "compact-date-col" },
+  { key: "purchaseDate", label: "采购日期", type: "text", cls: "compact-date-col" },
+  { key: "recommendedDaily", label: "日销建议", type: "decimal", cls: "compact-number-col" },
+  { key: "replenishmentSuggestion", label: "补货建议", type: "signed", cls: "compact-number-col" },
   ...Array.from({ length: 12 - SALES_FORECAST_CURRENT_MONTH_INDEX }, (_, offset) => {
     const index = SALES_FORECAST_CURRENT_MONTH_INDEX + offset;
     return [
-      { key: `monthDaily${index}`, label: `${index + 1}月日销`, type: "monthDaily", cls: "month-daily-col", width: 54 },
-      { key: `monthSales${index}`, label: `${index + 1}月销量`, type: "monthSales", cls: "month-sales-col", width: 58 },
+      { key: `monthDaily${index}`, label: `${index + 1}月日销`, type: "monthDaily", cls: "month-daily-col" },
+      { key: `monthSales${index}`, label: `${index + 1}月销量`, type: "monthSales", cls: "month-sales-col" },
     ];
   }).flat(),
-  { key: "daysRemainingInMonth", label: "本月剩余天数", cls: "compact-number-col", width: 82 },
-  { key: "days3", label: "3天日均", type: "recentDaily", cls: "compact-number-col", width: 58 },
-  { key: "days7", label: "7天日均", type: "recentDaily", cls: "compact-number-col", width: 58 },
-  { key: "days14", label: "14天日均", type: "recentDaily", cls: "compact-number-col", width: 62 },
-  { key: "days30", label: "30天日均", type: "recentDaily", cls: "compact-number-col", width: 62 },
+  { key: "daysRemainingInMonth", label: "本月剩余天数", cls: "compact-number-col" },
+  { key: "days3", label: "3天日均", type: "recentDaily", cls: "compact-number-col" },
+  { key: "days7", label: "7天日均", type: "recentDaily", cls: "compact-number-col" },
+  { key: "days14", label: "14天日均", type: "recentDaily", cls: "compact-number-col" },
+  { key: "days30", label: "30天日均", type: "recentDaily", cls: "compact-number-col" },
 ];
 
 function renderSalesForecastHeader() {
@@ -105,7 +105,7 @@ function renderSalesForecastHeader() {
     <th class="group-head sales-group" colspan="${salesColumnCount}">销量数据</th>
   `;
   row.innerHTML = salesForecastColumns
-    .map((column) => `<th class="${column.cls || ""} col-${escapeHtml(column.key)}" data-column-key="${escapeHtml(column.key)}" data-column-width="${escapeHtml(column.width || "")}">${escapeHtml(column.label)}</th>`)
+    .map((column) => `<th class="${column.cls || ""} col-${escapeHtml(column.key)}" data-column-key="${escapeHtml(column.key)}">${escapeHtml(column.label)}</th>`)
     .join("");
   row.dataset.ready = "true";
 }

@@ -134,18 +134,8 @@
   color: var(--tj-tone-info-text);
 }
 
-.ads-keyword-table-wrap table {
-  --tj-table-min-width: 1180px;
-}
-
 .ads-keyword-table-wrap td {
   vertical-align: top;
-}
-
-.ads-keyword-table-wrap td:nth-child(3),
-.ads-keyword-table-wrap td:nth-child(4),
-.ads-keyword-table-wrap td:nth-child(5) {
-  min-width: 150px;
 }
 
 .ads-keyword-table-wrap td strong,
@@ -205,10 +195,6 @@
 .ads-keyword-badge.rank-drop {
   background: var(--tj-tone-info-bg);
   color: var(--tj-tone-info-text);
-}
-
-.ads-portfolio-table-wrap table {
-  --tj-table-min-width: 1280px;
 }
 
 .ads-portfolio-table-wrap td:first-child strong {
