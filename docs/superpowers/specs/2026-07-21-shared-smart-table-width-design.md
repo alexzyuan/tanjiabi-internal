@@ -52,13 +52,14 @@ Each profile defines minimum, preferred, and maximum widths. Exact values may be
 | money-rate | amount, cost, price, ACOS, rate | 80-112 px |
 | date-time | date, created time, delivery time | 96-136 px |
 | status | shipment status, state, risk | 84-128 px |
+| short-name | store, owner, operator | 84-140 px |
 | identifier | SKU, MSKU, ASIN, FNSKU | 112-180 px |
 | code-order | order number, shipment number, warehouse code | 128-200 px |
-| name | product name, store, supplier, owner | 140-240 px |
+| name | product name, supplier, carrier, channel | 140-240 px |
 | narrative | description, result, note, recommendation | 160-280 px |
 | action | operation controls | 72-320 px |
 
-Classification uses normalized labels and explicit `data-column-kind` metadata. Specific patterns must run before broad patterns so that `货件单号` is classified as `code-order`, not generic text, and `采购成本小计` is classified as `money-rate`, not generic number.
+Classification uses normalized labels, header controls, and explicit `data-column-profile` metadata. A header checkbox is classified as `selection` even when the header has no text. Specific patterns must run before broad patterns so that `货件单号` is classified as `code-order`, not generic text, `采购成本小计` is classified as `money-rate`, not generic number, and short organizational labels such as `店铺` do not inherit long-name widths.
 
 Unknown labels use a generic text profile and are observable in diagnostics so the vocabulary can be improved centrally.
 

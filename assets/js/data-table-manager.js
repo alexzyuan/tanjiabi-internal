@@ -23,6 +23,7 @@ const SMART_COLUMN_PROFILES = Object.freeze({
   "money-rate": Object.freeze({ min: 80, preferred: 92, max: 112, padding: 20, align: "right" }),
   "date-time": Object.freeze({ min: 96, preferred: 112, max: 136, padding: 20, align: "left" }),
   status: Object.freeze({ min: 84, preferred: 96, max: 128, padding: 20, align: "left" }),
+  "short-name": Object.freeze({ min: 84, preferred: 96, max: 140, padding: 20, align: "left" }),
   identifier: Object.freeze({ min: 112, preferred: 136, max: 180, padding: 20, align: "left" }),
   "code-order": Object.freeze({ min: 128, preferred: 152, max: 200, padding: 20, align: "left" }),
   name: Object.freeze({ min: 140, preferred: 176, max: 240, padding: 20, align: "left" }),
@@ -35,7 +36,8 @@ const SMART_COLUMN_PROFILE_PATTERNS = [
   ["selection", /^(选择|全选|勾选|关注|隐藏|序号)$/i],
   ["image", /(图片|产品图|主图|缩略图|image|photo)/i],
   ["action", /^(操作|动作|管理)$/i],
-  ["number", /^(AWD|日销建议|补货建议|\d+月日销|(?:货件|店铺|供应商|MSKU|SKU)\s*数)$/i],
+  ["number", /^(AWD|FBA预留|旺季预测|日销建议|补货建议|\d+月日销|(?:货件|店铺|供应商|MSKU|SKU)\s*数)$/i],
+  ["short-name", /^(店铺|负责人|所有者|操作人|人员)$/i],
   ["narrative", /(处理结果|结果|说明|备注|内容|建议|结论|原因|描述|下一步|共性信号)/i],
   ["code-order", /(单号|订单号|货件号|编号|编码|仓库代码|物流中心|shipment\s*id|order\s*id)/i],
   ["identifier", /(^|[\s/])(MSKU|SKU|ASIN|FNSKU|SID|Profile)([\s/]|$)/i],
@@ -44,7 +46,7 @@ const SMART_COLUMN_PROFILE_PATTERNS = [
   ["money-rate", /(金额|销售额|采购额|成本|费用|费率|利润|收入|支出|回款|结算|余额|单价|价格|采购价|税点|比例|占比|达成率|退款率|毛利率|净利率|ACOS|ROAS|CPC|CTR|CVR|预算|(?:销售|退款|利润)目标)/i],
   ["number", /(数量|销量|日销|库存|在库|可售|转库|在途|天数|订单|目标|实际|统计|申请中|未申请|总数|小计|合计|排名|次数|review数)/i],
   ["compact-dimension", /^(国家|站点|币种|平台)$/i],
-  ["name", /(名称|产品|品名|店铺|供应商|负责人|所有者|操作人|人员|账号|承运商|渠道)/i],
+  ["name", /(名称|产品|品名|供应商|账号|承运商|渠道)/i],
 ];
 
 function normalizeColumnLabel(label = "") {
@@ -365,10 +367,15 @@ function applyColumnWidthMetadata(table, headers, index, { align, profile }) {
   });
 }
 
+function inferHeaderControlProfile(header) {
+  if (header?.querySelector?.("input[type='checkbox'], [role='checkbox']")) return "selection";
+  return "";
+}
+
 function smartWidthSignature(headers, columns, samples, savedWidths) {
   return JSON.stringify({
     columns: headers.map((header, index) => ({
-      explicitProfile: header?.getAttribute?.("data-column-profile") || header?.getAttribute?.("data-column-type") || "",
+      explicitProfile: header?.getAttribute?.("data-column-profile") || header?.getAttribute?.("data-column-type") || inferHeaderControlProfile(header),
       explicitWidth: header?.getAttribute?.("data-column-width") || "",
       key: columnStorageKey(header, index),
       label: normalizeColumnLabel(header?.textContent || ""),
@@ -430,7 +437,7 @@ export function applySmartColumnWidths(table, storage, { force = false } = {}) {
     const columnKey = columnStorageKey(header, index);
     const savedWidth = savedWidths[columnKey];
     const defaultWidth = header?.dataset?.columnWidth || header?.getAttribute?.("data-column-width") || "";
-    const explicitProfile = header?.dataset?.columnProfile || header?.getAttribute?.("data-column-profile") || header?.getAttribute?.("data-column-type") || "";
+    const explicitProfile = header?.dataset?.columnProfile || header?.getAttribute?.("data-column-profile") || header?.getAttribute?.("data-column-type") || inferHeaderControlProfile(header);
     const estimate = estimateSmartColumnWidth({
       label: header?.textContent || "",
       values: samples.values[index],

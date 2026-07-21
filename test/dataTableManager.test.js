@@ -20,6 +20,7 @@ function createResizeInteractionHarness({
   tableKey = "",
   columnKey = "sales",
   viewId = "view-test",
+  headerControl = "",
 } = {}) {
   const rootListeners = new Map();
   const windowListeners = new Map();
@@ -105,6 +106,7 @@ function createResizeInteractionHarness({
     offsetWidth: 128,
     querySelector(selector) {
       if (selector === ":scope > .table-resize-handle") return handle;
+      if (headerControl === "checkbox" && selector.includes("input[type='checkbox']")) return { type: "checkbox" };
       return null;
     },
     tagName: "TH",
@@ -185,6 +187,8 @@ test("smart table widths classify BI column semantics", () => {
     ["发货产品图片", "image"],
     ["国家", "compact-dimension"],
     ["FBA可售", "number"],
+    ["FBA预留", "number"],
+    ["旺季预测", "number"],
     ["AWD", "number"],
     ["日销建议", "number"],
     ["补货建议", "number"],
@@ -198,7 +202,8 @@ test("smart table widths classify BI column semantics", () => {
     ["MSKU / FNSKU", "identifier"],
     ["货件单号", "code-order"],
     ["产品名称", "name"],
-    ["操作人", "name"],
+    ["店铺", "short-name"],
+    ["操作人", "short-name"],
     ["处理结果", "narrative"],
     ["操作", "action"],
   ]);
@@ -375,6 +380,20 @@ test("data table manager applies smart widths from sampled table content", () =>
   assert.equal(header.dataset.widthAlign, "left");
   assert.equal(bodyCells[0].dataset.widthProfile, "name");
   assert.equal(bodyCells[0].dataset.widthAlign, "left");
+});
+
+test("data table manager recognizes an unlabeled checkbox header as a selection column", () => {
+  const { col, header } = createResizeInteractionHarness({
+    columnKey: "selected",
+    explicitWidth: "",
+    headerControl: "checkbox",
+    headerLabel: "",
+  });
+
+  assert.equal(col.style.width, "48px");
+  assert.equal(col.dataset.widthProfile, "selection");
+  assert.equal(header.dataset.widthProfile, "selection");
+  assert.equal(header.dataset.widthAlign, "center");
 });
 
 test("data table manager keeps explicit widths ahead of smart widths", () => {
