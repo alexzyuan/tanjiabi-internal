@@ -11,7 +11,12 @@ import {
   resolveTableColumnKind,
 } from "../assets/js/data-table-manager.js";
 
-function createResizeInteractionHarness({ storageData = new Map() } = {}) {
+function createResizeInteractionHarness({
+  storageData = new Map(),
+  headerLabel = "销售额",
+  explicitWidth = "128",
+  rowValues = [],
+} = {}) {
   const rootListeners = new Map();
   const windowListeners = new Map();
   const scheduledTimers = [];
@@ -19,7 +24,18 @@ function createResizeInteractionHarness({ storageData = new Map() } = {}) {
     getItem: (key) => storageData.get(key) || null,
     setItem: (key, value) => storageData.set(key, String(value)),
   };
-  const col = { dataset: {}, style: {} };
+  let widthWriteCount = 0;
+  const colStyle = {};
+  Object.defineProperty(colStyle, "width", {
+    configurable: true,
+    enumerable: true,
+    get: () => colStyle.currentWidth || "",
+    set(value) {
+      widthWriteCount += 1;
+      colStyle.currentWidth = value;
+    },
+  });
+  const col = { dataset: {}, style: colStyle };
   const tableClassNames = new Set();
   const headerClassNames = new Set();
   const handle = {
@@ -41,6 +57,11 @@ function createResizeInteractionHarness({ storageData = new Map() } = {}) {
     id: "test-table",
     className: "data-table",
     dataset: {},
+    style: {
+      setProperty(name, value) {
+        this[name] = value;
+      },
+    },
     classList: {
       add: (...names) => names.forEach((name) => tableClassNames.add(name)),
       remove: (...names) => names.forEach((name) => tableClassNames.delete(name)),
@@ -65,10 +86,11 @@ function createResizeInteractionHarness({ storageData = new Map() } = {}) {
         else headerClassNames.delete(name);
       },
     },
-    dataset: { columnIndex: "0", columnKey: "sales" },
+    dataset: { columnIndex: "0", columnKey: "sales", columnWidth: explicitWidth },
     getAttribute(name) {
       if (name === "data-column-key") return this.dataset.columnKey;
       if (name === "data-column-width") return this.dataset.columnWidth || "";
+      if (name === "data-column-profile") return this.dataset.columnProfile || "";
       return "";
     },
     getBoundingClientRect: () => ({ width: 128 }),
@@ -78,10 +100,17 @@ function createResizeInteractionHarness({ storageData = new Map() } = {}) {
       return null;
     },
     tagName: "TH",
-    textContent: "销售额",
+    textContent: headerLabel,
   };
   table.tHead = { rows: [{ cells: [header] }] };
-  table.tBodies = [];
+  const bodyCells = rowValues.map((textContent) => ({
+    classList: { toggle() {} },
+    colSpan: 1,
+    dataset: {},
+    querySelectorAll: () => [],
+    textContent,
+  }));
+  table.tBodies = [{ rows: bodyCells.map((cell) => ({ cells: [cell] })) }];
   header.closest = (selector) => (selector === "th" ? header : null);
   const root = {
     body: { classList: { add() {}, remove() {} } },
@@ -105,7 +134,18 @@ function createResizeInteractionHarness({ storageData = new Map() } = {}) {
   };
   const manager = createDataTableManager({ root, windowRef });
   manager.setupDataTables();
-  return { col, handle, header, manager, rootListeners, scheduledTimers, storageData, windowListeners };
+  return {
+    bodyCells,
+    col,
+    handle,
+    header,
+    manager,
+    rootListeners,
+    scheduledTimers,
+    storageData,
+    widthWriteCount: () => widthWriteCount,
+    windowListeners,
+  };
 }
 
 function createCancelableEvent(target, extra = {}) {
@@ -295,4 +335,45 @@ test("data table manager keeps active user widths when enhancement reruns", () =
 
   assert.equal(restoredCol.style.width, "170px");
   assert.equal(restoredCol.dataset.userWidth, "170");
+});
+
+test("data table manager applies smart widths from sampled table content", () => {
+  const rowValues = Array.from({ length: 30 }, () => `产品${"X".repeat(14)}`);
+  rowValues[29] = "Y".repeat(200);
+
+  const { bodyCells, col, header } = createResizeInteractionHarness({
+    explicitWidth: "",
+    headerLabel: "产品名称",
+    rowValues,
+  });
+
+  assert.equal(col.style.width, "160px");
+  assert.equal(col.dataset.widthProfile, "name");
+  assert.equal(col.dataset.widthSource, "smart");
+  assert.equal(header.dataset.widthProfile, "name");
+  assert.equal(bodyCells[0].dataset.widthProfile, "name");
+});
+
+test("data table manager keeps explicit widths ahead of smart widths", () => {
+  const { col } = createResizeInteractionHarness({
+    explicitWidth: "164",
+    headerLabel: "产品名称",
+    rowValues: ["短名称"],
+  });
+
+  assert.equal(col.style.width, "164px");
+  assert.equal(col.dataset.widthSource, "explicit");
+});
+
+test("data table manager does not rewrite unchanged smart widths", () => {
+  const harness = createResizeInteractionHarness({
+    explicitWidth: "",
+    headerLabel: "国家",
+    rowValues: ["美国", "加拿大"],
+  });
+  const writesAfterFirstEnhancement = harness.widthWriteCount();
+
+  harness.manager.setupDataTables();
+
+  assert.equal(harness.widthWriteCount(), writesAfterFirstEnhancement);
 });

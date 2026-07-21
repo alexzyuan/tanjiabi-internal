@@ -3,6 +3,8 @@ const MIN_COLUMN_WIDTH = 44;
 const DEFAULT_COLUMN_WIDTH = 112;
 const DEFAULT_SCROLL_HINT = "横向滚动查看更多列";
 const COLUMN_WIDTH_STORAGE_PREFIX = "tanjia:tableColumnWidths:v1";
+const SMART_WIDTH_DEBUG_STORAGE_KEY = "tanjia:tableWidthDiagnostics";
+const smartWidthSignatures = new WeakMap();
 
 const numericHeaderPattern = /(金额|销售额|采购额|应付额|实付额|未付额|数量|销量|采购量|库存|在库|可售|转库|在途|成本|费用|费率|毛利率|净利率|退款率|达成率|占比|税点|采购价|单价|价格|天数|ACOS|ROAS|CPC|CTR|CVR|订单|目标|实际|利润|收入|支出|回款|结算|余额|计提|冲回|统计|申请中|未申请|货件数|店铺数|MSKU\s*数|SKU\s*数|总数|小计|合计|比例|率)$/i;
 const textHeaderPattern = /(名称|产品|店铺|国家|负责人|供应商|图片|状态|操作|时间|日期|币种|编码|单号|型号|备注|内容|链接|目录|文件夹|标题|账号|角色|来源|阶段|建议|结论|周期|模块|对象|指标|类型|仓库|承运商|运输方式|feedback|review|ASIN|MSKU|SKU|FNSKU)$/i;
@@ -214,29 +216,168 @@ function writeSavedColumnWidths(table, storage) {
   storage.setItem(key, JSON.stringify({ widths, updatedAt: new Date().toISOString() }));
 }
 
-function applyInitialColumnWidths(table, storage) {
-  const headers = getLeafHeaderCells(table);
-  const columns = Array.from(table.querySelectorAll(":scope > colgroup > col"));
-  const savedWidths = readSavedColumnWidths(table, storage);
-  let hasExplicitWidth = false;
+function isTableStateRow(row) {
+  const firstCell = row?.cells?.[0];
+  return Boolean(firstCell && row.cells.length === 1 && Number(firstCell.colSpan || 1) > 1);
+}
 
-  columns.forEach((col, index) => {
-    if (col.dataset.userWidth) {
-      hasExplicitWidth = true;
-      return;
-    }
-    const header = headers[index];
-    const savedWidth = savedWidths[columnStorageKey(header, index)];
-    const defaultWidth = header?.dataset?.columnWidth || header?.getAttribute?.("data-column-width") || "";
-    const width = savedWidth || defaultWidth;
-    if (!width) return;
-    const normalized = normalizeColumnWidth(width);
-    col.style.width = `${normalized}px`;
-    col.dataset.userWidth = savedWidth ? String(normalized) : "";
-    hasExplicitWidth = true;
+function extractSampleCellText(cell) {
+  if (!cell) return "";
+  const clone = cell.cloneNode?.(true);
+  if (!clone) return String(cell.textContent || "").replace(/\s+/g, " ").trim();
+  clone.querySelectorAll?.(".table-resize-handle, [role='tooltip'], [hidden], .tooltip").forEach((node) => node.remove());
+  return String(clone.textContent || "").replace(/\s+/g, " ").trim();
+}
+
+function createTextMeasurer(table) {
+  try {
+    const canvas = table?.ownerDocument?.createElement?.("canvas");
+    const context = canvas?.getContext?.("2d");
+    if (!context) throw new Error("canvas context unavailable");
+    const style = table.ownerDocument?.defaultView?.getComputedStyle?.(table);
+    if (style) context.font = style.font || `${style.fontSize || "14px"} ${style.fontFamily || "sans-serif"}`;
+    return (value) => context.measureText(String(value || "")).width;
+  } catch {
+    return (value) => Array.from(String(value || "")).reduce((width, character) => width + (/[^\u0000-\u00ff]/.test(character) ? 14 : 8), 0);
+  }
+}
+
+function sampleTableColumns(table, columnCount) {
+  const rows = Array.from(table?.tBodies || [])
+    .flatMap((tbody) => Array.from(tbody.rows || []))
+    .filter((row) => !isTableStateRow(row))
+    .slice(0, SMART_COLUMN_SAMPLE_LIMIT);
+  const values = Array.from({ length: columnCount }, () => []);
+  const actionControlWidths = Array.from({ length: columnCount }, () => 0);
+
+  rows.forEach((row) => {
+    Array.from(row.cells || []).forEach((cell, index) => {
+      if (index >= columnCount || Number(cell.colSpan || 1) > 1) return;
+      values[index].push(extractSampleCellText(cell));
+      const controls = Array.from(cell.querySelectorAll?.("button, a, input, select") || []);
+      if (!controls.length) return;
+      const estimatedControlWidth = controls.reduce((sum, control) => {
+        const label = control.getAttribute?.("aria-label") || control.textContent || control.value || "";
+        return sum + Math.max(32, Array.from(String(label)).length * 8 + 20);
+      }, 0) + Math.max(0, controls.length - 1) * 8;
+      actionControlWidths[index] = Math.max(actionControlWidths[index], estimatedControlWidth);
+    });
   });
 
-  if (hasExplicitWidth) table.classList.add("is-column-resized");
+  return { actionControlWidths, rows, values };
+}
+
+function applyColumnWidthMetadata(table, headers, index, { align, profile }) {
+  const header = headers[index];
+  if (header) {
+    header.dataset.widthProfile = profile;
+    header.dataset.widthAlign = align;
+  }
+  Array.from(table?.tBodies || []).forEach((tbody) => {
+    Array.from(tbody.rows || []).forEach((row) => {
+      const cell = row.cells?.[index];
+      if (!cell || Number(cell.colSpan || 1) > 1) return;
+      cell.dataset.widthProfile = profile;
+      cell.dataset.widthAlign = align;
+    });
+  });
+}
+
+function smartWidthSignature(headers, columns, samples, savedWidths) {
+  return JSON.stringify({
+    columns: headers.map((header, index) => ({
+      explicitProfile: header?.getAttribute?.("data-column-profile") || header?.getAttribute?.("data-column-type") || "",
+      explicitWidth: header?.getAttribute?.("data-column-width") || "",
+      key: columnStorageKey(header, index),
+      label: normalizeColumnLabel(header?.textContent || ""),
+      userWidth: columns[index]?.dataset?.userWidth || savedWidths[columnStorageKey(header, index)] || "",
+    })),
+    values: samples.values,
+  });
+}
+
+function smartWidthDebugEnabled(table, storage) {
+  return table?.dataset?.tableWidthDebug === "true" || storage?.getItem?.(SMART_WIDTH_DEBUG_STORAGE_KEY) === "1";
+}
+
+export function applySmartColumnWidths(table, storage, { force = false } = {}) {
+  const headers = getLeafHeaderCells(table);
+  const columns = Array.from(table.querySelectorAll(":scope > colgroup > col"));
+  if (!headers.length || !columns.length) return [];
+  const savedWidths = readSavedColumnWidths(table, storage);
+  const samples = sampleTableColumns(table, headers.length);
+  const signature = smartWidthSignature(headers, columns, samples, savedWidths);
+  if (!force && smartWidthSignatures.get(table) === signature && columns.every((column) => column.style.width)) {
+    return columns.map((column) => Number.parseFloat(column.style.width || "0"));
+  }
+
+  const measureText = createTextMeasurer(table);
+  const details = [];
+  let totalWidth = 0;
+
+  columns.forEach((col, index) => {
+    const header = headers[index];
+    const columnKey = columnStorageKey(header, index);
+    const savedWidth = savedWidths[columnKey];
+    const defaultWidth = header?.dataset?.columnWidth || header?.getAttribute?.("data-column-width") || "";
+    const explicitProfile = header?.dataset?.columnProfile || header?.getAttribute?.("data-column-profile") || header?.getAttribute?.("data-column-type") || "";
+    const estimate = estimateSmartColumnWidth({
+      label: header?.textContent || "",
+      values: samples.values[index],
+      explicitProfile,
+      measureText,
+      controlWidth: samples.actionControlWidths[index],
+    });
+    let source = "smart";
+    let width = estimate.width;
+
+    if (col.dataset.userWidth) {
+      source = "user";
+      width = normalizeColumnWidth(col.dataset.userWidth);
+    } else if (savedWidth) {
+      source = "user";
+      width = normalizeColumnWidth(savedWidth);
+      col.dataset.userWidth = String(width);
+    } else if (defaultWidth) {
+      source = "explicit";
+      width = normalizeColumnWidth(defaultWidth);
+      col.dataset.userWidth = "";
+    } else {
+      col.dataset.userWidth = "";
+    }
+
+    const widthValue = `${width}px`;
+    if (col.style.width !== widthValue) col.style.width = widthValue;
+    col.dataset.widthProfile = estimate.profile;
+    col.dataset.widthSource = source;
+    col.dataset.smartWidth = String(estimate.width);
+    applyColumnWidthMetadata(table, headers, index, estimate);
+    totalWidth += width;
+    details.push({
+      align: estimate.align,
+      columnKey,
+      label: normalizeColumnLabel(header?.textContent || ""),
+      measuredContentWidth: estimate.measuredContentWidth,
+      profile: estimate.profile,
+      sampleCount: estimate.sampleCount,
+      source,
+      width,
+    });
+  });
+
+  table.style?.setProperty?.("--tj-table-resolved-width", `${totalWidth}px`);
+  table.classList.add("is-smart-width", "is-column-resized");
+  table.dataset.smartWidthSampleCount = String(samples.rows.length);
+  smartWidthSignatures.set(table, smartWidthSignature(headers, columns, samples, savedWidths));
+  if (smartWidthDebugEnabled(table, storage)) {
+    console.debug("[data-table-manager] smart widths", {
+      tableKey: table.dataset.tableKey || table.id || "",
+      sampleCount: samples.rows.length,
+      totalWidth,
+      columns: details,
+    });
+  }
+  return details;
 }
 
 function getTableWrap(table) {
@@ -406,7 +547,7 @@ function enhanceTable(table) {
   }
   ensureColGroup(table, columnCount);
   markColumnKinds(table);
-  applyInitialColumnWidths(table, table.ownerDocument?.defaultView?.localStorage || globalThis.localStorage);
+  applySmartColumnWidths(table, table.ownerDocument?.defaultView?.localStorage || globalThis.localStorage);
   markStateRows(table);
   ensureResizeHandles(table);
   updateStickyOffsets(table);
