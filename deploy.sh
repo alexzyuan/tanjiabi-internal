@@ -79,6 +79,15 @@ health_check() {
   fail "健康检查未通过，请执行：pm2 logs $APP_NAME --lines 80"
 }
 
+deploy_integrity_check() {
+  local port_value
+  port_value="$(read_port)"
+  local base_url="http://127.0.0.1:$port_value"
+
+  log "检查线上部署完整性：$base_url"
+  APP_DIR="$APP_DIR" DEPLOY_VERIFY_BASE_URL="$base_url" node scripts/deploy-integrity.js verify-deployed
+}
+
 validate_deploy_manifest() {
   local manifest_json
   if ! manifest_json="$(tar -xOzf "$ARCHIVE" .deploy-manifest.json 2>/dev/null)"; then
@@ -168,6 +177,7 @@ fi
 pm2 save
 
 health_check
+deploy_integrity_check
 cleanup_old_releases
 
 log "部署完成。当前保留最近 $KEEP_RELEASES 个备份。"

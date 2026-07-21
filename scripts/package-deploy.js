@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
+import { buildDeployIntegrity } from "./deploy-integrity.js";
 import { isRepositoryMetadataPath } from "../src/utils/pathFilters.js";
 
 const ROOT = process.cwd();
@@ -25,6 +26,7 @@ const explicitFiles = [
   "package-lock.json",
   "deploy.sh",
   "rollback.sh",
+  "scripts/deploy-integrity.js",
   "scripts/package-deploy.js",
   "assets/favicon.svg",
   "assets/jm-logo.jpg",
@@ -198,6 +200,8 @@ const tmpDir = mkdtempSync(join(tmpdir(), "tanjia-bi-package-"));
 const listFile = join(tmpDir, "files.txt");
 const deployManifestFile = join(ROOT, DEPLOY_MANIFEST);
 writeFileSync(listFile, `${packageManifest.join("\n")}\n`);
+deployMetadata.integrity = await buildDeployIntegrity(ROOT, manifest);
+console.log(`板块完整性清单：${deployMetadata.integrity.navigationModules.length} 个板块`);
 writeFileSync(deployManifestFile, `${JSON.stringify(deployMetadata, null, 2)}\n`);
 
 const tarResult = spawnSync("tar", ["--no-xattrs", "--no-mac-metadata", "-czf", OUTPUT, "-T", listFile], {
