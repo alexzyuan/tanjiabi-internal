@@ -196,11 +196,11 @@ for (const file of packageManifest) {
 
 const tmpDir = mkdtempSync(join(tmpdir(), "tanjia-bi-package-"));
 const listFile = join(tmpDir, "files.txt");
-const deployManifestFile = join(tmpDir, DEPLOY_MANIFEST);
-writeFileSync(listFile, `${manifest.join("\n")}\n`);
+const deployManifestFile = join(ROOT, DEPLOY_MANIFEST);
+writeFileSync(listFile, `${packageManifest.join("\n")}\n`);
 writeFileSync(deployManifestFile, `${JSON.stringify(deployMetadata, null, 2)}\n`);
 
-const tarResult = spawnSync("tar", ["--no-xattrs", "--no-mac-metadata", "-czf", OUTPUT, "-C", ROOT, "-T", listFile, "-C", tmpDir, DEPLOY_MANIFEST], {
+const tarResult = spawnSync("tar", ["--no-xattrs", "--no-mac-metadata", "-czf", OUTPUT, "-T", listFile], {
   cwd: ROOT,
   env: {
     ...process.env,
@@ -210,6 +210,7 @@ const tarResult = spawnSync("tar", ["--no-xattrs", "--no-mac-metadata", "-czf", 
 });
 
 rmSync(tmpDir, { recursive: true, force: true });
+rmSync(deployManifestFile, { force: true });
 
 if (tarResult.status !== 0) {
   fail(`tar 命令失败，退出码 ${tarResult.status}`);
