@@ -200,7 +200,7 @@ const deployManifestFile = join(tmpDir, DEPLOY_MANIFEST);
 writeFileSync(listFile, `${manifest.join("\n")}\n`);
 writeFileSync(deployManifestFile, `${JSON.stringify(deployMetadata, null, 2)}\n`);
 
-const tarResult = spawnSync("tar", ["--no-xattrs", "--no-mac-metadata", "-czf", OUTPUT, "-C", tmpDir, DEPLOY_MANIFEST, "-C", ROOT, "-T", listFile], {
+const tarResult = spawnSync("tar", ["--no-xattrs", "--no-mac-metadata", "-czf", OUTPUT, "-C", ROOT, "-T", listFile, "-C", tmpDir, DEPLOY_MANIFEST], {
   cwd: ROOT,
   env: {
     ...process.env,
