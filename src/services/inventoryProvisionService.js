@@ -913,6 +913,61 @@ function buildInitialProvisionMovements(currentRows) {
   };
 }
 
+function inventoryProvisionSummaryKey(row) {
+  return [
+    String(row.storeName || "").trim(),
+    String(row.country || "").trim(),
+    String(row.msku || "").trim(),
+    String(row.listingOwner || "").trim(),
+  ].join("|").toLowerCase();
+}
+
+function buildInventoryProvisionSummaryRows(batchRows = []) {
+  const groups = new Map();
+  batchRows.forEach((row) => {
+    const key = inventoryProvisionSummaryKey(row);
+    if (!groups.has(key)) {
+      groups.set(key, {
+        rowKey: key,
+        storeName: row.storeName || "",
+        country: row.country || "",
+        msku: row.msku || "",
+        skuName: row.skuName || "",
+        listingOwner: row.listingOwner || "",
+        quantity: 0,
+        amount: 0,
+        provisionAmount: 0,
+        monthlyProvisionAmount: 0,
+        reversalAmount: 0,
+        netProvisionAmount: 0,
+        batchRows: [],
+      });
+    }
+    const group = groups.get(key);
+    if (!group.skuName && row.skuName) group.skuName = row.skuName;
+    group.quantity = round(group.quantity + Number(row.quantity || 0));
+    group.amount = round(group.amount + Number(row.amount || 0));
+    group.provisionAmount = round(group.provisionAmount + Number(row.provisionAmount || 0));
+    group.monthlyProvisionAmount = round(group.monthlyProvisionAmount + Number(row.monthlyProvisionAmount || 0));
+    group.reversalAmount = round(group.reversalAmount + Number(row.reversalAmount || 0));
+    group.netProvisionAmount = round(group.netProvisionAmount + Number(row.netProvisionAmount || 0));
+    group.batchRows.push(row);
+  });
+
+  return [...groups.values()]
+    .map((group) => ({
+      ...group,
+      batchRows: group.batchRows.slice().sort((left, right) => (
+        Math.max(Math.abs(Number(right.netProvisionAmount || 0)), Number(right.provisionAmount || 0))
+        - Math.max(Math.abs(Number(left.netProvisionAmount || 0)), Number(left.provisionAmount || 0))
+      )),
+    }))
+    .sort((left, right) => (
+      Math.max(Math.abs(Number(right.netProvisionAmount || 0)), Number(right.provisionAmount || 0))
+      - Math.max(Math.abs(Number(left.netProvisionAmount || 0)), Number(left.provisionAmount || 0))
+    ));
+}
+
 function buildSnapshotTrendRow(date, sourceRows, filters, costMode) {
   const rows = filterSourceRows(sourceRows, filters).map((row) => toProvisionRow(row, costMode));
   return {
@@ -1570,6 +1625,11 @@ export async function getInventoryProvisionDashboard(filters = {}) {
     }));
     movementResult.netProvisionAmount = provisionAmount;
   }
+  const batchDetailRows = movementResult.rows.sort((left, right) => (
+    Math.max(Math.abs(Number(right.netProvisionAmount || 0)), Number(right.provisionAmount || 0))
+    - Math.max(Math.abs(Number(left.netProvisionAmount || 0)), Number(left.provisionAmount || 0))
+  ));
+  const detailRows = buildInventoryProvisionSummaryRows(batchDetailRows);
   const monthlyProvisionAmount = movementResult.monthlyProvisionAmount;
   const reversalAmount = movementResult.reversalAmount;
   const netProvisionAmount = movementResult.netProvisionAmount;
@@ -1628,7 +1688,7 @@ export async function getInventoryProvisionDashboard(filters = {}) {
       netProvisionAmount,
       provisionRate,
       over180Amount,
-      skuCount: rows.length,
+      skuCount: detailRows.length,
     },
     bucketSummary: groupBucketAmounts(rows, movementResult.bucketMovementRows, { useEndingProvisionAsNet: useOpeningBalanceInNet }),
     storeDistribution: groupStoreAmounts(rows),
@@ -1637,10 +1697,8 @@ export async function getInventoryProvisionDashboard(filters = {}) {
         ? await buildMonthTrend(availableDates, activeFilters, costMode)
         : [buildSnapshotTrendRow(date, sourceRows, activeFilters, costMode)]
       : [buildSnapshotTrendRow(date, sourceRows, activeFilters, costMode)],
-    detailRows: movementResult.rows.sort((left, right) => (
-      Math.max(Math.abs(Number(right.netProvisionAmount || 0)), Number(right.provisionAmount || 0))
-      - Math.max(Math.abs(Number(left.netProvisionAmount || 0)), Number(left.provisionAmount || 0))
-    )),
+    detailRows,
+    batchDetailRows,
   };
 }
 
@@ -1945,16 +2003,11 @@ export async function exportInventoryProvisionDetailXlsx(filters = {}) {
     "MSKU",
     "商品名",
     "Listing负责人",
-    "库龄",
     "数量",
-    "单位采购成本",
-    "单位头程费用",
-    "成本计算单价",
-    "库存金额",
-    "计提比例",
+    "到库金额（库存金额）",
     "期末计提余额",
-    "本月增加计提（当月）",
-    "已计提冲回",
+    "本月新增计提",
+    "本月计提冲回",
     "本月计提金额",
   ];
   const detailRows = (data.detailRows || []).map((row) => [
@@ -1964,6 +2017,46 @@ export async function exportInventoryProvisionDetailXlsx(filters = {}) {
     row.msku || "",
     row.skuName || "",
     row.listingOwner && row.listingOwner !== "-" ? row.listingOwner : "负责人留空",
+    Number(row.quantity || 0),
+    Number(row.amount || 0),
+    Number(row.provisionAmount || 0),
+    Number(row.monthlyProvisionAmount || 0),
+    Number(row.reversalAmount || 0),
+    Number(row.netProvisionAmount || 0),
+  ]);
+  const detailSheet = XLSX.utils.aoa_to_sheet([detailHeaders, ...detailRows]);
+  detailSheet["!autofilter"] = { ref: `A1:L${Math.max(1, detailRows.length + 1)}` };
+  setSheetWidths(detailSheet, [10, 18, 10, 26, 34, 14, 12, 18, 14, 14, 14, 14]);
+  XLSX.utils.book_append_sheet(workbook, detailSheet, "库存减值明细");
+
+  const batchHeaders = [
+    "月份",
+    "店铺",
+    "国家",
+    "MSKU",
+    "商品名",
+    "Listing负责人",
+    "库存批次月份",
+    "库龄",
+    "数量",
+    "单位采购成本",
+    "单位头程费用",
+    "成本计算单价",
+    "库存金额",
+    "计提比例",
+    "期末计提余额",
+    "本月新增计提",
+    "本月计提冲回",
+    "本月计提金额",
+  ];
+  const batchRows = (data.batchDetailRows || []).map((row) => [
+    exportMonth,
+    row.storeName || "",
+    row.country || "",
+    row.msku || "",
+    row.skuName || "",
+    row.listingOwner && row.listingOwner !== "-" ? row.listingOwner : "负责人留空",
+    row.cohortMonth || "",
     `${row.ageDays || 0}天 · ${row.bucketLabel || ""}`,
     Number(row.quantity || 0),
     Number(row.purchaseCost || 0),
@@ -1976,10 +2069,10 @@ export async function exportInventoryProvisionDetailXlsx(filters = {}) {
     Number(row.reversalAmount || 0),
     Number(row.netProvisionAmount || 0),
   ]);
-  const detailSheet = XLSX.utils.aoa_to_sheet([detailHeaders, ...detailRows]);
-  detailSheet["!autofilter"] = { ref: `A1:Q${Math.max(1, detailRows.length + 1)}` };
-  setSheetWidths(detailSheet, [10, 18, 10, 26, 34, 14, 18, 12, 14, 14, 14, 14, 10, 14, 14, 14, 14]);
-  XLSX.utils.book_append_sheet(workbook, detailSheet, "库存减值明细");
+  const batchSheet = XLSX.utils.aoa_to_sheet([batchHeaders, ...batchRows]);
+  batchSheet["!autofilter"] = { ref: `A1:R${Math.max(1, batchRows.length + 1)}` };
+  setSheetWidths(batchSheet, [10, 18, 10, 26, 34, 14, 14, 18, 12, 14, 14, 14, 14, 10, 14, 14, 14, 14]);
+  XLSX.utils.book_append_sheet(workbook, batchSheet, "批次追溯明细");
 
   const summaryHeaders = ["月份", "库龄", "计提比例", "库存金额", "占比", "期末计提余额", "本月增加计提（当月）", "已计提冲回", "本月计提金额"];
   const summaryRows = (data.bucketSummary || []).map((row) => [
@@ -2020,6 +2113,7 @@ export async function exportInventoryProvisionDetailXlsx(filters = {}) {
 }
 
 export const inventoryProvisionTestUtils = {
+  buildInventoryProvisionSummaryRows,
   costModes,
   normalizeLingxingInventoryRows,
   toProvisionRow,

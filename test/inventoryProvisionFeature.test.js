@@ -50,6 +50,121 @@ test("inventory provision feature owns its DOM event bindings", () => {
       ["#inventory-provision-owner", "change", feature.loadInventoryProvision],
       ["#inventory-provision-cost-mode", "change", feature.loadInventoryProvision],
       ["#inventory-provision-keyword", "keydown", bindCalls[7][3]],
+      ["#inventory-detail-table", "click", bindCalls[8][3]],
     ],
   );
+});
+
+test("inventory provision renders MSKU summary rows and expands batch details from the MSKU button", () => {
+  const elements = new Map();
+  const detailTable = {
+    innerHTML: "",
+    rowsByKey: new Map(),
+    togglesByKey: new Map(),
+    querySelectorAll(selector) {
+      if (selector === "[data-inventory-batch-row]") return [...this.rowsByKey.values()];
+      return [];
+    },
+    querySelector(selector) {
+      const rowMatch = selector.match(/\[data-inventory-batch-row="([^"]+)"\]/);
+      if (rowMatch) return this.rowsByKey.get(rowMatch[1]) || null;
+      const toggleMatch = selector.match(/\[data-inventory-summary-toggle="([^"]+)"\]/);
+      if (toggleMatch) return this.togglesByKey.get(toggleMatch[1]) || null;
+      return null;
+    },
+  };
+  elements.set("#inventory-detail-table", detailTable);
+  elements.set("#inventory-bucket-table", { innerHTML: "" });
+  ["#inventory-age-trend-chart", "#inventory-age-donut-chart", "#inventory-store-chart"].forEach((selector) => {
+    elements.set(selector, { innerHTML: "" });
+  });
+  const root = {
+    querySelector(selector) {
+      return elements.get(selector) || detailTable.querySelector(selector);
+    },
+  };
+  const bindCalls = [];
+  const { feature } = createFeature({
+    root,
+    bind: (...args) => bindCalls.push(args),
+    formatActualMoney: (value) => Number(value || 0).toLocaleString("zh-CN"),
+    formatNumber: (value) => Number(value || 0).toLocaleString("zh-CN"),
+  });
+
+  feature.renderInventoryProvision({
+    meta: { source: "测试", date: "2026-05", syncStatus: "已同步", snapshotAvailable: true },
+    filters: { countryOptions: [], storeOptions: [], ownerOptions: [] },
+    buckets: [],
+    bucketSummary: [],
+    storeDistribution: [],
+    monthTrend: [],
+    kpis: {},
+    detailRows: [
+      {
+        rowKey: "xiamentanjia-us|美国|jm-9006truck|林芃",
+        storeName: "xiamentanjia-US",
+        country: "美国",
+        msku: "JM-9006Truck",
+        skuName: "TJ024高速越野短卡绿色",
+        listingOwner: "林芃",
+        quantity: 135,
+        amount: 24975,
+        provisionAmount: 18278,
+        monthlyProvisionAmount: 9990,
+        reversalAmount: 1850,
+        netProvisionAmount: 8140,
+        batchRows: [
+          {
+            cohortMonth: "2025-11",
+            ageDays: 210,
+            bucketLabel: "181-270天",
+            quantity: 112,
+            amount: 20720,
+            provisionAmount: 16576,
+            monthlyProvisionAmount: 8288,
+            reversalAmount: 1850,
+            netProvisionAmount: 6438,
+          },
+        ],
+      },
+    ],
+  });
+
+  assert.match(detailTable.innerHTML, /data-inventory-summary-toggle="xiamentanjia-us\\|美国\\|jm-9006truck\\|林芃"/);
+  assert.match(detailTable.innerHTML, /JM-9006Truck/);
+  assert.match(detailTable.innerHTML, />135</);
+  assert.match(detailTable.innerHTML, />¥24,975</);
+  assert.match(detailTable.innerHTML, />¥18,278</);
+  assert.match(detailTable.innerHTML, />¥9,990</);
+  assert.match(detailTable.innerHTML, />¥1,850</);
+  assert.match(detailTable.innerHTML, />¥8,140</);
+  assert.doesNotMatch(detailTable.innerHTML, /单位采购成本/);
+  assert.match(detailTable.innerHTML, /2025-11 批次/);
+
+  feature.setupInventoryProvision();
+  const clickHandler = bindCalls.find(([, selector, eventName]) => selector === "#inventory-detail-table" && eventName === "click")?.[3];
+  assert.equal(typeof clickHandler, "function");
+  const batchRow = { hidden: true };
+  const toggle = {
+    dataset: { inventorySummaryToggle: "xiamentanjia-us|美国|jm-9006truck|林芃" },
+    textContent: "JM-9006Truck",
+    setAttribute(name, value) {
+      this[name] = value;
+    },
+  };
+  detailTable.rowsByKey.set("xiamentanjia-us|美国|jm-9006truck|林芃", batchRow);
+  detailTable.togglesByKey.set("xiamentanjia-us|美国|jm-9006truck|林芃", toggle);
+  clickHandler({
+    target: {
+      closest(selector) {
+        if (selector === "[data-inventory-summary-toggle]") {
+          return toggle;
+        }
+        return null;
+      },
+    },
+  });
+
+  assert.equal(batchRow.hidden, false);
+  assert.equal(toggle["aria-expanded"], "true");
 });

@@ -63,6 +63,81 @@ test("inventory provision movement separates retained increase and consumed reve
   assert.equal(movement.rows[0].netProvisionAmount, 8);
 });
 
+test("inventory provision summary rows aggregate batches by store country MSKU and owner", async () => {
+  const { inventoryProvisionTestUtils, applyProvisionMovements } = await import("../src/services/inventoryProvisionService.js");
+  assert.ok(inventoryProvisionTestUtils.buildInventoryProvisionSummaryRows, "summary row builder must be exported for tests");
+
+  const previousRows = [
+    inventoryProvisionTestUtils.toProvisionRow({
+      storeName: "xiamentanjia-US",
+      country: "美国",
+      msku: "JM-9006Truck",
+      skuName: "TJ024高速越野短卡绿色",
+      listingOwner: "林芃",
+      cohortMonth: "2025-11",
+      ageDays: 120,
+      quantity: 137,
+      purchaseCost: 185,
+      firstLegCost: 28.76,
+    }),
+    inventoryProvisionTestUtils.toProvisionRow({
+      storeName: "xiamentanjia-US",
+      country: "美国",
+      msku: "JM-9006Truck",
+      skuName: "TJ024高速越野短卡绿色",
+      listingOwner: "林芃",
+      cohortMonth: "2026-02",
+      ageDays: 75,
+      quantity: 23,
+      purchaseCost: 185,
+      firstLegCost: 28.76,
+    }),
+  ];
+  const currentRows = [
+    inventoryProvisionTestUtils.toProvisionRow({
+      storeName: "xiamentanjia-US",
+      country: "美国",
+      msku: "JM-9006Truck",
+      skuName: "TJ024高速越野短卡绿色",
+      listingOwner: "林芃",
+      cohortMonth: "2025-11",
+      ageDays: 210,
+      quantity: 112,
+      purchaseCost: 185,
+      firstLegCost: 28.76,
+    }),
+    inventoryProvisionTestUtils.toProvisionRow({
+      storeName: "xiamentanjia-US",
+      country: "美国",
+      msku: "JM-9006Truck",
+      skuName: "TJ024高速越野短卡绿色",
+      listingOwner: "林芃",
+      cohortMonth: "2026-02",
+      ageDays: 120,
+      quantity: 23,
+      purchaseCost: 185,
+      firstLegCost: 28.76,
+    }),
+  ];
+
+  const movement = applyProvisionMovements(currentRows, previousRows);
+  const summaryRows = inventoryProvisionTestUtils.buildInventoryProvisionSummaryRows(movement.rows);
+
+  assert.equal(summaryRows.length, 1);
+  assert.equal(summaryRows[0].storeName, "xiamentanjia-US");
+  assert.equal(summaryRows[0].country, "美国");
+  assert.equal(summaryRows[0].msku, "JM-9006Truck");
+  assert.equal(summaryRows[0].listingOwner, "林芃");
+  assert.equal(summaryRows[0].quantity, 135);
+  assert.equal(summaryRows[0].amount, 24975);
+  assert.equal(summaryRows[0].provisionAmount, 18278);
+  assert.equal(summaryRows[0].monthlyProvisionAmount, 9990);
+  assert.equal(summaryRows[0].reversalAmount, 1850);
+  assert.equal(summaryRows[0].netProvisionAmount, 8140);
+  assert.equal(summaryRows[0].batchRows.length, 2);
+  assert.deepEqual(summaryRows[0].batchRows.map((row) => row.cohortMonth), ["2025-11", "2026-02"]);
+});
+
 test("inventory provision movement records aggregate reversals when a SKU disappears", async () => {
   const { inventoryProvisionTestUtils, applyProvisionMovements } = await import("../src/services/inventoryProvisionService.js");
 
@@ -168,10 +243,13 @@ test("inventory provision export workbook includes detail, summary, and meta she
 
     assert.equal(exportResult.filename, "库存减值明细-2026-07.xlsx");
     assert.equal(exportResult.rowCount, 4);
-    assert.deepEqual(workbook.SheetNames, ["库存减值明细", "库龄汇总", "导出说明"]);
+    assert.deepEqual(workbook.SheetNames, ["库存减值明细", "批次追溯明细", "库龄汇总", "导出说明"]);
     const detailRows = XLSX.utils.sheet_to_json(workbook.Sheets["库存减值明细"], { header: 1 });
     assert.equal(detailRows[0][0], "月份");
     assert.equal(detailRows[1][2], "加拿大");
+    assert.equal(detailRows[0][7], "到库金额（库存金额）");
+    const batchRows = XLSX.utils.sheet_to_json(workbook.Sheets["批次追溯明细"], { header: 1 });
+    assert.equal(batchRows[0][6], "库存批次月份");
     const summaryRows = XLSX.utils.sheet_to_json(workbook.Sheets["库龄汇总"], { header: 1 });
     assert.equal(summaryRows.length, 7);
   });
