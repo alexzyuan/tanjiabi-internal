@@ -32,7 +32,7 @@
 .multi-select-button {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
+  gap: var(--spectrum-spacing-100);
   align-items: center;
   cursor: pointer;
   overflow: hidden;
