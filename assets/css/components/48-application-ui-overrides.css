@@ -1,43 +1,14 @@
 /* Application-wide component density and surface overrides. */
-body:not(.login-body) table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  color: var(--tj-text-strong);
-  font-size: 13px;
-}
-
-body:not(.login-body) th {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  height: 38px;
-  padding: 9px 10px;
-  border-color: var(--tj-border-subtle);
-  background: var(--tj-action-blue-soft);
-  color: var(--tj-text-strong);
-  font-weight: 850;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-body:not(.login-body) th.table-sort-active {
+body:not(.login-body) table.data-table th.table-sort-active {
   padding-right: 24px;
 }
 
-body:not(.login-body) th.table-sort-active::after {
+body:not(.login-body) table.data-table th.table-sort-active::after {
   position: absolute;
   right: 8px;
   color: var(--tj-action-blue);
   font-size: 12px;
   font-weight: 900;
-}
-
-body:not(.login-body) td {
-  padding: 9px 10px;
-  border-color: var(--tj-border-subtle);
-  color: var(--tj-text-strong);
-  vertical-align: middle;
 }
 
 body:not(.login-body) .table-wrap {

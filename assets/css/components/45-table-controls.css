@@ -5,6 +5,11 @@
 }
 
 table.data-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  color: var(--tj-text-strong);
+  font-size: 13px;
   min-width: var(--tj-table-min-width, 980px);
   font-variant-numeric: tabular-nums;
 }
@@ -35,11 +40,22 @@ table.data-table.is-column-resized {
 table.data-table th {
   position: sticky;
   top: 0;
+  z-index: 2;
+  height: 38px;
+  padding: 9px 10px;
+  border-color: var(--tj-border-subtle);
+  background: var(--tj-action-blue-soft);
+  color: var(--tj-text-strong);
+  font-weight: 850;
+  white-space: nowrap;
   text-align: left;
   font-variant-numeric: tabular-nums;
 }
 
 table.data-table td {
+  padding: 9px 10px;
+  border-color: var(--tj-border-subtle);
+  color: var(--tj-text-strong);
   text-align: left;
 }
 

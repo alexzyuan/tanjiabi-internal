@@ -550,14 +550,14 @@ body:not(.login-body) .filter-toolbar>button.primary-button{min-height:var(--tj-
 .risk-mid{color:var(--tj-tone-warning-text);background:var(--tj-tone-warning-bg)}
 .risk-low{color:var(--tj-tone-info-text);background:var(--tj-tone-info-bg)}
 .data-table-wrap{position:relative;overflow:auto}
-table.data-table{min-width:var(--tj-table-min-width,980px);font-variant-numeric:tabular-nums}
+table.data-table{width:100%;border-collapse:separate;border-spacing:0;color:var(--tj-text-strong);font-size:13px;min-width:var(--tj-table-min-width,980px);font-variant-numeric:tabular-nums}
 table.data-table--standard{--tj-table-min-width:980px}
 table.data-table--wide{--tj-table-min-width:1280px}
 table.data-table--matrix{--tj-table-min-width:2400px;font-size:12px}
 table.data-table.is-smart-width{width:max(100%,var(--tj-table-resolved-width,980px));min-width:0;table-layout:fixed}
 table.data-table.is-column-resized{table-layout:fixed}
-table.data-table th{position:sticky;top:0;text-align:left;font-variant-numeric:tabular-nums}
-table.data-table td{text-align:left}
+table.data-table th{position:sticky;top:0;z-index:2;height:38px;padding:9px 10px;border-color:var(--tj-border-subtle);background:var(--tj-action-blue-soft);color:var(--tj-text-strong);font-weight:850;white-space:nowrap;text-align:left;font-variant-numeric:tabular-nums}
+table.data-table td{padding:9px 10px;border-color:var(--tj-border-subtle);color:var(--tj-text-strong);text-align:left}
 table.data-table td.table-cell--number{text-align:right;font-variant-numeric:tabular-nums}
 table.data-table th.table-cell--number{font-variant-numeric:tabular-nums}
 table.data-table :is(th,td)[data-width-align="right"]{text-align:right}
@@ -587,11 +587,8 @@ body:not(.login-body) .table-select:focus-visible,.table-action:focus-visible{ou
 .table-action:hover{background:var(--tj-table-row-hover-bg)}
 .table-action.danger{color:var(--tj-tone-danger-strong)}
 .table-actions{white-space:nowrap}
-body:not(.login-body) table{width:100%;border-collapse:separate;border-spacing:0;color:var(--tj-text-strong);font-size:13px}
-body:not(.login-body) th{position:sticky;top:0;z-index:2;height:38px;padding:9px 10px;border-color:var(--tj-border-subtle);background:var(--tj-action-blue-soft);color:var(--tj-text-strong);font-weight:850;white-space:nowrap;cursor:pointer}
-body:not(.login-body) th.table-sort-active{padding-right:24px}
-body:not(.login-body) th.table-sort-active::after{position:absolute;right:8px;color:var(--tj-action-blue);font-size:12px;font-weight:900}
-body:not(.login-body) td{padding:9px 10px;border-color:var(--tj-border-subtle);color:var(--tj-text-strong);vertical-align:middle}
+body:not(.login-body) table.data-table th.table-sort-active{padding-right:24px}
+body:not(.login-body) table.data-table th.table-sort-active::after{position:absolute;right:8px;color:var(--tj-action-blue);font-size:12px;font-weight:900}
 body:not(.login-body) .table-wrap{border-color:var(--tj-border-control);background:var(--tj-content-bg)}
 body:not(.login-body) .module-grid,body:not(.login-body) .payable-dashboard-grid{gap:12px}
 .modal-backdrop{position:fixed;inset:0;display:grid;place-items:center;padding:26px;background:var(--tj-overlay-backdrop)}
@@ -1840,13 +1837,6 @@ body:not(.login-body) .view>.module-hero::before,body:not(.login-body) .metric-t
 .login-body .admin-login-logo,.login-body .login-corner-toggle,.login-body .login-button:not(.is-disabled){background:var(--tj-action-blue) !important;background-image:none !important}
 .login-body .login-button:not(.is-disabled):hover{background:var(--tj-action-blue-hover) !important;background-image:none !important}
 button,input,select{font:inherit}
-table{width:100%;border-collapse:separate;border-spacing:0;min-width:980px;font-size:14px}
-th{background:#eef7ff;color:var(--text);font-weight:800;white-space:nowrap;position:sticky;top:0;z-index:1}
-th,td{border:1px solid #e3edf7;padding:11px 10px}
-td{background:white}
-tbody tr:nth-child(even){background:#f8fbff}
-tbody tr:nth-child(even) td{background:#f8fbff}
-tbody tr:hover td{background:#f2f9ff}
 .total-row{font-weight:700}
 .total-row td{background:#eef7ff}
 .site-row-level-1 td{background:#fbfdff;color:#526074}

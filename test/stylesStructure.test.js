@@ -446,6 +446,8 @@ test("shared table controls live outside legacy css and use semantic tokens", as
   assert.equal(legacySource.includes(".table-action.danger"), false);
   assert.equal(legacySource.includes(".table-actions {"), false);
   assert.equal(legacySource.includes("body:not(.login-body) .table-action"), false);
+  assert.equal(/^table\s*\{/m.test(legacySource), false, "legacy must not own the global table baseline");
+  assert.equal(/^th\s*\{/m.test(legacySource), false, "legacy must not own global table headers");
   assert.equal(
     /body:not\(\.login-body\)\s+\.sales-review-detail-table-wrap\s+td\s*\{[\s\S]*?text-align:\s*left\s*!important/.test(legacySource),
     false,
@@ -583,7 +585,7 @@ test("application-wide UI overrides live in components, not shell or legacy css"
   [
     "Application-wide component density and surface overrides",
     "body:not(.login-body) table",
-    "body:not(.login-body) th.table-sort-active",
+    "body:not(.login-body) table.data-table th.table-sort-active",
     "body:not(.login-body) .table-wrap",
     "body:not(.login-body) .module-grid",
     "body:not(.login-body) .payable-dashboard-grid",
@@ -593,10 +595,7 @@ test("application-wide UI overrides live in components, not shell or legacy css"
 
   assert.match(componentSource, /var\(--tj-content-bg\)/);
   assert.match(componentSource, /var\(--tj-border-control\)/);
-  assert.match(componentSource, /var\(--tj-border-subtle\)/);
-  assert.match(componentSource, /var\(--tj-text-strong\)/);
   assert.match(componentSource, /var\(--tj-action-blue\)/);
-  assert.match(componentSource, /var\(--tj-action-blue-soft\)/);
   assert.equal(/#(?:102039|d8e8f6|ecf7ff|dff0ff|0d213b|1d5cff|e1ebf5)\b/i.test(componentSource), false);
   assert.equal(/rgba\(255,\s*255,\s*255,\s*0\.96\)/i.test(componentSource), false);
 
