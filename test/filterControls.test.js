@@ -54,6 +54,22 @@ test("filter dropdown summary ignores the all option and trims selected labels",
   });
 });
 
+test("filter dropdown summary normalizes whitespace in selected labels", () => {
+  const select = {
+    options: [{ value: "", textContent: "全部店铺" }],
+    selectedOptions: [
+      { value: "", textContent: "全部店铺" },
+      { value: "tandanbo-CA", textContent: "  tandanbo\n  CA  " },
+    ],
+  };
+
+  assert.deepEqual(getFilterDropdownSummary(select), {
+    text: "tandanbo CA",
+    accessibleText: "已选 1 项：tandanbo CA",
+    title: "tandanbo CA",
+  });
+});
+
 test("filter dropdown menu aligns to its end edge when its start edge would exceed the viewport", () => {
   assert.equal(getFilterDropdownMenuAlignment({ right: 804 }, 800), "end");
   assert.equal(getFilterDropdownMenuAlignment({ right: 784 }, 800), "start");

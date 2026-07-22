@@ -1,8 +1,12 @@
-export function getFilterDropdownSummary(select) {
-  const labels = [...(select?.selectedOptions || [])]
-    .filter((option) => option.value)
-    .map((option) => option.textContent.trim())
+function getSelectedFilterLabels(select) {
+  return [...(select?.selectedOptions || [])]
+    .filter((option) => option?.value)
+    .map((option) => String(option.textContent ?? "").replace(/\s+/g, " ").trim())
     .filter(Boolean);
+}
+
+export function getFilterDropdownSummary(select) {
+  const labels = getSelectedFilterLabels(select);
   const allText = select?.options?.[0]?.textContent?.trim() || "全部";
   if (!labels.length) {
     return { text: allText, accessibleText: allText, title: allText };
@@ -49,8 +53,7 @@ export function createFilterControls({
   }
 
   function selectedFilterLabels(select) {
-    const selected = [...(select?.selectedOptions || [])].filter((option) => option.value);
-    return selected.map((option) => option.textContent.trim()).filter(Boolean);
+    return getSelectedFilterLabels(select);
   }
 
   function updateFilterDropdownButton(select) {
