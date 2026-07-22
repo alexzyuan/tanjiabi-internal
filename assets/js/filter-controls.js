@@ -20,6 +20,13 @@ export function getFilterDropdownMenuAlignment(menuRect, viewportWidth, gutter =
   return menuRect.right > viewportWidth - gutter ? "end" : "start";
 }
 
+export function updateFilterDropdownMenuAlignment(menu, viewportWidth) {
+  menu.classList.remove("filter-dropdown-menu--align-end");
+  const alignment = getFilterDropdownMenuAlignment(menu.getBoundingClientRect(), viewportWidth);
+  menu.classList.toggle("filter-dropdown-menu--align-end", alignment === "end");
+  return alignment;
+}
+
 export function createFilterControls({
   root = document,
   globalObject = root?.defaultView || window,
@@ -99,11 +106,7 @@ export function createFilterControls({
       });
       setDisclosureState(menu, event.currentTarget, opening);
       if (opening) {
-        const alignment = getFilterDropdownMenuAlignment(
-          menu.getBoundingClientRect(),
-          globalObject.innerWidth,
-        );
-        menu.classList.toggle("filter-dropdown-menu--align-end", alignment === "end");
+        updateFilterDropdownMenuAlignment(menu, globalObject.innerWidth);
       }
     });
     bind(dropdown, ".filter-dropdown-options", "change", (event) => {

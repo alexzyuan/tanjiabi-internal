@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  updateFilterDropdownMenuAlignment,
   getFilterDropdownMenuAlignment,
   getFilterDropdownSummary,
 } from "../assets/js/filter-controls.js";
@@ -56,4 +57,32 @@ test("filter dropdown summary ignores the all option and trims selected labels",
 test("filter dropdown menu aligns to its end edge when its start edge would exceed the viewport", () => {
   assert.equal(getFilterDropdownMenuAlignment({ right: 804 }, 800), "end");
   assert.equal(getFilterDropdownMenuAlignment({ right: 784 }, 800), "start");
+});
+
+test("filter dropdown menu recalculates alignment from its start edge when reopened", () => {
+  let endAligned = true;
+  const calls = [];
+  const menu = {
+    classList: {
+      remove(className) {
+        calls.push(`remove:${className}`);
+        if (className === "filter-dropdown-menu--align-end") endAligned = false;
+      },
+      toggle(className, force) {
+        calls.push(`toggle:${className}:${force}`);
+        if (className === "filter-dropdown-menu--align-end") endAligned = force;
+      },
+    },
+    getBoundingClientRect() {
+      calls.push("measure");
+      return { right: endAligned ? 784 : 804 };
+    },
+  };
+
+  assert.equal(updateFilterDropdownMenuAlignment(menu, 800), "end");
+  assert.deepEqual(calls, [
+    "remove:filter-dropdown-menu--align-end",
+    "measure",
+    "toggle:filter-dropdown-menu--align-end:true",
+  ]);
 });
