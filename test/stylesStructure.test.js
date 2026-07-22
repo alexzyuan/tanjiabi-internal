@@ -420,6 +420,7 @@ test("shared table controls live outside legacy css and use semantic tokens", as
   assert.match(componentSource, /^table\.data-table\s*\{/m);
   assert.match(componentSource, /^table\.data-table--matrix\s*\{/m);
   assert.match(componentSource, /^table\.data-table\.is-smart-width\s*\{/m);
+  assert.match(componentSource, /table\.data-table :is\(th, td\)\s*\{[\s\S]*?border:\s*1px solid var\(--tj-border-subtle\)/);
   assert.match(componentSource, /width:\s*max\(100%,\s*var\(--tj-table-resolved-width/);
   assert.match(componentSource, /\[data-width-align="right"\]/);
   assert.match(componentSource, /\[data-width-align="center"\]/);

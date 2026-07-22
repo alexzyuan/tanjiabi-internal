@@ -37,13 +37,16 @@ table.data-table.is-column-resized {
   table-layout: fixed;
 }
 
+table.data-table :is(th, td) {
+  border: 1px solid var(--tj-border-subtle);
+}
+
 table.data-table th {
   position: sticky;
   top: 0;
   z-index: 2;
   height: 38px;
   padding: 9px 10px;
-  border-color: var(--tj-border-subtle);
   background: var(--tj-action-blue-soft);
   color: var(--tj-text-strong);
   font-weight: 850;
@@ -54,7 +57,6 @@ table.data-table th {
 
 table.data-table td {
   padding: 9px 10px;
-  border-color: var(--tj-border-subtle);
   color: var(--tj-text-strong);
   text-align: left;
 }

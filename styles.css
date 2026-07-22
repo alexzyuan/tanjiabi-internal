@@ -556,8 +556,9 @@ table.data-table--wide{--tj-table-min-width:1280px}
 table.data-table--matrix{--tj-table-min-width:2400px;font-size:12px}
 table.data-table.is-smart-width{width:max(100%,var(--tj-table-resolved-width,980px));min-width:0;table-layout:fixed}
 table.data-table.is-column-resized{table-layout:fixed}
-table.data-table th{position:sticky;top:0;z-index:2;height:38px;padding:9px 10px;border-color:var(--tj-border-subtle);background:var(--tj-action-blue-soft);color:var(--tj-text-strong);font-weight:850;white-space:nowrap;text-align:left;font-variant-numeric:tabular-nums}
-table.data-table td{padding:9px 10px;border-color:var(--tj-border-subtle);color:var(--tj-text-strong);text-align:left}
+table.data-table :is(th,td){border:1px solid var(--tj-border-subtle)}
+table.data-table th{position:sticky;top:0;z-index:2;height:38px;padding:9px 10px;background:var(--tj-action-blue-soft);color:var(--tj-text-strong);font-weight:850;white-space:nowrap;text-align:left;font-variant-numeric:tabular-nums}
+table.data-table td{padding:9px 10px;color:var(--tj-text-strong);text-align:left}
 table.data-table td.table-cell--number{text-align:right;font-variant-numeric:tabular-nums}
 table.data-table th.table-cell--number{font-variant-numeric:tabular-nums}
 table.data-table :is(th,td)[data-width-align="right"]{text-align:right}
