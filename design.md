@@ -185,7 +185,11 @@ font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
 
 - 新增数据表的数字、金额、百分比列优先在表头声明 `data-column-kind="number"`，或用 `data-column-type="money"` / `data-column-type="percent"` 等语义类型；表格管理器会先尊重显式声明，再使用表头文案推断作为旧表格兼容兜底。
 - 表格基线样式分两层：`assets/css/components/45-table-controls.css` 提供共享表格组件规则，`assets/css/final/90-table-invariants.css` 位于 page/legacy 之后，只放产品级不变量，例如数字列右对齐、`tabular-nums`、状态行对齐和列宽调整手柄基础交互。
-- 页面 CSS 可以调整表格宽度、sticky、密度和页面专属视觉，但不能重新定义普通 `th` / `td` 的左右对齐；文本列默认左对齐，数字列由 `.table-cell--number` 统一右对齐。
+- 所有由 `assets/js/data-table-manager.js` 管理的 BI 表格必须使用共享智能列宽。管理器按列语义和前 30 行业务数据的 90 分位计算列宽，并优先保留当前浏览器中用户手动调整的宽度。
+- 宽度来源优先级固定为：用户保存宽度、经过审查的 `data-column-width`、共享智能计算、通用文本兜底。用户可通过表格内的“恢复智能列宽”只重置当前表。
+- 页面 CSS 可以保留矩阵表的 sticky、分组表头、图片框、tooltip、行密度和容器布局等页面专属视觉，但不得给普通业务列设置固定 `width` / `min-width`，不得用 `nth-child` 给列设宽，也不得重新定义普通 `th` / `td` 的左右对齐。文本列默认左对齐，数字列由 `.table-cell--number` 统一右对齐。
+- 选择、图片、数字、金额/费率、短名称、标识符、单号、长名称、说明和操作列必须使用共享语义 profile。语义无法由列名稳定推断时，在表头补充 `data-column-profile`，不在页面 CSS 中增加像素补丁。
+- 完整的 profile 范围、采样算法、持久化迁移、诊断和验收标准以 `docs/superpowers/specs/2026-07-21-shared-smart-table-width-design.md` 为准；`design.md` 只保留所有页面必须遵守的设计约束。
 
 筛选栏契约：
 
