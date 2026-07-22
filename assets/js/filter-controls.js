@@ -16,6 +16,10 @@ export function getFilterDropdownSummary(select) {
   };
 }
 
+export function getFilterDropdownMenuAlignment(menuRect, viewportWidth, gutter = 16) {
+  return menuRect.right > viewportWidth - gutter ? "end" : "start";
+}
+
 export function createFilterControls({
   root = document,
   globalObject = root?.defaultView || window,
@@ -94,6 +98,13 @@ export function createFilterControls({
         toggleForPanel: (panel) => panel.closest(".filter-dropdown")?.querySelector(".filter-dropdown-button"),
       });
       setDisclosureState(menu, event.currentTarget, opening);
+      if (opening) {
+        const alignment = getFilterDropdownMenuAlignment(
+          menu.getBoundingClientRect(),
+          globalObject.innerWidth,
+        );
+        menu.classList.toggle("filter-dropdown-menu--align-end", alignment === "end");
+      }
     });
     bind(dropdown, ".filter-dropdown-options", "change", (event) => {
       const input = closestTarget(event, "input[type='checkbox']");

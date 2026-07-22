@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { getFilterDropdownSummary } from "../assets/js/filter-controls.js";
+import {
+  getFilterDropdownMenuAlignment,
+  getFilterDropdownSummary,
+} from "../assets/js/filter-controls.js";
 
 function makeSelect(allLabel, selectedLabels) {
   return {
@@ -48,4 +51,9 @@ test("filter dropdown summary ignores the all option and trims selected labels",
     accessibleText: "已选 1 项：tandanbo-CA",
     title: "tandanbo-CA",
   });
+});
+
+test("filter dropdown menu aligns to its end edge when its start edge would exceed the viewport", () => {
+  assert.equal(getFilterDropdownMenuAlignment({ right: 804 }, 800), "end");
+  assert.equal(getFilterDropdownMenuAlignment({ right: 784 }, 800), "start");
 });

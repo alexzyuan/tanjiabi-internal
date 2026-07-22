@@ -94,6 +94,11 @@
   border: 1px solid var(--tj-border-subtle);
 }
 
+.filters .filter-dropdown-menu--align-end {
+  right: 0;
+  left: auto;
+}
+
 .filters .filter-dropdown-group {
   display: grid;
   gap: 1px;
