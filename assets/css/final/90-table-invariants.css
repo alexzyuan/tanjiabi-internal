@@ -17,6 +17,14 @@ table.data-table th.table-cell--number {
   font-variant-numeric: tabular-nums;
 }
 
+table.data-table :is(th, td)[data-width-align="right"] {
+  text-align: right;
+}
+
+table.data-table :is(th, td)[data-width-align="center"] {
+  text-align: center;
+}
+
 .table-state-row td,
 .table-state-cell {
   text-align: left;

@@ -3,21 +3,45 @@ import test from "node:test";
 import {
   classifyDataTableVariant,
   createDataTableManager,
+  estimateSmartColumnWidth,
+  inferSmartColumnProfile,
   inferTableColumnKind,
   inferTableStateTone,
   normalizeColumnWidth,
   resolveTableColumnKind,
 } from "../assets/js/data-table-manager.js";
 
-function createResizeInteractionHarness({ storageData = new Map() } = {}) {
+function createResizeInteractionHarness({
+  storageData = new Map(),
+  headerLabel = "销售额",
+  explicitWidth = "128",
+  rowValues = [],
+  tableId = "test-table",
+  tableKey = "",
+  columnKey = "sales",
+  viewId = "view-test",
+  headerControl = "",
+} = {}) {
   const rootListeners = new Map();
   const windowListeners = new Map();
   const scheduledTimers = [];
   const storage = {
     getItem: (key) => storageData.get(key) || null,
     setItem: (key, value) => storageData.set(key, String(value)),
+    removeItem: (key) => storageData.delete(key),
   };
-  const col = { dataset: {}, style: {} };
+  let widthWriteCount = 0;
+  const colStyle = {};
+  Object.defineProperty(colStyle, "width", {
+    configurable: true,
+    enumerable: true,
+    get: () => colStyle.currentWidth || "",
+    set(value) {
+      widthWriteCount += 1;
+      colStyle.currentWidth = value;
+    },
+  });
+  const col = { dataset: {}, style: colStyle };
   const tableClassNames = new Set();
   const headerClassNames = new Set();
   const handle = {
@@ -36,15 +60,23 @@ function createResizeInteractionHarness({ storageData = new Map() } = {}) {
     },
   };
   const table = {
-    id: "test-table",
+    id: tableId,
     className: "data-table",
-    dataset: {},
+    dataset: { tableKey },
+    style: {
+      setProperty(name, value) {
+        this[name] = value;
+      },
+    },
     classList: {
       add: (...names) => names.forEach((name) => tableClassNames.add(name)),
       remove: (...names) => names.forEach((name) => tableClassNames.delete(name)),
     },
     ownerDocument: { defaultView: { localStorage: storage } },
-    closest: () => null,
+    closest(selector) {
+      if (selector === ".view[id]") return view;
+      return null;
+    },
     querySelector(selector) {
       if (selector === ":scope > colgroup") return colgroup;
       if (selector.includes("colgroup col")) return col;
@@ -63,23 +95,36 @@ function createResizeInteractionHarness({ storageData = new Map() } = {}) {
         else headerClassNames.delete(name);
       },
     },
-    dataset: { columnIndex: "0", columnKey: "sales" },
+    dataset: { columnIndex: "0", columnKey, columnWidth: explicitWidth },
     getAttribute(name) {
       if (name === "data-column-key") return this.dataset.columnKey;
       if (name === "data-column-width") return this.dataset.columnWidth || "";
+      if (name === "data-column-profile") return this.dataset.columnProfile || "";
       return "";
     },
     getBoundingClientRect: () => ({ width: 128 }),
     offsetWidth: 128,
     querySelector(selector) {
       if (selector === ":scope > .table-resize-handle") return handle;
+      if (headerControl === "checkbox" && selector.includes("input[type='checkbox']")) return { type: "checkbox" };
       return null;
     },
     tagName: "TH",
-    textContent: "销售额",
+    textContent: headerLabel,
+  };
+  const view = {
+    id: viewId,
+    querySelectorAll: () => [table],
   };
   table.tHead = { rows: [{ cells: [header] }] };
-  table.tBodies = [];
+  const bodyCells = rowValues.map((textContent) => ({
+    classList: { toggle() {} },
+    colSpan: 1,
+    dataset: {},
+    querySelectorAll: () => [],
+    textContent,
+  }));
+  table.tBodies = [{ rows: bodyCells.map((cell) => ({ cells: [cell] })) }];
   header.closest = (selector) => (selector === "th" ? header : null);
   const root = {
     body: { classList: { add() {}, remove() {} } },
@@ -103,7 +148,19 @@ function createResizeInteractionHarness({ storageData = new Map() } = {}) {
   };
   const manager = createDataTableManager({ root, windowRef });
   manager.setupDataTables();
-  return { col, handle, header, manager, rootListeners, scheduledTimers, storageData, windowListeners };
+  return {
+    bodyCells,
+    col,
+    handle,
+    header,
+    manager,
+    rootListeners,
+    scheduledTimers,
+    storageData,
+    table,
+    widthWriteCount: () => widthWriteCount,
+    windowListeners,
+  };
 }
 
 function createCancelableEvent(target, extra = {}) {
@@ -122,6 +179,64 @@ test("data table manager classifies table variants by business shape", () => {
   assert.equal(classifyDataTableVariant({ className: "sales-forecast-table", columnCount: 49 }), "matrix");
   assert.equal(classifyDataTableVariant({ className: "data-table", columnCount: 15 }), "wide");
   assert.equal(classifyDataTableVariant({ className: "data-table", columnCount: 8 }), "standard");
+});
+
+test("smart table widths classify BI column semantics", () => {
+  const cases = new Map([
+    ["关注", "selection"],
+    ["发货产品图片", "image"],
+    ["国家", "compact-dimension"],
+    ["FBA可售", "number"],
+    ["FBA预留", "number"],
+    ["旺季预测", "number"],
+    ["AWD", "number"],
+    ["日销建议", "number"],
+    ["补货建议", "number"],
+    ["7月日销", "number"],
+    ["货件数", "number"],
+    ["采购成本小计", "money-rate"],
+    ["销售目标(原币)", "money-rate"],
+    ["退款目标(原币)", "money-rate"],
+    ["创建时间", "date-time"],
+    ["货件状态", "status"],
+    ["MSKU / FNSKU", "identifier"],
+    ["货件单号", "code-order"],
+    ["产品名称", "name"],
+    ["店铺", "short-name"],
+    ["操作人", "short-name"],
+    ["处理结果", "narrative"],
+    ["操作", "action"],
+  ]);
+
+  for (const [label, expected] of cases) {
+    assert.equal(inferSmartColumnProfile(label), expected, label);
+  }
+});
+
+test("smart width estimator samples 30 rows and resists one long outlier", () => {
+  const values = Array.from({ length: 30 }, () => "TJ033");
+  values[29] = "X".repeat(200);
+  values.push("Y".repeat(300));
+
+  const result = estimateSmartColumnWidth({
+    label: "MSKU",
+    values,
+    measureText: (value) => String(value).length * 8,
+  });
+
+  assert.equal(result.profile, "identifier");
+  assert.equal(result.sampleCount, 30);
+  assert.equal(result.measuredContentWidth, 40);
+  assert.equal(result.width, 112);
+});
+
+test("smart width estimator clamps each semantic profile", () => {
+  const measureText = (value) => String(value).length * 8;
+
+  assert.equal(estimateSmartColumnWidth({ label: "国家", values: ["美国"], measureText }).width, 56);
+  assert.equal(estimateSmartColumnWidth({ label: "产品名称", values: ["X".repeat(80)], measureText }).width, 240);
+  assert.equal(estimateSmartColumnWidth({ label: "发货产品图片", values: ["很长的图片占位文字"], measureText }).width, 56);
+  assert.equal(estimateSmartColumnWidth({ label: "操作", values: [], controlWidth: 248, measureText }).width, 264);
 });
 
 test("data table manager infers numeric columns from BI headers", () => {
@@ -246,4 +361,114 @@ test("data table manager keeps active user widths when enhancement reruns", () =
 
   assert.equal(restoredCol.style.width, "170px");
   assert.equal(restoredCol.dataset.userWidth, "170");
+});
+
+test("data table manager applies smart widths from sampled table content", () => {
+  const rowValues = Array.from({ length: 30 }, () => `产品${"X".repeat(14)}`);
+  rowValues[29] = "Y".repeat(200);
+
+  const { bodyCells, col, header } = createResizeInteractionHarness({
+    explicitWidth: "",
+    headerLabel: "产品名称",
+    rowValues,
+  });
+
+  assert.equal(col.style.width, "160px");
+  assert.equal(col.dataset.widthProfile, "name");
+  assert.equal(col.dataset.widthSource, "smart");
+  assert.equal(header.dataset.widthProfile, "name");
+  assert.equal(header.dataset.widthAlign, "left");
+  assert.equal(bodyCells[0].dataset.widthProfile, "name");
+  assert.equal(bodyCells[0].dataset.widthAlign, "left");
+});
+
+test("data table manager recognizes an unlabeled checkbox header as a selection column", () => {
+  const { col, header } = createResizeInteractionHarness({
+    columnKey: "selected",
+    explicitWidth: "",
+    headerControl: "checkbox",
+    headerLabel: "",
+  });
+
+  assert.equal(col.style.width, "48px");
+  assert.equal(col.dataset.widthProfile, "selection");
+  assert.equal(header.dataset.widthProfile, "selection");
+  assert.equal(header.dataset.widthAlign, "center");
+});
+
+test("data table manager keeps explicit widths ahead of smart widths", () => {
+  const { col } = createResizeInteractionHarness({
+    explicitWidth: "164",
+    headerLabel: "产品名称",
+    rowValues: ["短名称"],
+  });
+
+  assert.equal(col.style.width, "164px");
+  assert.equal(col.dataset.widthSource, "explicit");
+});
+
+test("data table manager does not rewrite unchanged smart widths", () => {
+  const harness = createResizeInteractionHarness({
+    explicitWidth: "",
+    headerLabel: "国家",
+    rowValues: ["美国", "加拿大"],
+  });
+  const writesAfterFirstEnhancement = harness.widthWriteCount();
+
+  harness.manager.setupDataTables();
+
+  assert.equal(harness.widthWriteCount(), writesAfterFirstEnhancement);
+});
+
+test("data table manager assigns stable keys and migrates legacy widths", (t) => {
+  const migrationLogs = [];
+  t.mock.method(console, "info", (...args) => migrationLogs.push(args));
+  const storageData = new Map();
+  const legacyStorageKey = "tanjia:tableColumnWidths:v1:产品名称";
+  storageData.set(legacyStorageKey, JSON.stringify({ widths: { "0:产品名称": 188 } }));
+
+  const { col, header, table } = createResizeInteractionHarness({
+    columnKey: "",
+    explicitWidth: "",
+    headerLabel: "产品名称",
+    rowValues: ["双支蜘蛛船"],
+    storageData,
+    tableId: "",
+    viewId: "view-products",
+  });
+
+  assert.equal(table.dataset.tableKey, "view-products:table-1");
+  assert.equal(header.dataset.columnKey, "column-1");
+  assert.equal(col.style.width, "188px");
+  assert.equal(col.dataset.widthSource, "user");
+  assert.ok(storageData.has(legacyStorageKey), "legacy record must remain as a backup");
+  const migrated = JSON.parse(storageData.get("tanjia:tableColumnWidths:v1:view-products:table-1"));
+  assert.equal(migrated.widths["column-1"], 188);
+  assert.equal(migrated.migratedFrom, legacyStorageKey);
+  assert.equal(migrationLogs[0][0], "[data-table-manager] migrated saved column widths");
+});
+
+test("data table manager restores only the current table to smart widths", (t) => {
+  const restoreLogs = [];
+  t.mock.method(console, "info", (...args) => restoreLogs.push(args));
+  const storageData = new Map([
+    ["tanjia:tableColumnWidths:v1:test-table", JSON.stringify({ widths: { sales: 188 } })],
+    ["tanjia:tableColumnWidths:v1:other-table", JSON.stringify({ widths: { country: 144 } })],
+  ]);
+  const { col, manager, table } = createResizeInteractionHarness({
+    explicitWidth: "",
+    headerLabel: "国家",
+    rowValues: ["美国", "加拿大"],
+    storageData,
+  });
+  assert.equal(col.style.width, "188px");
+
+  manager.restoreSmartWidths(table);
+
+  assert.equal(storageData.has("tanjia:tableColumnWidths:v1:test-table"), false);
+  assert.equal(storageData.has("tanjia:tableColumnWidths:v1:other-table"), true);
+  assert.equal(col.dataset.userWidth, "");
+  assert.equal(col.dataset.widthSource, "smart");
+  assert.equal(col.style.width, "56px");
+  assert.equal(restoreLogs[0][0], "[data-table-manager] restored smart column widths");
 });

@@ -13,10 +13,6 @@
   overflow-x: auto;
 }
 
-#view-budget .budget-target-table-wrap .data-table {
-  --tj-table-min-width: 1120px;
-}
-
 .month-multi-select {
   display: grid;
   gap: 8px;

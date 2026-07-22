@@ -36,10 +36,6 @@
   justify-content: start;
 }
 
-.supplier-detail-table-wrap table {
-  --tj-table-min-width: 1080px;
-}
-
 .supplier-detail-modal {
   width: min(720px, calc(100vw - 28px));
   max-height: calc(100vh - 48px);

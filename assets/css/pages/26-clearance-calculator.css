@@ -63,9 +63,6 @@ margin-top:var(--spectrum-spacing-150);
 #view-clearance .clearance-result-panel {
 margin-top:var(--spectrum-spacing-150);
 }
-#view-clearance .clearance-table-wrap table {
---tj-table-min-width: 1320px;
-}
 #view-clearance .clearance-action-row {
 background:color-mix(in srgb, var(--tj-warning) 10%, var(--tj-content-bg));
 }

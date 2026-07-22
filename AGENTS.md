@@ -112,6 +112,17 @@ Use `design.md` as the source of truth for UI decisions. For new or changed UI:
 4. Prefer improving a shared component class over adding page-only overrides.
 5. Document reusable visual patterns in `design.md` when they become part of the product language.
 
+## Shared Table Widths
+
+`assets/js/data-table-manager.js` is the single source of truth for managed BI table column widths.
+
+1. New and existing managed tables must use the shared semantic profiles and first-30-business-row sampling; do not add ordinary page-level `width` or `min-width` rules for business columns.
+2. Use stable `data-table-key` and `data-column-key` values when durable business identities exist. Display labels are not persistence keys.
+3. User-resized widths have the highest precedence and remain browser-local. Explicit `data-column-width` is allowed only for a reviewed business constraint; shared smart widths are the normal default.
+4. When a label is not classified correctly, improve the central profile vocabulary or add semantic `data-column-profile` metadata. Do not patch the page with a fixed pixel width.
+5. Selection controls, image columns, numeric values, short organizational names, identifiers, narrative fields, and action controls must retain their shared alignment and width behavior.
+6. Layout changes to tables require desktop and narrow viewport checks for page-level overflow, table-contained horizontal scrolling, manual-width persistence, and per-table restore behavior.
+
 ## Frontend Verification
 
 Before claiming a frontend task is complete, run browser-based verification when the change affects layout, interactions or rendered data. Prefer the in-app browser or Chrome DevTools MCP when available; otherwise use Playwright against a local server.

@@ -317,10 +317,6 @@
   margin-top: 0;
 }
 
-.payable-table-wrap table {
-  --tj-table-min-width: 940px;
-}
-
 #view-payables .section-title {
   margin-top: 14px;
 }

@@ -419,7 +419,17 @@ test("shared table controls live outside legacy css and use semantic tokens", as
   assert.match(componentSource, /^\.data-table-wrap\s*\{/m);
   assert.match(componentSource, /^table\.data-table\s*\{/m);
   assert.match(componentSource, /^table\.data-table--matrix\s*\{/m);
+  assert.match(componentSource, /^table\.data-table\.is-smart-width\s*\{/m);
+  assert.match(componentSource, /width:\s*max\(100%,\s*var\(--tj-table-resolved-width/);
+  assert.match(componentSource, /\[data-width-align="right"\]/);
+  assert.match(componentSource, /\[data-width-align="center"\]/);
+  assert.match(componentSource, /\[data-width-profile="identifier"\]/);
+  assert.match(componentSource, /\[data-width-profile="narrative"\]/);
   assert.match(componentSource, /^\.table-resize-handle\s*\{/m);
+  assert.match(componentSource, /^\.table-width-reset\s*\{/m);
+  assert.match(componentSource, /^\.table-width-reset:hover\s*\{/m);
+  assert.match(componentSource, /^\.table-width-reset:focus-visible\s*\{/m);
+  assert.match(componentSource, /^\.table-width-reset\[hidden\]\s*\{/m);
   assert.match(componentSource, /^\.table-state-cell--error\s*\{/m);
   assert.match(componentSource, /^body:not\(\.login-body\) \.table-select\s*\{/m);
   assert.match(componentSource, /^\.table-action\s*\{/m);
@@ -443,6 +453,24 @@ test("shared table controls live outside legacy css and use semantic tokens", as
   );
   assert.equal((generatedSource.match(/body:not\(\.login-body\) \.table-select\{/g) || []).length, 1);
   assert.equal((generatedSource.match(/\.table-action\{/g) || []).length, 1);
+});
+
+test("page styles do not override shared smart table widths", async () => {
+  const pageFiles = await listCssFiles(new URL("../assets/css/pages/", import.meta.url));
+  const violations = [];
+
+  for (const file of pageFiles) {
+    const source = await readFile(file, "utf8");
+    if (source.includes("--tj-table-min-width")) violations.push(file.pathname);
+  }
+
+  assert.deepEqual(violations, [], `page table min-width overrides must move to the shared manager: ${violations.join(", ")}`);
+
+  const salesForecastSource = await readFile(new URL("../assets/css/pages/25-sales-forecast.css", import.meta.url), "utf8");
+  const fbaFreightSource = await readFile(new URL("../assets/css/pages/35-fba-freight.css", import.meta.url), "utf8");
+  assert.equal(/\.sales-forecast-table \.sticky-(?:focus|hide|image|store|country|product|msku)\s*\{[^}]*\b(?:min-)?width:/s.test(salesForecastSource), false);
+  assert.equal(/\.sales-forecast-table \.(?:compact-number-col|compact-date-col|month-daily-col|month-sales-col)\s*\{[^}]*\b(?:min-)?width:/s.test(salesForecastSource), false);
+  assert.equal(/\.fba-freight-table th:nth-child\([^)]*\)[^{]*\{[^}]*\b(?:min-)?width:/s.test(fbaFreightSource), false);
 });
 
 test("final table invariants layer locks product table alignment after page css", async () => {
@@ -881,7 +909,6 @@ test("budget target table width rules live in the page layer", async () => {
   assert.match(pageSource, /^\.file-picker\s*\{/m);
   assert.match(pageSource, /^\.file-picker\.is-dragging\s*\{/m);
   assert.match(pageSource, /overflow-x:\s*auto/);
-  assert.match(pageSource, /min-width:\s*1120px/);
   assert.match(pageSource, /var\(--tj-text-muted\)/);
   assert.match(pageSource, /var\(--tj-action-blue\)/);
   assert.match(pageSource, /var\(--tj-content-bg\)/);
@@ -904,13 +931,11 @@ test("FBA freight page styles avoid overriding shared filter toolbar", async () 
   const legacySource = await readFile(new URL("../assets/css/legacy/current.css", import.meta.url), "utf8");
 
   assert.equal(pageSource.includes(".fba-freight-toolbar"), false);
-  assert.match(pageSource, /^#view-fba-freight \.fba-freight-table\s*\{/m);
   assert.match(pageSource, /^#view-fba-freight \.fba-freight-summary\s*\{/m);
   assert.match(pageSource, /grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(var\(--tj-kpi-card-min-width\),\s*var\(--tj-kpi-card-width\)\)\)/);
   assert.match(pageSource, /box-shadow:\s*var\(--tj-shadow-modal\)/);
   assert.match(pageSource, /^#view-fba-freight \.panel-head\s*\{/m);
   assert.match(pageSource, /^#fba-freight-status\s*\{/m);
-  assert.match(pageSource, /min-width:\s*1360px/);
   assert.match(pageSource, /overflow-wrap:\s*anywhere/);
   assert.match(pageSource, /var\(--tj-content-bg\)/);
   assert.equal(/#(?:1677ff|2563eb|0b66d8|2457d5)\b/i.test(pageSource), false);
@@ -1054,8 +1079,6 @@ test("cashflow table stack layout lives in the page layer", async () => {
   assert.match(pageSource, /^\/\* Cashflow dashboard page \*\//m);
   assert.match(pageSource, /^#view-cashflow \.cashflow-stack\s*\{/m);
   assert.match(pageSource, /^#view-cashflow \.cashflow-stack \.table-wrap\s*\{/m);
-  assert.match(pageSource, /^#view-cashflow \.cashflow-stack table\s*\{/m);
-  assert.match(pageSource, /min-width:\s*1180px/);
   assert.equal(legacySource.includes(".cashflow-stack {\n  grid-template-columns:"), false);
   assert.equal(legacySource.includes(".cashflow-stack .table-wrap {\n  overflow-x:"), false);
   assert.equal(legacySource.includes(".cashflow-stack table {\n  min-width:"), false);
@@ -1071,7 +1094,6 @@ test("payables dashboard styles live in the page layer and use semantic tokens",
   assert.match(pageSource, /^\.payable-visual-grid\s*\{/m);
   assert.match(pageSource, /^\.payable-status-row\s*\{/m);
   assert.match(pageSource, /^\.payable-flow-card\s*\{/m);
-  assert.match(pageSource, /^\.payable-table-wrap table\s*\{/m);
   assert.equal(pageSource.includes("#payables-detail-table th:first-child"), false);
   assert.match(pageSource, /^@media \(max-width:1180px\)/m);
   assert.match(pageSource, /^@media \(max-width:720px\)/m);
@@ -1111,13 +1133,11 @@ test("factory inventory styles live in the page layer and use semantic tokens", 
   assert.match(pageSource, /^#view-factory-inventory\.active\s*\{/m);
   assert.match(pageSource, /^\.factory-inventory-sticky\s*\{/m);
   assert.match(pageSource, /^\.factory-inventory-kpi-grid\s*\{/m);
-  assert.match(pageSource, /^\.factory-inventory-table-wrap table\s*\{/m);
   assert.match(pageSource, /^#factory-inventory-table \.factory-order-row td\s*\{/m);
   assert.match(pageSource, /^\.factory-order-strip\s*\{/m);
   assert.match(pageSource, /^\.factory-inventory-image\s*\{/m);
   assert.match(pageSource, /^\.factory-shipped-input:focus-visible\s*\{/m);
   assert.match(pageSource, /^@media \(max-width:\s*720px\)/m);
-  assert.match(pageSource, /min-width:\s*1840px/);
   assert.match(pageSource, /var\(--tj-page-bg\)/);
   assert.match(pageSource, /var\(--tj-content-bg\)/);
   assert.match(pageSource, /var\(--tj-action-blue\)/);
@@ -1161,7 +1181,6 @@ test("supplier board styles live in the page layer and use semantic tokens", asy
   assert.match(pageSource, /^#view-supplier-board\.active\s*\{/m);
   assert.match(pageSource, /^\.supplier-board-sticky\s*\{/m);
   assert.match(pageSource, /^\.supplier-board-kpi-grid\s*\{/m);
-  assert.match(pageSource, /^\.supplier-board-table-wrap table\s*\{/m);
   assert.match(pageSource, /^#supplier-board-table th,/m);
   assert.match(pageSource, /^#supplier-board-table td small\s*\{/m);
   assert.match(pageSource, /^\.supplier-board-image\s*\{/m);
@@ -1169,7 +1188,6 @@ test("supplier board styles live in the page layer and use semantic tokens", asy
   assert.match(pageSource, /^@media \(max-width:\s*720px\)/m);
   assert.match(pageSource, /#view-supplier-board \.supplier-board-kpi-grid\s*\{\s*grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(var\(--tj-kpi-card-min-width\),\s*var\(--tj-kpi-card-width\)\)\)/);
   assert.match(pageSource, /#view-supplier-board \.supplier-board-kpi-grid\s*\{\s*grid-template-columns:\s*1fr/);
-  assert.match(pageSource, /min-width:\s*1680px/);
   assert.match(pageSource, /var\(--tj-page-bg\)/);
   assert.match(pageSource, /var\(--tj-surface-muted\)/);
   assert.match(pageSource, /var\(--tj-border-subtle\)/);
@@ -1201,7 +1219,6 @@ test("supplier detail styles live in the page layer and use semantic tokens", as
   assert.match(pageSource, /^#supplier-detail-table th,/m);
   assert.match(pageSource, /^\.supplier-detail-actions\s*\{/m);
   assert.match(pageSource, /^\.supplier-detail-kpi-grid\s*\{/m);
-  assert.match(pageSource, /^\.supplier-detail-table-wrap table\s*\{/m);
   assert.match(pageSource, /^\.supplier-detail-modal\s*\{/m);
   assert.match(pageSource, /^@media \(max-width:720px\)/m);
   assert.match(pageSource, /#view-supplier-detail \.supplier-detail-kpi-grid\s*\{/);
@@ -1230,14 +1247,10 @@ test("inventory provision table stack layout lives in the page layer", async () 
   assert.match(pageSource, /^\/\* Inventory provision page \*\//m);
   assert.match(pageSource, /^#view-provision \.inventory-table-stack\s*\{/m);
   assert.match(pageSource, /^#view-provision \.inventory-table-stack \.table-wrap\s*\{/m);
-  assert.match(pageSource, /^#view-provision \.inventory-table-stack table\s*\{/m);
-  assert.match(pageSource, /^#view-provision \.inventory-table-stack article:first-child table\s*\{/m);
   assert.match(pageSource, /^#view-provision \.inventory-chart-grid\s*\{/m);
   assert.match(pageSource, /^#view-provision \.inventory-chart-grid svg\s*\{/m);
   assert.match(pageSource, /^#view-provision \.bucket-dot\s*\{/m);
   assert.match(pageSource, /^#view-provision \.provision-risk-row\s*\{/m);
-  assert.match(pageSource, /min-width:\s*1080px/);
-  assert.match(pageSource, /min-width:\s*720px/);
   assert.match(pageSource, /grid-template-columns:\s*minmax\(0, 1\.2fr\) minmax\(0, 0\.9fr\) minmax\(0, 1fr\)/);
   assert.match(pageSource, /min-height:\s*300px/);
   assert.match(pageSource, /var\(--tj-tone-warning-row-bg\)/);
@@ -1322,7 +1335,6 @@ test("clearance calculator styles live in the page layer and use semantic tokens
   assert.match(pageSource, /^#view-clearance \.clearance-paste-label\s*\{/m);
   assert.match(pageSource, /^#view-clearance \.clearance-rule-list\s*\{/m);
   assert.match(pageSource, /^#view-clearance \.clearance-kpi-grid\s*\{/m);
-  assert.match(pageSource, /^#view-clearance \.clearance-table-wrap table\s*\{/m);
   assert.match(pageSource, /^#view-clearance \.clearance-action-row\s*\{/m);
   assert.match(pageSource, /^@media \(max-width:\s*720px\)/m);
   assert.match(pageSource, /var\(--tj-content-bg\)/);
@@ -1481,8 +1493,6 @@ test("advertising review styles live in the page layer and use semantic tokens",
   assert.match(pageSource, /^\/\* Advertising review page \*\//m);
   assert.match(pageSource, /^\.ads-analysis-panel\s*\{/m);
   assert.match(pageSource, /^\.ads-analysis-card\s*\{/m);
-  assert.match(pageSource, /^\.ads-keyword-table-wrap table\s*\{/m);
-  assert.match(pageSource, /^\.ads-portfolio-table-wrap table\s*\{/m);
   assert.match(pageSource, /^\.column-picker\s*\{/m);
   assert.match(pageSource, /var\(--tj-content-bg\)/);
   assert.match(pageSource, /var\(--tj-border-control\)/);
