@@ -500,7 +500,7 @@ export function applySmartColumnWidths(table, storage, { force = false } = {}) {
 }
 
 function getTableWrap(table) {
-  return table?.closest?.(".table-wrap, .table-scroll") || table?.parentElement || null;
+  return table?.closest?.(".data-table-wrap, .table-wrap, .table-scroll, .table-shell") || table?.parentElement || null;
 }
 
 function setColumnWidth(table, index, width) {
@@ -809,7 +809,8 @@ export function createDataTableManager({
   }
 
   function bindTableWrapScroll() {
-    root?.querySelectorAll?.(".table-wrap, .table-scroll").forEach((wrap) => {
+    root?.querySelectorAll?.(".data-table-wrap").forEach((wrap) => {
+      if (typeof wrap?.addEventListener !== "function") return;
       if (wrap.dataset.tableScrollBound === "true") return;
       wrap.dataset.tableScrollBound = "true";
       wrap.addEventListener("scroll", () => {
@@ -821,8 +822,19 @@ export function createDataTableManager({
   function setupMutationObserver() {
     if (!windowRef.MutationObserver || !root?.body || mutationObserver) return null;
     mutationObserver = new windowRef.MutationObserver((mutations) => {
-      if (!mutations.some((mutation) => mutation.type === "childList")) return;
-      enhanceAll();
+      const affectedTables = new Set();
+      mutations.filter((mutation) => mutation.type === "childList").forEach((mutation) => {
+        const owner = mutation.target?.closest?.("table");
+        if (owner?.matches?.(tableSelector)) affectedTables.add(owner);
+        Array.from(mutation.addedNodes || []).forEach((node) => {
+          if (node.nodeType !== 1) return;
+          if (node.matches?.(tableSelector)) affectedTables.add(node);
+          node.closest?.("table")?.matches?.(tableSelector) && affectedTables.add(node.closest("table"));
+          node.querySelectorAll?.(tableSelector).forEach((table) => affectedTables.add(table));
+        });
+      });
+      if (!affectedTables.size) return;
+      affectedTables.forEach(enhanceTable);
       bindTableWrapScroll();
     });
     mutationObserver.observe(root.body, { childList: true, subtree: true });
