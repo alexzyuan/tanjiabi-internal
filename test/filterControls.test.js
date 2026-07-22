@@ -33,3 +33,19 @@ test("filter dropdown summary summarizes two selected items with an accessible l
     title: "tandanbo-CA、xiamentanjia-US",
   });
 });
+
+test("filter dropdown summary ignores the all option and trims selected labels", () => {
+  const select = {
+    options: [{ value: "", textContent: "全部店铺" }],
+    selectedOptions: [
+      { value: "", textContent: "全部店铺" },
+      { value: "tandanbo-CA", textContent: " tandanbo-CA " },
+    ],
+  };
+
+  assert.deepEqual(getFilterDropdownSummary(select), {
+    text: "tandanbo-CA",
+    accessibleText: "已选 1 项：tandanbo-CA",
+    title: "tandanbo-CA",
+  });
+});
