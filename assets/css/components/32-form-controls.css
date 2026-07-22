@@ -30,11 +30,20 @@
 }
 
 .multi-select-button {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
   align-items: center;
-  justify-content: space-between;
   cursor: pointer;
+  overflow: hidden;
   text-align: left;
+}
+
+.multi-select-button .filter-dropdown-button-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .multi-select-button::after {

@@ -446,6 +446,7 @@ body:not(.login-body) .section-title{font-size:15px}
 .filters .date-range-control{width:100%}
 .filters .filter-dropdown-button,.filters .date-range-button{height:var(--tj-control-height-compact)}
 .filters .filter-dropdown-menu{top:40px;right:auto;width:max-content;min-width:max(100%,220px);max-width:min(360px,calc(100vw - 32px));gap:4px;padding:8px;background:var(--tj-content-bg);border:1px solid var(--tj-border-subtle)}
+.filters .filter-dropdown-menu--align-end{right:0;left:auto}
 .filters .filter-dropdown-group{display:grid;gap:1px;padding:2px 0}
 .filters .filter-dropdown-group strong{padding:3px 8px 4px;color:var(--tj-text-muted);font-size:12px;font-weight:700;line-height:1.2}
 .filters .filter-dropdown-option{display:flex;grid-template-columns:none;align-items:center;min-height:30px;height:auto;gap:8px;padding:4px 8px;font-size:13px;line-height:1.25;white-space:nowrap;cursor:pointer}
@@ -471,7 +472,8 @@ body:not(.login-body) .section-title{font-size:15px}
 .form-grid label,.form-field{display:grid;gap:6px;color:var(--tj-text-muted);font-size:13px}
 .form-grid :where(input,select),.fba-schedule-bar :where(input,select),.multi-select-button{width:100%;height:var(--tj-control-height);border:1px solid var(--tj-border-control);border-radius:var(--tj-control-radius);padding:0 var(--tj-control-padding-x);color:var(--tj-text-body);background:var(--tj-content-bg)}
 .multi-select{position:relative}
-.multi-select-button{display:flex;align-items:center;justify-content:space-between;cursor:pointer;text-align:left}
+.multi-select-button{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;cursor:pointer;overflow:hidden;text-align:left}
+.multi-select-button .filter-dropdown-button-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .multi-select-button::after{content:"▾";color:var(--tj-text-muted);font-size:12px}
 .multi-select-menu{position:absolute;top:44px;left:0;right:0;z-index:35;display:grid;gap:8px;padding:10px;background:var(--tj-content-bg);border:1px solid var(--tj-border-control);border-radius:var(--tj-control-radius);box-shadow:var(--tj-shadow-floating)}
 .multi-select-menu[hidden]{display:none}
