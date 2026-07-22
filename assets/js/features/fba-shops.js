@@ -97,12 +97,14 @@ export function createFbaShopsFeature({
   function updateFbaShopButton() {
     const button = query("#fba-shop-button");
     if (!button) return;
+    const label = button.querySelector(".filter-dropdown-button-label");
+    if (!label) throw new Error("FBA shop button requires .filter-dropdown-button-label.");
     const selected = getSelectedFbaShops();
     if (!selected.length) {
-      button.textContent = "请选择店铺";
+      label.textContent = "请选择店铺";
     } else {
       const shop = selected[0];
-      button.textContent = `${shop.name} · ${shop.country}`;
+      label.textContent = `${shop.name} · ${shop.country}`;
     }
   }
 

@@ -1113,6 +1113,17 @@ test("app.js centralizes FBA floating panel visibility", async () => {
   assert.equal(source.includes("if (menu) menu.hidden = !menu.hidden"), false);
 });
 
+test("FBA shop picker preserves the shared dropdown label contract", async () => {
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const fbaShopsFeatureSource = await readFile(new URL("../assets/js/features/fba-shops.js", import.meta.url), "utf8");
+
+  assert.match(indexSource, /<button class="multi-select-button" id="fba-shop-button" type="button"><span class="filter-dropdown-button-label">tandanbo-CA · 加拿大<\/span><\/button>/);
+  assert.match(fbaShopsFeatureSource, /const label = button\.querySelector\("\.filter-dropdown-button-label"\);/);
+  assert.match(fbaShopsFeatureSource, /if \(!label\) throw new Error\("FBA shop button requires \.filter-dropdown-button-label\."\);/);
+  assert.match(fbaShopsFeatureSource, /label\.textContent = `\$\{shop\.name\} · \$\{shop\.country\}`;/);
+  assert.equal(fbaShopsFeatureSource.includes("button.textContent ="), false);
+});
+
 test("sales shell centralizes front date popover visibility", async () => {
   const appSource = await readFile(new URL("../app.js", import.meta.url), "utf8");
   const source = await readFile(new URL("../assets/js/sales-shell.js", import.meta.url), "utf8");
