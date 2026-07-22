@@ -204,6 +204,13 @@ test("smart table widths classify BI column semantics", () => {
     ["产品名称", "name"],
     ["店铺", "short-name"],
     ["操作人", "short-name"],
+    ["结算开始日", "date-time"],
+    ["广告花费", "money-rate"],
+    ["退款", "money-rate"],
+    ["采购量", "number"],
+    ["退货量", "number"],
+    ["14天日销", "number"],
+    ["review数", "number"],
     ["处理结果", "narrative"],
     ["操作", "action"],
   ]);
@@ -261,6 +268,11 @@ test("data table manager infers numeric columns from BI headers", () => {
     "利润目标(原币)",
     "本月增加计提（当月）",
     "已计提冲回",
+    "广告花费",
+    "退款",
+    "退货量",
+    "14天日销",
+    "review数",
   ].forEach((label) => {
     assert.equal(inferTableColumnKind(label), "number", `${label} should be numeric`);
   });

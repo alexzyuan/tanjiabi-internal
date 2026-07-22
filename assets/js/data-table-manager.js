@@ -8,6 +8,7 @@ const WIDTH_MIGRATION_MARKER_SUFFIX = ":migration-complete";
 const smartWidthSignatures = new WeakMap();
 
 const numericHeaderPattern = /(金额|销售额|采购额|应付额|实付额|未付额|数量|销量|采购量|库存|在库|可售|转库|在途|成本|费用|费率|毛利率|净利率|退款率|达成率|占比|税点|采购价|单价|价格|天数|ACOS|ROAS|CPC|CTR|CVR|订单|目标|实际|利润|收入|支出|回款|结算|余额|计提|冲回|统计|申请中|未申请|货件数|店铺数|MSKU\s*数|SKU\s*数|总数|小计|合计|比例|率)$/i;
+const exactNumericHeaderPattern = /^(广告花费|退款|采购量|退货量|\d+天日销|review数)$/i;
 const textHeaderPattern = /(名称|产品|店铺|国家|负责人|供应商|图片|状态|操作|时间|日期|币种|编码|单号|型号|备注|内容|链接|目录|文件夹|标题|账号|角色|来源|阶段|建议|结论|周期|模块|对象|指标|类型|仓库|承运商|运输方式|feedback|review|ASIN|MSKU|SKU|FNSKU)$/i;
 const errorStatePattern = /失败|错误|异常|缺少|missing|error/i;
 const loadingStatePattern = /正在|等待|读取|加载|同步|生成中/;
@@ -36,14 +37,14 @@ const SMART_COLUMN_PROFILE_PATTERNS = [
   ["selection", /^(选择|全选|勾选|关注|隐藏|序号)$/i],
   ["image", /(图片|产品图|主图|缩略图|image|photo)/i],
   ["action", /^(操作|动作|管理)$/i],
-  ["number", /^(AWD|FBA预留|旺季预测|日销建议|补货建议|\d+月日销|(?:货件|店铺|供应商|MSKU|SKU)\s*数)$/i],
+  ["number", /^(AWD|FBA预留|旺季预测|日销建议|补货建议|\d+月日销|\d+天日销|采购量|退货量|review数|(?:货件|店铺|供应商|MSKU|SKU)\s*数)$/i],
   ["short-name", /^(店铺|负责人|所有者|操作人|人员)$/i],
   ["narrative", /(处理结果|结果|说明|备注|内容|建议|结论|原因|描述|下一步|共性信号)/i],
   ["code-order", /(单号|订单号|货件号|编号|编码|仓库代码|物流中心|shipment\s*id|order\s*id)/i],
   ["identifier", /(^|[\s/])(MSKU|SKU|ASIN|FNSKU|SID|Profile)([\s/]|$)/i],
-  ["date-time", /(日期|时间|月份|周期|周数|到期|签发|登录|更新)/i],
+  ["date-time", /(日期|时间|月份|周期|周数|到期|签发|登录|更新|开始日|转账日)/i],
   ["status", /(状态|风险|优先级|阶段|类型|标记)/i],
-  ["money-rate", /(金额|销售额|采购额|成本|费用|费率|利润|收入|支出|回款|结算|余额|单价|价格|采购价|税点|比例|占比|达成率|退款率|毛利率|净利率|ACOS|ROAS|CPC|CTR|CVR|预算|(?:销售|退款|利润)目标)/i],
+  ["money-rate", /(金额|销售额|采购额|成本|费用|费率|利润|收入|支出|回款|结算|余额|单价|价格|采购价|税点|比例|占比|达成率|退款率|毛利率|净利率|ACOS|ROAS|CPC|CTR|CVR|预算|花费|退款|(?:销售|退款|利润)目标)/i],
   ["number", /(数量|销量|日销|库存|在库|可售|转库|在途|天数|订单|目标|实际|统计|申请中|未申请|总数|小计|合计|排名|次数|review数)/i],
   ["compact-dimension", /^(国家|站点|币种|平台)$/i],
   ["name", /(名称|产品|品名|供应商|账号|承运商|渠道)/i],
@@ -119,6 +120,7 @@ export function inferTableColumnKind(label = "") {
   const text = String(label || "").replace(/\s+/g, " ").trim();
   if (!text) return "text";
   const normalizedText = text.replace(/[（(][^（）()]*[）)]/g, "").replace(/\s+/g, " ").trim();
+  if (exactNumericHeaderPattern.test(normalizedText)) return "number";
   if (textHeaderPattern.test(normalizedText)) return "text";
   if (numericHeaderPattern.test(normalizedText)) return "number";
   return "text";
