@@ -22,6 +22,22 @@ export function createAdPortfolioFeature({
   const columnsStorageKey = "tanjia:adPortfolioColumns:v1";
   let adPortfolioRows = [];
 
+  function adPortfolioColumnMetadata(column) {
+    if (column.key === "name") return { kind: "text", profile: "name" };
+    if (column.key === "servingStatus") return { kind: "status", profile: "status" };
+    if (["createdAt", "startDate", "endDate"].includes(column.key)) return { kind: "date", profile: "date-time" };
+    if (["budget", "sales", "sameSales", "indirectSales", "cpa", "adUnitPrice", "cpc", "cost"].includes(column.key)) {
+      return { kind: "money", profile: "money-rate" };
+    }
+    if (["salesRate", "sameSalesRate", "indirectSalesRate", "acos", "sameAcos", "sameOrderRate", "indirectOrderRate", "cvr", "unitsRate", "clickRate", "ctr", "costRate"].includes(column.key)) {
+      return { kind: "percent", profile: "money-rate" };
+    }
+    if (["roas", "sameRoas", "orders", "sameOrders", "indirectOrders", "units", "sameUnits", "impressions", "clicks", "campaignCount"].includes(column.key)) {
+      return { kind: "number", profile: "number" };
+    }
+    return { kind: "text", profile: "text" };
+  }
+
   function formatAdBudget(row) {
     if (!row || !row.budget) return "-";
     const currency = row.currency ? `${row.currency} ` : "";
@@ -151,7 +167,10 @@ export function createAdPortfolioFeature({
     const columns = adPortfolioColumns.filter((column) => selectedKeys.includes(column.key));
     const totals = adPortfolioTotals(adPortfolioRows);
     const header = root?.querySelector?.("#ads-portfolio-table thead tr");
-    if (header) header.innerHTML = columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("");
+    if (header) header.innerHTML = columns.map((column) => {
+      const metadata = adPortfolioColumnMetadata(column);
+      return `<th data-column-key="${escapeHtml(column.key)}" data-column-kind="${metadata.kind}" data-column-profile="${metadata.profile}">${escapeHtml(column.label)}</th>`;
+    }).join("");
     const table = root?.querySelector?.("#ads-portfolio-table tbody");
     if (!table) return;
     table.innerHTML = adPortfolioRows.length ? adPortfolioRows.map((row) => `
