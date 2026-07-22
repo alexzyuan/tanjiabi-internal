@@ -1,0 +1,35 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import { getFilterDropdownSummary } from "../assets/js/filter-controls.js";
+
+function makeSelect(allLabel, selectedLabels) {
+  return {
+    options: [{ value: "", textContent: allLabel }],
+    selectedOptions: selectedLabels.map((label) => ({ value: label, textContent: label })),
+  };
+}
+
+test("filter dropdown summary shows the all label when no value is selected", () => {
+  assert.deepEqual(getFilterDropdownSummary(makeSelect("全部店铺", [])), {
+    text: "全部店铺",
+    accessibleText: "全部店铺",
+    title: "全部店铺",
+  });
+});
+
+test("filter dropdown summary exposes the selected item accessibly", () => {
+  assert.deepEqual(getFilterDropdownSummary(makeSelect("全部店铺", ["tandanbo-CA"])), {
+    text: "tandanbo-CA",
+    accessibleText: "已选 1 项：tandanbo-CA",
+    title: "tandanbo-CA",
+  });
+});
+
+test("filter dropdown summary summarizes two selected items with an accessible label list", () => {
+  assert.deepEqual(getFilterDropdownSummary(makeSelect("全部店铺", ["tandanbo-CA", "xiamentanjia-US"])), {
+    text: "已选 2 项",
+    accessibleText: "已选 2 项：tandanbo-CA、xiamentanjia-US",
+    title: "tandanbo-CA、xiamentanjia-US",
+  });
+});
