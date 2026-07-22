@@ -14,5 +14,6 @@ output/
 releases/
 .deploy-tmp-*
 .playwright-cli/
+.superpowers/
 *.log
 tanjia-bi-deploy.tar.gz
