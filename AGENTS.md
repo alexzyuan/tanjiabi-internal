@@ -122,6 +122,8 @@ Use `design.md` as the source of truth for UI decisions. For new or changed UI:
 4. When a label is not classified correctly, improve the central profile vocabulary or add semantic `data-column-profile` metadata. Do not patch the page with a fixed pixel width.
 5. Selection controls, image columns, numeric values, short organizational names, identifiers, narrative fields, and action controls must retain their shared alignment and width behavior.
 6. Layout changes to tables require desktop and narrow viewport checks for page-level overflow, table-contained horizontal scrolling, manual-width persistence, and per-table restore behavior.
+7. Narrow viewports must keep the document, application shell, dashboard, and view at viewport width. Never use a page-level fixed `min-width` to accommodate a table; the relevant table wrapper owns horizontal scrolling.
+8. Shared table presentation belongs in `assets/css/components/45-table-controls.css`: use `.data-table--middle` for whole-table vertical centering and `.data-table-wrap--detail` with `.data-table--detail` for reusable detail-table sticky-header presentation. Do not recreate these in page or legacy CSS.
 
 ## Frontend Verification
 

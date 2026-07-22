@@ -106,37 +106,6 @@ tbody tr:hover td {
   font-weight: 850;
 }
 
-body:not(.login-body) .sales-review-detail-table-wrap {
-  max-height: calc(100vh - 320px);
-  min-height: 320px;
-  position: relative;
-  isolation: isolate;
-}
-
-body:not(.login-body) .sales-review-detail-table-wrap th {
-  position: sticky;
-  top: 0;
-  z-index: 6;
-  background: linear-gradient(180deg, #ecf7ff 0%, #dff0ff 100%) !important;
-  box-shadow: 0 1px 0 #d8e8f6;
-}
-
-body:not(.login-body) .sales-review-detail-table-wrap th:not(:last-child)::after {
-  content: "";
-  position: absolute;
-  top: 9px;
-  right: 0;
-  bottom: 9px;
-  width: 1px;
-  background: #b9d2e7;
-}
-
-body:not(.login-body) .sales-review-detail-table-wrap :where(.sort-button) {
-  justify-content: flex-start;
-  text-align: left;
-  white-space: nowrap;
-}
-
 .tabs {
   display: flex;
   align-items: center;

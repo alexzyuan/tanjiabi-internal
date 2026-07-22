@@ -94,16 +94,6 @@
   background: var(--sales-forecast-sticky-hover-bg);
 }
 
-.sales-forecast-table .text-cell {
-  text-align: left;
-}
-
-.sales-forecast-table .sticky-focus,
-.sales-forecast-table .sticky-hide,
-.sales-forecast-table .sticky-image {
-  text-align: center;
-}
-
 .sales-forecast-table .forecast-emphasis {
   font-weight: 800;
   color: var(--tj-text-strong);

@@ -72,6 +72,38 @@ table.data-table :is(th, td)[data-width-profile="narrative"] {
   white-space: normal;
 }
 
+table.data-table--middle :is(th, td) {
+  vertical-align: middle;
+}
+
+.data-table-wrap--detail {
+  max-height: calc(100vh - 320px);
+  min-height: 320px;
+  position: relative;
+  isolation: isolate;
+}
+
+table.data-table--detail th {
+  background: var(--tj-surface-muted);
+  box-shadow: 0 1px 0 var(--tj-border-subtle);
+}
+
+table.data-table--detail th:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 9px;
+  right: 0;
+  bottom: 9px;
+  width: 1px;
+  background: var(--tj-border-control);
+}
+
+table.data-table--detail .sort-button {
+  justify-content: flex-start;
+  text-align: left;
+  white-space: nowrap;
+}
+
 .table-state-row td,
 .table-state-cell {
   height: 54px;

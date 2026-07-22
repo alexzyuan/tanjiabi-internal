@@ -473,6 +473,30 @@ test("page styles do not override shared smart table widths", async () => {
   assert.equal(/\.fba-freight-table th:nth-child\([^)]*\)[^{]*\{[^}]*\b(?:min-)?width:/s.test(fbaFreightSource), false);
 });
 
+test("shared table variants replace responsive page and legacy table patches", async () => {
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const componentSource = await readFile(new URL("../assets/css/components/45-table-controls.css", import.meta.url), "utf8");
+  const factorySource = await readFile(new URL("../assets/css/pages/52-factory-inventory.css", import.meta.url), "utf8");
+  const salesForecastSource = await readFile(new URL("../assets/css/pages/25-sales-forecast.css", import.meta.url), "utf8");
+  const supplierBoardSource = await readFile(new URL("../assets/css/pages/53-supplier-board.css", import.meta.url), "utf8");
+  const supplierDetailSource = await readFile(new URL("../assets/css/pages/54-supplier-detail.css", import.meta.url), "utf8");
+  const legacySource = await readFile(new URL("../assets/css/legacy/current.css", import.meta.url), "utf8");
+
+  assert.match(componentSource, /^table\.data-table--middle :is\(th, td\)\s*\{/m);
+  assert.match(componentSource, /^\.data-table-wrap--detail\s*\{/m);
+  assert.match(componentSource, /^table\.data-table--detail th\s*\{/m);
+  assert.match(indexSource, /class="table-wrap data-table-wrap--detail"/);
+  assert.match(indexSource, /class="data-table data-table--detail"/);
+  assert.equal((indexSource.match(/class="[^"]*data-table--middle[^"]*"/g) || []).length, 3);
+  assert.equal(/\.app-shell\s*\{[\s\S]*?min-width:\s*1180px/s.test(factorySource), false);
+  assert.equal(/\.dashboard\s*\{[\s\S]*?min-width:\s*1000px/s.test(factorySource), false);
+  assert.equal(/\.sales-forecast-table \.sticky-(?:focus|hide|image)\s*\{[\s\S]*?text-align:/s.test(salesForecastSource), false);
+  assert.equal(/#supplier-board-table th,[\s\S]*?#supplier-board-table td\s*\{[\s\S]*?vertical-align:/s.test(supplierBoardSource), false);
+  assert.equal(/#supplier-detail-table th,[\s\S]*?#supplier-detail-table td\s*\{[\s\S]*?vertical-align:/s.test(supplierDetailSource), false);
+  assert.equal(/#factory-inventory-table th,[\s\S]*?#factory-inventory-table td\s*\{[\s\S]*?vertical-align:/s.test(factorySource), false);
+  assert.equal(legacySource.includes("sales-review-detail-table-wrap"), false);
+});
+
 test("final table invariants layer locks product table alignment after page css", async () => {
   const buildScript = await readFile(new URL("../scripts/build-styles.js", import.meta.url), "utf8");
   const finalSource = await readFile(new URL("../assets/css/final/90-table-invariants.css", import.meta.url), "utf8");
@@ -1137,7 +1161,10 @@ test("factory inventory styles live in the page layer and use semantic tokens", 
   assert.match(pageSource, /^\.factory-order-strip\s*\{/m);
   assert.match(pageSource, /^\.factory-inventory-image\s*\{/m);
   assert.match(pageSource, /^\.factory-shipped-input:focus-visible\s*\{/m);
-  assert.match(pageSource, /^@media \(max-width:\s*720px\)/m);
+  assert.equal(/\.app-shell\s*\{[\s\S]*?min-width:\s*1180px/s.test(pageSource), false);
+  assert.equal(/\.dashboard\s*\{[\s\S]*?min-width:\s*1000px/s.test(pageSource), false);
+  assert.match(pageSource, /@media \(max-width:\s*720px\)[\s\S]*?#view-factory-inventory \.factory-inventory-hero\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)/);
+  assert.match(pageSource, /#view-factory-inventory \.factory-inventory-hero \.hero-actions\s*\{[\s\S]*?width:\s*100%/);
   assert.match(pageSource, /var\(--tj-page-bg\)/);
   assert.match(pageSource, /var\(--tj-content-bg\)/);
   assert.match(pageSource, /var\(--tj-action-blue\)/);
@@ -1181,7 +1208,6 @@ test("supplier board styles live in the page layer and use semantic tokens", asy
   assert.match(pageSource, /^#view-supplier-board\.active\s*\{/m);
   assert.match(pageSource, /^\.supplier-board-sticky\s*\{/m);
   assert.match(pageSource, /^\.supplier-board-kpi-grid\s*\{/m);
-  assert.match(pageSource, /^#supplier-board-table th,/m);
   assert.match(pageSource, /^#supplier-board-table td small\s*\{/m);
   assert.match(pageSource, /^\.supplier-board-image\s*\{/m);
   assert.match(pageSource, /^@media \(max-width:\s*1180px\)/m);
@@ -1216,7 +1242,6 @@ test("supplier detail styles live in the page layer and use semantic tokens", as
 
   assert.match(pageSource, /^\/\* Supplier detail page\. \*\//m);
   assert.match(pageSource, /^\.supplier-detail-hero\s*\{/m);
-  assert.match(pageSource, /^#supplier-detail-table th,/m);
   assert.match(pageSource, /^\.supplier-detail-actions\s*\{/m);
   assert.match(pageSource, /^\.supplier-detail-kpi-grid\s*\{/m);
   assert.match(pageSource, /^\.supplier-detail-modal\s*\{/m);

@@ -31,8 +31,6 @@ max-height:none;
 min-height:0;
 overflow:auto;
 }
-#factory-inventory-table th,
-#factory-inventory-table td { vertical-align:middle; }
 #factory-inventory-table .factory-order-row td {
 padding:0;
 border-bottom:0;
@@ -112,9 +110,23 @@ text-align:right;
 outline:var(--spectrum-focus-ring-width) solid var(--spectrum-focus-ring-color);
 outline-offset:var(--spectrum-focus-ring-gap);
 }
+
 @media (max-width:720px) {
-body.factory-inventory-view:not(.login-body) { overflow-x:auto; }
-body.factory-inventory-view:not(.login-body) .app-shell,
-html.os-windows body.factory-inventory-view:not(.login-body) .app-shell { min-width:1180px !important; }
-body.factory-inventory-view:not(.login-body) .dashboard { min-width:1000px !important; }
+#view-factory-inventory.active {
+height:auto;
+min-height:0;
+overflow:visible;
+}
+#view-factory-inventory .factory-inventory-hero {
+grid-template-columns:minmax(0, 1fr);
+align-items:start;
+}
+#view-factory-inventory .factory-inventory-hero > div:first-child,
+#view-factory-inventory .factory-inventory-hero .hero-actions {
+width:100%;
+min-width:0;
+}
+#view-factory-inventory .factory-inventory-hero .hero-actions {
+justify-content:flex-start;
+}
 }

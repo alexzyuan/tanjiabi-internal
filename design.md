@@ -189,6 +189,8 @@ font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
 - 宽度来源优先级固定为：用户保存宽度、经过审查的 `data-column-width`、共享智能计算、通用文本兜底。用户可通过表格内的“恢复智能列宽”只重置当前表。
 - 页面 CSS 可以保留矩阵表的 sticky、分组表头、图片框、tooltip、行密度和容器布局等页面专属视觉，但不得给普通业务列设置固定 `width` / `min-width`，不得用 `nth-child` 给列设宽，也不得重新定义普通 `th` / `td` 的左右对齐。文本列默认左对齐，数字列由 `.table-cell--number` 统一右对齐。
 - 选择、图片、数字、金额/费率、短名称、标识符、单号、长名称、说明和操作列必须使用共享语义 profile。语义无法由列名稳定推断时，在表头补充 `data-column-profile`，不在页面 CSS 中增加像素补丁。
+- 窄视口不得因表格给 `body`、`.app-shell`、`.dashboard` 或页面视图设置全局固定 `min-width`。页面本身必须保持视口宽度，横向浏览仅由对应 `.table-wrap` 容器承担。
+- 需要整表垂直居中的表格使用 `.data-table--middle`；需要可滚动明细表的统一 sticky 表头、分隔和排序按钮样式时，使用 `.data-table-wrap--detail` 与 `.data-table--detail`。这些属于共享组件能力，不在 page CSS 或 legacy CSS 重复实现。
 - 完整的 profile 范围、采样算法、持久化迁移、诊断和验收标准以 `docs/superpowers/specs/2026-07-21-shared-smart-table-width-design.md` 为准；`design.md` 只保留所有页面必须遵守的设计约束。
 
 筛选栏契约：

@@ -3,11 +3,6 @@
   align-items: flex-start;
 }
 
-#supplier-detail-table th,
-#supplier-detail-table td {
-  vertical-align: middle;
-}
-
 .supplier-detail-actions {
   display: flex;
   flex-wrap: wrap;
