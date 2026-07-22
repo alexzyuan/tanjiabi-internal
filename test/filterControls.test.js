@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  createFilterControls,
   updateFilterDropdownMenuAlignment,
   getFilterDropdownMenuAlignment,
   getFilterDropdownSummary,
@@ -101,4 +102,75 @@ test("filter dropdown menu recalculates alignment from its start edge when reope
     "measure",
     "toggle:filter-dropdown-menu--align-end:true",
   ]);
+});
+
+test("filter dropdown trigger closes an open menu with Escape", () => {
+  const bindCalls = [];
+  const disclosureCalls = [];
+  let focusCount = 0;
+  const button = {
+    attributes: { "aria-expanded": "true" },
+    focus() {
+      focusCount += 1;
+    },
+  };
+  const menu = { hidden: false };
+  const dropdown = {
+    querySelector(selector) {
+      return {
+        ".filter-dropdown-button": button,
+        ".filter-dropdown-menu": menu,
+      }[selector] || null;
+    },
+  };
+  const select = {
+    classList: { add() {} },
+    insertAdjacentElement(position, element) {
+      assert.equal(position, "afterend");
+      this.nextElementSibling = element;
+    },
+  };
+  const controls = createFilterControls({
+    root: { createElement: () => dropdown },
+    globalObject: {},
+    bind: (...args) => bindCalls.push(args),
+    setDisclosureState(panel, trigger, expanded) {
+      disclosureCalls.push([panel, trigger, expanded]);
+      panel.hidden = !expanded;
+      trigger.attributes["aria-expanded"] = String(expanded);
+    },
+  });
+
+  controls.createFilterDropdown(select);
+  const keydownHandler = bindCalls.find(([, selector, eventName]) => (
+    selector === ".filter-dropdown-button" && eventName === "keydown"
+  ))?.[3];
+  assert.equal(typeof keydownHandler, "function");
+
+  let nonEscapePrevented = false;
+  keydownHandler({
+    key: "Enter",
+    currentTarget: button,
+    preventDefault() {
+      nonEscapePrevented = true;
+    },
+  });
+  assert.equal(nonEscapePrevented, false);
+  assert.equal(menu.hidden, false);
+  assert.equal(button.attributes["aria-expanded"], "true");
+  assert.equal(focusCount, 0);
+
+  let escapePrevented = false;
+  keydownHandler({
+    key: "Escape",
+    currentTarget: button,
+    preventDefault() {
+      escapePrevented = true;
+    },
+  });
+  assert.equal(escapePrevented, true);
+  assert.equal(menu.hidden, true);
+  assert.equal(button.attributes["aria-expanded"], "false");
+  assert.equal(focusCount, 1);
+  assert.deepEqual(disclosureCalls, [[menu, button, false]]);
 });

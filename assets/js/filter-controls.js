@@ -112,6 +112,13 @@ export function createFilterControls({
         updateFilterDropdownMenuAlignment(menu, globalObject.innerWidth);
       }
     });
+    bind(dropdown, ".filter-dropdown-button", "keydown", (event) => {
+      const menu = dropdown.querySelector(".filter-dropdown-menu");
+      if (event.key !== "Escape" || !menu || menu.hidden) return;
+      event.preventDefault();
+      setDisclosureState(menu, event.currentTarget, false);
+      event.currentTarget.focus?.();
+    });
     bind(dropdown, ".filter-dropdown-options", "change", (event) => {
       const input = closestTarget(event, "input[type='checkbox']");
       if (!input) return;
