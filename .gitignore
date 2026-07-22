@@ -11,6 +11,7 @@ node_modules/
 data-cache/
 uploads/
 output/
+outputs/
 releases/
 .deploy-tmp-*
 .playwright-cli/
