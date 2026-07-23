@@ -1,4 +1,5 @@
 import { fetchLingxingListingsBySidMskus } from "./lingxingCatalogLookupService.js";
+import { findLingxingShop } from "../data/lingxingShopMap.js";
 
 function readFirst(item, keys) {
   for (const key of keys) {
@@ -45,6 +46,46 @@ function sellerCountryCode(seller = {}) {
   return readFirst(seller, ["countryCode", "country_code", "region", "marketplaceCode", "marketplace"]) || "";
 }
 
+function storeNameFromBudgetRow(row = {}, parent = {}) {
+  return readFirst(row, ["storeName", "store_name", "sellerName", "seller_name", "shopName", "shop_name"])
+    || readFirst(parent, ["storeName", "store_name", "sellerName", "seller_name", "shopName", "shop_name"])
+    || "";
+}
+
+function siteFromBudgetRow(row = {}, parent = {}) {
+  return readFirst(row, ["country", "countryName", "country_name", "site", "siteName"])
+    || readFirst(parent, ["country", "countryName", "country_name", "site", "siteName"])
+    || "";
+}
+
+function normalizeTextKey(value) {
+  return String(value || "").trim().replace(/\s+/g, "").toLowerCase();
+}
+
+function buildSellerByStoreKey(sellers = []) {
+  const map = new Map();
+  sellers.forEach((seller) => {
+    [
+      sellerName(seller),
+      readFirst(seller, ["displayName", "display_name"]),
+      seller.sid,
+      seller.seller_id,
+      seller.sellerId,
+    ].forEach((value) => {
+      const key = normalizeTextKey(value);
+      if (key && !map.has(key)) map.set(key, seller);
+    });
+  });
+  return map;
+}
+
+function findBudgetSeller(row = {}, sellersByStoreKey) {
+  const storeName = storeNameFromBudgetRow(row);
+  const directShop = findLingxingShop(storeName);
+  if (directShop) return directShop;
+  return sellersByStoreKey.get(normalizeTextKey(storeName)) || {};
+}
+
 function listingOwner(record = {}) {
   const list = readFirst(record, ["asin_principal_list", "listing_principal_list", "principal_list", "principal_info", "principalInfo"]);
   const listText = readNameList(list);
@@ -82,7 +123,11 @@ export function buildListingOwnerMap(rows = []) {
       if (!ownersByMsku.has(mskuKey)) ownersByMsku.set(mskuKey, new Set());
       ownersByMsku.get(mskuKey).add(owner);
     }
-    [ownerMapKey(row), ownerMapKey({ ...row, countryCode: "" })].forEach((key) => {
+    [
+      ownerMapKey(row),
+      ownerMapKey({ ...row, countryCode: "" }),
+      ownerMapKey({ ...row, country: "", countryCode: "" }),
+    ].forEach((key) => {
       if (key && !map.has(key)) map.set(key, owner);
     });
   });
@@ -97,6 +142,7 @@ export function buildListingOwnerMap(rows = []) {
 export function findListingOwner(ownerMap, row) {
   return ownerMap.get(ownerMapKey(row))
     || ownerMap.get(ownerMapKey({ ...row, countryCode: "" }))
+    || ownerMap.get(ownerMapKey({ ...row, country: "", countryCode: "" }))
     || ownerMap.get(ownerMapKey({ sid: "", countryCode: "", msku: row?.msku || "" }))
     || "-";
 }
@@ -134,6 +180,48 @@ export function ownerLookupRowsFromRecords(records = []) {
     countryCode: readFirst(record, ["country_code", "countryCode", "region", "marketplace"]) || "",
     msku: readFirst(record, ["msku", "sellerSku", "seller_sku", "sku", "asin"]) || "",
   })).filter((row) => row.sid && row.msku);
+}
+
+export function listingOwnerRowsFromRecords(records = []) {
+  return records.map((record) => {
+    const owner = listingOwner(record);
+    const msku = readFirst(record, ["msku", "sellerSku", "seller_sku", "sku", "asin"]) || "";
+    if (!owner || !msku) return null;
+    return {
+      sid: toNumber(readFirst(record, ["sid", "seller_id", "sellerId", "store_id", "storeId"])),
+      country: readFirst(record, ["country", "country_name", "countryName", "marketplace", "site", "siteName"]) || "",
+      countryCode: readFirst(record, ["country_code", "countryCode", "region", "marketplace"]) || "",
+      msku,
+      listingOwner: owner,
+    };
+  }).filter((row) => row && row.sid && row.msku && row.listingOwner);
+}
+
+export function ownerLookupRowsFromBudgetTargets(budgetTargets = {}, sellers = []) {
+  const sellersByStoreKey = buildSellerByStoreKey(sellers);
+  const rows = Array.isArray(budgetTargets.rows) ? budgetTargets.rows : [];
+  const lookupRows = rows.flatMap((parent) => {
+    const mskuRows = Array.isArray(parent?.mskuRows) ? parent.mskuRows : [];
+    return mskuRows.map((row) => {
+      const merged = { ...parent, ...row };
+      const seller = findBudgetSeller(merged, sellersByStoreKey);
+      const sid = toNumber(seller.sid || seller.seller_id || seller.sellerId);
+      return {
+        sid,
+        country: sellerCountry(seller) || siteFromBudgetRow(row, parent),
+        countryCode: sellerCountryCode(seller),
+        msku: readFirst(row, ["msku", "sellerSku", "seller_sku", "sku", "asin"]) || "",
+      };
+    });
+  }).filter((row) => row.sid && row.msku);
+
+  const seen = new Set();
+  return lookupRows.filter((row) => {
+    const key = `${row.sid}|${String(row.msku).trim().toLowerCase()}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function listingOwnerRow(record, fallback = {}) {

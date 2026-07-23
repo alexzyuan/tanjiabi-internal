@@ -8,7 +8,12 @@ import {
   saveSalesWeeklySourceCache,
 } from "../utils/cacheStore.js";
 import { getBudgetTargetContext } from "./budgetTargetService.js";
-import { fetchListingOwnerRows, ownerLookupRowsFromRecords } from "./listingOwnerService.js";
+import {
+  fetchListingOwnerRows,
+  listingOwnerRowsFromRecords,
+  ownerLookupRowsFromBudgetTargets,
+  ownerLookupRowsFromRecords,
+} from "./listingOwnerService.js";
 import { captureInventoryProvisionSnapshot } from "./inventoryProvisionService.js";
 import { acquireJobLock, releaseJobLock } from "../jobs/jobLock.js";
 import {
@@ -50,11 +55,17 @@ async function syncFromLingxing() {
   const adapter = getLingxingAdapter();
   const data = await adapter.fetchSalesWeeklyData();
   const budgetTargets = await getBudgetTargetContext(data.range);
+  const sourceRecords = data.orderProfitRecords || data.sellerProfitRecords || [];
+  const directOwnerRows = listingOwnerRowsFromRecords(sourceRecords);
   let listingOwnerRows = [];
   try {
-    listingOwnerRows = await fetchListingOwnerRows(adapter, ownerLookupRowsFromRecords(data.orderProfitRecords || data.sellerProfitRecords || []));
+    const fetchedOwnerRows = await fetchListingOwnerRows(adapter, [
+      ...ownerLookupRowsFromRecords(sourceRecords),
+      ...ownerLookupRowsFromBudgetTargets(budgetTargets, data.sellers || []),
+    ]);
+    listingOwnerRows = [...directOwnerRows, ...fetchedOwnerRows];
   } catch {
-    listingOwnerRows = [];
+    listingOwnerRows = directOwnerRows;
   }
   const source = {
     cacheScope: {

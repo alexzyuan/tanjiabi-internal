@@ -13,7 +13,12 @@ import { filterCoreSellers, getLingxingAdapter } from "../adapters/lingxingAdapt
 import { buildBudgetMskuDetailRows, mapLingxingToSalesDashboard } from "./lingxingDashboardMapper.js";
 import { getDefaultWeekRange } from "../utils/dateRange.js";
 import { getBudgetTargetContext } from "./budgetTargetService.js";
-import { fetchListingOwnerRows, ownerLookupRowsFromRecords } from "./listingOwnerService.js";
+import {
+  fetchListingOwnerRows,
+  listingOwnerRowsFromRecords,
+  ownerLookupRowsFromBudgetTargets,
+  ownerLookupRowsFromRecords,
+} from "./listingOwnerService.js";
 import { getSharedSellers } from "./sharedDataService.js";
 
 function hasLiveFilters(filters) {
@@ -117,15 +122,27 @@ function mapSalesWeeklySourceToDashboard(source = {}, filters = {}) {
   });
 }
 
-async function fetchSalesListingOwnerRows(adapter, records = []) {
+function salesListingOwnerLookupRows(records = [], budgetTargets = {}, sellers = []) {
+  return [
+    ...ownerLookupRowsFromRecords(records),
+    ...ownerLookupRowsFromBudgetTargets(budgetTargets, sellers),
+  ];
+}
+
+async function fetchSalesListingOwnerRows(adapter, records = [], budgetTargets = {}, sellers = []) {
+  const directOwnerRows = listingOwnerRowsFromRecords(records);
+  const lookupRows = salesListingOwnerLookupRows(records, budgetTargets, sellers);
   try {
-    return await fetchListingOwnerRows(adapter, ownerLookupRowsFromRecords(records));
+    const fetchedOwnerRows = await fetchListingOwnerRows(adapter, lookupRows);
+    return [...directOwnerRows, ...fetchedOwnerRows];
   } catch (error) {
     console.error("[sales-weekly] listing owner lookup failed", {
       recordCount: records.length,
+      directOwnerRecordCount: directOwnerRows.length,
+      lookupRowCount: lookupRows.length,
       error: error.message,
     });
-    return [];
+    return directOwnerRows;
   }
 }
 
@@ -133,7 +150,12 @@ async function fetchSalesWeeklySource(filters = {}) {
   const adapter = getLingxingAdapter();
   const data = await adapter.fetchSalesWeeklyData(filters);
   const budgetTargets = await getBudgetTargetContext(data.range);
-  const listingOwnerRows = await fetchSalesListingOwnerRows(adapter, data.orderProfitRecords || data.sellerProfitRecords || []);
+  const listingOwnerRows = await fetchSalesListingOwnerRows(
+    adapter,
+    data.orderProfitRecords || data.sellerProfitRecords || [],
+    budgetTargets,
+    data.sellers || [],
+  );
   return {
     cacheScope: salesWeeklySourceScope(filters),
     sellers: data.sellers || [],
@@ -452,14 +474,15 @@ export async function getMskuDetailDashboard(filters = {}) {
   } catch (error) {
     inventoryWarning = error.message;
   }
-  const listingOwnerRows = await fetchSalesListingOwnerRows(adapter, records);
+  const budgetTargets = await getBudgetTargetContext(range);
+  const listingOwnerRows = await fetchSalesListingOwnerRows(adapter, records, budgetTargets, sellerList);
 
   const data = {
     ok: true,
     source: inventoryWarning ? "领星 ERP · 订单利润 MSKU，FBA库存读取失败" : "领星 ERP · 订单利润 MSKU + FBA库存",
     cacheHit: false,
     recordCount: records.length,
-    detailRows: buildBudgetMskuDetailRows(records, await getBudgetTargetContext(range), inventoryRecords, sellerList, listingOwnerRows, filters),
+    detailRows: buildBudgetMskuDetailRows(records, budgetTargets, inventoryRecords, sellerList, listingOwnerRows, filters),
     inventoryRecordCount: inventoryRecords.length,
     listingOwnerRecordCount: listingOwnerRows.length,
     inventoryWarning,

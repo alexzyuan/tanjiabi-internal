@@ -473,6 +473,25 @@ function displayStoreName(value, sid = "") {
   return shop?.displayName || value || "-";
 }
 
+function findShopByStore(value, sid = "") {
+  const rawKey = normalizeRawKey(value);
+  const normalizedSid = String(sid || "").trim();
+  return lingxingShopMap.find((item) => {
+    return String(item.sid) === normalizedSid
+      || [item.name, item.displayName].some((candidate) => normalizeRawKey(candidate) === rawKey);
+  }) || null;
+}
+
+function resolveBudgetRowSid(row = {}) {
+  const rowSid = toNumber(row.sid || row.sellerId || row.seller_id);
+  if (rowSid) return rowSid;
+  return toNumber(findShopByStore(row.storeName)?.sid);
+}
+
+function resolveBudgetRowCountry(row = {}) {
+  return row.country || findShopByStore(row.storeName)?.country || row.site || "";
+}
+
 function isForcedActualMskuStore(actual = {}) {
   return getStoreTargetKeys(actual.storeName).some((key) => forcedActualMskuDetailStoreKeys.has(key))
     || forcedActualMskuDetailStores.includes(displayStoreName(actual.storeName, actual.sid));
@@ -834,8 +853,8 @@ export function buildBudgetMskuDetailRows(records = [], budgetTargets = {}, inve
       ? toNumber(actual.fbaInventory)
       : findFbaInventory(inventoryMap, row);
     const listingOwner = findListingOwner(ownerMap, {
-      sid: actual.sid || row.sid || row.sellerId || "",
-      country: row.country || "",
+      sid: actual.sid || resolveBudgetRowSid(row),
+      country: actual.country || resolveBudgetRowCountry(row),
       countryCode: row.countryCode || "",
       msku: row.msku,
     });
