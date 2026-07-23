@@ -1,7 +1,12 @@
 import { getConfig } from "../config/index.js";
 import { filterCoreSellers, getLingxingAdapter } from "../adapters/lingxingAdapter.js";
 import { mapLingxingToSalesDashboard } from "./lingxingDashboardMapper.js";
-import { readLingxingSellersCache, saveLingxingSellersCache, saveSalesDashboardCache } from "../utils/cacheStore.js";
+import {
+  readLingxingSellersCache,
+  saveLingxingSellersCache,
+  saveSalesDashboardCache,
+  saveSalesWeeklySourceCache,
+} from "../utils/cacheStore.js";
 import { getBudgetTargetContext } from "./budgetTargetService.js";
 import { fetchListingOwnerRows, ownerLookupRowsFromRecords } from "./listingOwnerService.js";
 import { captureInventoryProvisionSnapshot } from "./inventoryProvisionService.js";
@@ -51,7 +56,29 @@ async function syncFromLingxing() {
   } catch {
     listingOwnerRows = [];
   }
-  const dashboard = mapLingxingToSalesDashboard({ ...data, budgetTargets, listingOwnerRows });
+  const source = {
+    cacheScope: {
+      version: "sales-weekly-source-v1",
+      startDate: data.range?.startDate || "",
+      endDate: data.range?.endDate || "",
+      currencyCode: data.currencyCode || "ORIGINAL",
+      sids: [],
+    },
+    sellers: data.sellers || [],
+    sellerProfitRecords: data.sellerProfitRecords || [],
+    orderProfitRecords: data.orderProfitRecords || [],
+    dailyProfitRecords: data.dailyProfitRecords || [],
+    inventoryRecords: data.inventoryRecords || [],
+    listingOwnerRows,
+    budgetTargets,
+    range: data.range,
+    currencyCode: data.currencyCode || "ORIGINAL",
+    raw: data.raw || {},
+    updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
+  };
+  const dashboard = mapLingxingToSalesDashboard({ ...source, filters: {} });
+  const sourceCacheKey = JSON.stringify(source.cacheScope);
+  await saveSalesWeeklySourceCache(sourceCacheKey, source);
   await saveSalesDashboardCache(dashboard);
   await saveLingxingSellersCache(data.sellers);
   let inventorySnapshotMessage = "";

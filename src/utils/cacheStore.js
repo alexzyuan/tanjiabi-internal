@@ -5,6 +5,7 @@ import { readJsonWithRecovery, writeJsonAtomic } from "./jsonStore.js";
 
 const cacheDir = path.join(process.cwd(), "data-cache");
 const salesDashboardFile = path.join(cacheDir, "sales-weekly-dashboard.json");
+const salesWeeklySourceDir = path.join(cacheDir, "sales-weekly-source");
 const lingxingSellersFile = path.join(cacheDir, "lingxing-sellers.json");
 const mskuDetailDir = path.join(cacheDir, "msku-detail");
 const orderProfitDir = path.join(cacheDir, "order-profit");
@@ -36,6 +37,14 @@ export async function saveSalesDashboardCache(data) {
 
 export async function readSalesDashboardCache() {
   return readJsonWithRecovery(salesDashboardFile, null);
+}
+
+export async function saveSalesWeeklySourceCache(key, data) {
+  await saveNamedCache(salesWeeklySourceDir, key, data);
+}
+
+export async function readSalesWeeklySourceCache(key, ttlMs = 6 * 60 * 60 * 1000) {
+  return readNamedCache(salesWeeklySourceDir, key, ttlMs);
 }
 
 export async function saveLingxingSellersCache(data) {

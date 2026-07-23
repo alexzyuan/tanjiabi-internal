@@ -22,6 +22,7 @@ test("cache store preserves missing-file fallbacks", async () => {
     const cacheStore = await importFresh(projectRoot, "src/utils/cacheStore.js");
 
     assert.equal(await cacheStore.readSalesDashboardCache(), null);
+    assert.equal(await cacheStore.readSalesWeeklySourceCache(JSON.stringify({ version: "sales-weekly-source-v1", startDate: "2026-07-01", endDate: "2026-07-23", currencyCode: "ORIGINAL", sids: [] })), null);
     assert.deepEqual(await cacheStore.readLingxingSellersCache(), { updatedAt: null, sellers: [] });
   });
 });
@@ -39,6 +40,24 @@ test("cache store fails fast on corrupted JSON instead of hiding it as a cache m
       cacheStore.readSalesDashboardCache(),
       (error) => error?.code === "JSON_PARSE_FAILED" && /sales-weekly-dashboard\.json/.test(error.filePath),
     );
+  });
+});
+
+test("cache store writes and reads keyed sales weekly source cache", async () => {
+  await withTempProject(async (projectRoot) => {
+    const cacheStore = await importFresh(projectRoot, "src/utils/cacheStore.js");
+    const cacheKey = JSON.stringify({
+      version: "sales-weekly-source-v1",
+      startDate: "2026-07-01",
+      endDate: "2026-07-23",
+      currencyCode: "ORIGINAL",
+      sids: [],
+    });
+
+    await cacheStore.saveSalesWeeklySourceCache(cacheKey, { rows: [{ id: 1 }] });
+    const cached = await cacheStore.readSalesWeeklySourceCache(cacheKey);
+
+    assert.deepEqual(cached?.data, { rows: [{ id: 1 }] });
   });
 });
 
