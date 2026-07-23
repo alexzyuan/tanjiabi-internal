@@ -194,10 +194,22 @@ export function createSalesDashboardFeature({
     return String(leftValue || "").localeCompare(String(rightValue || ""), "zh-Hans-CN");
   }
 
+  function currentListingOwnerFilter() {
+    const select = root?.querySelector?.("#front-owner-filter");
+    return String(select?.value || "").trim();
+  }
+
+  function ownerFilteredMskuDetailRows(rows = mskuDetailRows) {
+    const owner = currentListingOwnerFilter();
+    if (!owner) return rows;
+    return rows.filter((row) => String(row?.listingOwner || "").trim() === owner);
+  }
+
   function filteredMskuDetailRows() {
+    const ownerRows = ownerFilteredMskuDetailRows();
     const rows = mskuDetailStoreFilter
-      ? mskuDetailRows.filter((row) => row.budgetStoreName === mskuDetailStoreFilter)
-      : mskuDetailRows;
+      ? ownerRows.filter((row) => row.budgetStoreName === mskuDetailStoreFilter)
+      : ownerRows;
     const multiplier = mskuDetailSort.direction === "asc" ? 1 : -1;
     return [...rows].sort((left, right) => compareMskuDetailRows(left, right, mskuDetailSort.key) * multiplier);
   }
@@ -326,10 +338,11 @@ export function createSalesDashboardFeature({
     const detailRows = (data.detailRows || []).filter((row) => row && !Array.isArray(row) && typeof row === "object");
     if (detailTable) {
       mskuDetailRows = detailRows;
-      renderMskuStoreTabs(mskuDetailRows);
+      const visibleDetailRows = ownerFilteredMskuDetailRows(mskuDetailRows);
+      renderMskuStoreTabs(visibleDetailRows);
       renderMskuDetailTable();
       const status = root?.querySelector?.("#msku-detail-status");
-      if (status) status.textContent = `随销售看板同步加载 · ${mskuDetailRows.length} 条预算 MSKU`;
+      if (status) status.textContent = `随销售看板同步加载 · ${visibleDetailRows.length} 条预算 MSKU`;
     }
 
     const dailyTable = root?.querySelector?.("#daily-table");
