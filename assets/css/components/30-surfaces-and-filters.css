@@ -31,6 +31,12 @@
   flex: 0 0 220px;
 }
 
+.filters .front-owner-quick-filter {
+  position: relative;
+  flex: 0 0 150px;
+  min-width: 0;
+}
+
 .filters .checkbox-label {
   flex: 0 0 auto;
   gap: 8px;

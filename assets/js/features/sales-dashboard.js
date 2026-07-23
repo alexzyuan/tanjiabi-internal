@@ -1,4 +1,5 @@
 import { renderKpiProgress } from "../ui-components.js?v=20260707-ui-components-v1";
+import { FRONT_OWNER_QUICK_FILTERS } from "../front-shop-filters.js?v=20260723-sales-owner-quick-filter-v1";
 
 export function createSalesDashboardFeature({
   root = globalThis.document,
@@ -396,7 +397,16 @@ export function createSalesDashboardFeature({
     const select = root?.querySelector?.("#front-owner-filter");
     if (!select) return;
     const selected = select.value;
-    select.innerHTML = `<option value="">全部负责人</option>${options
+    const mergedOptions = [
+      ...FRONT_OWNER_QUICK_FILTERS.map((name) => ({ value: name, name })),
+      ...options,
+    ].reduce((items, item) => {
+      const value = item.value || item.name;
+      if (!value || items.some((existing) => existing.value === value)) return items;
+      items.push({ value, name: item.name || value });
+      return items;
+    }, []);
+    select.innerHTML = `<option value="">全部负责人</option>${mergedOptions
       .map((item) => `<option value="${escapeHtml(item.value || item.name)}">${escapeHtml(item.name || item.value)}</option>`)
       .join("")}`;
     if ([...select.options].some((option) => option.value === selected)) select.value = selected;

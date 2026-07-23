@@ -58,3 +58,51 @@ test("sales dashboard feature redirects on an expired session and returns fallba
     console.info = originalInfo;
   }
 });
+
+test("sales dashboard feature keeps the three quick owner names in the owner select", () => {
+  const ownerSelect = {
+    value: "运营A",
+    options: [
+      { value: "" },
+      { value: "运营A" },
+      { value: "林芃" },
+      { value: "熊丹轩" },
+      { value: "黄超" },
+    ],
+    set innerHTML(value) {
+      this._innerHTML = value;
+    },
+    get innerHTML() {
+      return this._innerHTML || "";
+    },
+  };
+  const root = {
+    querySelector(selector) {
+      return selector === "#front-owner-filter" ? ownerSelect : null;
+    },
+  };
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    const { renderDashboard } = createSalesDashboardFeature({
+      root,
+      bind: () => null,
+      bindAll: () => [],
+      buildDashboardQuery: () => "startDate=2026-07-01&endDate=2026-07-06&currencyCode=ORIGINAL",
+      canAccessFinance: () => false,
+      escapeHtml: (value) => String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"),
+      getCurrentAuthUser: () => null,
+      setText: () => {},
+    });
+
+    renderDashboard({ filters: { ownerOptions: [{ value: "运营A", name: "运营A" }] } });
+
+    assert.match(ownerSelect.innerHTML, /林芃/);
+    assert.match(ownerSelect.innerHTML, /熊丹轩/);
+    assert.match(ownerSelect.innerHTML, /黄超/);
+    assert.match(ownerSelect.innerHTML, /运营A/);
+    assert.equal(ownerSelect.value, "运营A");
+  } finally {
+    console.error = originalError;
+  }
+});

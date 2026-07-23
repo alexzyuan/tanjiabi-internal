@@ -438,6 +438,7 @@ body:not(.login-body) .section-title{font-size:15px}
 .filters label{display:inline-flex;align-items:center;flex:0 0 116px;min-width:0;font-size:0;color:var(--tj-text-body);white-space:nowrap}
 .filters label:has(.date-range-control){flex-basis:240px}
 .filters label:has(input[type="search"]){flex:0 0 220px}
+.filters .front-owner-quick-filter{position:relative;flex:0 0 150px;min-width:0}
 .filters .checkbox-label{flex:0 0 auto;gap:8px;font-size:13px}
 .filters :where(input,select,.filter-dropdown-button,.date-range-button){width:100%;min-width:0;height:var(--tj-control-height-compact);border:1px solid var(--tj-border-control);border-radius:var(--tj-control-radius);padding:0 var(--tj-control-padding-x);color:var(--tj-text-body);background:var(--tj-content-bg);font-size:13px;transition:border-color 0.16s ease,box-shadow 0.16s ease}
 .filters select.enhanced-filter-select{position:absolute;width:1px;height:1px;min-height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}

@@ -29,6 +29,36 @@ function makeSelect(selectedValues = []) {
   };
 }
 
+function makeQuickFilterElement() {
+  const label = { textContent: "负责人快捷筛选" };
+  const button = {
+    attributes: {},
+    label,
+    querySelector(selector) {
+      return selector === ".filter-dropdown-button-label" ? label : null;
+    },
+    setAttribute(name, value) {
+      this.attributes[name] = String(value);
+    },
+  };
+  const menu = { hidden: true };
+  const radios = ["林芃", "熊丹轩", "黄超"].map((value) => ({ type: "radio", value, checked: false }));
+  return {
+    querySelector(selector) {
+      if (selector === ".filter-dropdown-button") return button;
+      if (selector === ".filter-dropdown-menu") return menu;
+      return null;
+    },
+    querySelectorAll(selector) {
+      return selector === "input[type='radio']" ? radios : [];
+    },
+    button,
+    menu,
+    label,
+    radios,
+  };
+}
+
 function selectedFilterValues(selectorOrElement, root) {
   const element = typeof selectorOrElement === "string" ? root.querySelector(selectorOrElement) : selectorOrElement;
   return [...(element?.selectedOptions || [])].map((option) => option.value).filter(Boolean);
@@ -139,4 +169,76 @@ test("front shop filters own sales filter control bindings", async () => {
 
   assert.deepEqual(synced, [elements["#front-country-filter"], elements["#front-shop-filter"]]);
   assert.equal(refreshCount, 4);
+});
+
+test("front shop filters expose a quick owner dropdown for the three named leads", async () => {
+  const quickFilter = makeQuickFilterElement();
+  const ownerSelect = {
+    value: "",
+    options: [{ value: "" }, { value: "林芃" }, { value: "熊丹轩" }, { value: "黄超" }],
+    selectedOptions: [],
+  };
+  const elements = {
+    "#front-country-filter": makeSelect([]),
+    "#front-shop-filter": makeSelect([]),
+    "#front-currency-filter": { value: "ORIGINAL" },
+    "#front-owner-filter": ownerSelect,
+    "#front-owner-quick-filter": quickFilter,
+  };
+  const root = makeRoot(elements);
+  const bindCalls = [];
+  let refreshCount = 0;
+  const filters = createFrontShopFilters({
+    root,
+    bind: (...args) => bindCalls.push(args),
+    fieldValue,
+    getFrontDateRange: () => ({ start: "2026-07-01", end: "2026-07-06" }),
+    normalizeCountryName,
+    onFiltersChange: async () => {
+      refreshCount += 1;
+    },
+    selectedFilterValue,
+    selectedFilterValues,
+    setSelectOptions: () => {},
+    syncAllOptionSelection: () => {},
+  });
+
+  filters.setupFrontShopFilterControls();
+
+  assert.deepEqual(
+    bindCalls.map(([, selector, eventName]) => [selector, eventName]),
+    [
+      ["#front-country-filter", "change"],
+      ["#front-shop-filter", "change"],
+      ["#front-owner-filter", "change"],
+      ["#front-currency-filter", "change"],
+      [".filter-dropdown-button", "click"],
+      [".filter-dropdown-button", "keydown"],
+      [".filter-dropdown-menu", "change"],
+    ],
+  );
+
+  const clickHandler = bindCalls[4][3];
+  const changeHandler = bindCalls[6][3];
+  const clickEvent = {
+    preventDefault() {},
+    stopPropagation() {},
+  };
+
+  await clickHandler(clickEvent);
+  assert.equal(quickFilter.menu.hidden, false);
+  assert.equal(quickFilter.button.attributes["aria-expanded"], "true");
+
+  const selectedRadio = quickFilter.radios[1];
+  selectedRadio.checked = true;
+  await changeHandler({ target: selectedRadio });
+
+  assert.equal(ownerSelect.value, "熊丹轩");
+  assert.equal(quickFilter.menu.hidden, true);
+  assert.equal(quickFilter.button.attributes["aria-expanded"], "false");
+  assert.equal(quickFilter.label.textContent, "熊丹轩");
+  assert.equal(quickFilter.radios[0].checked, false);
+  assert.equal(quickFilter.radios[1].checked, true);
+  assert.equal(quickFilter.radios[2].checked, false);
+  assert.equal(refreshCount, 1);
 });
