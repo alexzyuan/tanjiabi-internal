@@ -30,3 +30,34 @@ test("budget MSKU detail owner matching uses mapped store SID when one MSKU exis
   assert.equal(rows[0].listingOwner, "黄超");
   assert.equal(rows[0].msku, "JMAU-SHARED");
 });
+
+test("MSKU detail includes uncovered actual rows for non-AU shops when budget rows are empty", () => {
+  const rows = buildBudgetMskuDetailRows(
+    [
+      {
+        sid: 8709,
+        storeName: "xiamentanjia-CA",
+        country: "加拿大",
+        countryCode: "CA",
+        msku: "JMCA-ACTUAL",
+        productName: "加拿大实际销售品",
+        amount: 120,
+        volume: 3,
+        gross_profit: 24,
+      },
+    ],
+    { rows: [] },
+    [],
+    [],
+    [
+      { sid: 8709, country: "加拿大", countryCode: "CA", msku: "JMCA-ACTUAL", listingOwner: "熊丹轩" },
+    ],
+    { listingOwner: "熊丹轩" },
+  );
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].budgetStoreName, "探嘉加拿大");
+  assert.equal(rows[0].msku, "JMCA-ACTUAL");
+  assert.equal(rows[0].listingOwner, "熊丹轩");
+  assert.equal(rows[0].actualQuantity, 3);
+});
