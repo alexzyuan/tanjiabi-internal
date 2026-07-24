@@ -11,7 +11,7 @@ export const freightRateOptions = {
   warehouseCodesByCountry: {
     美国: ["MIT", "GEU", "POC", "TCY", "ONT", "GYR"],
     加拿大: ["YYZ", "YUX", "YOW", "YYC", "YVR", "YEG", "YHM"],
-    澳洲: ["BWU", "XAU", "XBW"],
+    澳洲: ["BWU", "XAU", "XBW", "XYS"],
   },
   carriers: ["九方通逊", "同袍"],
   channelNamesByCountry: Object.fromEntries(

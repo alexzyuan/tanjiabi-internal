@@ -98,7 +98,7 @@ test("saveFreightRate restricts warehouse choices for US Canada and Australia on
     assert.deepEqual(freightRateOptions.warehouseCodesByCountry, {
       美国: ["MIT", "GEU", "POC", "TCY", "ONT", "GYR"],
       加拿大: ["YYZ", "YUX", "YOW", "YYC", "YVR", "YEG", "YHM"],
-      澳洲: ["BWU", "XAU", "XBW"],
+      澳洲: ["BWU", "XAU", "XBW", "XYS"],
     });
     assert.deepEqual(freightRateOptions.channelNamesByCountry.美国, [
       "OA直送（包税）",
@@ -112,6 +112,9 @@ test("saveFreightRate restricts warehouse choices for US Canada and Australia on
 
     const canadaYhm = await saveFreightRate({ date: "2026-07-14", country: "加拿大", warehouseCode: "yhm", carrier: "九方通逊", transportMethod: "加拿大卡派（包税）", price: 1 }, { storeFile });
     assert.equal(canadaYhm.warehouseCode, "YHM");
+
+    const australiaXys = await saveFreightRate({ date: "2026-07-13", country: "澳洲", warehouseCode: "xys", carrier: "九方通逊", transportMethod: "澳洲卡派（包税）", price: 1 }, { storeFile });
+    assert.equal(australiaXys.warehouseCode, "XYS");
 
     const germany = await saveFreightRate({ date: "2026-07-13", country: "德国", warehouseCode: "de-custom", carrier: "九方通逊", transportMethod: "欧盟递延卡派(不包税)", price: 1 }, { storeFile });
     assert.equal(germany.warehouseCode, "DE-CUSTOM");
