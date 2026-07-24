@@ -826,6 +826,36 @@ test("sales dashboard overview styles live in the page layer and use semantic to
   });
 });
 
+test("sales dashboard filters stay sticky below the topbar without redefining shared filter internals", async () => {
+  const pageSource = await readFile(new URL("../assets/css/pages/22-sales-dashboard.css", import.meta.url), "utf8");
+  const stickyBlock = pageSource.match(/^body\.sales-view #sales-global-filters\s*\{([^}]+)\}/m)?.[1] || "";
+
+  assert.match(pageSource, /^body\.sales-view #sales-global-filters\s*\{[\s\S]*?position:\s*sticky/m);
+  assert.match(pageSource, /^body\.sales-view #sales-global-filters\s*\{[\s\S]*?top:\s*var\(--tj-topbar-fixed-height\)/m);
+  assert.match(pageSource, /^body\.sales-view #sales-global-filters\s*\{[\s\S]*?z-index:\s*900/m);
+  assert.equal(/\b(?:display|grid-template(?:-columns|-rows)?|gap|padding|border|height|box-shadow)\s*:/m.test(stickyBlock), false);
+});
+
+test("sales review detail table declares stable table and column semantics", async () => {
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const tableMatch = indexSource.match(/<table\b[^>]*id="sales-review-detail-table"[^>]*>([\s\S]*?)<\/table>/);
+  assert.ok(tableMatch, "sales review detail table should have a stable id");
+  assert.match(tableMatch[0], /\bdata-table-key="sales-review-detail"/);
+
+  const headers = Array.from(tableMatch[1].matchAll(/<th\b([^>]*)>/g), (match) => match[1]);
+  assert.equal(headers.length, 17);
+  headers.forEach((attributes, index) => {
+    assert.match(attributes, /\bdata-column-key="/, `header ${index + 1} should declare data-column-key`);
+    assert.match(attributes, /\bdata-column-kind="/, `header ${index + 1} should declare data-column-kind`);
+  });
+  assert.match(headers[0], /\bdata-column-profile="short-name"/);
+  assert.match(headers[1], /\bdata-column-profile="identifier"/);
+  assert.match(headers[2], /\bdata-column-profile="name"/);
+  headers.slice(3).forEach((attributes, index) => {
+    assert.match(attributes, /\bdata-column-kind="number"/, `numeric header ${index + 4} should be marked as number`);
+  });
+});
+
 test("store inspection dashboard styles live in the page layer and use semantic tokens", async () => {
   const pageSource = await readFile(new URL("../assets/css/pages/23-store-inspection.css", import.meta.url), "utf8");
   const legacySource = await readFile(new URL("../assets/css/legacy/current.css", import.meta.url), "utf8");

@@ -7,6 +7,12 @@ body:not(.sales-view) #sales-global-filters {
   display: none !important;
 }
 
+body.sales-view #sales-global-filters {
+  position: sticky;
+  top: var(--tj-topbar-fixed-height);
+  z-index: 900;
+}
+
 body.sales-view #view-sales .insight-row {
   display: none !important;
 }

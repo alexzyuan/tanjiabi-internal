@@ -401,26 +401,26 @@
             <span id="msku-detail-status">随销售看板同步加载</span>
           </div>
           <div class="table-wrap data-table-wrap--detail">
-            <table class="data-table data-table--detail">
+            <table class="data-table data-table--detail" id="sales-review-detail-table" data-table-key="sales-review-detail">
               <thead>
                 <tr>
-                  <th><button class="sort-button" type="button" data-msku-sort="budgetStoreName">店铺</button></th>
-                  <th><button class="sort-button" type="button" data-msku-sort="msku">msku</button></th>
-                  <th><button class="sort-button" type="button" data-msku-sort="productName">产品名称</button></th>
-                  <th><button class="sort-button" type="button" data-msku-sort="budgetQuantity">销量目标</button></th>
-                  <th><button class="sort-button" type="button" data-msku-sort="actualQuantity">实际销量</button></th>
-                  <th><button class="sort-button" type="button" data-msku-sort="fbaInventory">FBA库存</button></th>
-                  <th><button class="sort-button" type="button" data-msku-sort="quantityAchievement">销量达成率</button></th>
-                  <th><button class="sort-button" type="button" data-msku-sort="orderProfit">订单利润</button></th>
-                  <th><button class="sort-button" type="button" data-msku-sort="grossRate">毛利率</button></th>
-                  <th><button class="sort-button" type="button" data-msku-sort="refundRate">退款率</button></th>
-                  <th><button class="sort-button" type="button" data-msku-sort="adFeeRate">广告费率</button></th>
-                  <th><button class="sort-button" type="button" data-msku-sort="promotionDiscountRate">促销折扣占比</button></th>
-                  <th><button class="sort-button" type="button" data-msku-sort="storageFeeRate">仓储费占比</button></th>
-                  <th><button class="sort-button" type="button" data-msku-sort="platformFeeRate">平台费占比</button></th>
-                  <th><button class="sort-button" type="button" data-msku-sort="fbaDeliveryFeeRate">FBA发货费占比</button></th>
-                  <th><button class="sort-button" type="button" data-msku-sort="purchaseCostRate">采购成本占比</button></th>
-                  <th><button class="sort-button" type="button" data-msku-sort="firstLegCostRate">头程成本占比</button></th>
+                  <th data-column-key="budgetStoreName" data-column-kind="text" data-column-profile="short-name"><button class="sort-button" type="button" data-msku-sort="budgetStoreName">店铺</button></th>
+                  <th data-column-key="msku" data-column-kind="text" data-column-profile="identifier"><button class="sort-button" type="button" data-msku-sort="msku">msku</button></th>
+                  <th data-column-key="productName" data-column-kind="text" data-column-profile="name"><button class="sort-button" type="button" data-msku-sort="productName">产品名称</button></th>
+                  <th data-column-key="budgetQuantity" data-column-kind="number" data-column-profile="number"><button class="sort-button" type="button" data-msku-sort="budgetQuantity">销量目标</button></th>
+                  <th data-column-key="actualQuantity" data-column-kind="number" data-column-profile="number"><button class="sort-button" type="button" data-msku-sort="actualQuantity">实际销量</button></th>
+                  <th data-column-key="fbaInventory" data-column-kind="number" data-column-profile="number"><button class="sort-button" type="button" data-msku-sort="fbaInventory">FBA库存</button></th>
+                  <th data-column-key="quantityAchievement" data-column-kind="number" data-column-profile="money-rate"><button class="sort-button" type="button" data-msku-sort="quantityAchievement">销量达成率</button></th>
+                  <th data-column-key="orderProfit" data-column-kind="number" data-column-profile="money-rate"><button class="sort-button" type="button" data-msku-sort="orderProfit">订单利润</button></th>
+                  <th data-column-key="grossRate" data-column-kind="number" data-column-profile="money-rate"><button class="sort-button" type="button" data-msku-sort="grossRate">毛利率</button></th>
+                  <th data-column-key="refundRate" data-column-kind="number" data-column-profile="money-rate"><button class="sort-button" type="button" data-msku-sort="refundRate">退款率</button></th>
+                  <th data-column-key="adFeeRate" data-column-kind="number" data-column-profile="money-rate"><button class="sort-button" type="button" data-msku-sort="adFeeRate">广告费率</button></th>
+                  <th data-column-key="promotionDiscountRate" data-column-kind="number" data-column-profile="money-rate"><button class="sort-button" type="button" data-msku-sort="promotionDiscountRate">促销折扣占比</button></th>
+                  <th data-column-key="storageFeeRate" data-column-kind="number" data-column-profile="money-rate"><button class="sort-button" type="button" data-msku-sort="storageFeeRate">仓储费占比</button></th>
+                  <th data-column-key="platformFeeRate" data-column-kind="number" data-column-profile="money-rate"><button class="sort-button" type="button" data-msku-sort="platformFeeRate">平台费占比</button></th>
+                  <th data-column-key="fbaDeliveryFeeRate" data-column-kind="number" data-column-profile="money-rate"><button class="sort-button" type="button" data-msku-sort="fbaDeliveryFeeRate">FBA发货费占比</button></th>
+                  <th data-column-key="purchaseCostRate" data-column-kind="number" data-column-profile="money-rate"><button class="sort-button" type="button" data-msku-sort="purchaseCostRate">采购成本占比</button></th>
+                  <th data-column-key="firstLegCostRate" data-column-kind="number" data-column-profile="money-rate"><button class="sort-button" type="button" data-msku-sort="firstLegCostRate">头程成本占比</button></th>
                 </tr>
               </thead>
               <tbody id="detail-table"></tbody>

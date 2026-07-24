@@ -840,6 +840,7 @@ body:not(.login-body) .home-sync-pill{min-width:0;width:100%}
 }
 #sales-global-filters[hidden]{display:none !important}
 body:not(.sales-view) #sales-global-filters{display:none !important}
+body.sales-view #sales-global-filters{position:sticky;top:var(--tj-topbar-fixed-height);z-index:900}
 body.sales-view #view-sales .insight-row{display:none !important}
 .insight-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:14px}
 .insight-card{padding:14px 16px;background:var(--tj-content-bg);border:1px solid var(--tj-border-subtle);border-left:3px solid var(--spectrum-accent-visual);border-top:3px solid var(--spectrum-accent-visual);border-radius:var(--tj-panel-radius);box-shadow:var(--tj-shadow-soft)}
