@@ -1,5 +1,5 @@
 import { renderKpiProgress } from "../ui-components.js?v=20260707-ui-components-v1";
-import { FRONT_OWNER_QUICK_FILTERS } from "../front-shop-filters.js?v=20260723-sales-owner-quick-filter-v1";
+import { FRONT_OWNER_QUICK_FILTERS } from "../front-shop-filters.js?v=20260724-sales-owner-detail-jump-v1";
 
 export function createSalesDashboardFeature({
   root = globalThis.document,
@@ -448,6 +448,12 @@ export function createSalesDashboardFeature({
     runSafely("销售看板表格渲染", () => fillTables(dashboard));
   }
 
+  function revealMskuDetailPanel() {
+    const detailTable = root?.querySelector?.("#detail-table");
+    const detailPanel = detailTable?.closest?.(".detail-panel") || root?.querySelector?.(".detail-panel");
+    detailPanel?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }
+
   async function loadDashboard() {
     try {
       const params = new URLSearchParams(buildDashboardQuery());
@@ -488,6 +494,7 @@ export function createSalesDashboardFeature({
     applyMskuDetailSort,
     loadDashboard,
     makeUnavailableDashboard,
+    revealMskuDetailPanel,
     renderDashboard,
     setupSalesDashboard,
   };

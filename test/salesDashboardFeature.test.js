@@ -170,3 +170,32 @@ test("sales dashboard feature filters MSKU detail rows by current listing owner"
     console.error = originalError;
   }
 });
+
+test("sales dashboard feature reveals the MSKU detail panel", () => {
+  const scrollCalls = [];
+  const panel = {
+    scrollIntoView(options) {
+      scrollCalls.push(options);
+    },
+  };
+  const detailTable = {
+    closest(selector) {
+      return selector === ".detail-panel" ? panel : null;
+    },
+  };
+  const root = {
+    querySelector(selector) {
+      return selector === "#detail-table" ? detailTable : null;
+    },
+  };
+  const { revealMskuDetailPanel } = createSalesDashboardFeature({
+    root,
+    bind: () => null,
+    bindAll: () => [],
+    buildDashboardQuery: () => "startDate=2026-07-01&endDate=2026-07-06&currencyCode=ORIGINAL",
+  });
+
+  revealMskuDetailPanel();
+
+  assert.deepEqual(scrollCalls, [{ behavior: "smooth", block: "start" }]);
+});

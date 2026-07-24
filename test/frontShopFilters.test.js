@@ -171,6 +171,40 @@ test("front shop filters own sales filter control bindings", async () => {
   assert.equal(refreshCount, 4);
 });
 
+test("front owner filter change reveals MSKU detail after dashboard refresh", async () => {
+  const elements = {
+    "#front-country-filter": makeSelect([]),
+    "#front-shop-filter": makeSelect([]),
+    "#front-currency-filter": { value: "ORIGINAL" },
+    "#front-owner-filter": { value: "熊丹轩" },
+  };
+  const root = makeRoot(elements);
+  const bindCalls = [];
+  const order = [];
+  const filters = createFrontShopFilters({
+    root,
+    bind: (...args) => bindCalls.push(args),
+    fieldValue,
+    getFrontDateRange: () => ({ start: "2026-07-01", end: "2026-07-06" }),
+    normalizeCountryName,
+    onFiltersChange: async () => {
+      order.push("refresh");
+    },
+    onOwnerFilterChange: () => {
+      order.push("reveal");
+    },
+    selectedFilterValue,
+    selectedFilterValues,
+    setSelectOptions: () => {},
+    syncAllOptionSelection: () => {},
+  });
+
+  filters.setupFrontShopFilterControls();
+  await bindCalls[2][3]();
+
+  assert.deepEqual(order, ["refresh", "reveal"]);
+});
+
 test("front shop filters expose a quick owner dropdown for the three named leads", async () => {
   const quickFilter = makeQuickFilterElement();
   const ownerSelect = {

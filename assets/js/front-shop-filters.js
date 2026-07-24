@@ -32,6 +32,7 @@ export function createFrontShopFilters({
   getFrontDateRange,
   normalizeCountryName,
   onFiltersChange = async () => {},
+  onOwnerFilterChange = () => {},
   selectedFilterValue,
   selectedFilterValues,
   setSelectOptions,
@@ -42,6 +43,7 @@ export function createFrontShopFilters({
   if (typeof fieldValue !== "function") throw new Error("createFrontShopFilters requires fieldValue.");
   if (typeof getFrontDateRange !== "function") throw new Error("createFrontShopFilters requires getFrontDateRange.");
   if (typeof normalizeCountryName !== "function") throw new Error("createFrontShopFilters requires normalizeCountryName.");
+  if (typeof onOwnerFilterChange !== "function") throw new Error("createFrontShopFilters requires onOwnerFilterChange to be a function.");
   if (typeof selectedFilterValue !== "function") throw new Error("createFrontShopFilters requires selectedFilterValue.");
   if (typeof selectedFilterValues !== "function") throw new Error("createFrontShopFilters requires selectedFilterValues.");
   if (typeof setSelectOptions !== "function") throw new Error("createFrontShopFilters requires setSelectOptions.");
@@ -118,6 +120,7 @@ export function createFrontShopFilters({
   async function handleFrontOwnerFilterChange() {
     updateFrontOwnerQuickFilterState();
     await onFiltersChange();
+    onOwnerFilterChange();
   }
 
   function setFrontOwnerQuickFilterValue(value) {
