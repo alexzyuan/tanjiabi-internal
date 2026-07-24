@@ -368,19 +368,102 @@ async function defaultGetShipments(filters = {}, { adapter = getLingxingAdapter(
   return result.rows || [];
 }
 
+function isStaShipment(shipment = {}) {
+  return [shipment.isSta, shipment.raw?.is_sta, shipment.raw?.isSta]
+    .map((value) => firstText(value).toLowerCase())
+    .some((value) => ["1", "true", "yes"].includes(value));
+}
+
+function normalizeOrdinaryFbaBoxPayload(payload = {}, shipment = {}) {
+  const shipmentId = firstText(shipment.shipmentId, shipment.staShipmentId, "未知货件");
+  const boxList = payload.data?.box_list;
+  if (!Array.isArray(boxList)) {
+    throw new Error(`${shipmentId} 普通 FBA 装箱查询返回格式异常：缺少 data.box_list。`);
+  }
+
+  const shipmentPackingList = [];
+  for (const [boxIndex, sourceBox] of boxList.entries()) {
+    const boxCount = numberValue(sourceBox.box_num);
+    if (!Number.isInteger(boxCount) || boxCount <= 0) {
+      throw new Error(`${shipmentId} 普通 FBA 第 ${boxIndex + 1} 条装箱记录缺少有效箱数 box_num。`);
+    }
+    const productList = (Array.isArray(sourceBox.box_mskus) ? sourceBox.box_mskus : []).map((product) => ({
+      msku: firstText(product.msku),
+      fnsku: firstText(product.fulfillment_network_sku, product.fnsku),
+      sku: firstText(product.sku),
+      asin: firstText(product.asin),
+      quantityInBox: numberValue(product.quantity_in_case),
+    }));
+    for (let index = 0; index < boxCount; index += 1) {
+      const localBoxId = shipmentPackingList.length + 1;
+      shipmentPackingList.push({
+        localBoxId,
+        fbaBoxNumber: `${shipmentId}-${localBoxId}`,
+        weight: sourceBox.box_weight,
+        weightUnit: firstText(sourceBox.box_weight_unit),
+        length: sourceBox.box_length,
+        width: sourceBox.box_width,
+        height: sourceBox.box_height,
+        lengthUnit: firstText(sourceBox.box_dimensions_unit),
+        productList,
+      });
+    }
+  }
+
+  return {
+    data: {
+      shipmentList: [{
+        shipmentId,
+        shipmentPackingList,
+      }],
+    },
+  };
+}
+
 async function defaultFetchBoxPayloadsByShipmentId(shipments = [], { adapter = getLingxingAdapter() } = {}) {
   const map = new Map();
   for (const shipment of shipments) {
-    if (!shipment.inboundPlanId || !shipment.staShipmentId || !shipment.sid) {
-      throw new Error(`${shipment.shipmentId || shipment.staShipmentId || "未知货件"} 缺少查询装箱明细所需 inboundPlanId/staShipmentId/sid。`);
+    const shipmentId = firstText(shipment.shipmentId, shipment.staShipmentId, shipment.id, "未知货件");
+    const hasInboundPlanId = Boolean(firstText(shipment.inboundPlanId));
+    const hasStaShipmentId = Boolean(firstText(shipment.staShipmentId));
+    const staMetadataPresent = isStaShipment(shipment) || hasInboundPlanId || hasStaShipmentId;
+    let payload;
+    let source;
+    if (staMetadataPresent) {
+      if (!hasInboundPlanId || !hasStaShipmentId || !shipment.sid) {
+        throw new Error(`${shipmentId} 是 STA 货件，但缺少查询装箱明细所需 inboundPlanId/staShipmentId/sid。`);
+      }
+      payload = await adapter.fetchFbaCargoShipmentBoxes({
+        inboundPlanId: shipment.inboundPlanId,
+        shipmentIdList: [shipment.staShipmentId],
+        sid: shipment.sid,
+      });
+      source = "sta";
+    } else {
+      if (!shipment.shipmentId || !shipment.sid) {
+        throw new Error(`${shipmentId} 缺少查询普通 FBA 装箱明细所需 shipment_id/sid。`);
+      }
+      if (typeof adapter.fetchFbaShipmentBoxInfo !== "function") {
+        throw new Error(`${shipmentId} 当前领星适配器未提供普通 FBA 装箱查询接口 fetchFbaShipmentBoxInfo。`);
+      }
+      const ordinaryPayload = await adapter.fetchFbaShipmentBoxInfo({
+        shipment_id: shipment.shipmentId,
+        sid: shipment.sid,
+      });
+      payload = normalizeOrdinaryFbaBoxPayload(ordinaryPayload, shipment);
+      source = "ordinary";
     }
-    const payload = await adapter.fetchFbaCargoShipmentBoxes({
-      inboundPlanId: shipment.inboundPlanId,
-      shipmentIdList: [shipment.staShipmentId],
-      sid: shipment.sid,
-    });
     map.set(shipment.shipmentId, payload);
     if (shipment.staShipmentId) map.set(shipment.staShipmentId, payload);
+    const boxCount = payload.data?.shipmentList?.[0]?.shipmentPackingList?.length || 0;
+    console.info("[jiufang-fba-order] loaded shipment box details", {
+      shipmentId,
+      sid: shipment.sid,
+      source,
+      isSta: isStaShipment(shipment),
+      hasBoxDetails: boxCount > 0,
+      boxCount,
+    });
   }
   return map;
 }

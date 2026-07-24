@@ -170,6 +170,7 @@ export function normalizeFbaFreightShipments(payload, { sellersBySid = null, sel
       shipmentId,
       staShipmentId,
       inboundPlanId,
+      isSta: firstText(row.is_sta, row.isSta),
       shippedQuantity: shippedQuantityForRow(items, row),
       shipmentStatus: firstText(row.shipment_status, row.status, row.shipmentStatus),
       fulfillmentCenterCode: firstText(row.destination_fulfillment_center_id, row.warehouseId, row.wareHouseId),

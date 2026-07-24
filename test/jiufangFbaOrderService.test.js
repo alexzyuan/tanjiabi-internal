@@ -377,6 +377,100 @@ test("dryRunJiufangFbaOrders does not call Jiufang and reports duplicate stored 
   assert.equal(result.results[0].jiufangOrderNumber, "JF-EXISTS");
 });
 
+test("dryRunJiufangFbaOrders uses the ordinary FBA box endpoint when STA identifiers are absent", async () => {
+  const calls = [];
+  const ordinaryShipment = {
+    ...shipment,
+    sid: 11499,
+    shipmentId: "FBA15GFMLJX9",
+    staShipmentId: "",
+    inboundPlanId: "",
+    isSta: 0,
+    storeName: "xiamentanjia-AU",
+    country: "澳洲",
+    fulfillmentCenterCode: "XSY2",
+    shipToAddress: {
+      ...shipment.shipToAddress,
+      countryCode: "AU",
+    },
+  };
+  const result = await dryRunJiufangFbaOrders({
+    shipmentIds: [ordinaryShipment.shipmentId],
+    channelCode: "SEA-AU-01",
+    senderProfile,
+  }, {
+    getShipments: async () => [ordinaryShipment],
+    lingxingAdapter: {
+      async fetchFbaShipmentBoxInfo(params) {
+        calls.push(["ordinary", params]);
+        return {
+          data: {
+            box_list: [{
+              box_length: 40,
+              box_width: 30,
+              box_height: 20,
+              box_weight: 10,
+              box_dimensions_unit: "cm",
+              box_weight_unit: "kg",
+              box_num: 2,
+              box_mskus: [{
+                fulfillment_network_sku: "X004BLUE",
+                msku: "MSKU-BLUE",
+                quantity_in_case: 6,
+              }],
+            }],
+          },
+        };
+      },
+      async fetchFbaCargoShipmentBoxes() {
+        throw new Error("普通 FBA 不应调用 STA 装箱接口");
+      },
+    },
+    orderStore: {
+      async listByShipmentIds() {
+        return new Map();
+      },
+    },
+  });
+
+  assert.equal(result.results[0].status, "ready");
+  assert.equal(result.results[0].summary.boxCount, 2);
+  assert.deepEqual(calls, [["ordinary", { shipment_id: "FBA15GFMLJX9", sid: 11499 }]]);
+});
+
+test("dryRunJiufangFbaOrders reports missing ordinary FBA box details when box_list is empty", async () => {
+  const ordinaryShipment = {
+    ...shipment,
+    sid: 11499,
+    shipmentId: "FBA15GDW2RDK",
+    staShipmentId: "",
+    inboundPlanId: "",
+    isSta: 0,
+    storeName: "xiamentanjia-AU",
+    country: "澳洲",
+  };
+  const result = await dryRunJiufangFbaOrders({
+    shipmentIds: [ordinaryShipment.shipmentId],
+    channelCode: "SEA-AU-01",
+    senderProfile,
+  }, {
+    getShipments: async () => [ordinaryShipment],
+    lingxingAdapter: {
+      async fetchFbaShipmentBoxInfo() {
+        return { data: { box_list: [] } };
+      },
+    },
+    orderStore: {
+      async listByShipmentIds() {
+        return new Map();
+      },
+    },
+  });
+
+  assert.equal(result.results[0].status, "failed");
+  assert.deepEqual(result.results[0].missingFields, ["FBA15GDW2RDK 缺少装箱明细"]);
+});
+
 test("createJiufangFbaOrders requires explicit confirmation and saves returned Jiufang order number", async () => {
   await assert.rejects(
     () => createJiufangFbaOrders({
