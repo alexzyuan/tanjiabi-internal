@@ -60,4 +60,5 @@ test("MSKU detail includes uncovered actual rows for non-AU shops when budget ro
   assert.equal(rows[0].msku, "JMCA-ACTUAL");
   assert.equal(rows[0].listingOwner, "熊丹轩");
   assert.equal(rows[0].actualQuantity, 3);
+  assert.equal(rows[0].averageProfit, 8);
 });

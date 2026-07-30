@@ -1,5 +1,6 @@
 import { renderKpiProgress } from "../ui-components.js?v=20260707-ui-components-v1";
 import { FRONT_OWNER_QUICK_FILTERS } from "../front-shop-filters.js?v=20260724-sales-owner-detail-jump-v1";
+import { startDashboardLoadingOverlay } from "../dashboard-loader.js?v=20260730-loading-overlay-v1";
 
 export function createSalesDashboardFeature({
   root = globalThis.document,
@@ -276,6 +277,7 @@ export function createSalesDashboardFeature({
           <td>${formatActualMoney(row.fbaInventory || 0)}</td>
           <td>${formatActualMoney(row.quantityAchievement || 0)}%</td>
           <td>${formatActualMoney(row.orderProfit || 0)}</td>
+          <td>${formatActualMoney(row.averageProfit || 0)}</td>
           ${mskuRateCell("grossRate", row.grossRate)}
           ${mskuRateCell("refundRate", row.refundRate)}
           ${mskuRateCell("adFeeRate", row.adFeeRate)}
@@ -287,7 +289,7 @@ export function createSalesDashboardFeature({
           ${mskuRateCell("firstLegCostRate", row.firstLegCostRate)}
         </tr>
       `).join("")
-      : `<tr><td colspan="17">当前筛选周期暂无 MSKU 明细。</td></tr>`;
+      : `<tr><td colspan="18">当前筛选周期暂无 MSKU 明细。</td></tr>`;
   }
 
   function normalizeSiteCells(cells) {
@@ -454,7 +456,12 @@ export function createSalesDashboardFeature({
     detailPanel?.scrollIntoView?.({ behavior: "smooth", block: "start" });
   }
 
-  async function loadDashboard() {
+  async function loadDashboard({ loadingOverlay = {} } = {}) {
+    const hideLoadingOverlay = loadingOverlay === false ? () => {} : startDashboardLoadingOverlay({
+      root,
+      message: typeof loadingOverlay === "object" ? loadingOverlay.message || "正在加载销售复盘数据..." : "正在加载销售复盘数据...",
+      delayMs: typeof loadingOverlay === "object" ? loadingOverlay.delayMs : undefined,
+    });
     try {
       const params = new URLSearchParams(buildDashboardQuery());
       params.set("_", String(Date.now()));
@@ -474,6 +481,8 @@ export function createSalesDashboardFeature({
     } catch (error) {
       console.info("销售看板接口未返回真实数据。", error);
       return makeUnavailableDashboard(`销售看板接口失败：${error.message}`);
+    } finally {
+      hideLoadingOverlay();
     }
   }
 

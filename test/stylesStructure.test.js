@@ -627,6 +627,21 @@ test("application-wide UI overrides live in components, not shell or legacy css"
   });
 });
 
+test("shared dashboard loading overlay lives outside page css and legacy css", async () => {
+  const componentSource = await readFile(new URL("../assets/css/components/48-application-ui-overrides.css", import.meta.url), "utf8");
+  const legacySource = await readFile(new URL("../assets/css/legacy/current.css", import.meta.url), "utf8");
+  const pageSources = await Promise.all(
+    (await listCssFiles(new URL("../assets/css/pages/", import.meta.url))).map((fileUrl) => readFile(fileUrl, "utf8")),
+  );
+
+  assert.match(componentSource, /^\.dashboard-loading-overlay\s*\{/m);
+  assert.match(componentSource, /^\.dashboard-loading-spinner\s*\{/m);
+  assert.match(componentSource, /^@keyframes dashboard-loading-spin\s*\{/m);
+  assert.match(componentSource, /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{[\s\S]*?\.dashboard-loading-spinner\s*\{[\s\S]*?animation:\s*none/);
+  assert.equal(legacySource.includes("dashboard-loading-overlay"), false);
+  assert.equal(pageSources.some((source) => source.includes("dashboard-loading-overlay")), false);
+});
+
 test("shared form and multi-select controls live outside legacy css", async () => {
   const componentSource = await readFile(new URL("../assets/css/components/32-form-controls.css", import.meta.url), "utf8");
   const legacySource = await readFile(new URL("../assets/css/legacy/current.css", import.meta.url), "utf8");
@@ -848,7 +863,7 @@ test("sales review detail table declares stable table and column semantics", asy
   assert.match(tableMatch[0], /\bdata-table-key="sales-review-detail"/);
 
   const headers = Array.from(tableMatch[1].matchAll(/<th\b([^>]*)>/g), (match) => match[1]);
-  assert.equal(headers.length, 17);
+  assert.equal(headers.length, 18);
   headers.forEach((attributes, index) => {
     assert.match(attributes, /\bdata-column-key="/, `header ${index + 1} should declare data-column-key`);
     assert.match(attributes, /\bdata-column-kind="/, `header ${index + 1} should declare data-column-kind`);
@@ -856,6 +871,9 @@ test("sales review detail table declares stable table and column semantics", asy
   assert.match(headers[0], /\bdata-column-profile="short-name"/);
   assert.match(headers[1], /\bdata-column-profile="identifier"/);
   assert.match(headers[2], /\bdata-column-profile="name"/);
+  assert.match(tableMatch[0], /\bdata-column-key="averageProfit"[\s\S]*?平均利润/);
+  assert.match(tableMatch[0], /\bdata-column-key="fbaDeliveryFeeRate"[\s\S]*?FBA占比/);
+  assert.doesNotMatch(tableMatch[0], /FBA发货费占比/);
   headers.slice(3).forEach((attributes, index) => {
     assert.match(attributes, /\bdata-column-kind="number"/, `numeric header ${index + 4} should be marked as number`);
   });

@@ -33,6 +33,69 @@ test("sales dashboard feature loads the sales weekly endpoint with the dashboard
   assert.deepEqual(requests[0].options, { cache: "no-store", credentials: "same-origin" });
 });
 
+test("sales dashboard feature shows a full screen overlay while slow data is loading", async () => {
+  const bodyChildren = [];
+  const body = {
+    appendChild(element) {
+      bodyChildren.push(element);
+      element.parentNode = body;
+      return element;
+    },
+    removeChild(element) {
+      const index = bodyChildren.indexOf(element);
+      if (index >= 0) bodyChildren.splice(index, 1);
+      element.parentNode = null;
+      return element;
+    },
+  };
+  const root = {
+    body,
+    createElement(tagName) {
+      return {
+        tagName,
+        className: "",
+        textContent: "",
+        attributes: {},
+        children: [],
+        parentNode: null,
+        setAttribute(name, value) {
+          this.attributes[name] = String(value);
+        },
+        append(...children) {
+          this.children.push(...children);
+        },
+      };
+    },
+  };
+  let releaseFetch;
+  const pendingFetch = new Promise((resolve) => {
+    releaseFetch = resolve;
+  });
+  const { loadDashboard } = createFeature({
+    root,
+    fetchImpl: async () => {
+      await pendingFetch;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true, meta: { source: "mock" } }),
+      };
+    },
+  });
+
+  const dashboardPromise = loadDashboard({ loadingOverlay: { delayMs: 5 } });
+  assert.equal(bodyChildren.length, 0);
+  await new Promise((resolve) => setTimeout(resolve, 12));
+  assert.equal(bodyChildren.length, 1);
+  assert.equal(bodyChildren[0].className, "dashboard-loading-overlay");
+  assert.equal(bodyChildren[0].attributes["aria-label"], "正在加载销售复盘数据...");
+  releaseFetch();
+  const dashboard = await dashboardPromise;
+
+  assert.equal(dashboard.meta.source, "mock");
+  assert.equal(bodyChildren.length, 0);
+});
+
 test("sales dashboard feature redirects on an expired session and returns fallback data", async () => {
   let redirectCount = 0;
   const originalInfo = console.info;

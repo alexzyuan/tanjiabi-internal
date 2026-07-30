@@ -20,3 +20,44 @@ body:not(.login-body) .module-grid,
 body:not(.login-body) .payable-dashboard-grid {
   gap: 12px;
 }
+
+.dashboard-loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  gap: 12px;
+  background: var(--tj-overlay-backdrop);
+  color: var(--tj-text-inverse);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.dashboard-loading-spinner {
+  width: 38px;
+  height: 38px;
+  border: 3px solid var(--tj-surface-translucent);
+  border-top-color: var(--tj-text-inverse);
+  border-radius: 999px;
+  animation: dashboard-loading-spin 0.8s linear infinite;
+}
+
+.dashboard-loading-text {
+  padding: 8px 12px;
+  border-radius: var(--tj-control-radius);
+  background: var(--tj-surface-translucent);
+  color: var(--tj-text-strong);
+}
+
+@keyframes dashboard-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-loading-spinner {
+    animation: none;
+  }
+}

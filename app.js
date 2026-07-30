@@ -1,5 +1,5 @@
 import TanjiaUiUtils from "./assets/js/ui-utils.js?v=20260706-frontend-refactor-v41";
-import { loadDashboardSection } from "./assets/js/dashboard-loader.js?v=20260706-frontend-refactor-v2";
+import { loadDashboardSection } from "./assets/js/dashboard-loader.js?v=20260730-loading-overlay-v1";
 import { createFilterControls } from "./assets/js/filter-controls.js?v=20260707-frontend-refactor-v1";
 import {
   createFrontShopFilters,

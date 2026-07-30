@@ -861,6 +861,7 @@ export function buildBudgetMskuDetailRows(records = [], budgetTargets = {}, inve
       fbaInventory: Number(fbaInventory.toFixed(2)),
       quantityAchievement: budgetQuantity ? Number(((actualQuantity / budgetQuantity) * 100).toFixed(2)) : 0,
       orderProfit: Number(orderProfit.toFixed(2)),
+      averageProfit: actualQuantity ? Number((orderProfit / actualQuantity).toFixed(2)) : 0,
       grossRate: getRatioPercent(orderProfit, sales),
       refundRate: getRatioPercent(toNumber(actual.refund), sales),
       adFeeRate: getRatioPercent(adsCost, sales),
