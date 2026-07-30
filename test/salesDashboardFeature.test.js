@@ -33,8 +33,34 @@ test("sales dashboard feature loads the sales weekly endpoint with the dashboard
   assert.deepEqual(requests[0].options, { cache: "no-store", credentials: "same-origin" });
 });
 
-test("sales dashboard feature shows a full screen overlay while slow data is loading", async () => {
+test("sales dashboard feature shows a scoped content overlay while slow data is loading", async () => {
   const bodyChildren = [];
+  const contentChildren = [];
+  const content = {
+    classList: {
+      values: new Set(),
+      add(value) {
+        this.values.add(value);
+      },
+      remove(value) {
+        this.values.delete(value);
+      },
+      contains(value) {
+        return this.values.has(value);
+      },
+    },
+    appendChild(element) {
+      contentChildren.push(element);
+      element.parentNode = content;
+      return element;
+    },
+    removeChild(element) {
+      const index = contentChildren.indexOf(element);
+      if (index >= 0) contentChildren.splice(index, 1);
+      element.parentNode = null;
+      return element;
+    },
+  };
   const body = {
     appendChild(element) {
       bodyChildren.push(element);
@@ -50,6 +76,9 @@ test("sales dashboard feature shows a full screen overlay while slow data is loa
   };
   const root = {
     body,
+    querySelector(selector) {
+      return selector === "#sales-dashboard-content" ? content : null;
+    },
     createElement(tagName) {
       return {
         tagName,
@@ -86,14 +115,18 @@ test("sales dashboard feature shows a full screen overlay while slow data is loa
   const dashboardPromise = loadDashboard({ loadingOverlay: { delayMs: 5 } });
   assert.equal(bodyChildren.length, 0);
   await new Promise((resolve) => setTimeout(resolve, 12));
-  assert.equal(bodyChildren.length, 1);
-  assert.equal(bodyChildren[0].className, "dashboard-loading-overlay");
-  assert.equal(bodyChildren[0].attributes["aria-label"], "正在加载销售复盘数据...");
+  assert.equal(bodyChildren.length, 0);
+  assert.equal(contentChildren.length, 1);
+  assert.equal(contentChildren[0].className, "dashboard-loading-overlay");
+  assert.equal(contentChildren[0].attributes["aria-label"], "正在加载销售复盘数据...");
+  assert.equal(contentChildren[0].children[2].className, "dashboard-loading-progress");
   releaseFetch();
   const dashboard = await dashboardPromise;
 
   assert.equal(dashboard.meta.source, "mock");
   assert.equal(bodyChildren.length, 0);
+  assert.equal(contentChildren.length, 0);
+  assert.equal(content.classList.contains("dashboard-loading-target"), false);
 });
 
 test("sales dashboard feature redirects on an expired session and returns fallback data", async () => {

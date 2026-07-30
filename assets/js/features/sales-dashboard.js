@@ -459,6 +459,7 @@ export function createSalesDashboardFeature({
   async function loadDashboard({ loadingOverlay = {} } = {}) {
     const hideLoadingOverlay = loadingOverlay === false ? () => {} : startDashboardLoadingOverlay({
       root,
+      targetSelector: "#sales-dashboard-content",
       message: typeof loadingOverlay === "object" ? loadingOverlay.message || "正在加载销售复盘数据..." : "正在加载销售复盘数据...",
       delayMs: typeof loadingOverlay === "object" ? loadingOverlay.delayMs : undefined,
     });

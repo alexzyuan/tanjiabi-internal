@@ -115,10 +115,37 @@ test("loadDashboardSection passes parsed error payload to onError", async () => 
   assert.equal(dom.button.textContent, "刷新");
 });
 
-test("full screen loading overlay is visible while a dashboard request is pending", async () => {
+test("dashboard loading overlay is scoped to the requested content target", async () => {
   const { loadDashboardSection } = await loadModule();
   const dom = createDomHarness();
   const bodyChildren = [];
+  const targetChildren = [];
+  const target = {
+    children: targetChildren,
+    classList: {
+      values: new Set(),
+      add(value) {
+        this.values.add(value);
+      },
+      remove(value) {
+        this.values.delete(value);
+      },
+      contains(value) {
+        return this.values.has(value);
+      },
+    },
+    appendChild(element) {
+      targetChildren.push(element);
+      element.parentNode = target;
+      return element;
+    },
+    removeChild(element) {
+      const index = targetChildren.indexOf(element);
+      if (index >= 0) targetChildren.splice(index, 1);
+      element.parentNode = null;
+      return element;
+    },
+  };
   const body = {
     children: bodyChildren,
     appendChild(element) {
@@ -137,6 +164,10 @@ test("full screen loading overlay is visible while a dashboard request is pendin
   const root = {
     ...dom.root,
     body,
+    querySelector(selector) {
+      if (selector === "#content") return target;
+      return dom.root.querySelector(selector);
+    },
     createElement(tagName) {
       const element = {
         tagName,
@@ -160,14 +191,19 @@ test("full screen loading overlay is visible while a dashboard request is pendin
   const result = await loadDashboardSection({
     endpoint: "/api/slow",
     root,
-    loadingOverlay: { message: "正在加载销售复盘数据...", delayMs: 0 },
+    loadingOverlay: { targetSelector: "#content", message: "正在加载销售复盘数据...", delayMs: 0 },
     fetchApi: async () => {
-      assert.equal(bodyChildren.length, 1);
-      assert.equal(bodyChildren[0].className, "dashboard-loading-overlay");
-      assert.equal(bodyChildren[0].attributes.role, "status");
-      assert.equal(bodyChildren[0].attributes["aria-live"], "polite");
-      assert.equal(bodyChildren[0].attributes["aria-label"], "正在加载销售复盘数据...");
-      assert.match(bodyChildren[0].children[1].textContent, /正在加载销售复盘数据/);
+      assert.equal(bodyChildren.length, 0);
+      assert.equal(targetChildren.length, 1);
+      assert.equal(targetChildren[0].className, "dashboard-loading-overlay");
+      assert.equal(targetChildren[0].attributes.role, "status");
+      assert.equal(targetChildren[0].attributes["aria-live"], "polite");
+      assert.equal(targetChildren[0].attributes["aria-label"], "正在加载销售复盘数据...");
+      assert.equal(targetChildren[0].children[1].className, "dashboard-loading-copy");
+      assert.match(targetChildren[0].children[1].children[0].textContent, /正在加载销售复盘数据/);
+      assert.equal(targetChildren[0].children[2].className, "dashboard-loading-progress");
+      assert.equal(targetChildren[0].children[2].attributes.role, "progressbar");
+      assert.equal(target.classList.contains("dashboard-loading-target"), true);
       return {
         ok: true,
         status: 200,
@@ -180,7 +216,10 @@ test("full screen loading overlay is visible while a dashboard request is pendin
 
   assert.equal(result.ok, true);
   assert.equal(bodyChildren.length, 0);
+  assert.equal(targetChildren.length, 0);
+  assert.equal(target.classList.contains("dashboard-loading-target"), false);
   assert.ok(overlayElements.some((element) => element.className === "dashboard-loading-spinner"));
+  assert.ok(overlayElements.some((element) => element.className === "dashboard-loading-percent"));
 });
 
 test("loadDashboardSection shows the default overlay only when a request stays pending", async () => {

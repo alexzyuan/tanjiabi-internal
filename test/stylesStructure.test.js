@@ -636,8 +636,14 @@ test("shared dashboard loading overlay lives outside page css and legacy css", a
 
   assert.match(componentSource, /^\.dashboard-loading-overlay\s*\{/m);
   assert.match(componentSource, /^\.dashboard-loading-spinner\s*\{/m);
+  assert.match(componentSource, /^\.dashboard-loading-target\s*\{/m);
+  assert.match(componentSource, /^\.dashboard-loading-copy\s*\{/m);
+  assert.match(componentSource, /^\.dashboard-loading-progress\s*\{/m);
+  assert.match(componentSource, /^\.dashboard-loading-progress-bar\s*\{/m);
+  assert.match(componentSource, /^\.dashboard-loading-percent\s*\{/m);
   assert.match(componentSource, /^@keyframes dashboard-loading-spin\s*\{/m);
   assert.match(componentSource, /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{[\s\S]*?\.dashboard-loading-spinner\s*\{[\s\S]*?animation:\s*none/);
+  assert.doesNotMatch(componentSource.match(/^\.dashboard-loading-overlay\s*\{([\s\S]*?)\n\}/m)?.[1] || "", /position:\s*fixed/);
   assert.equal(legacySource.includes("dashboard-loading-overlay"), false);
   assert.equal(pageSources.some((source) => source.includes("dashboard-loading-overlay")), false);
 });
@@ -861,6 +867,7 @@ test("sales review detail table declares stable table and column semantics", asy
   const tableMatch = indexSource.match(/<table\b[^>]*id="sales-review-detail-table"[^>]*>([\s\S]*?)<\/table>/);
   assert.ok(tableMatch, "sales review detail table should have a stable id");
   assert.match(tableMatch[0], /\bdata-table-key="sales-review-detail"/);
+  assert.match(indexSource, /id="sales-dashboard-content"/);
 
   const headers = Array.from(tableMatch[1].matchAll(/<th\b([^>]*)>/g), (match) => match[1]);
   assert.equal(headers.length, 18);

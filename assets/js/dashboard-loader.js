@@ -8,11 +8,25 @@ function resolveElement(selectorOrElement, root = globalThis.document) {
   return typeof selectorOrElement === "string" ? root?.querySelector?.(selectorOrElement) : selectorOrElement;
 }
 
+function resolveOverlayTarget({ root = globalThis.document, target = null, targetSelector = "" } = {}) {
+  return resolveElement(target || targetSelector, root)
+    || root?.querySelector?.(".view.active .dashboard-loading-scope")
+    || root?.querySelector?.(".view.active")
+    || root?.body
+    || null;
+}
+
 export function showDashboardLoadingOverlay({
   root = globalThis.document,
+  target = null,
+  targetSelector = "",
   message = "数据加载中...",
 } = {}) {
-  if (!root?.body || typeof root.createElement !== "function") return () => {};
+  if (typeof root?.createElement !== "function") return () => {};
+  const overlayTarget = resolveOverlayTarget({ root, target, targetSelector });
+  if (!overlayTarget?.appendChild) return () => {};
+  overlayTarget.classList?.add?.("dashboard-loading-target");
+
   const overlay = root.createElement("div");
   overlay.className = "dashboard-loading-overlay";
   overlay.setAttribute("role", "status");
@@ -24,20 +38,54 @@ export function showDashboardLoadingOverlay({
   spinner.className = "dashboard-loading-spinner";
   spinner.setAttribute("aria-hidden", "true");
 
+  const copy = root.createElement("span");
+  copy.className = "dashboard-loading-copy";
+
   const text = root.createElement("span");
   text.className = "dashboard-loading-text";
   text.textContent = message;
+  copy.append(text);
 
-  overlay.append(spinner, text);
-  root.body.appendChild(overlay);
+  const progress = root.createElement("span");
+  progress.className = "dashboard-loading-progress";
+  progress.setAttribute("role", "progressbar");
+  progress.setAttribute("aria-valuemin", "0");
+  progress.setAttribute("aria-valuemax", "100");
+
+  const progressBar = root.createElement("span");
+  progressBar.className = "dashboard-loading-progress-bar";
+
+  const percent = root.createElement("span");
+  percent.className = "dashboard-loading-percent";
+  progress.append(progressBar, percent);
+
+  let progressValue = 8;
+  const renderProgress = () => {
+    const safeValue = Math.max(0, Math.min(100, Math.round(progressValue)));
+    progress.setAttribute("aria-valuenow", String(safeValue));
+    if (progressBar.style) progressBar.style.width = `${safeValue}%`;
+    percent.textContent = `${safeValue}%`;
+  };
+  renderProgress();
+  const progressTimer = globalThis.setInterval?.(() => {
+    progressValue = Math.min(92, progressValue + Math.max(1, Math.round((92 - progressValue) * 0.16)));
+    renderProgress();
+  }, 450) || null;
+
+  overlay.append(spinner, copy, progress);
+  overlayTarget.appendChild(overlay);
 
   return () => {
+    if (progressTimer !== null) globalThis.clearInterval?.(progressTimer);
     if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    overlayTarget.classList?.remove?.("dashboard-loading-target");
   };
 }
 
 export function startDashboardLoadingOverlay({
   root = globalThis.document,
+  target = null,
+  targetSelector = "",
   message = "数据加载中...",
   delayMs = 300,
 } = {}) {
@@ -46,7 +94,7 @@ export function startDashboardLoadingOverlay({
   let cleanedUp = false;
   const showOverlay = () => {
     if (cleanedUp) return;
-    hideOverlay = showDashboardLoadingOverlay({ root, message });
+    hideOverlay = showDashboardLoadingOverlay({ root, target, targetSelector, message });
   };
 
   if (Number(delayMs) <= 0) {
@@ -98,6 +146,8 @@ export async function loadDashboardSection({
   const restoreButton = setButtonBusy(button, busyText, restoreText || button?.textContent || "", buttonBusyOptions);
   const hideLoadingOverlay = loadingOverlay === false ? () => {} : startDashboardLoadingOverlay({
     root,
+    target: typeof loadingOverlay === "object" ? loadingOverlay.target : null,
+    targetSelector: typeof loadingOverlay === "object" ? loadingOverlay.targetSelector : "",
     message: typeof loadingOverlay === "object" ? loadingOverlay.message : undefined,
     delayMs: typeof loadingOverlay === "object" ? loadingOverlay.delayMs : undefined,
   });
