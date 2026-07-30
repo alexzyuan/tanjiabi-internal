@@ -111,6 +111,7 @@ Use `design.md` as the source of truth for UI decisions. For new or changed UI:
 3. Add feature-specific CSS only when it cannot reasonably be expressed as a shared component or token.
 4. Prefer improving a shared component class over adding page-only overrides.
 5. Document reusable visual patterns in `design.md` when they become part of the product language.
+6. When a module banner 后紧跟 .filters 或 .filter-toolbar, use the shared banner-adjacent sticky filter rule in `assets/css/components/30-surfaces-and-filters.css`; do not add page-specific sticky filter rules.
 
 ## Shared Table Widths
 

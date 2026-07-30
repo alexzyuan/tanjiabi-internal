@@ -1,6 +1,6 @@
 # 探嘉 BI 唯一设计规范
 
-更新时间：2026-07-17
+更新时间：2026-07-30
 
 本文档是探嘉 BI 的唯一主规范，合并了原 `DESIGN_SYSTEM.md` 与 `UI_DESIGN_README.md` 的有效内容。后续产品设计、UI 调整、前后端实现、权限、部署和验收都以本文档为准。
 
@@ -199,6 +199,7 @@ font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
 - 筛选栏容器使用白底、无外层实线框、`column-gap: 8px`、`row-gap: 8px`、`min-height: 48px`、`padding: 8px 10px`。输入框、下拉、日期按钮自身保留浅边框。
 - 控件高度统一用 `--tj-control-height-compact`，圆角用 `--tj-control-radius`，字号 13px，focus 使用 `--tj-focus-ring`。
 - `.filters` 默认字段宽度为 116px，日期字段 240px，搜索字段 220px；`.filter-toolbar` 默认字段宽度为 150px，日期字段 240px，直接 search 输入 180px，按钮宽度按内容自适应。
+- 当 .filters 或 .filter-toolbar 紧跟 .module-hero 后面时，筛选栏必须使用共享 sticky 规则固定在 topbar 下方；页面 CSS 不得为单个板块重复写 sticky 筛选栏规则。
 - checkbox 型筛选使用 `.checkbox-label`，由共享筛选栏规则统一控制字号、间距和 checkbox 尺寸。
 - 页面级 CSS 不允许重新定义 `.filters` / `.filter-toolbar` / `*-filters` / `*-toolbar` 的 `display`、`grid-template-*`、`gap`、`padding`、`border`、控件高度、控件边框、focus 样式或日期控件宽度。页面可以控制筛选栏是否显示，也可以调整所在业务面板、KPI、表格和图表布局。
 - 结构测试会扫描 page CSS，防止新页面继续用页面私有规则覆盖共享筛选栏基线。

@@ -321,6 +321,21 @@ test("shared filter toolbar styles live outside page css and use semantic tokens
   assert.equal(legacySource.includes(".budget-toolbar {"), false);
 });
 
+test("banner-adjacent filters use shared sticky positioning below the topbar", async () => {
+  const componentSource = await readFile(new URL("../assets/css/components/30-surfaces-and-filters.css", import.meta.url), "utf8");
+  const salesPageSource = await readFile(new URL("../assets/css/pages/22-sales-dashboard.css", import.meta.url), "utf8");
+  const designSource = await readFile(new URL("../design.md", import.meta.url), "utf8");
+  const agentsSource = await readFile(new URL("../AGENTS.md", import.meta.url), "utf8");
+
+  assert.match(componentSource, /^body:not\(\.login-body\) \.view > \.module-hero \+ :is\(\.filters, \.filter-toolbar\)\s*\{/m);
+  assert.match(componentSource, /^body:not\(\.login-body\) \.view > \.module-hero \+ :is\(\.filters, \.filter-toolbar\)\s*\{[\s\S]*?position:\s*sticky/m);
+  assert.match(componentSource, /^body:not\(\.login-body\) \.view > \.module-hero \+ :is\(\.filters, \.filter-toolbar\)\s*\{[\s\S]*?top:\s*var\(--tj-topbar-fixed-height\)/m);
+  assert.match(componentSource, /^body:not\(\.login-body\) \.view > \.module-hero \+ :is\(\.filters, \.filter-toolbar\)\s*\{[\s\S]*?z-index:\s*900/m);
+  assert.equal(/body\.sales-view #sales-global-filters\s*\{[\s\S]*?position:\s*sticky/m.test(salesPageSource), false);
+  assert.match(designSource, /当 \.filters 或 \.filter-toolbar 紧跟 \.module-hero 后面时/);
+  assert.match(agentsSource, /banner 后紧跟 \.filters 或 \.filter-toolbar/);
+});
+
 test("page css does not override shared filter toolbar baseline", async () => {
   const pageFiles = await listCssFiles(new URL("../assets/css/pages/", import.meta.url));
   const violations = [];
@@ -824,16 +839,6 @@ test("sales dashboard overview styles live in the page layer and use semantic to
   ].forEach((selectorPattern) => {
     assert.equal(selectorPattern.test(legacySource), false, `${selectorPattern} should be owned by assets/css/pages/22-sales-dashboard.css`);
   });
-});
-
-test("sales dashboard filters stay sticky below the topbar without redefining shared filter internals", async () => {
-  const pageSource = await readFile(new URL("../assets/css/pages/22-sales-dashboard.css", import.meta.url), "utf8");
-  const stickyBlock = pageSource.match(/^body\.sales-view #sales-global-filters\s*\{([^}]+)\}/m)?.[1] || "";
-
-  assert.match(pageSource, /^body\.sales-view #sales-global-filters\s*\{[\s\S]*?position:\s*sticky/m);
-  assert.match(pageSource, /^body\.sales-view #sales-global-filters\s*\{[\s\S]*?top:\s*var\(--tj-topbar-fixed-height\)/m);
-  assert.match(pageSource, /^body\.sales-view #sales-global-filters\s*\{[\s\S]*?z-index:\s*900/m);
-  assert.equal(/\b(?:display|grid-template(?:-columns|-rows)?|gap|padding|border|height|box-shadow)\s*:/m.test(stickyBlock), false);
 });
 
 test("sales review detail table declares stable table and column semantics", async () => {
