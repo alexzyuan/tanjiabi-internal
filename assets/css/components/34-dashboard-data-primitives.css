@@ -92,10 +92,11 @@ svg {
 }
 
 .sort-button {
-  width: 100%;
+  display: inline-block;
+  width: max-content;
   min-height: 0;
   height: auto;
-  padding: 0 18px 0 0;
+  padding: 0 12px 0 0;
   border: 0;
   background: transparent;
   color: inherit;
@@ -104,24 +105,40 @@ svg {
   cursor: pointer;
   box-shadow: none;
   position: relative;
+  overflow: visible;
+  white-space: nowrap;
 }
 
+.sort-button::before,
 .sort-button::after {
   content: "";
   position: absolute;
-  right: 0;
-  color: var(--tj-text-muted);
-  opacity: 0;
+  right: 1px;
+  width: 0;
+  height: 0;
+  opacity: 1;
 }
 
-.sort-button[data-direction="asc"]::after {
-  content: "↑";
-  opacity: 1;
+.sort-button::before {
+  top: calc(50% - 7px);
+  border-right: 4px solid transparent;
+  border-bottom: 5px solid var(--tj-border-control);
+  border-left: 4px solid transparent;
+}
+
+.sort-button::after {
+  top: calc(50% + 2px);
+  border-top: 5px solid var(--tj-border-control);
+  border-right: 4px solid transparent;
+  border-left: 4px solid transparent;
+}
+
+.sort-button[data-direction="asc"]::before {
+  border-bottom-color: var(--tj-action-blue);
 }
 
 .sort-button[data-direction="desc"]::after {
-  content: "↓";
-  opacity: 1;
+  border-top-color: var(--tj-action-blue);
 }
 
 .sort-button:focus-visible {

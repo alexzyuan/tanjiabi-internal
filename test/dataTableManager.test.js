@@ -246,6 +246,13 @@ test("smart width estimator clamps each semantic profile", () => {
   assert.equal(estimateSmartColumnWidth({ label: "操作", values: [], controlWidth: 248, measureText }).width, 264);
 });
 
+test("smart width estimator reserves space for sortable table headers", () => {
+  const measureText = (value) => Array.from(String(value)).reduce((width, character) => width + (/[^\u0000-\u00ff]/.test(character) ? 14 : 8), 0);
+
+  assert.equal(estimateSmartColumnWidth({ label: "实际销量", values: ["0"], measureText }).width, 76);
+  assert.equal(estimateSmartColumnWidth({ label: "实际销量", values: ["0"], sortControlWidth: 12, measureText }).width, 88);
+});
+
 test("data table manager infers numeric columns from BI headers", () => {
   [
     "销售额",

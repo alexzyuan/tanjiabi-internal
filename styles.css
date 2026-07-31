@@ -506,10 +506,12 @@ svg{width:100%;height:auto;display:block}
 .anomaly-list div{grid-template-columns:minmax(180px,240px) minmax(0,1fr) auto;align-items:center}
 .anomaly-list strong{color:var(--tj-text-strong)}
 .anomaly-list span{color:var(--tj-text-muted);line-height:1.45}
-.sort-button{width:100%;min-height:0;height:auto;padding:0 18px 0 0;border:0;background:transparent;color:inherit;font:inherit;text-align:inherit;cursor:pointer;box-shadow:none;position:relative}
-.sort-button::after{content:"";position:absolute;right:0;color:var(--tj-text-muted);opacity:0}
-.sort-button[data-direction="asc"]::after{content:"↑";opacity:1}
-.sort-button[data-direction="desc"]::after{content:"↓";opacity:1}
+.sort-button{display:inline-block;width:max-content;min-height:0;height:auto;padding:0 12px 0 0;border:0;background:transparent;color:inherit;font:inherit;text-align:inherit;cursor:pointer;box-shadow:none;position:relative;overflow:visible;white-space:nowrap}
+.sort-button::before,.sort-button::after{content:"";position:absolute;right:1px;width:0;height:0;opacity:1}
+.sort-button::before{top:calc(50% - 7px);border-right:4px solid transparent;border-bottom:5px solid var(--tj-border-control);border-left:4px solid transparent}
+.sort-button::after{top:calc(50%+2px);border-top:5px solid var(--tj-border-control);border-right:4px solid transparent;border-left:4px solid transparent}
+.sort-button[data-direction="asc"]::before{border-bottom-color:var(--tj-action-blue)}
+.sort-button[data-direction="desc"]::after{border-top-color:var(--tj-action-blue)}
 .sort-button:focus-visible{outline:0;box-shadow:var(--tj-focus-ring)}
 .image-placeholder{display:grid;place-items:center;color:var(--tj-text-muted);background:var(--tj-surface-muted)}
 .filter-toolbar{display:flex;flex-wrap:wrap;column-gap:8px;row-gap:8px;align-items:center;min-height:48px;margin-top:8px;padding:8px 10px;border:0;border-radius:var(--tj-control-radius);background:var(--tj-content-bg)}
