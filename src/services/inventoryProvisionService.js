@@ -201,6 +201,39 @@ function sellerCountryCode(seller) {
   return readFirst(seller, ["countryCode", "country_code", "region", "marketplaceCode"]) || "";
 }
 
+const marketplaceCurrencyCodes = Object.freeze({
+  AE: "AED",
+  AU: "AUD",
+  BR: "BRL",
+  CA: "CAD",
+  DE: "EUR",
+  ES: "EUR",
+  FR: "EUR",
+  GB: "GBP",
+  IN: "INR",
+  IT: "EUR",
+  JP: "JPY",
+  MX: "MXN",
+  NL: "EUR",
+  PL: "PLN",
+  SA: "SAR",
+  SE: "SEK",
+  SG: "SGD",
+  UK: "GBP",
+  US: "USD",
+});
+
+function sellerCurrencyCode(seller = {}, record = {}) {
+  const explicitCurrencyCode = String(readFirst(record, ["currency_code", "currencyCode", "currency"])
+    || readFirst(seller, ["currency_code", "currencyCode", "currency"])
+    || "").trim().toUpperCase();
+  if (explicitCurrencyCode) return explicitCurrencyCode;
+  const marketplace = String(sellerCountryCode(seller)
+    || readFirst(record, ["country_code", "countryCode", "region", "marketplace"])
+    || "").trim().toUpperCase();
+  return marketplaceCurrencyCodes[marketplace] || "";
+}
+
 function listingOwner(record) {
   const list = readFirst(record, ["asin_principal_list", "listing_principal_list", "principal_list", "principal_info", "principalInfo"]);
   const listText = readNameList(list);
@@ -367,6 +400,7 @@ function fbaTotalInventory(record) {
 function baseLingxingInventoryRow(record, sellersBySid) {
   const sid = toNumber(readFirst(record, ["sid", "seller_id", "sellerId", "store_id", "storeId"]));
   const seller = sellersBySid.get(sid) || {};
+  const countryCode = readFirst(record, ["country_code", "countryCode", "region", "marketplace"]) || sellerCountryCode(seller) || "";
   const purchaseCost = toNumber(readFirst(record, [
     "unit_purchase_cost",
     "purchase_cost",
@@ -418,7 +452,8 @@ function baseLingxingInventoryRow(record, sellersBySid) {
   return {
     sid,
     sellerId: readFirst(seller, ["seller_id", "sellerId"]) || readFirst(record, ["seller_id", "sellerId"]) || "",
-    countryCode: readFirst(record, ["country_code", "countryCode", "region", "marketplace"]) || "",
+    countryCode,
+    currencyCode: sellerCurrencyCode(seller, record),
     storeName: sellerName(seller) || readFirst(record, ["store_name", "storeName", "seller_name", "sellerName"]) || `${sid || "-"}`,
     country: sellerCountry(seller) || readFirst(record, ["country", "country_name", "countryName", "marketplace"]) || "",
     msku: readFirst(record, ["msku", "seller_sku", "sellerSku", "fnsku", "sku"]) || "",

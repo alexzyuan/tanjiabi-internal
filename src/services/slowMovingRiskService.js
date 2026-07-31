@@ -252,10 +252,12 @@ export function filterSlowMovingRiskRows(rows = [], filters = {}) {
   const stores = selected(filters.storeName);
   const owners = selected(filters.listingOwner);
   const levels = selected(filters.riskLevel);
+  const currencies = selected(filters.currencyCode);
   return rows.filter((row) => (!countries.length || countries.includes(row.country))
     && (!stores.length || stores.includes(row.storeName))
     && (!owners.length || owners.includes(row.listingOwner))
-    && (!levels.length || levels.includes(row.riskLevel)));
+    && (!levels.length || levels.includes(row.riskLevel))
+    && (!currencies.length || currencies.includes(row.currencyCode)));
 }
 
 export function buildSlowMovingRiskDashboard({
@@ -285,6 +287,7 @@ export function buildSlowMovingRiskDashboard({
       countryOptions: [...new Set(allRows.map((row) => row.country).filter(Boolean))].sort().map((name) => ({ name })),
       storeOptions: [...new Set(allRows.map((row) => row.storeName).filter(Boolean))].sort().map((name) => ({ name })),
       ownerOptions: [...new Set(allRows.map((row) => row.listingOwner).filter(Boolean))].sort().map((name) => ({ name })),
+      currencyOptions: [...new Set(allRows.map((row) => row.currencyCode).filter(Boolean))].sort().map((name) => ({ name })),
     },
     meta: { generatedAt, dataSources },
   };
@@ -319,7 +322,7 @@ export function createSlowMovingRiskService({
         startDate: dateRange.startDate,
         endDate: dateRange.endDate,
         sids: (inventory.sellers || []).map((seller) => seller.sid),
-        currencyCode: "ORIGINAL",
+        currencyCode: "CNY",
       });
     } catch (error) {
       sourceError("orderProfit", error);

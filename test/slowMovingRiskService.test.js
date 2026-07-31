@@ -127,6 +127,34 @@ test("getDashboard aggregates FBA age buckets and order-profit advertising field
   assert.equal(dashboard.meta.dataSources.orderProfit.status, "success");
 });
 
+test("getDashboard requests CNY profit data and filters by store original currency", async () => {
+  let orderProfitRequest = null;
+  const service = createSlowMovingRiskService({
+    loadInventoryRows: async () => ({
+      rows: [
+        { sid: 1, storeName: "tandanbo-US", country: "美国", currencyCode: "USD", msku: "US-SKU", quantity: 10, ageDays: 120, totalInventory: 10, unitCost: 10, historicalDaysOfSupply: 130 },
+        { sid: 2, storeName: "tandanbo-CA", country: "加拿大", currencyCode: "CAD", msku: "CA-SKU", quantity: 10, ageDays: 120, totalInventory: 10, unitCost: 10, historicalDaysOfSupply: 130 },
+      ],
+      sellers: [{ sid: 1 }, { sid: 2 }],
+    }),
+    fetchOrderProfit: async (request) => {
+      orderProfitRequest = request;
+      return [];
+    },
+    normalizeRecordList: (records) => records,
+    normalizeOrderProfit: (records) => records,
+  });
+
+  const dashboard = await service.getDashboard({
+    dateRange: { startDate: "2026-07-04", endDate: "2026-08-02", reportKey: "2026-08-02" },
+    filters: { currencyCode: "USD" },
+  });
+
+  assert.equal(orderProfitRequest.currencyCode, "CNY");
+  assert.deepEqual(dashboard.rows.map((row) => row.msku), ["US-SKU"]);
+  assert.deepEqual(dashboard.filters.currencyOptions, [{ name: "CAD" }, { name: "USD" }]);
+});
+
 test("getSlowMovingRiskDashboard composes adapter defaults through explicit dependencies", async () => {
   const dashboard = await getSlowMovingRiskDashboard({
     dateRange: { startDate: "2026-07-04", endDate: "2026-08-02", reportKey: "2026-08-02" },

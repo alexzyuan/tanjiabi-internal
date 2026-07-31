@@ -26,6 +26,7 @@ test("loadFbaInventoryDetailRows normalizes FBA inventory rows for an injected s
   assert.equal(result.rows[0].totalInventory, 646);
   assert.equal(result.rows[0].inventoryAmount, 14728.8);
   assert.equal(result.rows[0].historicalDaysOfSupply, 240);
+  assert.equal(result.rows[0].currencyCode, "USD");
 });
 
 test("inventory provision landed cost rows calculate provision amount by aging bucket", async () => {
