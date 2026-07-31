@@ -637,6 +637,12 @@ test("application-wide UI overrides live in components, not shell or legacy css"
   });
 });
 
+test("active table sort state does not expand header icon spacing", async () => {
+  const componentSource = await readFile(new URL("../assets/css/components/48-application-ui-overrides.css", import.meta.url), "utf8");
+
+  assert.equal(/th\.table-sort-active\s*\{[^}]*padding-right\s*:/s.test(componentSource), false);
+});
+
 test("shared dashboard loading overlay lives outside page css and legacy css", async () => {
   const componentSource = await readFile(new URL("../assets/css/components/48-application-ui-overrides.css", import.meta.url), "utf8");
   const legacySource = await readFile(new URL("../assets/css/legacy/current.css", import.meta.url), "utf8");

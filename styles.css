@@ -595,7 +595,6 @@ body:not(.login-body) .table-select:focus-visible,.table-action:focus-visible{ou
 .table-action:hover{background:var(--tj-table-row-hover-bg)}
 .table-action.danger{color:var(--tj-tone-danger-strong)}
 .table-actions{white-space:nowrap}
-body:not(.login-body) table.data-table th.table-sort-active{padding-right:24px}
 body:not(.login-body) table.data-table th.table-sort-active .sort-button{color:var(--tj-action-blue);font-weight:900}
 body:not(.login-body) .table-wrap{border-color:var(--tj-border-control);background:var(--tj-content-bg)}
 body:not(.login-body) .module-grid,body:not(.login-body) .payable-dashboard-grid{gap:12px}

@@ -1,8 +1,4 @@
 /* Application-wide component density and surface overrides. */
-body:not(.login-body) table.data-table th.table-sort-active {
-  padding-right: 24px;
-}
-
 body:not(.login-body) table.data-table th.table-sort-active .sort-button {
   color: var(--tj-action-blue);
   font-weight: 900;
