@@ -29,6 +29,24 @@ test("loadFbaInventoryDetailRows normalizes FBA inventory rows for an injected s
   assert.equal(result.rows[0].currencyCode, "USD");
 });
 
+test("loadFbaInventoryDetailRows derives the known store currency when Lingxing omits countryCode", async () => {
+  const { loadFbaInventoryDetailRows } = await import("../src/services/inventoryProvisionService.js");
+  const result = await loadFbaInventoryDetailRows({
+    sellersOverride: [{ sid: 8708, name: "xiamentanjia-US", country: "美国" }],
+    adapter: {
+      fetchAllFbaInventoryDetails: async () => [{
+        sid: 8708,
+        seller_sku: "JM-DGC-BLUE",
+        available_quantity: 118,
+        inv_age_91_to_180_days: 118,
+      }],
+    },
+  });
+
+  assert.equal(result.rows[0].countryCode, "US");
+  assert.equal(result.rows[0].currencyCode, "USD");
+});
+
 test("inventory provision landed cost rows calculate provision amount by aging bucket", async () => {
   const { inventoryProvisionTestUtils } = await import("../src/services/inventoryProvisionService.js");
   assert.ok(inventoryProvisionTestUtils, "inventory provision test utilities must be exported");

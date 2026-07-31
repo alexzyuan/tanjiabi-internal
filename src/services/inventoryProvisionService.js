@@ -1,5 +1,6 @@
 import { getConfig } from "../config/index.js";
 import { getLingxingAdapter, filterCoreSellers } from "../adapters/lingxingAdapter.js";
+import { findLingxingShop } from "../data/lingxingShopMap.js";
 import { getPacificTodayText } from "../utils/pacificDate.js";
 import {
   listInventoryProvisionSnapshots,
@@ -223,15 +224,25 @@ const marketplaceCurrencyCodes = Object.freeze({
   US: "USD",
 });
 
+function sellerMarketplaceCode(seller = {}, record = {}) {
+  const directMarketplace = String(sellerCountryCode(seller)
+    || readFirst(record, ["country_code", "countryCode", "region", "marketplace"])
+    || "").trim().toUpperCase();
+  if (marketplaceCurrencyCodes[directMarketplace]) return directMarketplace;
+  const shop = findLingxingShop(sellerName(seller)
+    || readFirst(record, ["store_name", "storeName", "seller_name", "sellerName"])
+    || readFirst(seller, ["sid", "seller_id", "sellerId"])
+    || readFirst(record, ["sid", "seller_id", "sellerId"]));
+  const match = String(shop?.name || "").match(/-([A-Z]{2})$/iu);
+  return match?.[1] || "";
+}
+
 function sellerCurrencyCode(seller = {}, record = {}) {
   const explicitCurrencyCode = String(readFirst(record, ["currency_code", "currencyCode", "currency"])
     || readFirst(seller, ["currency_code", "currencyCode", "currency"])
     || "").trim().toUpperCase();
   if (explicitCurrencyCode) return explicitCurrencyCode;
-  const marketplace = String(sellerCountryCode(seller)
-    || readFirst(record, ["country_code", "countryCode", "region", "marketplace"])
-    || "").trim().toUpperCase();
-  return marketplaceCurrencyCodes[marketplace] || "";
+  return marketplaceCurrencyCodes[sellerMarketplaceCode(seller, record)] || "";
 }
 
 function listingOwner(record) {
@@ -400,7 +411,7 @@ function fbaTotalInventory(record) {
 function baseLingxingInventoryRow(record, sellersBySid) {
   const sid = toNumber(readFirst(record, ["sid", "seller_id", "sellerId", "store_id", "storeId"]));
   const seller = sellersBySid.get(sid) || {};
-  const countryCode = readFirst(record, ["country_code", "countryCode", "region", "marketplace"]) || sellerCountryCode(seller) || "";
+  const countryCode = sellerMarketplaceCode(seller, record);
   const purchaseCost = toNumber(readFirst(record, [
     "unit_purchase_cost",
     "purchase_cost",
