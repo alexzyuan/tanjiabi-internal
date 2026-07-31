@@ -23,6 +23,9 @@ export function createFbaMskuFeature({
 
   let fbaMskuOptions = [];
   let fbaMskuLoadTimer = null;
+  let fbaMskuDiagnosticTimer = null;
+  let fbaMskuDiagnostics = null;
+  let fbaMskuDiagnosticRequestId = 0;
   let fbaMskuLoading = false;
   let fbaLastMskuLoadKey = "";
 
@@ -44,6 +47,28 @@ export function createFbaMskuFeature({
       if (matchMode === "exact") return fields.some((field) => field === keyword);
       return fields.some((field) => field.includes(keyword));
     }).slice(0, 30);
+  }
+
+  function buildFbaMskuParams({ includeQuery = false } = {}) {
+    const selectedSids = getSelectedFbaShops().map((shop) => shop.sid).filter(Boolean);
+    const params = new URLSearchParams();
+    if (selectedSids.length) params.set("sids", selectedSids.join(","));
+    if (includeQuery) {
+      const keyword = fbaValue("#fba-msku").trim();
+      if (keyword) params.set("q", keyword);
+      params.set("match", fbaValue("#fba-msku-match") || "fuzzy");
+    }
+    return params;
+  }
+
+  function fbaMskuDiagnosticHtml() {
+    const message = fbaMskuDiagnostics?.message || "";
+    if (!message) return "";
+    const items = Array.isArray(fbaMskuDiagnostics.unpairedListings) ? fbaMskuDiagnostics.unpairedListings : [];
+    const sample = items.length
+      ? `<br /><small>${items.slice(0, 3).map((item) => `${escapeHtml(item.msku || "-")} · ${escapeHtml(item.displayName || item.shopName || "-")}${item.asin ? ` · ${escapeHtml(item.asin)}` : ""}`).join("<br />")}</small>`
+      : "";
+    return `<div class="search-result-item">${escapeHtml(message)}${sample}</div>`;
   }
 
   function setFbaMskuSuggestionsOpen(open) {
@@ -73,7 +98,7 @@ export function createFbaMskuFeature({
             ${escapeHtml(item.displayName || item.shopName || "-")}${item.asin ? ` · ${escapeHtml(item.asin)}` : ""}${item.title ? ` · ${escapeHtml(item.title)}` : ""}${item.packQuantity ? ` · 装箱${formatNumber(item.packQuantity)}` : ""}${item.boxSource && item.boxSource !== "missing" ? ` · 箱规${item.boxSource === "erp" ? "ERP" : "模板"}` : " · 箱规待补"}
           </button>
         `).join("")
-      : `<div class="search-result-item">没有匹配候选，可直接手填准确 MSKU。</div>`;
+      : fbaMskuDiagnosticHtml() || `<div class="search-result-item">没有匹配候选。若该 MSKU 在领星 Listing 存在，请检查是否已配对 ERP 产品资料，并维护装箱数量、外箱规格和外箱重量。</div>`;
     setFbaMskuSuggestionsOpen(true);
   }
 
@@ -82,7 +107,12 @@ export function createFbaMskuFeature({
     const results = query("#fba-msku-results");
     if (!results) return;
     if (!fbaMskuOptions.length) {
-      results.textContent = "正在准备 MSKU 候选；如果暂时未加载到，也可以直接在输入框手填准确 MSKU。";
+      const diagnosticHtml = fbaMskuDiagnosticHtml();
+      if (diagnosticHtml) {
+        results.innerHTML = diagnosticHtml;
+      } else {
+        results.textContent = "正在准备 MSKU 候选；如果暂时未加载到，也可以直接在输入框手填准确 MSKU。";
+      }
       return;
     }
     results.innerHTML = items.length
@@ -91,7 +121,7 @@ export function createFbaMskuFeature({
             ${escapeHtml(item.msku)} · ${escapeHtml(item.displayName || item.shopName || "-")}${item.asin ? ` · ${escapeHtml(item.asin)}` : ""}${item.packQuantity ? ` · 装箱${formatNumber(item.packQuantity)}` : ""}${item.boxSource && item.boxSource !== "missing" ? ` · 箱规${item.boxSource === "erp" ? "ERP" : "模板"}` : " · 箱规待补"}
           </button>
         `).join("")
-      : "没有匹配的 MSKU。你仍然可以直接手填准确 MSKU 后测试刷仓。";
+      : fbaMskuDiagnosticHtml() || "没有匹配的 MSKU。若领星 Listing 里存在该 MSKU，请先确认 Listing 已配对 ERP 产品资料，并维护装箱数量、外箱规格和外箱重量。";
   }
 
   function getFbaMskuLoadKey() {
@@ -116,15 +146,14 @@ export function createFbaMskuFeature({
     const button = query("#fba-load-mskus-button");
     const restoreButton = setButtonBusy(button, "刷新中", "刷新MSKU", { disable: false });
     fbaMskuLoading = true;
-    const selectedSids = getSelectedFbaShops().map((shop) => shop.sid).filter(Boolean);
-    const params = new URLSearchParams();
-    if (selectedSids.length) params.set("sids", selectedSids.join(","));
+    const params = buildFbaMskuParams();
     setText("#fba-status", "正在自动加载 MSKU", root);
 
     try {
       const response = await fetchImpl(`/api/fba/mskus?${params.toString()}`);
       const data = await response.json();
       fbaMskuOptions = data.items || [];
+      fbaMskuDiagnostics = data.diagnostics || null;
       fbaLastMskuLoadKey = loadKey;
       renderFbaMskuOptions();
       syncFbaQuantityFields();
@@ -141,6 +170,37 @@ export function createFbaMskuFeature({
       fbaMskuLoading = false;
       restoreButton();
     }
+  }
+
+  function scheduleFbaMskuDiagnosticLookup(items = filterLocalFbaMskus()) {
+    if (fbaMskuDiagnosticTimer) clearTimeout(fbaMskuDiagnosticTimer);
+    const keyword = fbaValue("#fba-msku").trim();
+    if (!keyword || items.length) {
+      fbaMskuDiagnostics = null;
+      return;
+    }
+    fbaMskuDiagnosticTimer = setTimeout(async () => {
+      const requestId = fbaMskuDiagnosticRequestId + 1;
+      fbaMskuDiagnosticRequestId = requestId;
+      try {
+        const params = buildFbaMskuParams({ includeQuery: true });
+        const response = await fetchImpl(`/api/fba/mskus?${params.toString()}`);
+        const data = await response.json().catch(() => ({}));
+        if (requestId !== fbaMskuDiagnosticRequestId) return;
+        if (!response.ok || data.ok === false) throw new Error(data.error || `API ${response.status}`);
+        fbaMskuDiagnostics = data.diagnostics || null;
+        renderFbaMskuOptions(filterLocalFbaMskus());
+        renderFbaMskuSuggestions(filterLocalFbaMskus(), true);
+      } catch (error) {
+        if (requestId !== fbaMskuDiagnosticRequestId) return;
+        fbaMskuDiagnostics = {
+          message: `MSKU 诊断查询失败：${error.message || error}`,
+          unpairedListings: [],
+          errors: [error.message || String(error)],
+        };
+        renderFbaMskuOptions(filterLocalFbaMskus());
+      }
+    }, 250);
   }
 
   function renderFbaWarehouseOptions() {
@@ -251,6 +311,7 @@ export function createFbaMskuFeature({
     renderFbaWarehouseOptions();
     setFbaShopMenuOpen(false);
     fbaMskuOptions = [];
+    fbaMskuDiagnostics = null;
     fbaLastMskuLoadKey = "";
     setFbaBoxSpecFields({}, "");
     renderFbaMskuOptions();
@@ -275,9 +336,11 @@ export function createFbaMskuFeature({
     });
     bind(root, "#fba-load-mskus-button", "click", () => loadFbaMskus({ force: true }));
     bind(root, "#fba-msku", "input", () => {
+      fbaMskuDiagnostics = null;
       const items = filterLocalFbaMskus();
       renderFbaMskuOptions(items);
       renderFbaMskuSuggestions(items, true);
+      scheduleFbaMskuDiagnosticLookup(items);
       syncFbaQuantityFields();
     });
     bind(root, "#fba-msku", "focus", () => renderFbaMskuSuggestions(filterLocalFbaMskus(), true));

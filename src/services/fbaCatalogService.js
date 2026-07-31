@@ -255,6 +255,64 @@ function filterMskus(items, keyword, matchMode) {
   });
 }
 
+function emptyDiagnostics() {
+  return {
+    message: "",
+    unpairedListings: [],
+    errors: [],
+  };
+}
+
+function diagnosticMessage(unpairedListings = []) {
+  if (!unpairedListings.length) return "";
+  const samples = unpairedListings
+    .slice(0, 3)
+    .map((item) => `${item.msku}（${item.displayName || item.shopName}）`)
+    .join("、");
+  return `领星 Listing 中存在 ${samples}，但未配对 ERP 产品资料。请先在领星把 Listing 关联到产品管理，并维护装箱数量、外箱规格和外箱重量后再刷新 MSKU。`;
+}
+
+async function diagnoseUnpairedListings(adapter, shops, keyword, matchMode) {
+  const diagnostics = emptyDiagnostics();
+  const value = normalizeText(keyword);
+  if (!value) return diagnostics;
+
+  for (const shop of shops) {
+    const baseParams = {
+      is_delete: 0,
+      search_field: "seller_sku",
+      search_value: [value],
+      exact_search: matchMode === "exact" ? 1 : 0,
+      sid: shop.sid,
+    };
+    try {
+      const records = await fetchLingxingListingRecords(adapter, baseParams);
+      const matches = filterMskus(
+        uniqueMskus(records.map((record) => normalizeMskuRecord(record, shop)).filter(Boolean)),
+        value,
+        matchMode,
+      );
+      diagnostics.unpairedListings.push(...matches.map((item) => ({
+        sid: item.sid,
+        shopName: item.shopName,
+        displayName: item.displayName,
+        country: item.country,
+        msku: item.msku,
+        asin: item.asin,
+        sku: item.sku,
+        title: item.title,
+        reason: "listing_not_paired_to_erp_product",
+      })));
+    } catch (error) {
+      diagnostics.errors.push(`${shop.name}: ${error.message}`);
+    }
+  }
+
+  diagnostics.unpairedListings = uniqueMskus(diagnostics.unpairedListings);
+  diagnostics.message = diagnosticMessage(diagnostics.unpairedListings);
+  return diagnostics;
+}
+
 function uniqueMskus(items) {
   const seen = new Set();
   return items.filter((item) => {
@@ -311,21 +369,25 @@ export function getFbaShopOptions() {
   }));
 }
 
-export async function searchFbaMskus({ sids = [], q = "", matchMode = "fuzzy" } = {}) {
+export async function searchFbaMskus({ sids = [], q = "", matchMode = "fuzzy", adapter = getLingxingAdapter() } = {}) {
   const coreShops = filterCoreSellers(lingxingShopMap);
   const selectedSids = Array.isArray(sids) && sids.length ? sids.map(Number).filter(Boolean) : coreShops.map((shop) => shop.sid);
   const shops = coreShops.filter((shop) => selectedSids.includes(Number(shop.sid)));
-  const adapter = getLingxingAdapter();
   const settled = await Promise.allSettled(shops.map((shop) => fetchMskusForShop(adapter, shop)));
   const errors = settled
     .map((result, index) => (result.status === "rejected" ? `${shops[index].name}: ${result.reason.message}` : ""))
     .filter(Boolean);
   const items = uniqueMskus(settled.flatMap((result) => (result.status === "fulfilled" ? result.value : [])));
+  const filteredItems = filterMskus(items, q, matchMode).slice(0, 200);
+  const diagnostics = filteredItems.length || !normalizeText(q)
+    ? emptyDiagnostics()
+    : await diagnoseUnpairedListings(adapter, shops, q, matchMode);
   return {
     ok: errors.length === 0,
     errors,
     count: items.length,
-    items: filterMskus(items, q, matchMode).slice(0, 200),
+    items: filteredItems,
+    diagnostics,
   };
 }
 
