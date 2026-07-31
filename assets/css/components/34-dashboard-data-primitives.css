@@ -107,11 +107,11 @@ svg {
 }
 
 .sort-button::after {
-  content: "↓";
+  content: "";
   position: absolute;
   right: 0;
   color: var(--tj-text-muted);
-  opacity: 0.45;
+  opacity: 0;
 }
 
 .sort-button[data-direction="asc"]::after {

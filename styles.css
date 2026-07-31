@@ -507,7 +507,7 @@ svg{width:100%;height:auto;display:block}
 .anomaly-list strong{color:var(--tj-text-strong)}
 .anomaly-list span{color:var(--tj-text-muted);line-height:1.45}
 .sort-button{width:100%;min-height:0;height:auto;padding:0 18px 0 0;border:0;background:transparent;color:inherit;font:inherit;text-align:inherit;cursor:pointer;box-shadow:none;position:relative}
-.sort-button::after{content:"↓";position:absolute;right:0;color:var(--tj-text-muted);opacity:0.45}
+.sort-button::after{content:"";position:absolute;right:0;color:var(--tj-text-muted);opacity:0}
 .sort-button[data-direction="asc"]::after{content:"↑";opacity:1}
 .sort-button[data-direction="desc"]::after{content:"↓";opacity:1}
 .sort-button:focus-visible{outline:0;box-shadow:var(--tj-focus-ring)}
@@ -571,7 +571,7 @@ table.data-table :is(th,td)[data-width-profile="identifier"],table.data-table :i
 table.data-table :is(th,td)[data-width-profile="narrative"]{overflow-wrap:anywhere;white-space:normal}
 table.data-table--middle :is(th,td){vertical-align:middle}
 .data-table-wrap--detail{max-height:calc(100vh - 320px);min-height:320px;position:relative;isolation:isolate}
-table.data-table--detail th{background:var(--tj-surface-muted);box-shadow:0 1px 0 var(--tj-border-subtle)}
+table.data-table--detail th{background:var(--tj-action-blue-soft);box-shadow:0 1px 0 var(--tj-border-subtle)}
 table.data-table--detail th:not(:last-child)::after{content:"";position:absolute;top:9px;right:0;bottom:9px;width:1px;background:var(--tj-border-control)}
 table.data-table--detail .sort-button{justify-content:flex-start;text-align:left;white-space:nowrap}
 .table-state-row td,.table-state-cell{height:54px;padding:14px 16px;text-align:left;color:var(--tj-text-muted);background:var(--tj-content-bg)}
@@ -593,7 +593,7 @@ body:not(.login-body) .table-select:focus-visible,.table-action:focus-visible{ou
 .table-action.danger{color:var(--tj-tone-danger-strong)}
 .table-actions{white-space:nowrap}
 body:not(.login-body) table.data-table th.table-sort-active{padding-right:24px}
-body:not(.login-body) table.data-table th.table-sort-active::after{position:absolute;right:8px;color:var(--tj-action-blue);font-size:12px;font-weight:900}
+body:not(.login-body) table.data-table th.table-sort-active .sort-button{color:var(--tj-action-blue);font-weight:900}
 body:not(.login-body) .table-wrap{border-color:var(--tj-border-control);background:var(--tj-content-bg)}
 body:not(.login-body) .module-grid,body:not(.login-body) .payable-dashboard-grid{gap:12px}
 .dashboard-loading-target{position:relative}
