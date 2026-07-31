@@ -86,9 +86,9 @@ test("slow-moving-risk live route forwards the confirmed filter fields", async (
 
   await route.handler({
     res: {},
-    url: new URL("http://localhost/api/dashboard/slow-moving-risk/live?country=US&storeName=tandanbo-US&listingOwner=Max&riskLevel=%E9%AB%98%E9%A3%8E%E9%99%A9"),
+    url: new URL("http://localhost/api/dashboard/slow-moving-risk/live?country=US&storeName=tandanbo-US&listingOwner=Max&riskLevel=%E9%AB%98%E9%A3%8E%E9%99%A9&currencyCode=USD"),
   });
 
-  assert.deepEqual(received, { filters: { country: "US", storeName: "tandanbo-US", listingOwner: "Max", riskLevel: "高风险" } });
+  assert.deepEqual(received, { filters: { country: "US", storeName: "tandanbo-US", listingOwner: "Max", riskLevel: "高风险", currencyCode: "USD" } });
   assert.deepEqual(payload, { rows: [] });
 });

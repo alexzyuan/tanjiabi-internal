@@ -67,6 +67,7 @@ export function createInventoryRoutes(deps = {}) {
             storeName: url.searchParams.get("storeName") || "",
             listingOwner: url.searchParams.get("listingOwner") || "",
             riskLevel: url.searchParams.get("riskLevel") || "",
+            currencyCode: url.searchParams.get("currencyCode") || "",
           },
         }));
       },
