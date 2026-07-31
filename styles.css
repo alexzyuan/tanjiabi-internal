@@ -506,10 +506,10 @@ svg{width:100%;height:auto;display:block}
 .anomaly-list div{grid-template-columns:minmax(180px,240px) minmax(0,1fr) auto;align-items:center}
 .anomaly-list strong{color:var(--tj-text-strong)}
 .anomaly-list span{color:var(--tj-text-muted);line-height:1.45}
-.sort-button{display:block;width:100%;min-height:0;height:auto;box-sizing:border-box;min-width:0;padding:0 18px 0 0;border:0;background:transparent;color:inherit;font:inherit;text-align:inherit;cursor:pointer;box-shadow:none;position:relative;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.sort-button::before,.sort-button::after{content:"";position:absolute;right:8px;width:0;height:0;opacity:1;pointer-events:none}
-.sort-button::before{top:50%;transform:translateY(-8px);border-right:4px solid transparent;border-bottom:5px solid var(--tj-border-control);border-left:4px solid transparent}
-.sort-button::after{top:50%;transform:translateY(3px);border-top:5px solid var(--tj-border-control);border-right:4px solid transparent;border-left:4px solid transparent}
+.sort-button{display:block;width:100%;min-height:0;height:auto;box-sizing:border-box;min-width:0;padding:0 10px 0 0;border:0;background:transparent;color:inherit;font:inherit;text-align:inherit;cursor:pointer;box-shadow:none;position:relative;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sort-button::before,.sort-button::after{content:"";position:absolute;right:2px;width:0;height:0;opacity:1;pointer-events:none}
+.sort-button::before{top:50%;transform:translateY(-7px);border-right:3.5px solid transparent;border-bottom:4.5px solid var(--tj-border-control);border-left:3.5px solid transparent}
+.sort-button::after{top:50%;transform:translateY(2px);border-top:4.5px solid var(--tj-border-control);border-right:3.5px solid transparent;border-left:3.5px solid transparent}
 .sort-button[data-direction="asc"]::before{border-bottom-color:var(--tj-action-blue)}
 .sort-button[data-direction="desc"]::after{border-top-color:var(--tj-action-blue)}
 .sort-button:focus-visible{outline:0;box-shadow:var(--tj-focus-ring)}
@@ -565,6 +565,7 @@ table.data-table.is-column-resized{table-layout:fixed}
 table.data-table :is(th,td){border:1px solid var(--tj-border-subtle)}
 table.data-table th{position:sticky;top:0;z-index:2;height:38px;padding:9px 10px;background:var(--tj-action-blue-soft);color:var(--tj-text-strong);font-weight:850;white-space:nowrap;text-align:left;font-variant-numeric:tabular-nums}
 table.data-table td{padding:9px 10px;color:var(--tj-text-strong);text-align:left}
+table.data-table tbody tr:hover>td{background-color:var(--tj-table-row-hover-bg);box-shadow:inset 0 0 0 9999px color-mix(in srgb,var(--tj-table-row-hover-bg) 70%,transparent)}
 table.data-table td.table-cell--number{text-align:right;font-variant-numeric:tabular-nums}
 table.data-table th.table-cell--number{font-variant-numeric:tabular-nums}
 table.data-table :is(th,td)[data-width-align="right"]{text-align:right}

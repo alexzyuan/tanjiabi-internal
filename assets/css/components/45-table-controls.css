@@ -61,6 +61,11 @@ table.data-table td {
   text-align: left;
 }
 
+table.data-table tbody tr:hover > td {
+  background-color: var(--tj-table-row-hover-bg);
+  box-shadow: inset 0 0 0 9999px color-mix(in srgb, var(--tj-table-row-hover-bg) 70%, transparent);
+}
+
 table.data-table td.table-cell--number {
   text-align: right;
   font-variant-numeric: tabular-nums;

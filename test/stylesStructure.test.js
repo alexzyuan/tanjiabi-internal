@@ -302,6 +302,8 @@ test("shared visual component tokens normalize controls, tables, and modals", as
   assert.match(formSource, /box-shadow:\s*var\(--tj-focus-ring\)/);
   assert.match(tableSource, /height:\s*var\(--tj-control-height-compact\)/);
   assert.match(tableSource, /background:\s*var\(--tj-table-row-hover-bg\)/);
+  assert.match(tableSource, /table\.data-table\s+tbody\s+tr:hover\s*>\s*td\s*\{/);
+  assert.match(tableSource, /box-shadow:\s*inset 0 0 0 9999px color-mix\(in srgb,\s*var\(--tj-table-row-hover-bg\) 70%,\s*transparent\)/);
   assert.match(modalSource, /border-radius:\s*var\(--tj-modal-radius\)/);
   assert.match(modalSource, /\.modal-close-button:focus-visible/);
 });
