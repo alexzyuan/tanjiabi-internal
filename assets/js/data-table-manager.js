@@ -1,4 +1,4 @@
-const TABLE_SELECTOR = ".table-wrap table, .table-scroll table, table.data-table";
+const TABLE_SELECTOR = ".view table, .table-wrap table, .table-scroll table, table.data-table";
 const MIN_COLUMN_WIDTH = 44;
 const DEFAULT_COLUMN_WIDTH = 112;
 const DEFAULT_SCROLL_HINT = "横向滚动查看更多列";
@@ -231,6 +231,31 @@ function ensureStableColumnIdentities(headers) {
     header.dataset.columnKey = datasetBusinessKey(header.dataset)
       || datasetBusinessKey(control?.dataset)
       || `column-${index + 1}`;
+  });
+}
+
+function isAutoSortableHeader(header) {
+  if (!header || Number(header.colSpan || 1) > 1) return false;
+  if (header.dataset?.columnSortable === "false") return false;
+  if (header.querySelector?.(".sort-button")) return false;
+  if (header.querySelector?.("input, select, textarea, a, button")) return false;
+  return Boolean(String(header.textContent || "").replace(/\s+/g, " ").trim());
+}
+
+function ensureHeaderSortButtons(headers) {
+  headers.forEach((header, index) => {
+    if (!isAutoSortableHeader(header)) return;
+    const documentRef = header.ownerDocument || header.closest?.("table")?.ownerDocument;
+    if (!documentRef?.createElement || !header.appendChild) return;
+    const label = String(header.textContent || "").replace(/\s+/g, " ").trim();
+    const button = documentRef.createElement("button");
+    if (!button) return;
+    button.className = "sort-button";
+    button.type = "button";
+    button.dataset.tableSort = String(header.dataset?.columnKey || `column-${index + 1}`);
+    button.textContent = label;
+    header.textContent = "";
+    header.appendChild(button);
   });
 }
 
@@ -663,6 +688,7 @@ function enhanceTable(table) {
   const legacyKey = legacyTableStorageKey(table);
   ensureStableTableIdentity(table);
   ensureStableColumnIdentities(headers);
+  ensureHeaderSortButtons(headers);
   assertUniqueTableIdentity(table);
   const storage = table.ownerDocument?.defaultView?.localStorage || globalThis.localStorage;
   migrateLegacyColumnWidths(table, headers, storage, legacyKey);

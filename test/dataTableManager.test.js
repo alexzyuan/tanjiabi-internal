@@ -12,6 +12,7 @@ import {
 } from "../assets/js/data-table-manager.js";
 
 function createResizeInteractionHarness({
+  enableHeaderAppend = false,
   storageData = new Map(),
   headerLabel = "销售额",
   explicitWidth = "128",
@@ -42,6 +43,7 @@ function createResizeInteractionHarness({
     },
   });
   const col = { dataset: {}, style: colStyle };
+  let sortButton = null;
   const tableClassNames = new Set();
   const headerClassNames = new Set();
   const handle = {
@@ -59,6 +61,25 @@ function createResizeInteractionHarness({
       this.children.push(child);
     },
   };
+  const ownerDocument = {
+    defaultView: { localStorage: storage },
+    createElement(tagName) {
+      if (!enableHeaderAppend) return null;
+      return {
+        className: "",
+        dataset: {},
+        tagName: String(tagName || "").toUpperCase(),
+        textContent: "",
+        type: "",
+        closest(selector) {
+          if (selector === "th") return header;
+          if (selector === "table") return table;
+          return null;
+        },
+      };
+    },
+    querySelectorAll: () => [table],
+  };
   const table = {
     id: tableId,
     className: "data-table",
@@ -72,7 +93,7 @@ function createResizeInteractionHarness({
       add: (...names) => names.forEach((name) => tableClassNames.add(name)),
       remove: (...names) => names.forEach((name) => tableClassNames.delete(name)),
     },
-    ownerDocument: { defaultView: { localStorage: storage } },
+    ownerDocument,
     closest(selector) {
       if (selector === ".view[id]") return view;
       return null;
@@ -102,11 +123,20 @@ function createResizeInteractionHarness({
       if (name === "data-column-profile") return this.dataset.columnProfile || "";
       return "";
     },
+    ownerDocument,
     getBoundingClientRect: () => ({ width: 128 }),
     offsetWidth: 128,
+    appendChild(child) {
+      sortButton = child;
+      child.parentElement = header;
+      this.sortButton = child;
+      return child;
+    },
     querySelector(selector) {
+      if (selector === ".sort-button" || selector.includes(".sort-button")) return sortButton;
       if (selector === ":scope > .table-resize-handle") return handle;
       if (headerControl === "checkbox" && selector.includes("input[type='checkbox']")) return { type: "checkbox" };
+      if (selector.includes("input, select, textarea, a, button")) return sortButton;
       return null;
     },
     tagName: "TH",
@@ -344,6 +374,20 @@ test("data table manager does not suppress ordinary header clicks", () => {
   rootListeners.get("click")(clickEvent);
 
   assert.deepEqual(clickEvent.calls, []);
+});
+
+test("data table manager adds shared sort buttons to plain managed table headers", () => {
+  const { header } = createResizeInteractionHarness({
+    enableHeaderAppend: true,
+    explicitWidth: "",
+    headerLabel: "销售额",
+  });
+
+  assert.ok(header.sortButton, "plain table header should receive a shared sort button");
+  assert.equal(header.sortButton.className, "sort-button");
+  assert.equal(header.sortButton.type, "button");
+  assert.equal(header.sortButton.dataset.tableSort, "sales");
+  assert.equal(header.sortButton.textContent, "销售额");
 });
 
 test("data table manager persists user resized column widths", () => {

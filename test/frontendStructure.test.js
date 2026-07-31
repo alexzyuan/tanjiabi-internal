@@ -52,6 +52,15 @@ test("sales forecast delegates default column widths to the shared table manager
   assert.match(source, /data-column-key=/);
 });
 
+test("data table manager is the shared owner for BI table sort affordances", async () => {
+  const source = await readFile(new URL("../assets/js/data-table-manager.js", import.meta.url), "utf8");
+
+  assert.match(source, /const TABLE_SELECTOR = "\.view table, \.table-wrap table, \.table-scroll table, table\.data-table"/);
+  assert.match(source, /function ensureHeaderSortButtons/);
+  assert.match(source, /button\.className = "sort-button"/);
+  assert.match(source, /button\.dataset\.tableSort/);
+});
+
 test("FBA logistics views stay grouped under logistics metadata", async () => {
   const breadcrumbShellSource = await readFile(new URL("../assets/js/features/breadcrumb-shell.js", import.meta.url), "utf8");
   const homeQuickLinksSource = await readFile(new URL("../assets/js/features/home-quick-links.js", import.meta.url), "utf8");
