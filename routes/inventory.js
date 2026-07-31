@@ -6,7 +6,9 @@ export function createInventoryRoutes(deps = {}) {
     isFinanceUser,
     getInventoryProvisionDashboard,
     exportInventoryProvisionDetailXlsx,
-    getClearanceInventoryDashboard,
+    getSlowMovingRiskDashboard,
+    listSlowMovingRiskReports,
+    readSlowMovingRiskReport,
     getLowInventoryFeeDashboard,
     getFactoryInventoryDashboard,
     saveFactoryInventoryShippedQuantity,
@@ -55,18 +57,40 @@ export function createInventoryRoutes(deps = {}) {
     },
     {
       method: "GET",
-      path: "/api/dashboard/clearance-inventory",
+      path: "/api/dashboard/slow-moving-risk/live",
       auth: "session",
       errorStatusCode: 502,
-      handler: async ({ req, res, url }) => {
-        sendJson(res, 200, await getClearanceInventoryDashboard({
-          date: url.searchParams.get("date") || "",
-          country: url.searchParams.get("country") || "",
-          storeName: url.searchParams.get("storeName") || "",
-          listingOwner: url.searchParams.get("listingOwner") || "",
-          keyword: url.searchParams.get("keyword") || "",
-          includeFinancials: isFinanceUser(req.user),
+      handler: async ({ res, url }) => {
+        sendJson(res, 200, await getSlowMovingRiskDashboard({
+          filters: {
+            country: url.searchParams.get("country") || "",
+            storeName: url.searchParams.get("storeName") || "",
+            listingOwner: url.searchParams.get("listingOwner") || "",
+            riskLevel: url.searchParams.get("riskLevel") || "",
+          },
         }));
+      },
+    },
+    {
+      method: "GET",
+      path: "/api/dashboard/slow-moving-risk/reports",
+      auth: "session",
+      handler: async ({ res }) => {
+        sendJson(res, 200, await listSlowMovingRiskReports());
+      },
+    },
+    {
+      method: "GET",
+      pattern: /^\/api\/dashboard\/slow-moving-risk\/reports\/(?<reportKey>[^/]+)$/u,
+      auth: "session",
+      handler: async ({ res, params }) => {
+        const report = await readSlowMovingRiskReport(params.reportKey);
+        if (!report) {
+          const error = new Error(`Slow-moving risk report not found: ${params.reportKey}`);
+          error.statusCode = 404;
+          throw error;
+        }
+        sendJson(res, 200, report);
       },
     },
     {

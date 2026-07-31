@@ -45,9 +45,11 @@ import {
 import {
   debugInventoryProvisionSource,
   exportInventoryProvisionDetailXlsx,
-  getClearanceInventoryDashboard,
   getInventoryProvisionDashboard,
 } from "./src/services/inventoryProvisionService.js";
+import { getSlowMovingRiskDashboard } from "./src/services/slowMovingRiskService.js";
+import { createSlowMovingRiskSnapshotStore } from "./src/services/slowMovingRiskSnapshotStore.js";
+import { startSlowMovingRiskWeeklyScheduler } from "./src/jobs/slowMovingRiskWeeklyJob.js";
 import { debugLowInventoryLedgerSource, getLowInventoryFeeDashboard } from "./src/services/lowInventoryFeeService.js";
 import {
   getPlatformCashflowDashboard,
@@ -145,6 +147,7 @@ import { generateAiListingCopy } from "./src/services/aiListingService.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const config = getConfig();
+const slowMovingRiskSnapshotStore = createSlowMovingRiskSnapshotStore();
 const sessionCookieName = "tanjia_session";
 const oauthStateCookieName = "tanjia_oauth_state";
 const sessionTtlMs = 12 * 60 * 60 * 1000;
@@ -798,7 +801,9 @@ const apiRoutes = createApiRoutes(buildApiRoutes({
   updateAftersalesMailStatus,
   getInventoryProvisionDashboard,
   exportInventoryProvisionDetailXlsx,
-  getClearanceInventoryDashboard,
+  getSlowMovingRiskDashboard,
+  listSlowMovingRiskReports: () => slowMovingRiskSnapshotStore.list(),
+  readSlowMovingRiskReport: (reportKey) => slowMovingRiskSnapshotStore.read(reportKey),
   getLowInventoryFeeDashboard,
   getFactoryInventoryDashboard,
   saveFactoryInventoryShippedQuantity,
@@ -923,6 +928,7 @@ startWebhookAssistantScheduler();
 startFactoryInventoryWarmupScheduler();
 startFbaShipmentWarmupScheduler();
 startDefaultDashboardWarmupScheduler();
+startSlowMovingRiskWeeklyScheduler();
 
 const server = http.createServer((req, res) => {
   router(req, res).catch((error) => {
