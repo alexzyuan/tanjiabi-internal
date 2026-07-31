@@ -224,17 +224,51 @@ const marketplaceCurrencyCodes = Object.freeze({
   US: "USD",
 });
 
+const marketplaceCountryNames = Object.freeze({
+  AE: "阿联酋",
+  AU: "澳洲",
+  BR: "巴西",
+  CA: "加拿大",
+  DE: "德国",
+  ES: "西班牙",
+  FR: "法国",
+  GB: "英国",
+  IN: "印度",
+  IT: "意大利",
+  JP: "日本",
+  MX: "墨西哥",
+  NL: "荷兰",
+  PL: "波兰",
+  SA: "沙特阿拉伯",
+  SE: "瑞典",
+  SG: "新加坡",
+  UK: "英国",
+  US: "美国",
+});
+
+function inventoryStoreName(seller = {}, record = {}) {
+  return sellerName(seller)
+    || readFirst(record, ["seller_group_name", "sellerGroupName", "store_name", "storeName", "seller_name", "sellerName", "name"])
+    || "";
+}
+
+function marketplaceCodeFromStoreName(value) {
+  const match = String(value || "").trim().toUpperCase().match(/-([A-Z]{2})$/u);
+  return match && marketplaceCurrencyCodes[match[1]] ? match[1] : "";
+}
+
 function sellerMarketplaceCode(seller = {}, record = {}) {
   const directMarketplace = String(sellerCountryCode(seller)
     || readFirst(record, ["country_code", "countryCode", "region", "marketplace"])
     || "").trim().toUpperCase();
   if (marketplaceCurrencyCodes[directMarketplace]) return directMarketplace;
-  const shop = findLingxingShop(sellerName(seller)
-    || readFirst(record, ["store_name", "storeName", "seller_name", "sellerName"])
+  const storeName = inventoryStoreName(seller, record);
+  const storeMarketplace = marketplaceCodeFromStoreName(storeName);
+  if (storeMarketplace) return storeMarketplace;
+  const shop = findLingxingShop(storeName
     || readFirst(seller, ["sid", "seller_id", "sellerId"])
     || readFirst(record, ["sid", "seller_id", "sellerId"]));
-  const match = String(shop?.name || "").match(/-([A-Z]{2})$/iu);
-  return match?.[1] || "";
+  return marketplaceCodeFromStoreName(shop?.name);
 }
 
 function sellerCurrencyCode(seller = {}, record = {}) {
@@ -353,6 +387,16 @@ function buildSellerMap(sellers = []) {
   );
 }
 
+function normalizedStoreKey(value) {
+  return String(value || "").trim().replace(/\s+/g, "").toLowerCase();
+}
+
+function findSellerForInventoryRecord(record, sellersBySid) {
+  const storeKey = normalizedStoreKey(inventoryStoreName({}, record));
+  if (!storeKey) return null;
+  return [...sellersBySid.values()].find((seller) => normalizedStoreKey(sellerName(seller)) === storeKey) || null;
+}
+
 function fbaTotalInventory(record) {
   const available = toNumber(readDeepFirst(record, [
     "afn_fulfillable_quantity",
@@ -409,9 +453,15 @@ function fbaTotalInventory(record) {
 }
 
 function baseLingxingInventoryRow(record, sellersBySid) {
-  const sid = toNumber(readFirst(record, ["sid", "seller_id", "sellerId", "store_id", "storeId"]));
-  const seller = sellersBySid.get(sid) || {};
+  const recordSid = toNumber(readFirst(record, ["sid", "seller_id", "sellerId", "store_id", "storeId"]));
+  const seller = sellersBySid.get(recordSid) || findSellerForInventoryRecord(record, sellersBySid) || {};
+  const sid = recordSid || toNumber(readFirst(seller, ["sid", "seller_id", "sellerId"]));
   const countryCode = sellerMarketplaceCode(seller, record);
+  const storeName = inventoryStoreName(seller, record);
+  const country = sellerCountry(seller)
+    || readFirst(record, ["country", "country_name", "countryName", "marketplace"])
+    || marketplaceCountryNames[countryCode]
+    || "";
   const purchaseCost = toNumber(readFirst(record, [
     "unit_purchase_cost",
     "purchase_cost",
@@ -465,8 +515,8 @@ function baseLingxingInventoryRow(record, sellersBySid) {
     sellerId: readFirst(seller, ["seller_id", "sellerId"]) || readFirst(record, ["seller_id", "sellerId"]) || "",
     countryCode,
     currencyCode: sellerCurrencyCode(seller, record),
-    storeName: sellerName(seller) || readFirst(record, ["store_name", "storeName", "seller_name", "sellerName"]) || `${sid || "-"}`,
-    country: sellerCountry(seller) || readFirst(record, ["country", "country_name", "countryName", "marketplace"]) || "",
+    storeName: storeName || `${sid || "-"}`,
+    country,
     msku: readFirst(record, ["msku", "seller_sku", "sellerSku", "fnsku", "sku"]) || "",
     fnsku: readFirst(record, ["fnsku", "FNSKU"]) || "",
     listingOwner: listingOwner(record) || "-",

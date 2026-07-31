@@ -47,6 +47,28 @@ test("loadFbaInventoryDetailRows derives the known store currency when Lingxing 
   assert.equal(result.rows[0].currencyCode, "USD");
 });
 
+test("loadFbaInventoryDetailRows uses Lingxing seller_group_name when an EU warehouse row has sid zero", async () => {
+  const { loadFbaInventoryDetailRows } = await import("../src/services/inventoryProvisionService.js");
+  const result = await loadFbaInventoryDetailRows({
+    sellersOverride: [{ sid: 17307, name: "tanjia-eu-DE", country: "德国", region: "EU" }],
+    adapter: {
+      fetchAllFbaInventoryDetails: async () => [{
+        sid: 0,
+        seller_group_name: "tanjia-eu-DE",
+        seller_sku: "JMDE-HJ825A",
+        available_total: 73,
+        inv_age_31_to_60_days: 114,
+      }],
+    },
+  });
+
+  assert.equal(result.rows[0].sid, 17307);
+  assert.equal(result.rows[0].storeName, "tanjia-eu-DE");
+  assert.equal(result.rows[0].countryCode, "DE");
+  assert.equal(result.rows[0].country, "德国");
+  assert.equal(result.rows[0].currencyCode, "EUR");
+});
+
 test("inventory provision landed cost rows calculate provision amount by aging bucket", async () => {
   const { inventoryProvisionTestUtils } = await import("../src/services/inventoryProvisionService.js");
   assert.ok(inventoryProvisionTestUtils, "inventory provision test utilities must be exported");
