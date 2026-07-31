@@ -121,6 +121,31 @@ test("front shop filters build the sales dashboard query from selected shops", (
   );
 });
 
+test("front shop filters default the sales dashboard currency to CNY", () => {
+  const elements = {
+    "#front-country-filter": makeSelect([]),
+    "#front-shop-filter": makeSelect([]),
+    "#front-owner-filter": { value: "" },
+  };
+  const root = makeRoot(elements);
+  const filters = createFrontShopFilters({
+    root,
+    bind: () => {},
+    fieldValue,
+    getFrontDateRange: () => ({ start: "2026-07-01", end: "2026-07-06" }),
+    normalizeCountryName,
+    selectedFilterValue,
+    selectedFilterValues,
+    setSelectOptions: () => {},
+    syncAllOptionSelection: () => {},
+  });
+
+  assert.equal(
+    filters.buildDashboardQuery(),
+    "startDate=2026-07-01&endDate=2026-07-06&currencyCode=CNY",
+  );
+});
+
 test("front shop filters own sales filter control bindings", async () => {
   const elements = {
     "#front-country-filter": makeSelect(["美国"]),

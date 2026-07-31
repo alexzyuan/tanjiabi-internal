@@ -65,3 +65,38 @@ test("LingxingAdapter fails fast instead of serving stale order profit cache", a
     await rm(tempRoot, { recursive: true, force: true });
   }
 });
+
+test("LingxingAdapter defaults sales weekly order profit currency to CNY", async () => {
+  const projectRoot = process.cwd();
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lingxing-order-profit-cny-"));
+  try {
+    process.chdir(tempRoot);
+    const { LingxingAdapter } = await importFresh(projectRoot, "src/adapters/lingxingAdapter.js");
+    const adapter = new LingxingAdapter({
+      baseUrl: "https://openapi.test/",
+      appKey: "1234567890abcdef",
+      appSecret: "secret",
+    });
+    let orderProfitRequest = null;
+    adapter.fetchSellers = async () => ({
+      data: [{ sid: 8708, name: "JOI MEW-US", country: "美国", status: 1 }],
+    });
+    adapter.fetchMskuOrderProfit = async (request) => {
+      orderProfitRequest = request;
+      return { data: { records: [] } };
+    };
+    adapter.fetchAllFbaInventoryDetails = async () => [];
+
+    const data = await adapter.fetchSalesWeeklyData({
+      startDate: "2026-07-01",
+      endDate: "2026-07-14",
+      sids: [8708],
+    });
+
+    assert.equal(orderProfitRequest.currencyCode, "CNY");
+    assert.equal(data.currencyCode, "CNY");
+  } finally {
+    process.chdir(projectRoot);
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});

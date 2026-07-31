@@ -72,7 +72,7 @@ async function syncFromLingxing() {
       version: "sales-weekly-source-v1",
       startDate: data.range?.startDate || "",
       endDate: data.range?.endDate || "",
-      currencyCode: data.currencyCode || "ORIGINAL",
+      currencyCode: data.currencyCode || "CNY",
       sids: [],
     },
     sellers: data.sellers || [],
@@ -83,7 +83,7 @@ async function syncFromLingxing() {
     listingOwnerRows,
     budgetTargets,
     range: data.range,
-    currencyCode: data.currencyCode || "ORIGINAL",
+    currencyCode: data.currencyCode || "CNY",
     raw: data.raw || {},
     updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
   };

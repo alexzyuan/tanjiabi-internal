@@ -40,7 +40,7 @@ function logSalesWeeklyTiming(stage, startedAt, extra = {}) {
 }
 
 function normalizedCurrencyCode(filters = {}) {
-  return String(filters.currencyCode || "ORIGINAL").trim().toUpperCase() || "ORIGINAL";
+  return String(filters.currencyCode || "CNY").trim().toUpperCase() || "CNY";
 }
 
 function uniqueNumbers(values = []) {
@@ -69,7 +69,7 @@ function sourceFiltersFromCacheScope(scope = {}) {
   return {
     startDate: scope.startDate || "",
     endDate: scope.endDate || "",
-    currencyCode: scope.currencyCode || "ORIGINAL",
+    currencyCode: scope.currencyCode || "CNY",
     sids: Array.isArray(scope.sids) ? scope.sids : [],
   };
 }
@@ -87,7 +87,7 @@ function canUseDefaultSalesDashboardCache(filters = {}) {
   return matchesDefaultSalesWeeklyRange(filters)
     && !listingOwner
     && !hasSelectedSids
-    && normalizedCurrencyCode(filters) === "ORIGINAL";
+    && normalizedCurrencyCode(filters) === "CNY";
 }
 
 function dashboardFiltersFromSource(source = {}, filters = {}) {
@@ -112,7 +112,7 @@ function mapSalesWeeklySourceToDashboard(source = {}, filters = {}) {
       startDate: nextFilters.startDate,
       endDate: nextFilters.endDate,
     },
-    currencyCode: source.currencyCode || nextFilters.currencyCode || "ORIGINAL",
+    currencyCode: source.currencyCode || nextFilters.currencyCode || "CNY",
     raw: {
       ...(source.raw || {}),
       cacheState: source.raw?.cacheState || "hit",
@@ -190,7 +190,7 @@ function refreshSalesWeeklySourceCacheInBackground(filters = {}) {
         filters: {
           startDate: filters.startDate || "",
           endDate: filters.endDate || "",
-          currencyCode: filters.currencyCode || "ORIGINAL",
+          currencyCode: filters.currencyCode || "CNY",
           sids: Array.isArray(filters.sids) ? filters.sids : [],
         },
         error: error.message,
@@ -415,7 +415,7 @@ function stableMskuDetailCacheKey(filters) {
     startDate: filters.startDate || "",
     endDate: filters.endDate || "",
     listingOwner: filters.listingOwner || filters.owner || "",
-    currencyCode: filters.currencyCode || "ORIGINAL",
+    currencyCode: filters.currencyCode || "CNY",
     sids: Array.isArray(filters.sids) ? uniqueNumbers(filters.sids).sort((a, b) => a - b) : [],
   });
 }
@@ -459,7 +459,7 @@ export async function getMskuDetailDashboard(filters = {}) {
     startDate: range.startDate,
     endDate: range.endDate,
     sids: selectedSids,
-    currencyCode: filters.currencyCode || "ORIGINAL",
+    currencyCode: filters.currencyCode || "CNY",
   });
   const selectedSidSet = new Set(selectedSids);
   const records = adapter.normalizeMskuOrderProfitRecords(adapter.normalizeRecordList(orderProfit), sellerList).filter((record) => {

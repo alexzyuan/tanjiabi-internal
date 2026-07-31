@@ -628,7 +628,7 @@ async function readJsonBody(req) {
 function readSalesDashboardFilters(url) {
   const startDate = url.searchParams.get("startDate") || "";
   const endDate = url.searchParams.get("endDate") || "";
-  const currencyCode = url.searchParams.get("currencyCode") || "ORIGINAL";
+  const currencyCode = url.searchParams.get("currencyCode") || "CNY";
   const listingOwner = String(url.searchParams.get("listingOwner") || url.searchParams.get("owner") || "").trim();
   const sids = (url.searchParams.get("sids") || "")
     .split(",")

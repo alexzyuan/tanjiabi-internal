@@ -152,7 +152,7 @@ export function createFrontShopFilters({
     const sids = getSelectedFrontSids();
     const country = selectedFilterValue("#front-country-filter", root);
     const shop = selectedFilterValue("#front-shop-filter", root);
-    params.set("currencyCode", fieldValue("#front-currency-filter", "ORIGINAL", root) || "ORIGINAL");
+    params.set("currencyCode", fieldValue("#front-currency-filter", "CNY", root) || "CNY");
     const listingOwner = fieldValue("#front-owner-filter", "", root);
     if ((country || shop) && sids.length) {
       params.set("sids", sids.join(","));

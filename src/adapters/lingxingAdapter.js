@@ -31,7 +31,7 @@ export function filterCoreSellers(sellers = []) {
   return sellers.filter(isCoreSeller);
 }
 
-function stableOrderProfitCacheKey({ startDate, endDate, sids = [], currencyCode = "ORIGINAL" }) {
+function stableOrderProfitCacheKey({ startDate, endDate, sids = [], currencyCode = "CNY" }) {
   return JSON.stringify({
     source: "basicOpen/finance/mreport/OrderProfit",
     startDate,
@@ -1255,7 +1255,7 @@ export class LingxingAdapter {
       startDate: filters.startDate || defaultRange.startDate,
       endDate: filters.endDate || defaultRange.endDate,
     };
-    const currencyCode = filters.currencyCode || "ORIGINAL";
+    const currencyCode = filters.currencyCode || "CNY";
     const activeSids = sellerList
       .filter((seller) => !seller.status || seller.status === 1)
       .map((seller) => seller.sid);
