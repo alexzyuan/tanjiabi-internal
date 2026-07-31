@@ -250,7 +250,7 @@ test("smart width estimator reserves space for sortable table headers", () => {
   const measureText = (value) => Array.from(String(value)).reduce((width, character) => width + (/[^\u0000-\u00ff]/.test(character) ? 14 : 8), 0);
 
   assert.equal(estimateSmartColumnWidth({ label: "实际销量", values: ["0"], measureText }).width, 76);
-  assert.equal(estimateSmartColumnWidth({ label: "实际销量", values: ["0"], sortControlWidth: 12, measureText }).width, 88);
+  assert.equal(estimateSmartColumnWidth({ label: "实际销量", values: ["0"], sortControlWidth: 18, measureText }).width, 94);
 });
 
 test("data table manager infers numeric columns from BI headers", () => {

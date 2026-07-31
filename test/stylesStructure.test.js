@@ -192,6 +192,14 @@ test("CSS minifier has a single shared implementation", async () => {
   assert.equal(countMinifyCssDefinitions(minifier), 1);
 });
 
+test("CSS minifier keeps required calc plus spacing", () => {
+  const source = ".menu { top: calc(100% + 8px); } .item + .item { margin-left: 4px; }";
+  const minified = minifyCss(source);
+
+  assert.match(minified, /top:calc\(100% \+ 8px\)/);
+  assert.match(minified, /\.item\+\.item/);
+});
+
 test("styles.css stays within the raw size budget", async () => {
   const { size } = await stat(new URL("../styles.css", import.meta.url));
   assert.ok(size <= 256_000, `styles.css should be <= 256KB raw, got ${size} bytes`);

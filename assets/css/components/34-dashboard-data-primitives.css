@@ -92,11 +92,13 @@ svg {
 }
 
 .sort-button {
-  display: inline-block;
-  width: max-content;
+  display: block;
+  width: 100%;
   min-height: 0;
   height: auto;
-  padding: 0 12px 0 0;
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 0 18px 0 0;
   border: 0;
   background: transparent;
   color: inherit;
@@ -105,7 +107,8 @@ svg {
   cursor: pointer;
   box-shadow: none;
   position: relative;
-  overflow: visible;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -113,21 +116,24 @@ svg {
 .sort-button::after {
   content: "";
   position: absolute;
-  right: 1px;
+  right: 8px;
   width: 0;
   height: 0;
   opacity: 1;
+  pointer-events: none;
 }
 
 .sort-button::before {
-  top: calc(50% - 7px);
+  top: 50%;
+  transform: translateY(-8px);
   border-right: 4px solid transparent;
   border-bottom: 5px solid var(--tj-border-control);
   border-left: 4px solid transparent;
 }
 
 .sort-button::after {
-  top: calc(50% + 2px);
+  top: 50%;
+  transform: translateY(3px);
   border-top: 5px solid var(--tj-border-control);
   border-right: 4px solid transparent;
   border-left: 4px solid transparent;

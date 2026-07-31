@@ -5,10 +5,16 @@ function shouldKeepSpace(before, after) {
   return true;
 }
 
+function currentFunctionName(output) {
+  const match = output.match(/([a-z-]+)$/i);
+  return match ? match[1].toLowerCase() : "";
+}
+
 export function minifyCss(source) {
   let output = "";
   let quote = null;
   let pendingSpace = false;
+  const functionStack = [];
 
   for (let index = 0; index < source.length; index += 1) {
     const char = source[index];
@@ -43,7 +49,18 @@ export function minifyCss(source) {
     }
 
     if (/\s/.test(char)) {
+      if (output.endsWith(" ")) {
+        pendingSpace = false;
+        continue;
+      }
       pendingSpace = true;
+      continue;
+    }
+
+    if (char === "+" && functionStack.includes("calc")) {
+      output = output.trimEnd();
+      output += " + ";
+      pendingSpace = false;
       continue;
     }
 
@@ -54,6 +71,8 @@ export function minifyCss(source) {
         output = output.trimEnd();
       }
       output += char;
+      if (char === "(") functionStack.push(currentFunctionName(output.slice(0, -1)));
+      if (char === ")") functionStack.pop();
       pendingSpace = false;
       continue;
     }

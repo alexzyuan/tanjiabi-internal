@@ -5,7 +5,7 @@ const DEFAULT_SCROLL_HINT = "横向滚动查看更多列";
 const COLUMN_WIDTH_STORAGE_PREFIX = "tanjia:tableColumnWidths:v1";
 const SMART_WIDTH_DEBUG_STORAGE_KEY = "tanjia:tableWidthDiagnostics";
 const WIDTH_MIGRATION_MARKER_SUFFIX = ":migration-complete";
-const SORT_INDICATOR_WIDTH = 12;
+const SORT_INDICATOR_WIDTH = 18;
 const smartWidthSignatures = new WeakMap();
 
 const numericHeaderPattern = /(金额|销售额|采购额|应付额|实付额|未付额|数量|销量|采购量|库存|在库|可售|转库|在途|成本|费用|费率|毛利率|净利率|退款率|达成率|占比|税点|采购价|单价|价格|天数|ACOS|ROAS|CPC|CTR|CVR|订单|目标|实际|利润|收入|支出|回款|结算|余额|计提|冲回|统计|申请中|未申请|货件数|店铺数|MSKU\s*数|SKU\s*数|总数|小计|合计|比例|率)$/i;

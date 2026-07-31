@@ -105,7 +105,7 @@ body:not(.login-body) .account-avatar::before{content:"";position:absolute;left:
 body:not(.login-body) .account-avatar::after{content:"";position:absolute;left:50%;bottom:4px;width:16px;height:9px;border-radius:999px 999px 6px 6px;background:#aab5c4;transform:translateX(-50%)}
 body:not(.login-body) .account-name{max-width:96px;overflow:hidden;color:inherit;font-size:13px;font-weight:760;line-height:1;text-overflow:ellipsis;white-space:nowrap}
 body:not(.login-body) .account-caret{width:0;height:0;margin-left:2px;border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid rgba(21,58,99,0.78)}
-body:not(.login-body) .account-logout{position:absolute;top:calc(100%+7px);right:auto;left:50%;z-index:80;display:flex;align-items:center;justify-content:center;width:74px;min-width:74px;height:30px;min-height:30px;padding:0 8px;border:0;border-radius:7px;background:var(--tj-content-bg);color:#1b2636;font-size:12px;font-weight:650;box-shadow:0 14px 30px rgba(20,43,80,0.16);transform:translateX(-50%)}
+body:not(.login-body) .account-logout{position:absolute;top:calc(100% + 7px);right:auto;left:50%;z-index:80;display:flex;align-items:center;justify-content:center;width:74px;min-width:74px;height:30px;min-height:30px;padding:0 8px;border:0;border-radius:7px;background:var(--tj-content-bg);color:#1b2636;font-size:12px;font-weight:650;box-shadow:0 14px 30px rgba(20,43,80,0.16);transform:translateX(-50%)}
 body:not(.login-body) .account-menu:not(.is-open) .account-logout{display:none}
 body:not(.login-body) #account-menu[hidden],body:not(.login-body) #auth-user-chip[hidden],body:not(.login-body) #logout-button[hidden]{display:none}
 body:not(.login-body) .account-trigger{background-image:none}
@@ -506,10 +506,10 @@ svg{width:100%;height:auto;display:block}
 .anomaly-list div{grid-template-columns:minmax(180px,240px) minmax(0,1fr) auto;align-items:center}
 .anomaly-list strong{color:var(--tj-text-strong)}
 .anomaly-list span{color:var(--tj-text-muted);line-height:1.45}
-.sort-button{display:inline-block;width:max-content;min-height:0;height:auto;padding:0 12px 0 0;border:0;background:transparent;color:inherit;font:inherit;text-align:inherit;cursor:pointer;box-shadow:none;position:relative;overflow:visible;white-space:nowrap}
-.sort-button::before,.sort-button::after{content:"";position:absolute;right:1px;width:0;height:0;opacity:1}
-.sort-button::before{top:calc(50% - 7px);border-right:4px solid transparent;border-bottom:5px solid var(--tj-border-control);border-left:4px solid transparent}
-.sort-button::after{top:calc(50%+2px);border-top:5px solid var(--tj-border-control);border-right:4px solid transparent;border-left:4px solid transparent}
+.sort-button{display:block;width:100%;min-height:0;height:auto;box-sizing:border-box;min-width:0;padding:0 18px 0 0;border:0;background:transparent;color:inherit;font:inherit;text-align:inherit;cursor:pointer;box-shadow:none;position:relative;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sort-button::before,.sort-button::after{content:"";position:absolute;right:8px;width:0;height:0;opacity:1;pointer-events:none}
+.sort-button::before{top:50%;transform:translateY(-8px);border-right:4px solid transparent;border-bottom:5px solid var(--tj-border-control);border-left:4px solid transparent}
+.sort-button::after{top:50%;transform:translateY(3px);border-top:5px solid var(--tj-border-control);border-right:4px solid transparent;border-left:4px solid transparent}
 .sort-button[data-direction="asc"]::before{border-bottom-color:var(--tj-action-blue)}
 .sort-button[data-direction="desc"]::after{border-top-color:var(--tj-action-blue)}
 .sort-button:focus-visible{outline:0;box-shadow:var(--tj-focus-ring)}
@@ -527,7 +527,7 @@ body:not(.login-body) .filter-toolbar>button.primary-button{min-height:var(--tj-
 .date-range-control{position:relative}
 .date-range-button{width:100%;height:var(--tj-control-height);display:flex;align-items:center;justify-content:space-between;border:1px solid var(--tj-border-control);color:var(--tj-text-strong);background:var(--tj-content-bg);padding:0 var(--tj-control-padding-x);border-radius:var(--tj-control-radius);cursor:pointer}
 .date-range-button:focus-visible{outline:0;border-color:var(--tj-action-blue);box-shadow:var(--tj-focus-ring)}
-.date-range-picker__popover{position:absolute;top:calc(100%+8px);left:0;z-index:90;width:min(760px,96vw);display:grid;grid-template-columns:112px minmax(0,1fr);overflow:hidden;border:1px solid var(--tj-border-subtle);border-radius:var(--tj-panel-radius);color:var(--tj-text-body);background:var(--tj-content-bg);box-shadow:var(--tj-shadow-floating);font-size:13px;line-height:1.35}
+.date-range-picker__popover{position:absolute;top:calc(100% + 8px);left:0;z-index:90;width:min(760px,96vw);display:grid;grid-template-columns:112px minmax(0,1fr);overflow:hidden;border:1px solid var(--tj-border-subtle);border-radius:var(--tj-panel-radius);color:var(--tj-text-body);background:var(--tj-content-bg);box-shadow:var(--tj-shadow-floating);font-size:13px;line-height:1.35}
 .date-range-picker__shortcuts{display:grid;padding:var(--spectrum-spacing-100) 0;border-right:1px solid var(--tj-border-subtle)}
 .date-range-picker__shortcuts button{height:32px;border:0;background:transparent;padding:0 var(--spectrum-spacing-200);text-align:left}
 .date-range-picker__shortcuts button:is(:hover, :focus-visible){background:var(--tj-action-blue-soft)}
