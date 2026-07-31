@@ -1937,6 +1937,7 @@
               <label>店铺<select id="slow-moving-risk-store-filter" multiple size="4"><option value="">全部店铺</option></select></label>
               <label>运营<select id="slow-moving-risk-owner-filter"><option value="">全部运营</option></select></label>
               <label>风险<select id="slow-moving-risk-level-filter"><option value="">全部等级</option><option value="强制处置">强制处置</option><option value="高风险">高风险</option><option value="关注">关注</option><option value="正常">正常</option></select></label>
+              <label>币种<select id="slow-moving-risk-currency-filter"><option value="">全部原币种</option></select></label>
             </section>
           </section>
           <section id="slow-moving-risk-history-panel" class="slow-moving-risk-panel" role="tabpanel" aria-labelledby="slow-moving-risk-history-tab" data-slow-moving-risk-panel="history" hidden>
@@ -1945,8 +1946,8 @@
           <section class="module-grid slow-moving-risk-kpis" aria-label="滞销处置周报概览">
             <article class="metric-tile"><span>高风险 SKU</span><strong id="slow-moving-risk-kpi-count">0</strong><small>强制处置与高风险</small></article>
             <article class="metric-tile"><span>90天+ 库存数量</span><strong id="slow-moving-risk-kpi-quantity">0</strong><small>件</small></article>
-            <article class="metric-tile"><span>90天+ 库存金额</span><strong id="slow-moving-risk-kpi-amount">—</strong><small>统一币种</small></article>
-            <article class="metric-tile"><span>近30日毛利</span><strong id="slow-moving-risk-kpi-profit">—</strong><small>强制处置与高风险 SKU</small></article>
+            <article class="metric-tile"><span>90天+ 库存金额</span><strong id="slow-moving-risk-kpi-amount">—</strong><small>人民币</small></article>
+            <article class="metric-tile"><span>近30日毛利</span><strong id="slow-moving-risk-kpi-profit">—</strong><small>人民币，强制处置与高风险 SKU</small></article>
           </section>
           <article class="panel slow-moving-risk-result-panel">
             <div class="panel-head">
@@ -1958,20 +1959,30 @@
                 <thead>
                   <tr>
                     <th data-column-key="risk-level">风险</th>
-                    <th data-column-key="store-country">店铺 / 站点</th>
+                    <th data-column-key="store-name">店铺</th>
+                    <th data-column-key="site-country">站点</th>
                     <th data-column-key="msku">MSKU</th>
-                    <th data-column-key="inventory-quantity">当前可售 / 90天+</th>
-                    <th data-column-key="inventory-amount">库存金额 / 90天+</th>
-                    <th data-column-key="supply-conversion">可售天数 / 30日转化</th>
-                    <th data-column-key="sales-gross-profit">30日销量 / 毛利 / 均毛利</th>
-                    <th data-column-key="advertising">广告花费 / 占比 / ACOS</th>
-                    <th data-column-key="cash-risk">资金风险金额</th>
-                    <th data-column-key="recovery-scenarios">清仓 / 清算回收</th>
-                    <th data-column-key="removal-fee">移除费</th>
+                    <th data-column-key="currency-code">原币种</th>
+                    <th data-column-key="available-quantity">当前可售</th>
+                    <th data-column-key="aged-quantity">90天+库存</th>
+                    <th data-column-key="inventory-amount-cny">库存金额（人民币）</th>
+                    <th data-column-key="aged-inventory-amount-cny">90天+库存金额（人民币）</th>
+                    <th data-column-key="supply-days">可售天数</th>
+                    <th data-column-key="cash-conversion-rate">30日转化</th>
+                    <th data-column-key="recent30-sales-quantity">30日销量</th>
+                    <th data-column-key="recent30-gross-profit-cny">30日毛利（人民币）</th>
+                    <th data-column-key="average-gross-profit-cny">30日均毛利（人民币）</th>
+                    <th data-column-key="recent30-ad-spend-cny">广告花费（人民币）</th>
+                    <th data-column-key="ad-share">广告占比</th>
+                    <th data-column-key="acos">ACOS</th>
+                    <th data-column-key="cash-risk-amount-cny">资金风险金额（人民币）</th>
+                    <th data-column-key="clearance-recovery-original">清仓回收（原币）</th>
+                    <th data-column-key="liquidation-recovery-original">清算回收（原币）</th>
+                    <th data-column-key="removal-fee-original">移除费（原币）</th>
                     <th data-column-key="recommendation">本周建议</th>
                   </tr>
                 </thead>
-                <tbody id="slow-moving-risk-table"><tr><td colspan="12">正在读取数据。</td></tr></tbody>
+                <tbody id="slow-moving-risk-table"><tr><td colspan="22">正在读取数据。</td></tr></tbody>
               </table>
             </div>
           </article>

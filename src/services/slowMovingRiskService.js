@@ -299,12 +299,21 @@ function sourceError(source, error) {
   throw error;
 }
 
+function assertInventoryCurrencyCodes(rows = []) {
+  const missing = rows.find((row) => !String(row.currencyCode || "").trim());
+  if (!missing) return;
+  const error = new Error(`无法识别店铺原币种：店铺 ${missing.storeName || "-"}，MSKU ${missing.msku || "-"}。`);
+  error.source = "currency";
+  throw error;
+}
+
 export function createSlowMovingRiskService({
   loadInventoryRows,
   fetchOrderProfit,
   normalizeRecordList = (payload) => payload,
   normalizeOrderProfit = (records) => records,
   now = () => new Date(),
+  requireCurrencyCode = false,
 } = {}) {
   if (typeof loadInventoryRows !== "function") throw new Error("createSlowMovingRiskService requires loadInventoryRows.");
   if (typeof fetchOrderProfit !== "function") throw new Error("createSlowMovingRiskService requires fetchOrderProfit.");
@@ -316,6 +325,7 @@ export function createSlowMovingRiskService({
     } catch (error) {
       sourceError("inventory", error);
     }
+    if (requireCurrencyCode) assertInventoryCurrencyCodes(inventory.rows || []);
     let payload;
     try {
       payload = await fetchOrderProfit({
@@ -375,6 +385,7 @@ export async function getSlowMovingRiskDashboard(filters = {}, dependencies = {}
     normalizeRecordList: (payload) => adapter.normalizeRecordList(payload),
     normalizeOrderProfit: (records, sellers) => adapter.normalizeMskuOrderProfitRecords(records, sellers),
     now,
+    requireCurrencyCode: dependencies.requireCurrencyCode ?? (getConfig().dataProvider === "lingxing"),
   });
   return service.getDashboard(filters);
 }

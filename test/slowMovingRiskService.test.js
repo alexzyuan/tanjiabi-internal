@@ -155,6 +155,24 @@ test("getDashboard requests CNY profit data and filters by store original curren
   assert.deepEqual(dashboard.filters.currencyOptions, [{ name: "CAD" }, { name: "USD" }]);
 });
 
+test("getDashboard fails with currency context when a production inventory row has no original currency", async () => {
+  const service = createSlowMovingRiskService({
+    requireCurrencyCode: true,
+    loadInventoryRows: async () => ({
+      rows: [{ sid: 1, storeName: "unknown-store", msku: "UNKNOWN-SKU", quantity: 10, ageDays: 120 }],
+      sellers: [{ sid: 1 }],
+    }),
+    fetchOrderProfit: async () => {
+      throw new Error("Order profit must not be requested after a currency failure.");
+    },
+  });
+
+  await assert.rejects(
+    () => service.getDashboard({ dateRange: { startDate: "2026-07-04", endDate: "2026-08-02", reportKey: "2026-08-02" } }),
+    (error) => error.source === "currency" && error.message.includes("unknown-store") && error.message.includes("UNKNOWN-SKU"),
+  );
+});
+
 test("getSlowMovingRiskDashboard composes adapter defaults through explicit dependencies", async () => {
   const dashboard = await getSlowMovingRiskDashboard({
     dateRange: { startDate: "2026-07-04", endDate: "2026-08-02", reportKey: "2026-08-02" },

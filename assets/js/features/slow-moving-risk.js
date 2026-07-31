@@ -32,8 +32,8 @@ export function createSlowMovingRiskFeature({
     return value === null || value === undefined ? "—" : formatActualMoney(value);
   }
 
-  function percent(value) {
-    return value === null || value === undefined ? "—" : formatPercent(value);
+  function percent(value, fallback = "—") {
+    return value === null || value === undefined ? fallback : formatPercent(value);
   }
 
   async function fetchJson(url) {
@@ -61,19 +61,29 @@ export function createSlowMovingRiskFeature({
     table.innerHTML = rows.length ? rows.map((row) => `
       <tr class="slow-moving-risk-row slow-moving-risk-row--${escapeHtml(row.riskLevel || "正常")}">
         <td>${escapeHtml(text(row.riskLevel))}</td>
-        <td>${escapeHtml(text(row.storeName))}<br /><small>${escapeHtml(text(row.country))}</small></td>
+        <td>${escapeHtml(text(row.storeName))}</td>
+        <td>${escapeHtml(text(row.country))}</td>
         <td>${escapeHtml(text(row.msku))}</td>
-        <td>${formatNumber(row.availableQuantity || 0)}<br /><strong>${formatNumber(row.agedQuantity || 0)}</strong></td>
-        <td>${money(row.inventoryAmount)}<br /><strong>${money(row.agedInventoryAmount)}</strong></td>
-        <td>${formatNumber(row.historicalDaysOfSupply || 0)}天<br /><strong>${percent(row.cashConversionRate)}</strong></td>
-        <td>${formatNumber(row.recent30SalesQuantity || 0)}<br /><span class="${row.recent30GrossProfit < 0 ? "metric-danger" : ""}">${money(row.recent30GrossProfit)} / ${row.averageGrossProfit === null ? "无销量" : money(row.averageGrossProfit)}</span></td>
-        <td>${money(row.recent30AdSpend)}<br />${percent(row.adShare)} / ${percent(row.acos)}${row.adWaste ? "<br /><strong>广告浪费</strong>" : ""}</td>
+        <td>${escapeHtml(text(row.currencyCode, "原币"))}</td>
+        <td>${formatNumber(row.availableQuantity || 0)}</td>
+        <td><strong>${formatNumber(row.agedQuantity || 0)}</strong></td>
+        <td>${money(row.inventoryAmount)}</td>
+        <td><strong>${money(row.agedInventoryAmount)}</strong></td>
+        <td>${formatNumber(row.historicalDaysOfSupply || 0)}天</td>
+        <td>${percent(row.cashConversionRate)}</td>
+        <td>${formatNumber(row.recent30SalesQuantity || 0)}</td>
+        <td><span class="${row.recent30GrossProfit < 0 ? "metric-danger" : ""}">${money(row.recent30GrossProfit)}</span></td>
+        <td><span class="${row.averageGrossProfit < 0 ? "metric-danger" : ""}">${row.averageGrossProfit === null ? "无销量" : money(row.averageGrossProfit)}</span></td>
+        <td>${money(row.recent30AdSpend)}</td>
+        <td>${percent(row.adShare)}</td>
+        <td>${percent(row.acos, "不可用")}${row.adWaste ? "<br /><strong>广告浪费</strong>" : ""}</td>
         <td><strong>${money(row.cashRiskAmount)}</strong></td>
-        <td>${escapeHtml(text(row.currencyCode, "原币"))} ${money(row.clearanceRecoveryOriginal)}<br />${escapeHtml(text(row.currencyCode, "原币"))} ${money(row.liquidationRecoveryOriginal)}</td>
+        <td>${escapeHtml(text(row.currencyCode, "原币"))} ${money(row.clearanceRecoveryOriginal)}</td>
+        <td>${escapeHtml(text(row.currencyCode, "原币"))} ${money(row.liquidationRecoveryOriginal)}</td>
         <td>${row.removalFeeStatus === "unavailable" ? escapeHtml(text(row.removalFeeReason)) : money(row.removalFeeOriginal)}</td>
         <td><strong>${escapeHtml(text(row.recommendation, "待评估"))}</strong><br /><small>${escapeHtml(text(row.recommendationReason, "—"))}</small></td>
       </tr>
-    `).join("") : "<tr><td colspan=\"12\">当前筛选下没有滞销风险 SKU。</td></tr>";
+    `).join("") : "<tr><td colspan=\"22\">当前筛选下没有滞销风险 SKU。</td></tr>";
   }
 
   function renderDashboard(dashboard = {}, { preview = false } = {}) {
@@ -91,6 +101,7 @@ export function createSlowMovingRiskFeature({
     setSelectOptions("#slow-moving-risk-country-filter", filters.countryOptions || [], "全部国家");
     setSelectOptions("#slow-moving-risk-store-filter", filters.storeOptions || [], "全部店铺");
     setSelectOptions("#slow-moving-risk-owner-filter", filters.ownerOptions || [], "全部运营");
+    setSelectOptions("#slow-moving-risk-currency-filter", filters.currencyOptions || [], "全部原币种");
   }
 
   function successfulReports() {
@@ -116,10 +127,12 @@ export function createSlowMovingRiskFeature({
     const storeName = selectedFilterValues("#slow-moving-risk-store-filter", root).join(",");
     const listingOwner = query("#slow-moving-risk-owner-filter")?.value || "";
     const riskLevel = query("#slow-moving-risk-level-filter")?.value || "";
+    const currencyCode = query("#slow-moving-risk-currency-filter")?.value || "";
     if (country) params.set("country", country);
     if (storeName) params.set("storeName", storeName);
     if (listingOwner) params.set("listingOwner", listingOwner);
     if (riskLevel) params.set("riskLevel", riskLevel);
+    if (currencyCode) params.set("currencyCode", currencyCode);
     return params.toString();
   }
 
@@ -195,6 +208,7 @@ export function createSlowMovingRiskFeature({
     });
     bind(root, "#slow-moving-risk-owner-filter", "change", () => loadSlowMovingRiskLive().catch(showLoadError));
     bind(root, "#slow-moving-risk-level-filter", "change", () => loadSlowMovingRiskLive().catch(showLoadError));
+    bind(root, "#slow-moving-risk-currency-filter", "change", () => loadSlowMovingRiskLive().catch(showLoadError));
     bind(root, "#slow-moving-risk-history-select", "change", (event) => {
       const reportKey = event.currentTarget?.value;
       if (reportKey) loadSlowMovingRiskReport(reportKey).catch(showLoadError);

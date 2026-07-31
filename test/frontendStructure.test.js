@@ -1043,6 +1043,11 @@ test("sales clearance view is replaced by slow-moving risk report tabs", async (
   assert.match(source, /data-slow-moving-risk-tab="live"/);
   assert.match(source, /data-slow-moving-risk-tab="history"/);
   assert.match(source, /id="slow-moving-risk-table"/);
+  assert.match(source, /id="slow-moving-risk-currency-filter"/);
+  assert.match(source, /data-column-key="currency-code"/);
+  assert.equal(source.includes("店铺 \/ 站点"), false);
+  assert.equal(source.includes("当前可售 \/ 90天+"), false);
+  assert.equal(source.includes("广告花费 \/ 占比 \/ ACOS"), false);
   assert.equal(source.includes("clearance-load-real-button"), false);
 });
 
