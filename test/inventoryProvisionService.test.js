@@ -2,6 +2,30 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { withEnv } from "./helpers/env.js";
 
+test("loadFbaInventoryDetailRows normalizes FBA inventory rows for an injected seller source", async () => {
+  const { loadFbaInventoryDetailRows } = await import("../src/services/inventoryProvisionService.js");
+  const result = await loadFbaInventoryDetailRows({
+    sellersOverride: [{ sid: 11500, name: "tandanbo-US", country: "US", countryCode: "US" }],
+    adapter: {
+      fetchAllFbaInventoryDetails: async () => [{
+        sid: 11500,
+        seller_sku: "MD-DINOBATH",
+        available_quantity: 646,
+        inv_age_91_to_180_days: 623,
+        total_amount: 14728.8,
+        historical_days_of_supply: 240,
+        estimated_storage_cost_next_month: 93.17,
+      }],
+    },
+  });
+
+  assert.equal(result.sellers.length, 1);
+  assert.equal(result.rows.length, 1);
+  assert.equal(result.rows[0].msku, "MD-DINOBATH");
+  assert.equal(result.rows[0].quantity, 623);
+  assert.equal(result.rows[0].totalInventory, 646);
+});
+
 test("inventory provision landed cost rows calculate provision amount by aging bucket", async () => {
   const { inventoryProvisionTestUtils } = await import("../src/services/inventoryProvisionService.js");
   assert.ok(inventoryProvisionTestUtils, "inventory provision test utilities must be exported");

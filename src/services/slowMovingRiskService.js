@@ -129,3 +129,209 @@ export function buildSlowMovingRiskRow(source = {}, parameters = RISK_PARAMETERS
     removalFeeOriginal: null,
   };
 }
+
+function riskKey({ sid = 0, msku = "" } = {}) {
+  return `${toNumber(sid)}|${String(msku || "").trim().toLowerCase()}`;
+}
+
+function ageAmount(row) {
+  return round(toNumber(row.quantity) * toNumber(row.unitCost));
+}
+
+function groupInventoryRows(rows = []) {
+  const groups = new Map();
+  rows.forEach((row) => {
+    const key = riskKey(row);
+    if (!key || !String(row.msku || "").trim()) return;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        sid: toNumber(row.sid),
+        storeName: row.storeName || "",
+        country: row.country || "",
+        countryCode: row.countryCode || "",
+        listingOwner: row.listingOwner || "",
+        msku: row.msku || "",
+        fnsku: row.fnsku || "",
+        productName: row.skuName || "",
+        currencyCode: row.currencyCode || "",
+        availableQuantity: 0,
+        inventoryAmount: 0,
+        age91To180Quantity: 0,
+        age91To180Amount: 0,
+        age181PlusQuantity: 0,
+        age181PlusAmount: 0,
+        historicalDaysOfSupply: 0,
+        estimatedStorageCostNextMonth: 0,
+      });
+    }
+    const target = groups.get(key);
+    const quantity = toNumber(row.quantity);
+    const amount = ageAmount(row);
+    const totalInventory = toNumber(row.totalInventory);
+    target.availableQuantity = Math.max(target.availableQuantity, totalInventory || quantity);
+    target.inventoryAmount = Math.max(target.inventoryAmount, round((totalInventory || quantity) * toNumber(row.unitCost)));
+    target.historicalDaysOfSupply = Math.max(target.historicalDaysOfSupply, toNumber(row.historicalDaysOfSupply));
+    target.estimatedStorageCostNextMonth = round(target.estimatedStorageCostNextMonth + toNumber(row.estimatedStorageCostAllocation));
+    if (toNumber(row.ageDays) >= 91 && toNumber(row.ageDays) <= 180) {
+      target.age91To180Quantity = round(target.age91To180Quantity + quantity);
+      target.age91To180Amount = round(target.age91To180Amount + amount);
+    }
+    if (toNumber(row.ageDays) >= 181) {
+      target.age181PlusQuantity = round(target.age181PlusQuantity + quantity);
+      target.age181PlusAmount = round(target.age181PlusAmount + amount);
+    }
+  });
+  return groups;
+}
+
+function groupProfitRows(rows = []) {
+  const groups = new Map();
+  rows.forEach((row) => {
+    const key = riskKey(row);
+    if (!key || !String(row.msku || "").trim()) return;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        recent30SalesQuantity: 0,
+        recent30SalesAmount: 0,
+        recent30GrossProfit: 0,
+        recent30AdSpend: 0,
+        recent30AdSales: 0,
+      });
+    }
+    const target = groups.get(key);
+    target.recent30SalesQuantity = round(target.recent30SalesQuantity + toNumber(row.totalSalesQuantity ?? row.volume));
+    target.recent30SalesAmount = round(target.recent30SalesAmount + toNumber(row.totalSalesAmount ?? row.amount));
+    target.recent30GrossProfit = round(target.recent30GrossProfit + toNumber(row.grossProfit ?? row.gross_profit));
+    target.recent30AdSpend = round(target.recent30AdSpend + toNumber(row.totalAdsCost ?? row.spend));
+    target.recent30AdSales = round(target.recent30AdSales + toNumber(row.totalAdsSales ?? row.ad_sales_amount));
+  });
+  return groups;
+}
+
+export function summarizeSlowMovingRiskRows(rows = []) {
+  const riskRows = rows.filter((row) => row.riskLevel === "强制处置" || row.riskLevel === "高风险");
+  return {
+    highRiskSkuCount: riskRows.length,
+    agedInventoryQuantity: round(riskRows.reduce((total, row) => total + toNumber(row.agedQuantity), 0)),
+    agedInventoryAmount: round(riskRows.reduce((total, row) => total + toNumber(row.agedInventoryAmount), 0), 2),
+    recent30GrossProfit: round(riskRows.reduce((total, row) => total + toNumber(row.recent30GrossProfit), 0), 2),
+  };
+}
+
+export function filterSlowMovingRiskRows(rows = [], filters = {}) {
+  const selected = (value) => String(value || "").split(",").map((item) => item.trim()).filter(Boolean);
+  const countries = selected(filters.country);
+  const stores = selected(filters.storeName);
+  const owners = selected(filters.listingOwner);
+  const levels = selected(filters.riskLevel);
+  return rows.filter((row) => (!countries.length || countries.includes(row.country))
+    && (!stores.length || stores.includes(row.storeName))
+    && (!owners.length || owners.includes(row.listingOwner))
+    && (!levels.length || levels.includes(row.riskLevel)));
+}
+
+export function buildSlowMovingRiskDashboard({
+  inventoryRows = [],
+  profitRows = [],
+  dateRange,
+  filters = {},
+  parameters = RISK_PARAMETERS,
+  generatedAt = new Date().toISOString(),
+  dataSources = {},
+} = {}) {
+  if (!dateRange?.startDate || !dateRange?.endDate || !dateRange?.reportKey) {
+    throw new Error("buildSlowMovingRiskDashboard requires a complete dateRange.");
+  }
+  const inventoryByKey = groupInventoryRows(inventoryRows);
+  const profitByKey = groupProfitRows(profitRows);
+  const allRows = [...inventoryByKey.entries()]
+    .map(([key, inventory]) => buildSlowMovingRiskRow({ ...inventory, ...(profitByKey.get(key) || {}) }, parameters))
+    .sort((left, right) => right.cashRiskAmount - left.cashRiskAmount || String(left.msku).localeCompare(String(right.msku), "zh-CN"));
+  const rows = filterSlowMovingRiskRows(allRows, filters);
+  return {
+    dateRange,
+    parameters,
+    kpis: summarizeSlowMovingRiskRows(rows),
+    rows,
+    filters: {
+      countryOptions: [...new Set(allRows.map((row) => row.country).filter(Boolean))].sort().map((name) => ({ name })),
+      storeOptions: [...new Set(allRows.map((row) => row.storeName).filter(Boolean))].sort().map((name) => ({ name })),
+      ownerOptions: [...new Set(allRows.map((row) => row.listingOwner).filter(Boolean))].sort().map((name) => ({ name })),
+    },
+    meta: { generatedAt, dataSources },
+  };
+}
+
+function sourceError(source, error) {
+  if (error?.source) throw error;
+  error.source = source;
+  throw error;
+}
+
+export function createSlowMovingRiskService({
+  loadInventoryRows,
+  fetchOrderProfit,
+  normalizeRecordList = (payload) => payload,
+  normalizeOrderProfit = (records) => records,
+  now = () => new Date(),
+} = {}) {
+  if (typeof loadInventoryRows !== "function") throw new Error("createSlowMovingRiskService requires loadInventoryRows.");
+  if (typeof fetchOrderProfit !== "function") throw new Error("createSlowMovingRiskService requires fetchOrderProfit.");
+
+  async function getDashboard({ dateRange = completedWeeklyRange(now()), filters = {}, parameters = RISK_PARAMETERS } = {}) {
+    let inventory;
+    try {
+      inventory = await loadInventoryRows();
+    } catch (error) {
+      sourceError("inventory", error);
+    }
+    let payload;
+    try {
+      payload = await fetchOrderProfit({
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+        sids: (inventory.sellers || []).map((seller) => seller.sid),
+        currencyCode: "ORIGINAL",
+      });
+    } catch (error) {
+      sourceError("orderProfit", error);
+    }
+    let profitRows;
+    try {
+      profitRows = normalizeOrderProfit(normalizeRecordList(payload), inventory.sellers || []);
+    } catch (error) {
+      sourceError("orderProfit", error);
+    }
+    return buildSlowMovingRiskDashboard({
+      inventoryRows: inventory.rows || [],
+      profitRows,
+      dateRange,
+      filters,
+      parameters,
+      generatedAt: now().toISOString(),
+      dataSources: {
+        inventory: { status: "success", rowCount: (inventory.rows || []).length },
+        orderProfit: { status: "success", rowCount: profitRows.length },
+      },
+    });
+  }
+
+  return { getDashboard };
+}
+
+export async function getSlowMovingRiskDashboard(filters = {}, {
+  adapter = getLingxingAdapter(),
+  loadInventoryRows = () => loadFbaInventoryDetailRows({ adapter }),
+  now,
+} = {}) {
+  const service = createSlowMovingRiskService({
+    loadInventoryRows,
+    fetchOrderProfit: (request) => adapter.fetchMskuOrderProfit(request),
+    normalizeRecordList: (payload) => adapter.normalizeRecordList(payload),
+    normalizeOrderProfit: (records, sellers) => adapter.normalizeMskuOrderProfitRecords(records, sellers),
+    now,
+  });
+  return service.getDashboard(filters);
+}
+import { getLingxingAdapter } from "../adapters/lingxingAdapter.js";
+import { loadFbaInventoryDetailRows } from "./inventoryProvisionService.js";

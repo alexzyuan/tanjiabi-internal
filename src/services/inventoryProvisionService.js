@@ -995,11 +995,14 @@ async function buildMonthTrend(snapshotDates, filters, costMode) {
     .filter(Boolean);
 }
 
-async function loadInventoryRowsFromLingxing(sellersOverride = null) {
-  const adapter = getLingxingAdapter();
+export async function loadFbaInventoryDetailRows({
+  sellersOverride = null,
+  adapter = getLingxingAdapter(),
+  getSellers = getSharedSellers,
+} = {}) {
   const sellers = sellersOverride?.length
     ? filterCoreSellers(sellersOverride)
-    : filterCoreSellers((await getSharedSellers({ adapter })).sellers || []);
+    : filterCoreSellers((await getSellers({ adapter })).sellers || []);
   const sids = uniqueNumbers(sellers.map((seller) => seller.sid));
   const records = await adapter.fetchAllFbaInventoryDetails(sids);
   return {
@@ -1007,6 +1010,10 @@ async function loadInventoryRowsFromLingxing(sellersOverride = null) {
     sellers,
     rawCount: records.length,
   };
+}
+
+async function loadInventoryRowsFromLingxing(sellersOverride = null) {
+  return loadFbaInventoryDetailRows({ sellersOverride });
 }
 
 function clearanceSalesKey(row) {

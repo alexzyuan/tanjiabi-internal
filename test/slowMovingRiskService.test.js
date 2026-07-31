@@ -6,6 +6,8 @@ import {
   buildSlowMovingRiskRow,
   classifyRisk,
   completedWeeklyRange,
+  createSlowMovingRiskService,
+  getSlowMovingRiskDashboard,
 } from "../src/services/slowMovingRiskService.js";
 
 test("buildSlowMovingRiskRow marks a slow negative-margin SKU with high ad share as mandatory disposal", () => {
@@ -65,4 +67,76 @@ test("buildSlowMovingRiskRow flags advertising spend with zero sales and leaves 
   assert.equal(row.adWaste, true);
   assert.equal(row.averageGrossProfit, null);
   assert.equal(row.adShare, null);
+});
+
+test("getDashboard aggregates FBA age buckets and order-profit advertising fields", async () => {
+  const service = createSlowMovingRiskService({
+    loadInventoryRows: async () => ({
+      rows: [{
+        sid: 11500,
+        storeName: "tandanbo-US",
+        country: "US",
+        msku: "MD-DINOBATH",
+        quantity: 623,
+        ageDays: 120,
+        totalInventory: 646,
+        unitCost: 22.8,
+        historicalDaysOfSupply: 150,
+        estimatedStorageCostAllocation: 93.17,
+      }],
+      sellers: [{ sid: 11500, name: "tandanbo-US", country: "US" }],
+    }),
+    fetchOrderProfit: async () => [{
+      sid: 11500,
+      msku: "MD-DINOBATH",
+      volume: 59,
+      amount: 7229.16,
+      gross_profit: -4709.9,
+      spend: 1680.25,
+      ad_sales_amount: 3308.26,
+    }],
+    normalizeRecordList: (records) => records,
+    normalizeOrderProfit: (records) => records,
+  });
+
+  const dashboard = await service.getDashboard({
+    dateRange: { startDate: "2026-07-04", endDate: "2026-08-02", reportKey: "2026-08-02" },
+  });
+
+  assert.equal(dashboard.rows.length, 1);
+  assert.equal(dashboard.rows[0].riskLevel, "高风险");
+  assert.equal(dashboard.rows[0].recent30AdSpend, 1680.25);
+  assert.equal(dashboard.rows[0].age91To180Quantity, 623);
+  assert.equal(dashboard.meta.dataSources.inventory.status, "success");
+  assert.equal(dashboard.meta.dataSources.orderProfit.status, "success");
+});
+
+test("getSlowMovingRiskDashboard composes adapter defaults through explicit dependencies", async () => {
+  const dashboard = await getSlowMovingRiskDashboard({
+    dateRange: { startDate: "2026-07-04", endDate: "2026-08-02", reportKey: "2026-08-02" },
+  }, {
+    loadInventoryRows: async () => ({ rows: [], sellers: [{ sid: 11500 }] }),
+    adapter: {
+      fetchMskuOrderProfit: async () => [],
+      normalizeRecordList: (records) => records,
+      normalizeMskuOrderProfitRecords: (records) => records,
+    },
+  });
+
+  assert.deepEqual(dashboard.rows, []);
+  assert.equal(dashboard.meta.dataSources.inventory.rowCount, 0);
+});
+
+test("getDashboard identifies the failed core source instead of returning a partial dashboard", async () => {
+  const service = createSlowMovingRiskService({
+    loadInventoryRows: async () => {
+      throw new Error("inventory timeout");
+    },
+    fetchOrderProfit: async () => [],
+  });
+
+  await assert.rejects(
+    () => service.getDashboard(),
+    (error) => error.source === "inventory" && error.message === "inventory timeout",
+  );
 });
