@@ -9,6 +9,7 @@ import {
   createSlowMovingRiskService,
   getSlowMovingRiskDashboard,
 } from "../src/services/slowMovingRiskService.js";
+import { withEnv } from "./helpers/env.js";
 
 test("buildSlowMovingRiskRow marks a slow negative-margin SKU with high ad share as mandatory disposal", () => {
   const row = buildSlowMovingRiskRow({
@@ -35,6 +36,8 @@ test("buildSlowMovingRiskRow marks a slow negative-margin SKU with high ad share
   assert.equal(row.cashConversionRate, 0.0837);
   assert.equal(row.averageGrossProfit, -79.8288);
   assert.equal(row.adWaste, true);
+  assert.equal(row.recommendation, "停止广告并清仓");
+  assert.match(row.recommendationReason, /广告占比/);
   assert.equal(row.clearanceRecoveryOriginal, 6167.7);
   assert.equal(row.liquidationRecoveryOriginal, 623);
   assert.equal(row.removalFeeStatus, "unavailable");
@@ -67,6 +70,19 @@ test("buildSlowMovingRiskRow flags advertising spend with zero sales and leaves 
   assert.equal(row.adWaste, true);
   assert.equal(row.averageGrossProfit, null);
   assert.equal(row.adShare, null);
+});
+
+test("buildSlowMovingRiskRow does not flag advertising waste below the 15 percent ad-share threshold", () => {
+  const row = buildSlowMovingRiskRow({
+    availableQuantity: 8,
+    recent30SalesQuantity: 1,
+    recent30SalesAmount: 100,
+    recent30AdSpend: 14.99,
+    recent30GrossProfit: -2,
+  });
+
+  assert.equal(row.adShare, 0.1499);
+  assert.equal(row.adWaste, false);
 });
 
 test("getDashboard aggregates FBA age buckets and order-profit advertising fields", async () => {
@@ -125,6 +141,18 @@ test("getSlowMovingRiskDashboard composes adapter defaults through explicit depe
 
   assert.deepEqual(dashboard.rows, []);
   assert.equal(dashboard.meta.dataSources.inventory.rowCount, 0);
+});
+
+test("getSlowMovingRiskDashboard keeps the local mock BI page observable without calling Lingxing", async () => {
+  await withEnv({ DATA_PROVIDER: "mock" }, async () => {
+    const dashboard = await getSlowMovingRiskDashboard({
+      dateRange: { startDate: "2026-07-04", endDate: "2026-08-02", reportKey: "2026-08-02" },
+    });
+
+    assert.deepEqual(dashboard.rows, []);
+    assert.equal(dashboard.meta.dataSources.inventory.status, "mock");
+    assert.equal(dashboard.meta.dataSources.orderProfit.status, "mock");
+  });
 });
 
 test("getDashboard identifies the failed core source instead of returning a partial dashboard", async () => {

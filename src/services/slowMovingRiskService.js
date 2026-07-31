@@ -1,3 +1,7 @@
+import { getLingxingAdapter } from "../adapters/lingxingAdapter.js";
+import { getConfig } from "../config/index.js";
+import { loadFbaInventoryDetailRows } from "./inventoryProvisionService.js";
+
 export const RISK_PARAMETERS = Object.freeze({
   annualCapitalCostRate: 0.12,
   clearanceUnitPriceOriginal: 9.9,
@@ -60,6 +64,28 @@ export function classifyRisk({
   return "正常";
 }
 
+function resolveRecommendation({ riskLevel, adWaste, age181PlusQuantity }) {
+  if (riskLevel === "强制处置" && adWaste) {
+    return { recommendation: "停止广告并清仓", recommendationReason: "近30天毛利为负，广告占比达到15%且库存已满足强制处置门槛" };
+  }
+  if (riskLevel === "强制处置" && toNumber(age181PlusQuantity) > 0) {
+    return { recommendation: "申请清算并停止补货", recommendationReason: "181天以上库龄库存已进入强制处置范围" };
+  }
+  if (riskLevel === "强制处置") {
+    return { recommendation: "移除 FBA 并停止补货", recommendationReason: "供货天数超过180天、动销低且近30天毛利非正" };
+  }
+  if (riskLevel === "高风险" && adWaste) {
+    return { recommendation: "停止广告并降价清仓", recommendationReason: "库存周转低于高风险门槛，广告继续投入会扩大现金占用" };
+  }
+  if (riskLevel === "高风险") {
+    return { recommendation: "降价清仓并停止补货", recommendationReason: "供货天数与动销均已触及高风险门槛" };
+  }
+  if (riskLevel === "关注") {
+    return { recommendation: "停止补货，持续观察", recommendationReason: "90天以上库龄库存周转偏慢" };
+  }
+  return { recommendation: "继续观察", recommendationReason: "未触及滞销处置门槛" };
+}
+
 export function buildSlowMovingRiskRow(source = {}, parameters = RISK_PARAMETERS) {
   const age91To180Quantity = toNumber(source.age91To180Quantity);
   const age181PlusQuantity = toNumber(source.age181PlusQuantity);
@@ -99,6 +125,7 @@ export function buildSlowMovingRiskRow(source = {}, parameters = RISK_PARAMETERS
     cashConversionRate: cashConversionRate ?? 0,
     recent30GrossProfit,
   });
+  const recommendation = resolveRecommendation({ riskLevel, adWaste, age181PlusQuantity });
 
   return {
     ...source,
@@ -122,6 +149,7 @@ export function buildSlowMovingRiskRow(source = {}, parameters = RISK_PARAMETERS
     capitalCostThreeMonths,
     cashRiskAmount,
     riskLevel,
+    ...recommendation,
     clearanceRecoveryOriginal: round(agedQuantity * parameters.clearanceUnitPriceOriginal, 2),
     liquidationRecoveryOriginal: round(agedQuantity * parameters.liquidationUnitPriceOriginal, 2),
     removalFeeStatus: "unavailable",
@@ -135,7 +163,7 @@ function riskKey({ sid = 0, msku = "" } = {}) {
 }
 
 function ageAmount(row) {
-  return round(toNumber(row.quantity) * toNumber(row.unitCost));
+  return toNumber(row.ageBucketAmount) || round(toNumber(row.quantity) * toNumber(row.unitCost));
 }
 
 function groupInventoryRows(rows = []) {
@@ -169,7 +197,7 @@ function groupInventoryRows(rows = []) {
     const amount = ageAmount(row);
     const totalInventory = toNumber(row.totalInventory);
     target.availableQuantity = Math.max(target.availableQuantity, totalInventory || quantity);
-    target.inventoryAmount = Math.max(target.inventoryAmount, round((totalInventory || quantity) * toNumber(row.unitCost)));
+    target.inventoryAmount = Math.max(target.inventoryAmount, toNumber(row.inventoryAmount), round((totalInventory || quantity) * toNumber(row.unitCost)));
     target.historicalDaysOfSupply = Math.max(target.historicalDaysOfSupply, toNumber(row.historicalDaysOfSupply));
     target.estimatedStorageCostNextMonth = round(target.estimatedStorageCostNextMonth + toNumber(row.estimatedStorageCostAllocation));
     if (toNumber(row.ageDays) >= 91 && toNumber(row.ageDays) <= 180) {
@@ -319,11 +347,25 @@ export function createSlowMovingRiskService({
   return { getDashboard };
 }
 
-export async function getSlowMovingRiskDashboard(filters = {}, {
-  adapter = getLingxingAdapter(),
-  loadInventoryRows = () => loadFbaInventoryDetailRows({ adapter }),
-  now,
-} = {}) {
+export async function getSlowMovingRiskDashboard(filters = {}, dependencies = {}) {
+  const now = dependencies.now;
+  const currentTime = typeof now === "function" ? now() : new Date();
+  if (!Object.keys(dependencies).length && getConfig().dataProvider !== "lingxing") {
+    return buildSlowMovingRiskDashboard({
+      inventoryRows: [],
+      profitRows: [],
+      dateRange: filters.dateRange || completedWeeklyRange(currentTime),
+      filters: filters.filters || {},
+      parameters: filters.parameters || RISK_PARAMETERS,
+      generatedAt: currentTime.toISOString(),
+      dataSources: {
+        inventory: { status: "mock", rowCount: 0 },
+        orderProfit: { status: "mock", rowCount: 0 },
+      },
+    });
+  }
+  const adapter = dependencies.adapter || getLingxingAdapter();
+  const loadInventoryRows = dependencies.loadInventoryRows || (() => loadFbaInventoryDetailRows({ adapter }));
   const service = createSlowMovingRiskService({
     loadInventoryRows,
     fetchOrderProfit: (request) => adapter.fetchMskuOrderProfit(request),
@@ -333,5 +375,3 @@ export async function getSlowMovingRiskDashboard(filters = {}, {
   });
   return service.getDashboard(filters);
 }
-import { getLingxingAdapter } from "../adapters/lingxingAdapter.js";
-import { loadFbaInventoryDetailRows } from "./inventoryProvisionService.js";

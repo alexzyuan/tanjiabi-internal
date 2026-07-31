@@ -1044,27 +1044,26 @@ body:not(.login-body) #store-inspection-report-output.store-inspection-report-ou
 .sales-daily-input{width:43px;height:24px;border:1px solid var(--tj-border-control);border-radius:5px;padding:0 5px;text-align:right;color:var(--tj-text-body);background:color-mix(in srgb,var(--tj-warning) 5%,var(--tj-content-bg))}
 .sales-forecast-table .image-placeholder{width:34px;height:34px;border-radius:var(--spectrum-control-radius)}
 .sales-daily-input:focus{outline:0;border-color:var(--tj-action-blue);box-shadow:0 0 0 3px color-mix(in srgb,var(--tj-action-blue) 16%,transparent);background:var(--tj-content-bg)}
-#view-clearance .clearance-rate-panel{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
-.clearance-rate-panel label{display:grid;align-content:start}
-.clearance-rate-panel input{width:100%}
-#view-clearance .clearance-workbench{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(280px,0.65fr);gap:var(--spectrum-spacing-150);margin-top:var(--spectrum-spacing-150)}
-#view-clearance .clearance-input-panel,#view-clearance .clearance-rule-card,#view-clearance .clearance-result-panel{min-width:0}
-#view-clearance .clearance-paste-label{display:grid;gap:var(--spectrum-spacing-75);color:var(--tj-text-muted);font-size:13px;font-weight:700}
-.clearance-paste-label textarea{width:100%;min-height:260px;resize:vertical;font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace;line-height:1.5}
-#view-clearance .clearance-rule-list{display:grid;gap:var(--spectrum-spacing-100)}
-.clearance-rule-list div{display:grid;gap:var(--spectrum-spacing-50);padding:var(--spectrum-spacing-100);border:1px solid var(--tj-border-strong);border-radius:var(--spectrum-control-radius);background:var(--tj-surface-muted)}
-.clearance-rule-list strong{color:var(--tj-text-strong);font-size:13px}
-.clearance-rule-list span{color:var(--tj-text-muted);font-size:12px;line-height:1.45}
-#view-clearance .clearance-kpi-grid{grid-template-columns:repeat(auto-fill,minmax(var(--tj-kpi-card-min-width),var(--tj-kpi-card-width)));justify-content:start;margin-top:var(--spectrum-spacing-150)}
-#view-clearance .clearance-result-panel{margin-top:var(--spectrum-spacing-150)}
-#view-clearance .clearance-action-row{background:color-mix(in srgb,var(--tj-warning) 10%,var(--tj-content-bg))}
-#view-clearance .clearance-positive{color:var(--spectrum-positive);font-weight:700}
-#view-clearance .clearance-negative{color:var(--spectrum-negative);font-weight:700}
-@media(max-width:720px){#view-clearance .clearance-rate-panel,#view-clearance .clearance-workbench,#view-clearance .clearance-kpi-grid{grid-template-columns:1fr}
-.clearance-paste-label textarea{min-height:220px}
-body:not(.login-body) #view-clearance>.module-hero{display:flex !important;align-items:stretch !important;flex-direction:column !important}
-body:not(.login-body) #view-clearance>.module-hero>div:first-child{width:100% !important}
-body:not(.login-body) #view-clearance>.module-hero .hero-actions{justify-content:flex-start !important}
+#view-clearance .slow-moving-risk-tabs{display:flex;gap:var(--spectrum-spacing-75);margin-top:var(--spectrum-spacing-150);border-bottom:1px solid var(--tj-border-strong)}
+#view-clearance .slow-moving-risk-tabs button{padding:var(--spectrum-spacing-100) var(--spectrum-spacing-150);border:0;border-bottom:2px solid transparent;background:transparent;color:var(--tj-text-muted);font:inherit;font-weight:700;cursor:pointer}
+#view-clearance .slow-moving-risk-tabs button.is-active{border-bottom-color:var(--tj-action-blue);color:var(--tj-text-strong)}
+#view-clearance .slow-moving-risk-tabs button:focus-visible{outline:0;box-shadow:var(--tj-focus-ring)}
+#view-clearance .slow-moving-risk-panel{padding:var(--spectrum-spacing-125) 0;color:var(--tj-text-muted)}
+#view-clearance .slow-moving-risk-history-label{display:grid;gap:var(--spectrum-spacing-50);max-width:260px;font-weight:700}
+#view-clearance .slow-moving-risk-kpis{grid-template-columns:repeat(auto-fit,minmax(var(--tj-kpi-card-min-width),var(--tj-kpi-card-width)));justify-content:start;margin-top:var(--spectrum-spacing-100)}
+#view-clearance .slow-moving-risk-result-panel{margin-top:var(--spectrum-spacing-150)}
+#view-clearance .slow-moving-risk-table-wrap{max-width:100%}
+#view-clearance .slow-moving-risk-row--强制处置{background:color-mix(in srgb,var(--tj-warning) 12%,var(--tj-content-bg))}
+#view-clearance .slow-moving-risk-row--高风险{background:color-mix(in srgb,var(--spectrum-negative) 8%,var(--tj-content-bg))}
+#view-clearance .slow-moving-risk-row--关注{background:color-mix(in srgb,var(--tj-surface-muted) 70%,var(--tj-content-bg))}
+#view-clearance .slow-moving-risk-row strong{font-weight:700}
+#view-clearance .slow-moving-risk-row small{color:var(--tj-text-muted)}
+@media(max-width:720px){#view-clearance>.module-hero{grid-template-columns:1fr;align-items:start}
+#view-clearance>.module-hero .hero-actions{min-width:0;justify-content:flex-start}
+#view-clearance>.module-hero .hero-actions small{flex:1 1 100%;overflow-wrap:anywhere}
+#view-clearance .slow-moving-risk-tabs{overflow-x:auto}
+#view-clearance .slow-moving-risk-tabs button{flex:0 0 auto}
+#view-clearance .slow-moving-risk-kpis{grid-template-columns:1fr}
 }
 #view-budget{min-width:0}
 #view-budget .budget-upload-box,#view-budget .detail-panel{min-width:0}

@@ -7,7 +7,7 @@ const homeQuickLinkCatalog = [
   { target: "ads", group: "销售", title: "广告复盘", description: "广告组合与关键词" },
   { target: "budget", group: "销售", title: "预算目标", description: "店铺目标与完成度" },
   { target: "purchase", group: "销售", title: "销售预估", description: "库存天数与补货建议" },
-  { target: "clearance", group: "销售", title: "动销预警", description: "毛利差额与清货建议" },
+  { target: "clearance", group: "销售", title: "动销预警", description: "FBA 库龄与现金风险处置" },
   { target: "review-rating", group: "工具", title: "review计算", description: "星级占比、目标分与补量" },
   { target: "ai-image-workflow", group: "工具", title: "AI图片工作流", description: "产品图与文案流程" },
   { target: "fba-freight", group: "物流", title: "FBA货件处理", description: "货代表格与领星发货单" },

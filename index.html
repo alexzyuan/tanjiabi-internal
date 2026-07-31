@@ -1915,51 +1915,63 @@
           <section class="module-hero">
             <div>
               <span>动销预警</span>
-              <h2>动销毛利预警</h2>
-              <p>按 MSKU 的 FBA 总库存、订单利润里的近 30 天单只平均毛利润，以及采购加头程除以售出件数，筛选近 30 天均毛利为负且库存大于 10 的库存。</p>
+              <h2>滞销处置周报</h2>
+              <p>聚合 FBA 库龄、近 30 天利润与广告数据，按现金风险金额定位本周应优先处置的 SKU。</p>
             </div>
             <div class="hero-actions">
-              <small id="clearance-real-status">未读取真实库存</small>
-              <button class="secondary-button" id="clearance-load-real-button" type="button">刷新数据</button>
+              <small id="slow-moving-risk-status">等待读取周报</small>
+              <button class="secondary-button" id="slow-moving-risk-refresh" type="button">刷新数据</button>
             </div>
           </section>
-          <section class="filters clearance-rate-panel" aria-label="动销预警筛选">
-            <label>国家<select id="clearance-country-filter" multiple size="3"><option value="">全部国家</option></select></label>
-            <label>店铺<select id="clearance-store-filter" multiple size="4"><option value="">全部店铺</option></select></label>
-            <label>运营<select id="clearance-owner-filter"><option value="">全部运营</option></select></label>
+          <div class="slow-moving-risk-tabs" role="tablist" aria-label="动销预警视图">
+            <button id="slow-moving-risk-weekly-tab" type="button" role="tab" aria-controls="slow-moving-risk-weekly-panel" aria-selected="true" data-slow-moving-risk-tab="weekly">滞销处置周报</button>
+            <button id="slow-moving-risk-live-tab" type="button" role="tab" aria-controls="slow-moving-risk-live-panel" aria-selected="false" tabindex="-1" data-slow-moving-risk-tab="live">日常预警</button>
+            <button id="slow-moving-risk-history-tab" type="button" role="tab" aria-controls="slow-moving-risk-history-panel" aria-selected="false" tabindex="-1" data-slow-moving-risk-tab="history">历史周报</button>
+          </div>
+          <section id="slow-moving-risk-weekly-panel" class="slow-moving-risk-panel" role="tabpanel" aria-labelledby="slow-moving-risk-weekly-tab" data-slow-moving-risk-panel="weekly">
+            <p>每周二 09:00（北京时间）生成，统计截至上周日的连续 30 天数据。</p>
           </section>
-          <section class="module-grid clearance-kpi-grid" aria-label="动销预警概览">
-            <article class="metric-tile"><span>预警 MSKU</span><strong id="clearance-msku-count">0</strong><small>均毛利为负，库存>10</small></article>
-            <article class="metric-tile"><span>建议清货 MSKU</span><strong id="clearance-daily-cost">0</strong><small id="clearance-daily-cost-cny">均毛利为负，库存>10</small></article>
-            <article class="metric-tile"><span>近30天单只均毛利</span><strong id="clearance-hold-cost">$0</strong><small>按销量加权</small></article>
-            <article class="metric-tile"><span>单只货值</span><strong id="clearance-loss">$0</strong><small>按近30天销量加权</small></article>
-            <article class="metric-tile"><span>库存差额</span><strong id="clearance-delta">$0</strong><small id="clearance-delta-note">按 |均毛利| - 单只货值 加权</small></article>
+          <section id="slow-moving-risk-live-panel" class="slow-moving-risk-panel" role="tabpanel" aria-labelledby="slow-moving-risk-live-tab" data-slow-moving-risk-panel="live" hidden>
+            <section class="filters slow-moving-risk-filters" aria-label="日常预警筛选">
+              <label>国家<select id="slow-moving-risk-country-filter" multiple size="3"><option value="">全部国家</option></select></label>
+              <label>店铺<select id="slow-moving-risk-store-filter" multiple size="4"><option value="">全部店铺</option></select></label>
+              <label>运营<select id="slow-moving-risk-owner-filter"><option value="">全部运营</option></select></label>
+              <label>风险<select id="slow-moving-risk-level-filter"><option value="">全部等级</option><option value="强制处置">强制处置</option><option value="高风险">高风险</option><option value="关注">关注</option><option value="正常">正常</option></select></label>
+            </section>
           </section>
-          <article class="panel clearance-result-panel">
+          <section id="slow-moving-risk-history-panel" class="slow-moving-risk-panel" role="tabpanel" aria-labelledby="slow-moving-risk-history-tab" data-slow-moving-risk-panel="history" hidden>
+            <label class="slow-moving-risk-history-label">报告周<select id="slow-moving-risk-history-select"><option value="">暂无历史周报</option></select></label>
+          </section>
+          <section class="module-grid slow-moving-risk-kpis" aria-label="滞销处置周报概览">
+            <article class="metric-tile"><span>高风险 SKU</span><strong id="slow-moving-risk-kpi-count">0</strong><small>强制处置与高风险</small></article>
+            <article class="metric-tile"><span>90天+ 库存数量</span><strong id="slow-moving-risk-kpi-quantity">0</strong><small>件</small></article>
+            <article class="metric-tile"><span>90天+ 库存金额</span><strong id="slow-moving-risk-kpi-amount">—</strong><small>统一币种</small></article>
+            <article class="metric-tile"><span>近30日毛利</span><strong id="slow-moving-risk-kpi-profit">—</strong><small>强制处置与高风险 SKU</small></article>
+          </section>
+          <article class="panel slow-moving-risk-result-panel">
             <div class="panel-head">
-              <h2>MSKU 明细对比</h2>
-              <span id="clearance-result-status">等待计算</span>
+              <h2>现金风险 SKU 明细</h2>
+              <span>按资金风险金额降序</span>
             </div>
-            <div class="table-wrap clearance-table-wrap">
-              <table>
+            <div class="table-wrap data-table-wrap--detail slow-moving-risk-table-wrap">
+              <table class="data-table data-table--middle data-table--detail slow-moving-risk-table" data-table-key="slow-moving-risk-weekly">
                 <thead>
                   <tr>
-                    <th>风险</th>
-                    <th>国家</th>
-                    <th>店铺</th>
-                    <th>运营</th>
-                    <th>MSKU</th>
-                    <th>库存</th>
-                    <th>日销</th>
-                    <th>可售天数</th>
-                    <th>近30天均毛利</th>
-                    <th>近7天均毛利</th>
-                    <th>单只货值</th>
-                    <th>差额</th>
-                    <th>货值合计</th>
+                    <th data-column-key="risk-level">风险</th>
+                    <th data-column-key="store-country">店铺 / 站点</th>
+                    <th data-column-key="msku">MSKU</th>
+                    <th data-column-key="inventory-quantity">当前可售 / 90天+</th>
+                    <th data-column-key="inventory-amount">库存金额 / 90天+</th>
+                    <th data-column-key="supply-conversion">可售天数 / 30日转化</th>
+                    <th data-column-key="sales-gross-profit">30日销量 / 毛利 / 均毛利</th>
+                    <th data-column-key="advertising">广告花费 / 占比 / ACOS</th>
+                    <th data-column-key="cash-risk">资金风险金额</th>
+                    <th data-column-key="recovery-scenarios">清仓 / 清算回收</th>
+                    <th data-column-key="removal-fee">移除费</th>
+                    <th data-column-key="recommendation">本周建议</th>
                   </tr>
                 </thead>
-                <tbody id="clearance-table"><tr><td colspan="13">正在读取数据。</td></tr></tbody>
+                <tbody id="slow-moving-risk-table"><tr><td colspan="12">正在读取数据。</td></tr></tbody>
               </table>
             </div>
           </article>

@@ -24,6 +24,8 @@ test("loadFbaInventoryDetailRows normalizes FBA inventory rows for an injected s
   assert.equal(result.rows[0].msku, "MD-DINOBATH");
   assert.equal(result.rows[0].quantity, 623);
   assert.equal(result.rows[0].totalInventory, 646);
+  assert.equal(result.rows[0].inventoryAmount, 14728.8);
+  assert.equal(result.rows[0].historicalDaysOfSupply, 240);
 });
 
 test("inventory provision landed cost rows calculate provision amount by aging bucket", async () => {
@@ -231,6 +233,8 @@ test("inventory provision normalizes Lingxing age buckets and allocates storage 
       inv_age_331_to_365_days: "5",
       inv_age_365_plus_days: "5",
       estimated_storage_cost_next_month: "200",
+      total_amount: "400",
+      historical_days_of_supply: "180",
     },
   ], [
     {
@@ -250,6 +254,8 @@ test("inventory provision normalizes Lingxing age buckets and allocates storage 
   assert.equal(rows[0].storageFeeAllocationRate, 24);
   assert.equal(rows[1].estimatedStorageCostAllocation, 112);
   assert.equal(rows[1].storageFeeAllocationRate, 56);
+  assert.equal(rows[0].inventoryAmount, 400);
+  assert.equal(rows[0].historicalDaysOfSupply, 180);
 });
 
 test("inventory provision export workbook includes detail, summary, and meta sheets", async () => {

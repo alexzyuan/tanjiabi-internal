@@ -218,7 +218,7 @@ test("app.js starts using shared dashboard section loader", async () => {
   const authShellFeatureSource = await readFile(new URL("../assets/js/features/auth-shell.js", import.meta.url), "utf8");
   const budgetTargetsFeatureSource = await readFile(new URL("../assets/js/features/budget-targets.js", import.meta.url), "utf8");
   const cashflowFeatureSource = await readFile(new URL("../assets/js/features/cashflow-dashboard.js", import.meta.url), "utf8");
-  const clearanceFeatureSource = await readFile(new URL("../assets/js/features/clearance-calculator.js", import.meta.url), "utf8");
+  const slowMovingRiskFeatureSource = await readFile(new URL("../assets/js/features/slow-moving-risk.js", import.meta.url), "utf8");
   const knowledgeFeatureSource = await readFile(new URL("../assets/js/features/knowledge-library.js", import.meta.url), "utf8");
   const inventoryProvisionFeatureSource = await readFile(new URL("../assets/js/features/inventory-provision.js", import.meta.url), "utf8");
   const lowFeeFeatureSource = await readFile(new URL("../assets/js/features/low-inventory-fee.js", import.meta.url), "utf8");
@@ -294,10 +294,10 @@ test("app.js starts using shared dashboard section loader", async () => {
   );
   const reviewRatingSource = appSource.slice(
     appSource.indexOf("createReviewRatingFeature({"),
-    appSource.indexOf("createClearanceCalculatorFeature({"),
+    appSource.indexOf("createSlowMovingRiskFeature({"),
   );
-  const clearanceSource = appSource.slice(
-    appSource.indexOf("createClearanceCalculatorFeature({"),
+  const slowMovingRiskSource = appSource.slice(
+    appSource.indexOf("createSlowMovingRiskFeature({"),
     appSource.indexOf("createAiImageWorkflowFeature({"),
   );
   const aiImageWorkflowSource = appSource.slice(
@@ -426,7 +426,7 @@ test("app.js starts using shared dashboard section loader", async () => {
   assert.match(appSource, /import \{ createSidebarShellFeature \} from "\.\/assets\/js\/features\/sidebar-shell\.js/);
   assert.match(appSource, /import \{ createBreadcrumbShellFeature \} from "\.\/assets\/js\/features\/breadcrumb-shell\.js/);
   assert.match(appSource, /import \{ createStoreInspectionFeature \} from "\.\/assets\/js\/features\/store-inspection\.js/);
-  assert.match(appSource, /import \{ createClearanceCalculatorFeature \} from "\.\/assets\/js\/features\/clearance-calculator\.js/);
+  assert.match(appSource, /import \{ createSlowMovingRiskFeature \} from "\.\/assets\/js\/features\/slow-moving-risk\.js/);
   assert.match(appSource, /import \{ createKnowledgeLibraryFeature \} from "\.\/assets\/js\/features\/knowledge-library\.js/);
   assert.match(appSource, /import \{ createSyncCenterFeature \} from "\.\/assets\/js\/features\/sync-center\.js/);
   assert.match(appSource, /import \{ createTopbarStatusFeature \} from "\.\/assets\/js\/features\/topbar-status\.js/);
@@ -460,7 +460,7 @@ test("app.js starts using shared dashboard section loader", async () => {
   assert.match(appSource, /createSidebarShellFeature\(\{/);
   assert.match(appSource, /createBreadcrumbShellFeature\(\{/);
   assert.match(appSource, /createStoreInspectionFeature\(\{/);
-  assert.match(appSource, /createClearanceCalculatorFeature\(\{/);
+  assert.match(appSource, /createSlowMovingRiskFeature\(\{/);
   assert.match(appSource, /createKnowledgeLibraryFeature\(\{/);
   assert.match(appSource, /createSyncCenterFeature\(\{/);
   assert.match(appSource, /createTopbarStatusFeature\(\{/);
@@ -547,7 +547,7 @@ test("app.js starts using shared dashboard section loader", async () => {
   assert.match(sidebarShellFeatureSource, /export function createSidebarShellFeature/);
   assert.match(breadcrumbShellFeatureSource, /export function createBreadcrumbShellFeature/);
   assert.match(storeInspectionFeatureSource, /export function createStoreInspectionFeature/);
-  assert.match(clearanceFeatureSource, /export function createClearanceCalculatorFeature/);
+  assert.match(slowMovingRiskFeatureSource, /export function createSlowMovingRiskFeature/);
   assert.match(knowledgeFeatureSource, /export function createKnowledgeLibraryFeature/);
   assert.match(adminSettingsFeatureSource, /export function createAdminSettingsFeature/);
   assert.match(syncCenterFeatureSource, /export function createSyncCenterFeature/);
@@ -602,10 +602,10 @@ test("app.js starts using shared dashboard section loader", async () => {
   assert.ok(breadcrumbShellFeatureSource.includes("function renderTopbarBreadcrumb"), "missing topbar breadcrumb renderer");
   assert.ok(breadcrumbShellFeatureSource.includes("function applyModuleBreadcrumbs"), "missing module breadcrumb applier");
   assert.ok(breadcrumbShellFeatureSource.includes("function setupBreadcrumbNavigation"), "missing breadcrumb navigation setup");
-  assert.ok(clearanceFeatureSource.includes("async function loadClearanceInventory"), "missing loadClearanceInventory feature loader");
-  assert.ok(clearanceFeatureSource.includes("async function loadClearanceView"), "missing loadClearanceView feature entry");
-  assert.ok(clearanceFeatureSource.includes("function renderClearanceCalculator"), "missing renderClearanceCalculator feature renderer");
-  assert.ok(clearanceFeatureSource.includes("function setupClearanceCalculator"), "missing setupClearanceCalculator feature setup");
+  assert.ok(slowMovingRiskFeatureSource.includes("async function loadSlowMovingRiskLive"), "missing live-risk feature loader");
+  assert.ok(slowMovingRiskFeatureSource.includes("async function loadSlowMovingRiskView"), "missing weekly-risk feature entry");
+  assert.ok(slowMovingRiskFeatureSource.includes("function renderDashboard"), "missing slow-moving-risk renderer");
+  assert.ok(slowMovingRiskFeatureSource.includes("function setupSlowMovingRisk"), "missing slow-moving-risk setup");
   assert.ok(knowledgeFeatureSource.includes("async function loadKnowledgeLibrary"), "missing loadKnowledgeLibrary feature loader");
   assert.ok(knowledgeFeatureSource.includes("function renderKnowledgeLibrary"), "missing renderKnowledgeLibrary feature renderer");
   assert.ok(knowledgeFeatureSource.includes("function closeKnowledgeExternalDocument"), "missing closeKnowledgeExternalDocument feature action");
@@ -882,8 +882,8 @@ test("app.js starts using shared dashboard section loader", async () => {
   assert.equal(appSource.includes("const CLEARANCE_SAMPLE_ROWS"), false);
   assert.equal(appSource.includes("function buildClearanceResults"), false);
   assert.equal(appSource.includes("function populateClearanceStoreOptions"), false);
-  assert.equal(clearanceSource.includes("fetch(`/api/dashboard/clearance-inventory"), false);
-  assert.equal(clearanceSource.includes("setButtonBusy("), false);
+  assert.equal(slowMovingRiskSource.includes("fetch(`/api/dashboard/clearance-inventory"), false);
+  assert.equal(appSource.includes("function refreshSlowMovingRisk"), false);
 
   assert.equal(appSource.includes("const KNOWLEDGE_CATEGORIES"), false);
   assert.equal(appSource.includes("const KNOWLEDGE_BUILT_IN_DOCUMENTS"), false);
@@ -1035,6 +1035,15 @@ test("app.js starts using shared dashboard section loader", async () => {
   assert.equal(appSource.includes('bind(document, "#inventory-provision'), false);
   assert.match(inventoryProvisionFeatureSource, /bind\(root, "#inventory-provision-refresh", "click"/);
   assert.match(inventoryProvisionFeatureSource, /bind\(root, "#inventory-provision-keyword", "keydown"/);
+});
+
+test("sales clearance view is replaced by slow-moving risk report tabs", async () => {
+  const source = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  assert.match(source, /data-slow-moving-risk-tab="weekly"/);
+  assert.match(source, /data-slow-moving-risk-tab="live"/);
+  assert.match(source, /data-slow-moving-risk-tab="history"/);
+  assert.match(source, /id="slow-moving-risk-table"/);
+  assert.equal(source.includes("clearance-load-real-button"), false);
 });
 
 test("shared filter controls live outside app.js", async () => {

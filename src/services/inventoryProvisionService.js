@@ -56,12 +56,12 @@ const mockInventoryRows = [
 }));
 
 const ageQuantityAliases = [
-  { key: "0_30", ageDays: 15, keys: ["age0To30Qty", "age_0_30_qty", "age_0_30_quantity", "qty_0_30", "quantity_0_30", "stock_age_0_30", "inv_age_0_to_30_days"] },
-  { key: "31_60", ageDays: 45, keys: ["age31To60Qty", "age_31_60_qty", "age_31_60_quantity", "qty_31_60", "quantity_31_60", "stock_age_31_60", "inv_age_31_to_60_days"] },
-  { key: "61_90", ageDays: 75, keys: ["age61To90Qty", "age_61_90_qty", "age_61_90_quantity", "qty_61_90", "quantity_61_90", "stock_age_61_90", "inv_age_61_to_90_days"] },
-  { key: "91_180", ageDays: 120, keys: ["age91To180Qty", "age_91_180_qty", "age_91_180_quantity", "qty_91_180", "quantity_91_180", "stock_age_91_180", "inv_age_91_to_180_days"] },
-  { key: "181_270", ageDays: 210, keys: ["age181To270Qty", "age_181_270_qty", "age_181_270_quantity", "qty_181_270", "quantity_181_270", "stock_age_181_270", "inv_age_181_to_270_days"] },
-  { key: "271_plus", ageDays: 300, keys: ["age271PlusQty", "age_271_plus_qty", "age_271_plus_quantity", "qty_271_plus", "quantity_271_plus", "stock_age_271_plus", "age_271_365_qty", "qty_271_365", "age_365_plus_qty", "qty_365_plus", "inv_age_271_to_365_days", "inv_age_365_plus_days"] },
+  { key: "0_30", ageDays: 15, keys: ["age0To30Qty", "age_0_30_qty", "age_0_30_quantity", "qty_0_30", "quantity_0_30", "stock_age_0_30", "inv_age_0_to_30_days"], amountKeys: ["inv_age_0_to_30_days_price", "age_0_30_amount"] },
+  { key: "31_60", ageDays: 45, keys: ["age31To60Qty", "age_31_60_qty", "age_31_60_quantity", "qty_31_60", "quantity_31_60", "stock_age_31_60", "inv_age_31_to_60_days"], amountKeys: ["inv_age_31_to_60_days_price", "age_31_60_amount"] },
+  { key: "61_90", ageDays: 75, keys: ["age61To90Qty", "age_61_90_qty", "age_61_90_quantity", "qty_61_90", "quantity_61_90", "stock_age_61_90", "inv_age_61_to_90_days"], amountKeys: ["inv_age_61_to_90_days_price", "age_61_90_amount"] },
+  { key: "91_180", ageDays: 120, keys: ["age91To180Qty", "age_91_180_qty", "age_91_180_quantity", "qty_91_180", "quantity_91_180", "stock_age_91_180", "inv_age_91_to_180_days"], amountKeys: ["inv_age_91_to_180_days_price", "age_91_180_amount"] },
+  { key: "181_270", ageDays: 210, keys: ["age181To270Qty", "age_181_270_qty", "age_181_270_quantity", "qty_181_270", "quantity_181_270", "stock_age_181_270", "inv_age_181_to_270_days"], amountKeys: ["inv_age_181_to_270_days_price", "age_181_270_amount"] },
+  { key: "271_plus", ageDays: 300, keys: ["age271PlusQty", "age_271_plus_qty", "age_271_plus_quantity", "qty_271_plus", "quantity_271_plus", "stock_age_271_plus", "age_271_365_qty", "qty_271_365", "age_365_plus_qty", "qty_365_plus", "inv_age_271_to_365_days", "inv_age_365_plus_days"], amountKeys: ["inv_age_271_to_365_days_price", "inv_age_365_plus_days_price", "age_271_plus_amount"] },
 ];
 
 function todayText() {
@@ -391,6 +391,19 @@ function baseLingxingInventoryRow(record, sellersBySid) {
     "unit_cg_transport_costs",
   ]));
   const totalInventory = fbaTotalInventory(record);
+  const inventoryAmount = toNumber(readFirst(record, [
+    "total_amount",
+    "totalAmount",
+    "inventory_amount",
+    "inventoryAmount",
+    "total_inventory_amount",
+  ]));
+  const historicalDaysOfSupply = toNumber(readFirst(record, [
+    "historical_days_of_supply",
+    "historicalDaysOfSupply",
+    "days_of_supply",
+    "daysOfSupply",
+  ]));
   const estimatedStorageCostNextMonth = toNumber(readFirst(record, [
     "estimated_storage_cost_next_month",
     "estimatedStorageCostNextMonth",
@@ -415,6 +428,8 @@ function baseLingxingInventoryRow(record, sellersBySid) {
     purchaseCost,
     firstLegCost,
     totalInventory,
+    inventoryAmount,
+    historicalDaysOfSupply,
     estimatedStorageCostNextMonth,
   };
 }
@@ -438,7 +453,7 @@ function normalizeLingxingInventoryRows(records = [], sellers = []) {
   records.forEach((record) => {
     const base = baseLingxingInventoryRow(record, sellersBySid);
     const bucketQuantities = ageQuantityAliases
-      .map((alias) => ({ ...alias, quantity: readAgeBucketQuantity(record, alias) }))
+      .map((alias) => ({ ...alias, quantity: readAgeBucketQuantity(record, alias), amount: toNumber(readFirst(record, alias.amountKeys || [])) }))
       .filter((item) => item.quantity > 0);
 
     if (bucketQuantities.length) {
@@ -450,6 +465,7 @@ function normalizeLingxingInventoryRows(records = [], sellers = []) {
           ...base,
           ageDays: item.ageDays,
           quantity: item.quantity,
+          ageBucketAmount: item.amount,
           estimatedStorageCostAllocation: round(Number(base.estimatedStorageCostNextMonth || 0) * storageShare),
           storageFeeAllocationRate: round(storageShare * 100, 4),
         });
@@ -479,6 +495,7 @@ function normalizeLingxingInventoryRows(records = [], sellers = []) {
         "qty",
         "stock_quantity",
       ])),
+      ageBucketAmount: base.inventoryAmount,
       estimatedStorageCostAllocation: Number(base.estimatedStorageCostNextMonth || 0),
       storageFeeAllocationRate: 100,
     });

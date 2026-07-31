@@ -505,7 +505,7 @@ test("shared table variants replace responsive page and legacy table patches", a
   assert.match(componentSource, /^table\.data-table--detail th\s*\{/m);
   assert.match(indexSource, /class="table-wrap data-table-wrap--detail"/);
   assert.match(indexSource, /class="data-table data-table--detail"/);
-  assert.equal((indexSource.match(/class="[^"]*data-table--middle[^"]*"/g) || []).length, 3);
+  assert.equal((indexSource.match(/class="[^"]*data-table--middle[^"]*"/g) || []).length, 4);
   assert.equal(/\.app-shell\s*\{[\s\S]*?min-width:\s*1180px/s.test(factorySource), false);
   assert.equal(/\.dashboard\s*\{[\s\S]*?min-width:\s*1000px/s.test(factorySource), false);
   assert.equal(/\.sales-forecast-table \.sticky-(?:focus|hide|image)\s*\{[\s\S]*?text-align:/s.test(salesForecastSource), false);
@@ -1410,38 +1410,31 @@ test("review rating styles live in the page layer and use semantic tokens", asyn
   });
 });
 
-test("clearance calculator styles live in the page layer and use semantic tokens", async () => {
-  const pageSource = await readFile(new URL("../assets/css/pages/26-clearance-calculator.css", import.meta.url), "utf8");
+test("slow-moving risk styles live in the page layer and use semantic tokens", async () => {
+  const pageSource = await readFile(new URL("../assets/css/pages/26-slow-moving-risk.css", import.meta.url), "utf8");
   const legacySource = await readFile(new URL("../assets/css/legacy/current.css", import.meta.url), "utf8");
 
-  assert.match(pageSource, /^\/\* Clearance calculator page\. \*\//m);
-  assert.match(pageSource, /^#view-clearance \.clearance-rate-panel\s*\{/m);
-  assert.match(pageSource, /^#view-clearance \.clearance-workbench\s*\{/m);
-  assert.match(pageSource, /^#view-clearance \.clearance-paste-label\s*\{/m);
-  assert.match(pageSource, /^#view-clearance \.clearance-rule-list\s*\{/m);
-  assert.match(pageSource, /^#view-clearance \.clearance-kpi-grid\s*\{/m);
-  assert.match(pageSource, /^#view-clearance \.clearance-action-row\s*\{/m);
+  assert.match(pageSource, /^\/\* Slow-moving risk page\. \*\//m);
+  assert.match(pageSource, /^#view-clearance \.slow-moving-risk-tabs\s*\{/m);
+  assert.match(pageSource, /^#view-clearance \.slow-moving-risk-kpis\s*\{/m);
+  assert.match(pageSource, /^#view-clearance \.slow-moving-risk-table-wrap\s*\{/m);
   assert.match(pageSource, /^@media \(max-width:\s*720px\)/m);
+  assert.match(pageSource, /#view-clearance > \.module-hero\s*\{/m);
   assert.match(pageSource, /var\(--tj-content-bg\)/);
   assert.match(pageSource, /var\(--tj-surface-muted\)/);
   assert.match(pageSource, /var\(--tj-text-muted\)/);
   assert.match(pageSource, /var\(--tj-border-strong\)/);
-  assert.match(pageSource, /var\(--spectrum-positive\)/);
   assert.match(pageSource, /var\(--spectrum-negative\)/);
   assert.equal(/#(?:f8fbff|ffffff|d8e4f0|1677ff|2563eb|0b66d8)\b/i.test(pageSource), false);
 
   [
-    ".clearance-rate-panel {",
-    ".clearance-workbench {",
-    ".clearance-paste-label {",
-    ".clearance-rule-list {",
-    ".clearance-kpi-grid {",
-    ".clearance-table-wrap table {",
-    ".clearance-action-row {",
-    ".clearance-positive {",
-    ".clearance-negative {",
+    ".slow-moving-risk-tabs {",
+    ".slow-moving-risk-panel {",
+    ".slow-moving-risk-kpis {",
+    ".slow-moving-risk-table-wrap {",
+    ".slow-moving-risk-row--强制处置 {",
   ].forEach((snippet) => {
-    assert.equal(legacySource.includes(snippet), false, `${snippet} should be owned by assets/css/pages/26-clearance-calculator.css`);
+    assert.equal(legacySource.includes(snippet), false, `${snippet} should be owned by assets/css/pages/26-slow-moving-risk.css`);
   });
 });
 

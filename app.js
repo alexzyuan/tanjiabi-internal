@@ -41,7 +41,7 @@ import { createSupplierDetailFeature } from "./assets/js/features/supplier-detai
 import { createPayablesDashboardFeature } from "./assets/js/features/payables-dashboard.js?v=20260706-frontend-refactor-v1";
 import { createReviewRatingFeature } from "./assets/js/features/review-rating.js?v=20260706-frontend-refactor-v1";
 import { createStoreInspectionFeature } from "./assets/js/features/store-inspection.js?v=20260706-frontend-refactor-v1";
-import { createClearanceCalculatorFeature } from "./assets/js/features/clearance-calculator.js?v=20260706-frontend-refactor-v1";
+import { createSlowMovingRiskFeature } from "./assets/js/features/slow-moving-risk.js?v=20260731-slow-moving-risk-v1";
 import { createKnowledgeLibraryFeature } from "./assets/js/features/knowledge-library.js?v=20260706-frontend-refactor-v1";
 import { createAiImageWorkflowFeature } from "./assets/js/features/ai-image-workflow.js?v=20260706-frontend-refactor-v1";
 import { createAdminSettingsFeature } from "./assets/js/features/admin-settings.js?v=20260706-frontend-refactor-v1";
@@ -229,7 +229,7 @@ let loadAftersalesMailDashboard = async () => {};
 let loadBudgetUploads = async () => {};
 let loadBudgetTargets = async () => {};
 let loadCashflowDashboard = async () => {};
-let loadClearanceView = async () => {};
+let loadSlowMovingRiskView = async () => {};
 let loadInventoryProvision = async () => {};
 let loadKnowledgeLibrary = async () => {};
 let loadLowInventoryFee = async () => {};
@@ -262,7 +262,7 @@ let setDefaultFactoryInventoryDates = () => {};
 let setDefaultAdPortfolioDate = () => {};
 let setDefaultAdKeywordDate = () => {};
 let setupHomeQuickLinks = () => {};
-let setupClearanceCalculator = () => {};
+let setupSlowMovingRisk = () => {};
 let setupKnowledgeLibrary = () => {};
 let setupAiImageWorkflow = () => {};
 let setupAdminSettings = () => {};
@@ -944,14 +944,15 @@ async function refreshDashboardFromFilters() {
   setText,
 }));
 
-({ loadClearanceView, setupClearanceCalculator } = createClearanceCalculatorFeature({
+({ loadSlowMovingRiskView, setupSlowMovingRisk } = createSlowMovingRiskFeature({
   root: document,
   bind,
+  bindAll,
   escapeHtml,
-  fieldValue,
+  fetchImpl: fetch.bind(window),
   formatActualMoney,
   formatNumber,
-  selectedFilterValue,
+  formatPercent,
   selectedFilterValues,
   setButtonBusy,
   setSelectOptions,
@@ -1124,7 +1125,7 @@ function setupNavigation() {
       calculateReviewRating();
     }
     if (view === "clearance") {
-      await loadClearanceView();
+      await loadSlowMovingRiskView();
     }
     if (view === "provision") {
       setDefaultInventoryProvisionDate();
@@ -1184,7 +1185,7 @@ function setupNavigation() {
   setupBreadcrumbNavigation();
   setupAuthShell();
   updateNavGroupActiveStates();
-  setupClearanceCalculator();
+  setupSlowMovingRisk();
   setupKnowledgeLibrary();
   setupReviewRatingCalculator();
   setupAiImageWorkflow();
