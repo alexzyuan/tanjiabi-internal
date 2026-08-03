@@ -12,6 +12,7 @@ const emptyStore = {
   version: 1,
   rows: [],
 };
+const followupStatuses = new Set(["已跟进", "调查中", "已理赔", "无需处理"]);
 
 function firstText(...values) {
   for (const value of values) {
@@ -35,6 +36,12 @@ function normalizeShipmentId(value) {
     throw new Error("保存货件差异跟进失败：缺少货件单号。");
   }
   return shipmentId;
+}
+
+function normalizeFollowupStatus(value) {
+  const status = firstText(value, "已跟进");
+  if (!followupStatuses.has(status)) throw new Error(`保存货件差异跟进失败：不支持的跟进状态 ${status}。`);
+  return status;
 }
 
 function normalizeStore(store) {
@@ -78,6 +85,7 @@ async function saveFollowup(
   const sid = normalizeSid(input?.sid);
   const shipmentId = normalizeShipmentId(input?.shipmentId);
   const operator = firstText(input?.operator, "系统");
+  const followupStatus = followedUp ? normalizeFollowupStatus(input?.followupStatus) : "";
   const updatedAt = timestampFrom(now);
   const key = shipmentKey({ sid, shipmentId });
   let savedRow;
@@ -91,6 +99,7 @@ async function saveFollowup(
         sid,
         shipmentId,
         followedUp,
+        followupStatus,
         followedUpAt: followedUp ? updatedAt : firstText(previous.followedUpAt),
         followedUpBy: followedUp ? operator : firstText(previous.followedUpBy),
         clearedAt: followedUp ? "" : updatedAt,

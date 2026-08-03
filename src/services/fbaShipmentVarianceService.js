@@ -49,7 +49,7 @@ export function normalizeFbaShipmentVarianceFilters(filters = {}, { now = new Da
     endDate: datePattern.test(providedEndDate) ? providedEndDate : formatDate(current),
     sids: normalizeSids(filters.sids || filters.sid),
     shipmentId: firstText(filters.shipmentId, filters.shipment_id),
-    shipmentStatus: firstText(filters.shipmentStatus, filters.shipment_status),
+    shipmentStatus: firstText(filters.shipmentStatus, filters.shipment_status, "RECEIVING,CLOSED"),
     followupStatus: normalizeFollowupStatus(filters.followupStatus || filters.followup_status),
     offset: Math.max(0, Number(filters.offset || 0) || 0),
     length: Math.min(500, Math.max(1, Number(filters.length || 100) || 100)),
@@ -116,6 +116,7 @@ function shipmentKey(row = {}) {
 function normalizedFollowup(record) {
   return {
     followedUp: Boolean(record?.followedUp),
+    status: firstText(record?.followupStatus),
     followedUpAt: firstText(record?.followedUpAt),
     followedUpBy: firstText(record?.followedUpBy),
     clearedAt: firstText(record?.clearedAt),
@@ -169,8 +170,9 @@ export async function getFbaShipmentVariances(filters = {}, {
 } = {}) {
   const current = normalizedNow(now);
   const normalizedFilters = normalizeFbaShipmentVarianceFilters(filters, { now: current });
-  const candidateResult = await getCandidates(normalizedFilters, { now: current.valueOf() });
-  const candidateRows = Array.isArray(candidateResult?.rows) ? candidateResult.rows : [];
+  const shipmentStatuses = new Set(normalizedFilters.shipmentStatus.split(",").map((status) => firstText(status).toUpperCase()).filter(Boolean));
+  const candidateResult = await getCandidates({ ...normalizedFilters, shipmentStatus: shipmentStatuses.size > 1 ? "" : normalizedFilters.shipmentStatus }, { now: current.valueOf() });
+  const candidateRows = (Array.isArray(candidateResult?.rows) ? candidateResult.rows : []).filter((row) => !shipmentStatuses.size || shipmentStatuses.has(firstText(row.shipmentStatus).toUpperCase()));
   const keys = candidateRows.map(shipmentKey).filter((key) => !key.startsWith("0:"));
   const followups = await listFollowups(keys);
   const allRows = candidateRows.map((shipment) => buildRow(shipment, followups, current));

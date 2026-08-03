@@ -11,6 +11,8 @@ test("shipment variance feature sends date, store and follow-up filters and pers
     "#fba-shipment-variance-followup-status": { value: "pending" },
     "#fba-shipment-variance-refresh": { disabled: false },
     "#fba-shipment-variance-table": { innerHTML: "" },
+    "#fba-shipment-variance-followup-select": { value: "调查中" },
+    "#fba-shipment-variance-followup-modal": {},
   };
   const binds = [];
   const requests = [];
@@ -50,6 +52,8 @@ test("shipment variance feature sends date, store and follow-up filters and pers
   const tableClick = binds.find(([, selector, eventName]) => selector === "#fba-shipment-variance-table" && eventName === "click")[3];
   target = { dataset: { fbaShipmentVarianceFollowup: "8708:FBA1" } };
   await tableClick({});
+  const confirmFollowup = binds.find(([, selector, eventName]) => selector === "#fba-shipment-variance-followup-confirm" && eventName === "click")[3];
+  await confirmFollowup();
   const followupRequest = requests.find((request) => request.url === "/api/fba/shipment-variances/8708/FBA1/followup");
   assert.equal(followupRequest?.options.method, "PUT");
 });

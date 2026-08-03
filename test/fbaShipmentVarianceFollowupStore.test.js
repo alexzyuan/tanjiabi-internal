@@ -34,6 +34,7 @@ test("marking a shipment follow-up persists its business key, operator and times
       sid: 8708,
       shipmentId: "FBA18QJFDCWJ",
       followedUp: true,
+      followupStatus: "已跟进",
       followedUpAt: "2026-08-03T08:00:00.000Z",
       followedUpBy: "Alice",
       clearedAt: "",

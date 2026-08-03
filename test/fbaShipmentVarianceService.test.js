@@ -14,7 +14,7 @@ test("variance filters default to the latest 30 calendar days", () => {
     endDate: "2026-08-03",
     sids: [],
     shipmentId: "",
-    shipmentStatus: "",
+    shipmentStatus: "RECEIVING,CLOSED",
     followupStatus: "",
     offset: 0,
     length: 100,
