@@ -7,6 +7,7 @@ import {
   mapStoreOperatingBudgetMetrics,
   mapStoreOperatingOrderProfitBudgetScope,
   mapStoreOperatingSellerScope,
+  normalizeStoreOperatingCountryKey,
   readStoreOperatingBudgetCurrencyCode,
 } from "./storeOperatingMonthlyReportMapper.js";
 
@@ -45,7 +46,7 @@ function monthBounds(month) {
 
 function filterSellers(sellers, filters) {
   const stores = new Set(filters.stores);
-  const countries = new Set(filters.countries);
+  const countries = new Set(filters.countries.map(normalizeStoreOperatingCountryKey));
   return sellers.filter((seller) =>
     (!stores.size || stores.has(seller.name))
     && (!countries.size || countries.has(seller.country)),

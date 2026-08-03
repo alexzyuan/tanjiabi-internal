@@ -176,6 +176,27 @@ test("empty store and country filters use every seller and pass the effective sc
   });
 });
 
+test("country filter aliases select canonical seller countries without rewriting visible filters", async () => {
+  const calls = [];
+  const adapter = fakeAdapter({
+    calls,
+    sellers: [
+      { sid: 1, name: "Store-AU", country: "澳大利亚" },
+      { sid: 2, name: "Store-US", country: "美国站" },
+    ],
+    recordsForCall: () => [],
+  });
+
+  const value = await getStoreOperatingMonthlyReport(
+    { startMonth: "2026-07", endMonth: "2026-07", countries: ["澳大利亚", "美国站"] },
+    { adapter, getBudgetTargetContext: async () => ({ rows: [], matched: false }) },
+  );
+
+  assert.deepEqual(calls[0].sids, [1, 2]);
+  assert.deepEqual(value.filters.countries, ["澳大利亚", "美国站"]);
+  assert.equal(value.meta.currencyMode, "CNY");
+});
+
 test("store and country filters intersect, and an empty effective scope never calls an unscoped API", async () => {
   const calls = [];
   let budgetCalls = 0;
