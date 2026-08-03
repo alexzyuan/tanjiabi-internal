@@ -61,6 +61,33 @@ test("monthly report delegates business column width and sorting to shared table
     "the narrow viewport hide rule must override the desktop world-clock display",
   );
   assert.match(generatedCss, /#view-store-operating-monthly-report tr\[data-report-row-level="0"\]>/);
+  const generatedDesktopClock = "body:not(.login-body) .topbar .world-clock{display:flex}";
+  const generatedNarrowBreakpoint = "@media(max-width:620px){";
+  const generatedNarrowClock = "body:not(.login-body) .topbar .world-clock{display:none}";
+  const generatedNestedHeroTwoColumns = "body:not(.login-body) .view .module-hero{display:grid;grid-template-columns:minmax(0,1fr) auto";
+  const generatedSharedHeroOneColumn = "@media(max-width:900px){body:not(.login-body) .view>.module-hero,body:not(.login-body) .view .module-hero{grid-template-columns:minmax(0,1fr)";
+  const desktopClockIndex = generatedCss.indexOf(generatedDesktopClock);
+  const narrowBreakpointIndex = generatedCss.indexOf(generatedNarrowBreakpoint);
+  const narrowClockIndex = generatedCss.indexOf(generatedNarrowClock, narrowBreakpointIndex);
+  const nestedHeroTwoColumnsIndex = generatedCss.indexOf(generatedNestedHeroTwoColumns);
+  const sharedHeroOneColumnIndex = generatedCss.indexOf(generatedSharedHeroOneColumn);
+
+  assert.notEqual(desktopClockIndex, -1, "generated CSS must retain the desktop world-clock flex layout");
+  assert.notEqual(narrowClockIndex, -1, "generated CSS must hide the world clock at 620px");
+  assert.ok(desktopClockIndex < narrowBreakpointIndex && narrowBreakpointIndex < narrowClockIndex);
+  assert.doesNotMatch(
+    generatedCss.slice(narrowClockIndex + generatedNarrowClock.length),
+    /body:not\(\.login-body\) \.topbar \.world-clock\{[^}]*display:flex/,
+    "no later generated rule may re-enable the world clock after the 620px hide rule",
+  );
+  assert.notEqual(nestedHeroTwoColumnsIndex, -1, "generated CSS must retain the shared desktop Hero layout");
+  assert.notEqual(sharedHeroOneColumnIndex, -1, "generated CSS must retain the shared 900px Hero layout");
+  assert.ok(nestedHeroTwoColumnsIndex < sharedHeroOneColumnIndex);
+  assert.doesNotMatch(
+    generatedCss.slice(sharedHeroOneColumnIndex + generatedSharedHeroOneColumn.length),
+    /body:not\(\.login-body\) \.view(?:>| )\.module-hero\{[^}]*grid-template-columns:minmax\(0,1fr\) auto/,
+    "no later generated Hero rule may reset the shared 900px single-column layout",
+  );
   const worldClockParityRule = shellParityCss.slice(
     shellParityCss.indexOf("body:not(.login-body) .topbar .world-clock"),
     shellParityCss.indexOf("body:not(.login-body) .world-clock span", shellParityCss.indexOf("body:not(.login-body) .topbar .world-clock")),
