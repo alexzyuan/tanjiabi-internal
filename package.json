@@ -13,8 +13,11 @@
     "package:deploy": "node scripts/package-deploy.js",
     "check:js": "find routes src assets/js scripts -type f -name '*.js' -print0 | xargs -0 -n 1 node --check && node --check server.js && node --check app.js",
     "check": "npm run build:css -- --check && node scripts/check-css-standards.js && npm run check:js",
-    "test": "node --test test/*.test.js",
+    "test": "node --test test/*.test.js && npm run test:store-operating-css-browser",
     "test:store-operating-css-browser": "node scripts/verify-store-operating-monthly-report-css-browser.js"
+  },
+  "devDependencies": {
+    "@playwright/cli": "0.1.17"
   },
   "dependencies": {
     "imapflow": "^1.4.3",
