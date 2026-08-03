@@ -37,18 +37,19 @@ function isPresent(value) {
 }
 
 function toFiniteNumber(value, field) {
-  const number = Number(value);
-  if (!Number.isFinite(number)) {
-    throw new Error(`订单利润字段 ${field} 必须是有限数字`);
+  const isFiniteNumber = typeof value === "number" && Number.isFinite(value);
+  const isNumericString = typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value));
+  if (!isFiniteNumber && !isNumericString) {
+    throw new Error(`${field} 必须是有限数字`);
   }
-  return number;
+  return Number(value);
 }
 
 function sumPresent(records, field) {
   if (records.length === 0) return null;
   const values = records.map((row) => row[field]).filter(isPresent);
   if (values.length !== records.length) return null;
-  return values.reduce((sum, value) => sum + toFiniteNumber(value, field), 0);
+  return values.reduce((sum, value) => sum + toFiniteNumber(value, `订单利润字段 ${field}`), 0);
 }
 
 function readBudget(budgetByMetric, key) {
@@ -56,6 +57,11 @@ function readBudget(budgetByMetric, key) {
     return null;
   }
   return toFiniteNumber(budgetByMetric[key], `预算科目 ${key}`);
+}
+
+function deriveFromRequiredChildren(actualByKey, children, calculate) {
+  const values = children.map((key) => actualByKey.get(key));
+  return values.every((value) => value !== null && value !== undefined) ? calculate(values) : null;
 }
 
 function createRow({ key, category, name, level, actual, budget = null, children = [] }, netSales) {
@@ -103,13 +109,12 @@ export function buildStoreOperatingReportRows({ records, budgetByMetric = {}, cu
   const actualByKey = new Map(metricRows.map((row) => [row.key, row.actual]));
   actualByKey.set("revenue", actualByKey.get("net-sales"));
   actualByKey.set("sales-cost", actualByKey.get("purchase-cost"));
-
-  const revenueActual = actualByKey.get("revenue");
-  const salesCostActual = actualByKey.get("sales-cost");
-  actualByKey.set(
-    "gross-profit",
-    revenueActual !== null && salesCostActual !== null ? revenueActual - salesCostActual : null,
-  );
+  const grossProfitChildren = ["revenue", "sales-cost"];
+  actualByKey.set("gross-profit", deriveFromRequiredChildren(
+    actualByKey,
+    grossProfitChildren,
+    ([revenue, salesCost]) => revenue - salesCost,
+  ));
 
   const categoryRows = CATEGORIES.map(([key, name]) => createRow({
     key,
@@ -117,7 +122,7 @@ export function buildStoreOperatingReportRows({ records, budgetByMetric = {}, cu
     name,
     level: 1,
     actual: actualByKey.get(key) ?? null,
-    children: metricsByCategory.get(key),
+    children: key === "gross-profit" ? grossProfitChildren : metricsByCategory.get(key),
   }, netSales));
   const overview = createRow({
     key: "overview",

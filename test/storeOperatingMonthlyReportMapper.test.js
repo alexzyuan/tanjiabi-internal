@@ -58,6 +58,19 @@ test("an empty order-profit result does not manufacture zero actuals", () => {
   assert.ok(result.unavailableMetrics.includes("net-sales"));
 });
 
+test("whitespace, boolean, and non-numeric order-profit values are rejected instead of becoming zero", () => {
+  for (const value of [" ", false, "not-a-number"]) {
+    assert.throws(
+      () => buildStoreOperatingReportRows({
+        records: [{ totalAdsCost: value }],
+        budgetByMetric: {},
+        currencyCode: "USD",
+      }),
+      /订单利润字段 totalAdsCost 必须是有限数字/,
+    );
+  }
+});
+
 test("rows retain the confirmed category hierarchy and derived rows require every child", () => {
   const result = buildStoreOperatingReportRows({
     records: [{ totalSalesAmount: 100, promotionDiscount: 5, totalSalesRefunds: 10, netSalesAmount: 85, purchaseCost: 30, firstLegCost: 8, storageFee: 2, totalAdsCost: 4, platformFee: 6, fbaDeliveryFee: 7, grossProfit: 28 }],
@@ -77,4 +90,18 @@ test("rows retain the confirmed category hierarchy and derived rows require ever
   assert.equal(salesCost.actual, 30);
   assert.equal(grossProfit.actual, 55);
   assert.equal(grossProfit.available, true);
+  assert.deepEqual(grossProfit.children, ["revenue", "sales-cost"]);
+});
+
+test("gross profit is unavailable when a required hierarchy dependency is unavailable", () => {
+  const result = buildStoreOperatingReportRows({
+    records: [{ netSalesAmount: 85 }],
+    budgetByMetric: {},
+    currencyCode: "CNY",
+  });
+  const grossProfit = result.rows.find((row) => row.key === "gross-profit");
+
+  assert.equal(grossProfit.actual, null);
+  assert.equal(grossProfit.available, false);
+  assert.deepEqual(grossProfit.children, ["revenue", "sales-cost"]);
 });
