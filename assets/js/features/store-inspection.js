@@ -84,6 +84,12 @@ export function createStoreInspectionFeature({
             level: latest.aftersalesMail?.status || "warning",
             note: latest.aftersalesMail?.detail || "-",
           },
+          {
+            title: latest.lowInventoryFee?.label || "低库存费 MSKU",
+            value: latest.lowInventoryFee?.count ? `本周 ${latest.lowInventoryFee.count} 个` : autoInspectionStatusText(latest.lowInventoryFee?.status),
+            level: latest.lowInventoryFee?.tone || latest.lowInventoryFee?.status || "warning",
+            note: latest.lowInventoryFee?.detail || "-",
+          },
         ];
         focus.innerHTML = cards.map((item) => `
           <div class="inspection-focus-card ${autoInspectionBadgeClass(item.level)}">
@@ -111,6 +117,7 @@ export function createStoreInspectionFeature({
     const accountRows = latest?.accountHealth?.rows || [];
     const erpMailRows = latest?.erpBuyerMessages?.rows || [];
     const mailRows = latest?.aftersalesMail?.rows || [];
+    const lowInventoryFeeRows = latest?.lowInventoryFee?.rows || [];
     const riskRows = [
       ...feedback.map((item) => ({ type: "feedback", storeName: item.storeName, object: item.asin, actor: item.rating === "-" ? "-" : `${item.rating}星`, content: item.content, createdAt: item.createdAt, status: "低星" })),
       ...reviews.map((item) => ({ type: "review", storeName: item.storeName, object: item.asin, actor: item.rating === "-" ? "-" : `${item.rating}星`, content: item.content, createdAt: item.createdAt, status: "低星" })),
@@ -118,6 +125,7 @@ export function createStoreInspectionFeature({
       ...accountRows.map((item) => ({ type: "Account Health", storeName: item.storeName, object: item.asin || "-", actor: item.rating, content: item.content, createdAt: item.createdAt, status: "需处理" })),
       ...erpMailRows.map((item) => ({ type: "亚马逊站内信", storeName: item.storeName, object: item.item, actor: item.from || item.type, content: item.detail, createdAt: item.createdAt || "-", status: "新增" })),
       ...mailRows.map((item) => ({ type: "站外售后邮箱", storeName: item.storeName, object: item.item, actor: item.type, content: item.detail, createdAt: "-", status: item.type || "待回复" })),
+      ...lowInventoryFeeRows.map((item) => ({ type: "低库存费 MSKU", storeName: item.storeName, object: item.msku, actor: "-", content: "本周已进入低库存费区间", createdAt: "-", status: "本周低库存费" })),
     ];
     setText("#inspection-feedback-count", latest?.feedback?.count || 0, root);
     setText("#inspection-review-count", latest?.review?.count || 0, root);
@@ -125,6 +133,7 @@ export function createStoreInspectionFeature({
     setText("#inspection-review-note", latest?.review?.lowCount ? `低星 ${latest.review.lowCount} 条` : reviewRange, root);
     setText("#inspection-voice-count", latest?.voiceOfBuyer?.count || 0, root);
     setText("#inspection-account-health-count", latest?.accountHealth?.count || 0, root);
+    setText("#inspection-low-inventory-fee-count", latest?.lowInventoryFee?.count || 0, root);
     setText("#store-inspection-table-count", riskRows.length ? `共 ${riskRows.length} 条待处理` : latest ? "未发现待处理记录" : "暂无巡检结果", root);
     const table = root?.querySelector?.("#store-inspection-table");
     if (table) {
@@ -140,7 +149,7 @@ export function createStoreInspectionFeature({
             <td><span class="inspection-table-badge inspection-badge-high">${escapeHtml(item.status)}</span></td>
           </tr>
         `).join("")
-        : `<tr><td colspan="7">${latest ? "未发现 feedback、review、买家之声、Account Health 或售后邮件待处理记录。" : "等待自动巡检结果。"}</td></tr>`;
+        : `<tr><td colspan="7">${latest ? "未发现 feedback、review、买家之声、Account Health、低库存费或售后邮件待处理记录。" : "等待自动巡检结果。"}</td></tr>`;
     }
     setText("#store-inspection-history-count", history.length ? `最近 ${history.length} 次` : "暂无历史", root);
     const historyTable = root?.querySelector?.("#store-inspection-history");
@@ -155,9 +164,10 @@ export function createStoreInspectionFeature({
             <td>${escapeHtml(item.review?.lowCount ?? 0)} / ${escapeHtml(item.review?.count ?? 0)}</td>
             <td>${escapeHtml(item.voiceOfBuyer?.count ?? 0)}</td>
             <td>${escapeHtml(item.accountHealth?.count ?? 0)}</td>
+            <td>${escapeHtml(item.lowInventoryFee?.count ?? 0)}</td>
           </tr>
         `).join("")
-        : `<tr><td colspan="7">暂无历史巡检。</td></tr>`;
+        : `<tr><td colspan="8">暂无历史巡检。</td></tr>`;
     }
   }
 
