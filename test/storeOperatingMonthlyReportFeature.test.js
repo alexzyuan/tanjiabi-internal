@@ -5,6 +5,7 @@ import {
   createBudgetTargetsFeature,
   normalizeBudgetDeepLinkCountry,
 } from "../assets/js/features/budget-targets.js";
+import { pickSellerCountry, pickSellerName } from "../assets/js/front-shop-filters.js";
 import { createStoreOperatingMonthlyReportFeature } from "../assets/js/features/store-operating-monthly-report.js";
 
 function makeElement(value = "") {
@@ -17,12 +18,55 @@ function makeElement(value = "") {
   };
 }
 
+function makeReportResponse({ name = "销售收入净额" } = {}) {
+  return {
+    ok: true,
+    async json() {
+      return {
+        ok: true,
+        meta: {
+          currencyMode: "ORIGINAL",
+          currencyCodes: ["USD"],
+          generatedAt: "2026-08-03T08:00:00.000Z",
+          unavailableMetrics: [],
+          missingExchangeRateCount: 0,
+        },
+        groups: [{
+          currencyCode: "USD",
+          currencyAvailable: true,
+          rows: [{
+            key: "net-sales",
+            category: "销售收入",
+            name,
+            level: 2,
+            actual: 100,
+            share: 1,
+            budget: 120,
+            achievement: 100 / 120,
+            available: true,
+          }],
+        }],
+        budgetStatus: { state: "configured", matched: true, matchCount: 1 },
+      };
+    },
+  };
+}
+
+function createDeferred() {
+  let resolve;
+  const promise = new Promise((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
 function makeFeatureHarness({
   startMonth = "2026-06",
   endMonth = "2026-07",
   stores = [],
   countries = [],
   groups,
+  fetchImpl,
   storeOptions = [
     { name: "A", country: "美国" },
     { name: "B", country: "加拿大" },
@@ -65,47 +109,30 @@ function makeFeatureHarness({
     },
     downloadBlob() {},
     escapeHtml: (value) => String(value ?? ""),
-    fetchImpl: async (url) => {
+    fetchImpl: fetchImpl || (async (url) => {
       requests.push(String(url));
-      return {
-        ok: true,
-        async json() {
-          return {
-            ok: true,
-            meta: {
-              currencyMode: "ORIGINAL",
-              currencyCodes: ["USD"],
-              generatedAt: "2026-08-03T08:00:00.000Z",
-              unavailableMetrics: [],
-              missingExchangeRateCount: 0,
-            },
-            filters: { startMonth, endMonth, stores, countries },
-            groups: groups || [{
-              currencyCode: "USD",
-              currencyAvailable: true,
-              rows: [{
-                key: "net-sales",
-                category: "销售收入",
-                name: "销售收入净额",
-                level: 2,
-                actual: 100,
-                share: 1,
-                budget: 120,
-                achievement: 100 / 120,
-                available: true,
-              }],
-            }],
-            budgetStatus: { state: "configured", matched: true, matchCount: 1 },
-          };
-        },
-      };
-    },
+      if (groups) {
+        return {
+          ...makeReportResponse(),
+          async json() {
+            const response = makeReportResponse();
+            const data = await response.json();
+            data.groups = groups;
+            return data;
+          },
+        };
+      }
+      return makeReportResponse();
+    }),
     formatActualMoney: (value) => String(value),
     getCurrentMonth: () => "2026-08",
     getStoreOptions: () => storeOptions,
     historyRef: history,
     locationRef: location,
     refreshTable: (table) => refreshes.push(table),
+    normalizeCountryName: (country) => ({ US: "美国", CA: "加拿大", AU: "澳洲" }[country] || country || "-"),
+    pickSellerCountry,
+    pickSellerName,
     selectedFilterValues: (element) => element?.selectedValues?.slice() || [],
     setButtonBusy: () => () => {},
     setSelectOptions: (element, options, label, config) => {
@@ -118,6 +145,51 @@ function makeFeatureHarness({
   });
   return { elements, feature, location, navTargets, optionUpdates, refreshes, requests };
 }
+
+test("seller aliases are normalized through the shared shop identity helpers", () => {
+  const { feature, elements, optionUpdates } = makeFeatureHarness({
+    storeOptions: [
+      { seller_name: "seller-alias", marketplace: "US" },
+      { account_name: "account-alias", country_name: "CA" },
+      { shop_name: "shop-alias", marketplace: "AU" },
+      { store_name: "store-alias", country_name: "美国" },
+    ],
+  });
+
+  feature.initializeStoreOperatingMonthlyReportDefaults();
+
+  const countryUpdate = optionUpdates.filter((item) => item.element === elements["#store-operating-report-country"]).at(-1);
+  const storeUpdate = optionUpdates.filter((item) => item.element === elements["#store-operating-report-store"]).at(-1);
+  assert.deepEqual(countryUpdate.options, ["澳洲", "加拿大", "美国"]);
+  assert.deepEqual(
+    storeUpdate.options.map(({ name, country }) => ({ name, country })),
+    [
+      { name: "seller-alias", country: "美国" },
+      { name: "account-alias", country: "加拿大" },
+      { name: "shop-alias", country: "澳洲" },
+      { name: "store-alias", country: "美国" },
+    ],
+  );
+});
+
+test("the feature requires the managed table refresher dependency", () => {
+  assert.throws(() => createStoreOperatingMonthlyReportFeature({
+    root: { querySelector() { return null; } },
+    bind() {},
+    clickVisibleNavItem() {},
+    downloadBlob() {},
+    escapeHtml: String,
+    fetchImpl() {},
+    formatActualMoney: String,
+    normalizeCountryName: String,
+    pickSellerCountry,
+    pickSellerName,
+    selectedFilterValues() { return []; },
+    setSelectOptions() {},
+    setText() {},
+    syncAllOptionSelection() {},
+  }), /requires refreshTable/);
+});
 
 test("valid month edits auto-refresh and invalid 13-month edits do not request", async () => {
   const { feature, requests, elements } = makeFeatureHarness({
@@ -182,8 +254,55 @@ test("successful rendering refreshes the shared managed table and writes filter 
   assert.match(location.search, /view=store-operating-monthly-report/);
   assert.match(location.search, /startMonth=2026-06/);
   assert.match(location.search, /stores=A/);
-  assert.match(elements["#store-operating-report-head"].innerHTML, /data-column-key="actual"/);
+  assert.match(elements["#store-operating-report-head"].innerHTML, /data-column-key="actual" data-column-kind="number" data-column-profile="money-rate"/);
+  assert.match(elements["#store-operating-report-head"].innerHTML, /data-column-key="budget" data-column-kind="number" data-column-profile="money-rate"/);
   assert.match(elements["#store-operating-report-body"].innerHTML, /销售收入净额/);
+});
+
+test("a stale month response cannot replace the newer report DOM, URL, or status", async () => {
+  const pending = [];
+  const { feature, elements, location } = makeFeatureHarness({
+    startMonth: "2026-06",
+    endMonth: "2026-06",
+    fetchImpl: (url) => {
+      const deferred = createDeferred();
+      pending.push({ url: String(url), deferred });
+      return deferred.promise;
+    },
+  });
+
+  const oldRequest = feature.loadStoreOperatingMonthlyReport();
+  elements["#store-operating-report-end-month"].value = "2026-07";
+  const newRequest = feature.handleMonthChange();
+
+  assert.equal(pending.length, 2);
+  pending[1].deferred.resolve(makeReportResponse({ name: "新月份数据" }));
+  await newRequest;
+  pending[0].deferred.resolve(makeReportResponse({ name: "旧月份数据" }));
+  await oldRequest;
+
+  assert.match(elements["#store-operating-report-body"].innerHTML, /新月份数据/);
+  assert.doesNotMatch(elements["#store-operating-report-body"].innerHTML, /旧月份数据/);
+  assert.match(location.search, /endMonth=2026-07/);
+  assert.equal(elements["#store-operating-report-status"].textContent, "预算已匹配 1 条");
+});
+
+test("failed rendering refreshes the managed table after replacing the header", async () => {
+  const { feature, elements, refreshes } = makeFeatureHarness({
+    fetchImpl: async () => ({
+      ok: false,
+      status: 500,
+      async json() {
+        return { ok: false, error: "报告服务不可用" };
+      },
+    }),
+  });
+
+  await feature.loadStoreOperatingMonthlyReport();
+
+  assert.deepEqual(refreshes, [elements["#store-operating-report-table"]]);
+  assert.match(elements["#store-operating-report-head"].innerHTML, /data-column-key="actual"/);
+  assert.match(elements["#store-operating-report-body"].innerHTML, /加载失败：报告服务不可用/);
 });
 
 test("multi-currency rows keep their currency identity without unsortable group rows", async () => {

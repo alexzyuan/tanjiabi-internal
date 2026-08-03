@@ -30,13 +30,20 @@ export function validateMonthRange(startMonth, endMonth) {
   return { ok: true, months };
 }
 
-function normalizeStoreOption(item = {}) {
+function normalizeStoreOption(item = {}, {
+  normalizeCountryName,
+  pickSellerCountry,
+  pickSellerName,
+} = {}) {
   if (typeof item === "string") return { name: item, label: item, country: "" };
-  const name = String(item.name || item.value || item.label || "").trim();
+  const selectedName = pickSellerName(item);
+  const name = String(selectedName === "-" ? (item.value || item.label || "") : selectedName).trim();
+  const selectedCountry = pickSellerCountry(item);
+  const normalizedCountry = normalizeCountryName(selectedCountry === "-" ? "" : selectedCountry);
   return {
     name,
     label: String(item.label || name).trim(),
-    country: String(item.country || "").trim(),
+    country: normalizedCountry === "-" ? "" : String(normalizedCountry || "").trim(),
   };
 }
 
@@ -56,7 +63,10 @@ export function createStoreOperatingMonthlyReportFeature({
   getStoreOptions = () => [],
   historyRef = globalThis.history,
   locationRef = globalThis.location,
-  refreshTable = () => null,
+  normalizeCountryName,
+  pickSellerCountry,
+  pickSellerName,
+  refreshTable,
   selectedFilterValues,
   setButtonBusy,
   setSelectOptions,
@@ -69,6 +79,10 @@ export function createStoreOperatingMonthlyReportFeature({
   if (typeof escapeHtml !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires escapeHtml.");
   if (typeof fetchImpl !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires fetch.");
   if (typeof formatActualMoney !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires formatActualMoney.");
+  if (typeof normalizeCountryName !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires normalizeCountryName.");
+  if (typeof pickSellerCountry !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires pickSellerCountry.");
+  if (typeof pickSellerName !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires pickSellerName.");
+  if (typeof refreshTable !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires refreshTable.");
   if (typeof selectedFilterValues !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires selectedFilterValues.");
   if (typeof setSelectOptions !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires setSelectOptions.");
   if (typeof setText !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires setText.");
@@ -80,6 +94,8 @@ export function createStoreOperatingMonthlyReportFeature({
   let initialUrlScopeApplied = false;
   let initialUrlStores = [];
   let initialUrlCountries = [];
+  let activeReportAbortController = null;
+  let reportLoadGeneration = 0;
 
   function query(selector) {
     return root?.querySelector?.(selector) || null;
@@ -127,7 +143,9 @@ export function createStoreOperatingMonthlyReportFeature({
   }
 
   function refreshStoreOptions({ showScopeWarning = false } = {}) {
-    storeOptions = (getStoreOptions() || []).map(normalizeStoreOption).filter((item) => item.name);
+    storeOptions = (getStoreOptions() || [])
+      .map((item) => normalizeStoreOption(item, { normalizeCountryName, pickSellerCountry, pickSellerName }))
+      .filter((item) => item.name);
     const countrySelect = query("#store-operating-report-country");
     const storeSelect = query("#store-operating-report-store");
     const previousStores = [...new Set([...selectedFilterValues(storeSelect), ...initialUrlStores])];
@@ -209,10 +227,10 @@ export function createStoreOperatingMonthlyReportFeature({
       <tr>
         <th data-column-key="category">分类</th>
         <th data-column-key="name">名称</th>
-        <th data-column-key="actual" data-column-profile="numeric">实际完成值</th>
-        <th data-column-key="share" data-column-profile="numeric">占比</th>
-        <th data-column-key="budget" data-column-profile="numeric">预算值</th>
-        <th data-column-key="achievement" data-column-profile="numeric">达成率</th>
+        <th data-column-key="actual" data-column-kind="number" data-column-profile="money-rate">实际完成值</th>
+        <th data-column-key="share" data-column-kind="number" data-column-profile="money-rate">占比</th>
+        <th data-column-key="budget" data-column-kind="number" data-column-profile="money-rate">预算值</th>
+        <th data-column-key="achievement" data-column-kind="number" data-column-profile="money-rate">达成率</th>
       </tr>
     `;
   }
@@ -284,35 +302,65 @@ export function createStoreOperatingMonthlyReportFeature({
     refreshTable(query("#store-operating-report-table"));
   }
 
+  function invalidateActiveReportLoad() {
+    reportLoadGeneration += 1;
+    activeReportAbortController?.abort();
+    activeReportAbortController = null;
+  }
+
+  function startReportLoad() {
+    invalidateActiveReportLoad();
+    const abortController = typeof globalThis.AbortController === "function"
+      ? new globalThis.AbortController()
+      : null;
+    activeReportAbortController = abortController;
+    return { generation: reportLoadGeneration, abortController };
+  }
+
+  function isCurrentReportLoad(generation) {
+    return generation === reportLoadGeneration;
+  }
+
   async function loadStoreOperatingMonthlyReport() {
     initializeStoreOperatingMonthlyReportDefaults();
     const filters = readFilters();
     const validation = validateMonthRange(filters.startMonth, filters.endMonth);
     if (!validation.ok) {
+      invalidateActiveReportLoad();
       setText("#store-operating-report-status", validation.error, root);
       return null;
     }
+    const { generation, abortController } = startReportLoad();
     const reportQuery = buildReportQuery(filters);
     const exportButton = query("#store-operating-report-export");
     if (exportButton) exportButton.disabled = true;
     setText("#store-operating-report-status", "正在读取店铺经营月报…", root);
     try {
-      const response = await fetchImpl(`/api/finance/store-operating-monthly-report?${reportQuery}`, { cache: "no-store" });
+      const requestOptions = { cache: "no-store" };
+      if (abortController) requestOptions.signal = abortController.signal;
+      const response = await fetchImpl(`/api/finance/store-operating-monthly-report?${reportQuery}`, requestOptions);
       const data = await response.json();
       if (!response.ok || data?.ok === false) throw new Error(data?.error || `API ${response.status}`);
+      if (!isCurrentReportLoad(generation)) return null;
       renderReport(data, filters);
       lastSuccessfulQuery = reportQuery;
       syncReportUrl(filters);
       if (exportButton) exportButton.disabled = false;
       return data;
     } catch (error) {
+      if (!isCurrentReportLoad(generation)) return null;
       lastSuccessfulQuery = "";
       renderHeader();
       const body = query("#store-operating-report-body");
       if (body) body.innerHTML = `<tr><td colspan="6">加载失败：${escapeHtml(error?.message || String(error))}</td></tr>`;
+      refreshTable(query("#store-operating-report-table"));
       setText("#store-operating-report-status", `店铺经营月报加载失败：${error?.message || String(error)}`, root);
       console.error("[store-operating-monthly-report] load failed", error);
       return null;
+    } finally {
+      if (isCurrentReportLoad(generation) && activeReportAbortController === abortController) {
+        activeReportAbortController = null;
+      }
     }
   }
 
@@ -320,6 +368,7 @@ export function createStoreOperatingMonthlyReportFeature({
     const filters = readFilters();
     const validation = validateMonthRange(filters.startMonth, filters.endMonth);
     if (!validation.ok) {
+      invalidateActiveReportLoad();
       setText("#store-operating-report-status", validation.error, root);
       const exportButton = query("#store-operating-report-export");
       if (exportButton) exportButton.disabled = true;
