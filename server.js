@@ -85,6 +85,11 @@ import {
   saveFreightRate,
 } from "./src/services/freightRateService.js";
 import { getFbaShipmentCandidates } from "./src/services/fbaShipmentCandidateService.js";
+import { getFbaShipmentVariances } from "./src/services/fbaShipmentVarianceService.js";
+import {
+  clearFbaShipmentVarianceFollowup,
+  markFbaShipmentVarianceFollowup,
+} from "./src/services/fbaShipmentVarianceFollowupStore.js";
 import { startFbaShipmentWarmupScheduler } from "./src/services/fbaShipmentWarmupService.js";
 import {
   createReadySendFbaShipmentOrders,
@@ -658,6 +663,13 @@ function readFbaFreightFilters(url) {
   };
 }
 
+function readFbaShipmentVarianceFilters(url) {
+  return {
+    ...readFbaFreightFilters(url),
+    followupStatus: url.searchParams.get("followupStatus") || url.searchParams.get("followup_status") || "",
+  };
+}
+
 const adminSeed = {
   users: [
     { name: "系统管理员", role: "系统管理员", scope: "全部店铺" },
@@ -756,6 +768,7 @@ const apiRoutes = createApiRoutes(buildApiRoutes({
   readSalesDashboardFilters,
   readNumberList,
   readFbaFreightFilters,
+  readFbaShipmentVarianceFilters,
   sendCachedImage,
   contentDispositionAttachment,
   sendRedirect,
@@ -822,6 +835,9 @@ const apiRoutes = createApiRoutes(buildApiRoutes({
   searchFbaMskus,
   getFbaFreightShipments,
   getFbaShipmentCandidates,
+  getFbaShipmentVariances,
+  markFbaShipmentVarianceFollowup,
+  clearFbaShipmentVarianceFollowup,
   listFbaForwarderTemplates,
   exportFbaFreightShipments,
   convertFbaFreightShipmentsToForwarderTemplate,

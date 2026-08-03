@@ -3,12 +3,16 @@ export function createFbaRoutes(deps = {}) {
     readJsonBody,
     readNumberList,
     readFbaFreightFilters,
+    readFbaShipmentVarianceFilters,
     sendJson,
     contentDispositionAttachment,
     getFbaShopOptions,
     searchFbaMskus,
     getFbaFreightShipments,
     getFbaShipmentCandidates,
+    getFbaShipmentVariances,
+    markFbaShipmentVarianceFollowup,
+    clearFbaShipmentVarianceFollowup,
     listFbaForwarderTemplates,
     exportFbaFreightShipments,
     convertFbaFreightShipmentsToForwarderTemplate,
@@ -68,6 +72,41 @@ export function createFbaRoutes(deps = {}) {
       handler: async ({ res, url }) => sendJson(res, 200, await getFbaShipmentCandidates(readFbaFreightFilters(url), {
         autoLoadSellerMappings: true,
       })),
+    },
+    {
+      method: "GET",
+      path: "/api/fba/shipment-variances",
+      auth: "session",
+      errorStatusCode: 502,
+      handler: async ({ res, url }) => sendJson(res, 200, await getFbaShipmentVariances(readFbaShipmentVarianceFilters(url))),
+    },
+    {
+      method: "PUT",
+      pattern: /^\/api\/fba\/shipment-variances\/(?<sid>[^/]+)\/(?<shipmentId>[^/]+)\/followup$/,
+      auth: "session",
+      errorStatusCode: 400,
+      handler: async ({ req, res, params }) => sendJson(res, 200, {
+        ok: true,
+        row: await markFbaShipmentVarianceFollowup({
+          sid: decodeURIComponent(params.sid),
+          shipmentId: decodeURIComponent(params.shipmentId),
+          operator: requestOperator(req),
+        }),
+      }),
+    },
+    {
+      method: "DELETE",
+      pattern: /^\/api\/fba\/shipment-variances\/(?<sid>[^/]+)\/(?<shipmentId>[^/]+)\/followup$/,
+      auth: "session",
+      errorStatusCode: 400,
+      handler: async ({ req, res, params }) => sendJson(res, 200, {
+        ok: true,
+        row: await clearFbaShipmentVarianceFollowup({
+          sid: decodeURIComponent(params.sid),
+          shipmentId: decodeURIComponent(params.shipmentId),
+          operator: requestOperator(req),
+        }),
+      }),
     },
     {
       method: "GET",
