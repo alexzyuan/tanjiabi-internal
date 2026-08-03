@@ -26,6 +26,7 @@ export function createBreadcrumbShellFeature({
     clearance: ["首页", "销售", "动销预警"],
     "ai-image-workflow": ["首页", "工具", "AI图片工作流"],
     "fba-freight": ["首页", "物流", "FBA货件处理"],
+    "fba-shipment-variance": ["首页", "物流", "货件收发差异"],
     "freight-rates": ["首页", "物流", "运费看板"],
     fba: ["首页", "工具", "FBA刷仓"],
     "product-progress": ["首页", "产品", "产品进度"],

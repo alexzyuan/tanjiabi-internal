@@ -98,6 +98,21 @@ test("normalizeFbaFreightShipments maps Lingxing fba shipment rows into freight 
   assert.equal(rows[0].items[0].msku, "JM-DGC-BLUE");
 });
 
+test("normalizeFbaFreightShipments preserves Lingxing close time for downstream logistics views", () => {
+  const rows = normalizeFbaFreightShipments({
+    data: {
+      list: [{
+        sid: 8708,
+        shipment_id: "FBA-CLOSED-1",
+        closed_time: "2026-08-01 12:00:00",
+        item_list: [],
+      }],
+    },
+  });
+
+  assert.equal(rows[0].closedAt, "2026-08-01 12:00:00");
+});
+
 test("buildLingxingShipmentParams keeps the visible UI end date for the adapter boundary", () => {
   const params = fbaFreightSheetTestUtils.buildLingxingShipmentParams({
     sids: [8708],

@@ -176,6 +176,7 @@ export function normalizeFbaFreightShipments(payload, { sellersBySid = null, sel
       fulfillmentCenterCode: firstText(row.destination_fulfillment_center_id, row.warehouseId, row.wareHouseId),
       createdAt: firstText(row.gmt_create, row.createdAt, row.working_time),
       updatedAt: firstText(row.gmt_modified, row.updatedAt),
+      closedAt: firstText(row.closed_time, row.closedAt),
       shippingMode: firstText(row.shipping_mode, row.shippingMode),
       shippingSolution: firstText(row.shipping_solution, row.shippingSolution),
       alphaCode: firstText(row.alpha_code, row.alphaCode),

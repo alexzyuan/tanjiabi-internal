@@ -1242,6 +1242,12 @@ body:not(.login-body) #store-inspection-report-output.store-inspection-report-ou
 .search-results{min-height:var(--tj-control-height-compact);max-height:128px;overflow:auto;padding:8px;border:1px solid var(--tj-border-subtle);border-radius:var(--tj-panel-radius);color:var(--tj-text-muted);background:var(--tj-surface-muted);line-height:1.6}
 .search-result-item{display:block;width:100%;padding:6px;border:0;border-radius:var(--tj-control-radius);color:var(--tj-text-body);background:transparent;text-align:left;line-height:1.35;cursor:pointer}
 .search-result-item:hover{background:var(--tj-action-blue-soft)}
+.fba-shipment-variance-panel{display:grid;gap:var(--spectrum-spacing-200)}
+.fba-shipment-variance-summary{grid-template-columns:repeat(4,minmax(0,1fr))}
+.fba-shipment-variance-table-shell{overflow-x:auto}
+.fba-shipment-variance-detail-dialog{width:min(760px,calc(100vw - var(--spectrum-spacing-300)));max-height:calc(100vh - var(--spectrum-spacing-300));overflow:auto;padding:var(--spectrum-spacing-200);background:var(--tj-content-bg);border-radius:var(--tj-modal-radius)}
+@media(max-width:760px){.fba-shipment-variance-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
 .ai-workflow-hero{align-items:center}
 .ai-workflow-hero-actions{display:flex;align-items:center;gap:12px}
 .ai-workflow-hero-actions>span{color:var(--tj-text-muted);font-size:12px}

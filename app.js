@@ -49,6 +49,7 @@ import { createWebhookAssistantFeature } from "./assets/js/features/webhook-assi
 import { createBudgetTargetsFeature } from "./assets/js/features/budget-targets.js?v=20260706-frontend-refactor-v1";
 import { createSyncCenterFeature } from "./assets/js/features/sync-center.js?v=20260706-frontend-refactor-v1";
 import { createFbaFreightFeature } from "./assets/js/features/fba-freight.js?v=20260717-shared-logistics-channels";
+import { createFbaShipmentVarianceFeature } from "./assets/js/features/fba-shipment-variance.js?v=20260803-shipment-variance-v1";
 import { createFbaShopsFeature } from "./assets/js/features/fba-shops.js?v=20260706-frontend-refactor-v1";
 import { createFbaMskuFeature } from "./assets/js/features/fba-msku.js?v=20260707-frontend-refactor-v1";
 import { createFbaAutomationFeature } from "./assets/js/features/fba-automation.js?v=20260707-frontend-refactor-v1";
@@ -243,6 +244,7 @@ let loadLingxingShops = async () => {};
 let loadSyncStatus = async () => {};
 let loadSalesForecast = async () => {};
 let loadFbaFreightInitial = async () => {};
+let loadFbaShipmentVarianceInitial = async () => {};
 let loadFreightRatesDashboard = async () => {};
 let loadFreightRatesInitial = async () => {};
 let openSupplierDetailModal = () => {};
@@ -270,6 +272,7 @@ let setupWebhookAssistant = () => {};
 let setupBreadcrumbNavigation = () => {};
 let setupBudgetTargets = () => {};
 let setupFbaFreight = () => {};
+let setupFbaShipmentVariance = () => {};
 let setupFreightRatesDashboard = () => {};
 let setupFbaShopPicker = () => {};
 let setupReviewRatingCalculator = () => {};
@@ -907,6 +910,12 @@ async function refreshDashboardFromFilters() {
   setText,
 }));
 
+({ loadFbaShipmentVarianceInitial, setupFbaShipmentVariance } = createFbaShipmentVarianceFeature({
+  root: document, bind, bindBackdropClose, closestTarget, escapeHtml, fbaValue,
+  fetchImpl: fetch.bind(window), formatDate, formatNumber, getFbaShops, loadFbaShops,
+  normalizeFbaShop, renderTableMessage, setModalOpenState, setText,
+}));
+
 ({ loadFreightRatesDashboard, loadFreightRatesInitial, setupFreightRatesDashboard } = createFreightRatesFeature({
   root: document,
   bind,
@@ -1030,6 +1039,7 @@ function setupNavigation() {
     clearance: "",
     "ai-image-workflow": "",
     "fba-freight": "",
+    "fba-shipment-variance": "",
     "product-progress": "",
     aftersales: "",
     "aftersales-mail": "",
@@ -1165,6 +1175,7 @@ function setupNavigation() {
     if (view === "fba-freight") {
       await loadFbaFreightInitial();
     }
+    if (view === "fba-shipment-variance") await loadFbaShipmentVarianceInitial();
     if (view === "freight-rates") {
       await loadFreightRatesInitial();
     }
@@ -1213,6 +1224,7 @@ function setupNavigation() {
 
   setupSyncCenter();
   setupFbaFreight();
+  setupFbaShipmentVariance();
   setupFreightRatesDashboard();
   setupFbaShopPicker();
   setupFbaMskuPicker();
