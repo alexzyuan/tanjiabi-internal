@@ -19,6 +19,13 @@ function readFirst(item, keys) {
   return "";
 }
 
+function readFirstNumber(item, keys) {
+  const value = readFirst(item, keys);
+  if (!value) return "";
+  const number = Number(value);
+  return Number.isFinite(number) ? number : value;
+}
+
 function isCoreSeller(seller) {
   const name = readFirst(seller, ["name", "seller_name", "shop_name", "store_name", "account_name"]);
   const country = readFirst(seller, ["country", "countryName", "country_name", "marketplace", "marketplaceName"]);
@@ -964,6 +971,9 @@ export class LingxingAdapter {
         storeName,
         country,
         countryCode: seller.country_code || seller.countryCode || record.country_code || record.countryCode || "",
+        currencyCode: readFirst(record, ["currency_code", "currencyCode", "currency"]),
+        cnyAmount: readFirstNumber(record, ["amount_cny", "cny_amount", "total_amount_cny"]),
+        exchangeRate: readFirstNumber(record, ["exchange_rate", "exchangeRate", "rate_to_cny"]),
         totalSalesAmount: record.amount,
         netSalesAmount: record.net_amount,
         grossProfit: record.gross_profit,

@@ -42,11 +42,11 @@ function workbookBuffer({ storeTitle = "探嘉美国店铺预算报表", msku = 
   return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
 }
 
-function uploadPayload(overrides = {}) {
+function uploadPayload({ budgetMonth = "2026-07", ...workbookOverrides } = {}) {
   return {
     fileName: "探嘉美国-2026年7月预算.xlsx",
-    budgetMonth: "2026-07",
-    base64: workbookBuffer(overrides).toString("base64"),
+    budgetMonth,
+    base64: workbookBuffer(workbookOverrides).toString("base64"),
   };
 }
 
@@ -118,5 +118,44 @@ test("saveBudgetUpload replaces an existing upload for the same store and month"
     assert.equal(targets.rows.length, 1);
     assert.equal(targets.rows[0].salesTarget, 300);
     assert.equal(targets.mskuRows[0].msku, "JM-DGC-RED");
+  });
+});
+
+test("budget context sums exact store-country rows for all requested months", async () => {
+  await withTempService(async ({ saveBudgetUpload, getBudgetTargetContext }) => {
+    await saveBudgetUpload(uploadPayload({ budgetMonth: "2026-06", salesAmount: 100 }));
+    await saveBudgetUpload(uploadPayload({ budgetMonth: "2026-07", salesAmount: 200 }));
+
+    const value = await getBudgetTargetContext({
+      months: ["2026-06", "2026-07"],
+      storeNames: ["探嘉美国"],
+      countries: ["美国"],
+    });
+
+    assert.deepEqual(value.months, ["2026-06", "2026-07"]);
+    assert.equal(value.rows.length, 2);
+    assert.equal(value.totals.salesTarget, 300);
+  });
+});
+
+test("budget context rereads the replacement upload for the selected range", async () => {
+  await withTempService(async ({ saveBudgetUpload, getBudgetTargetContext }) => {
+    await saveBudgetUpload(uploadPayload({ salesAmount: 100 }));
+    const before = await getBudgetTargetContext({ months: ["2026-07"] });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await saveBudgetUpload(uploadPayload({ salesAmount: 250 }));
+    const after = await getBudgetTargetContext({ months: ["2026-07"] });
+
+    assert.equal(before.totals.salesTarget, 100);
+    assert.equal(after.totals.salesTarget, 250);
+  });
+});
+
+test("budget context rejects invalid explicit month ranges", async () => {
+  await withTempService(async ({ getBudgetTargetContext }) => {
+    await assert.rejects(
+      () => getBudgetTargetContext({ months: ["2026-13"] }),
+      /预算月份必须为 YYYY-MM/,
+    );
   });
 });

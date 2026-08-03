@@ -14,6 +14,22 @@ const lingxingTestConfig = {
   appSecret: "secret",
 };
 
+test("normalized order profit keeps currency and Lingxing rate metadata", () => {
+  const adapter = new LingxingAdapter(lingxingTestConfig);
+  const [row] = adapter.normalizeMskuOrderProfitRecords([{
+    sid: 1,
+    amount: 10,
+    net_amount: 9,
+    currency_code: "USD",
+    amount_cny: 72,
+    exchange_rate: 7.2,
+  }], [{ sid: 1, name: "Amazon-US", country: "美国" }]);
+
+  assert.equal(row.currencyCode, "USD");
+  assert.equal(row.cnyAmount, 72);
+  assert.equal(row.exchangeRate, 7.2);
+});
+
 test("filterCoreSellers includes JOI MEW Germany stores", () => {
   const sellers = filterCoreSellers([
     { name: "JOI MEW-US", country: "美国", countryCode: "US" },

@@ -146,6 +146,41 @@ function inferBudgetMonth(range = {}) {
   );
 }
 
+function normalizeRequestedBudgetMonth(value) {
+  const month = normalizeBudgetMonth(value);
+  if (!month) throw new Error("预算月份必须为 YYYY-MM");
+  return month;
+}
+
+function normalizeRequestedTextList(values, label, normalizer = normalizeText) {
+  if (!Array.isArray(values)) {
+    throw new TypeError(`${label}必须是数组`);
+  }
+  return new Set(values.map(normalizer).filter(Boolean));
+}
+
+function normalizeBudgetCountryKey(value) {
+  const country = normalizeText(value).replace(/站$/, "");
+  return country === "澳大利亚" ? "澳洲" : country;
+}
+
+function normalizeBudgetContextMonths(range = {}) {
+  if (range.months !== undefined) {
+    if (!Array.isArray(range.months)) {
+      throw new TypeError("months必须是数组");
+    }
+    return new Set(range.months.map(normalizeRequestedBudgetMonth));
+  }
+
+  const hasLegacyMonthInput = [range.budgetMonth, range.startDate, range.endDate]
+    .some((value) => normalizeText(value));
+  if (!hasLegacyMonthInput) return new Set();
+
+  const month = inferBudgetMonth(range);
+  if (!month) throw new Error("预算月份必须为 YYYY-MM");
+  return new Set([month]);
+}
+
 function summarizeBudgetTargetRows(rows = []) {
   const totals = rows.reduce(
     (acc, row) => {
@@ -619,14 +654,22 @@ export async function listBudgetTargets() {
 }
 
 export async function getBudgetTargetContext(range = {}) {
-  const budgetMonth = inferBudgetMonth(range);
+  if (!range || typeof range !== "object" || Array.isArray(range)) {
+    throw new TypeError("预算筛选条件必须是对象");
+  }
+  const monthSet = normalizeBudgetContextMonths(range);
+  const storeSet = normalizeRequestedTextList(range.storeNames ?? [], "storeNames");
+  const countrySet = normalizeRequestedTextList(range.countries ?? [], "countries", normalizeBudgetCountryKey);
   const targets = await listBudgetTargets();
-  const rows = budgetMonth
-    ? targets.rows.filter((row) => normalizeBudgetMonth(row.month) === budgetMonth)
-    : targets.rows;
+  const rows = targets.rows.filter((row) =>
+    (!monthSet.size || monthSet.has(normalizeBudgetMonth(row.month)))
+    && (!storeSet.size || storeSet.has(normalizeText(row.storeName)))
+    && (!countrySet.size || countrySet.has(normalizeBudgetCountryKey(row.site))),
+  );
 
   return {
-    month: budgetMonth,
+    month: monthSet.size === 1 ? [...monthSet][0] : "",
+    months: [...monthSet],
     rows,
     totals: summarizeBudgetTargetRows(rows),
     matched: rows.length > 0,
