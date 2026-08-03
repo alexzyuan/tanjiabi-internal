@@ -290,3 +290,164 @@ test("loadDashboardSection shows the default overlay only when a request stays p
   assert.equal(result.ok, true);
   assert.equal(bodyChildren.length, 0);
 });
+
+test("default overlay starts below a banner-adjacent filter in the active view", async () => {
+  const { loadDashboardSection } = await loadModule();
+  const viewChildren = [];
+  const bodyChildren = [];
+  const filterBar = { offsetTop: 36, offsetHeight: 48 };
+  const activeView = {
+    offsetTop: 0,
+    classList: {
+      add() {},
+      remove() {},
+    },
+    querySelector(selector) {
+      return selector === ":scope > .module-hero + :is(.filters, .filter-toolbar)" ? filterBar : null;
+    },
+    appendChild(element) {
+      viewChildren.push(element);
+      element.parentNode = activeView;
+      return element;
+    },
+    removeChild(element) {
+      const index = viewChildren.indexOf(element);
+      if (index >= 0) viewChildren.splice(index, 1);
+      element.parentNode = null;
+      return element;
+    },
+  };
+  const body = {
+    appendChild(element) {
+      bodyChildren.push(element);
+      element.parentNode = body;
+      return element;
+    },
+    removeChild(element) {
+      const index = bodyChildren.indexOf(element);
+      if (index >= 0) bodyChildren.splice(index, 1);
+      element.parentNode = null;
+      return element;
+    },
+  };
+  const root = {
+    body,
+    querySelector(selector) {
+      return selector === ".view.active" ? activeView : null;
+    },
+    createElement(tagName) {
+      return {
+        tagName,
+        className: "",
+        textContent: "",
+        attributes: {},
+        children: [],
+        parentNode: null,
+        style: {
+          values: new Map(),
+          setProperty(name, value) {
+            this.values.set(name, value);
+          },
+          getPropertyValue(name) {
+            return this.values.get(name) || "";
+          },
+        },
+        setAttribute(name, value) {
+          this.attributes[name] = String(value);
+        },
+        append(...children) {
+          this.children.push(...children);
+        },
+      };
+    },
+  };
+
+  const result = await loadDashboardSection({
+    endpoint: "/api/example",
+    root,
+    loadingOverlay: { delayMs: 0 },
+    fetchApi: async () => {
+      assert.equal(bodyChildren.length, 0);
+      assert.equal(viewChildren.length, 1);
+      assert.equal(viewChildren[0].style.getPropertyValue("--dashboard-loading-overlay-top"), "84px");
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return { ok: true };
+        },
+      };
+    },
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(viewChildren.length, 0);
+});
+
+test("global loading monitor scopes slow API reads to the active page", async () => {
+  const { installDashboardLoadingFetchOverlay } = await loadModule();
+  const viewChildren = [];
+  const activeView = {
+    classList: { add() {}, remove() {} },
+    querySelector() { return null; },
+    appendChild(element) {
+      viewChildren.push(element);
+      element.parentNode = activeView;
+      return element;
+    },
+    removeChild(element) {
+      const index = viewChildren.indexOf(element);
+      if (index >= 0) viewChildren.splice(index, 1);
+      element.parentNode = null;
+      return element;
+    },
+  };
+  let releaseFetch;
+  const pendingFetch = new Promise((resolve) => {
+    releaseFetch = resolve;
+  });
+  const fetchCalls = [];
+  const globalObject = {
+    fetch: async (...args) => {
+      fetchCalls.push(args);
+      await pendingFetch;
+      return { ok: true };
+    },
+  };
+  const root = {
+    body: { appendChild() { throw new Error("body should not receive the overlay"); } },
+    querySelector(selector) {
+      return selector === ".view.active" ? activeView : null;
+    },
+    createElement(tagName) {
+      return {
+        tagName,
+        className: "",
+        textContent: "",
+        attributes: {},
+        children: [],
+        parentNode: null,
+        style: { setProperty() {} },
+        setAttribute(name, value) { this.attributes[name] = String(value); },
+        append(...children) { this.children.push(...children); },
+      };
+    },
+  };
+  const restore = installDashboardLoadingFetchOverlay({
+    root,
+    globalObject,
+    delayMs: 5,
+    message: "正在读取页面数据...",
+  });
+
+  const request = globalObject.fetch("/api/dashboard/example");
+  await new Promise((resolve) => setTimeout(resolve, 12));
+  assert.equal(fetchCalls.length, 1);
+  assert.equal(viewChildren.length, 1);
+  assert.equal(viewChildren[0].attributes["aria-label"], "正在读取页面数据...");
+
+  releaseFetch();
+  await request;
+  assert.equal(viewChildren.length, 0);
+  restore();
+});

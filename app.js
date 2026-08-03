@@ -1,5 +1,5 @@
 import TanjiaUiUtils from "./assets/js/ui-utils.js?v=20260706-frontend-refactor-v41";
-import { loadDashboardSection } from "./assets/js/dashboard-loader.js?v=20260730-loading-overlay-v1";
+import { installDashboardLoadingFetchOverlay, loadDashboardSection } from "./assets/js/dashboard-loader.js?v=20260803-global-page-loading-v1";
 import { createFilterControls } from "./assets/js/filter-controls.js?v=20260707-frontend-refactor-v1";
 import {
   createFrontShopFilters,
@@ -72,6 +72,8 @@ import {
 if (!TanjiaUiUtils) {
   throw new Error("TanjiaUiUtils 未加载，请确认 assets/js/ui-utils.js 已在 app.js 前加载。");
 }
+
+installDashboardLoadingFetchOverlay({ root: document });
 
 const {
   bind,

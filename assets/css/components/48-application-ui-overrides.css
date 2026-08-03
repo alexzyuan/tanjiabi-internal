@@ -20,7 +20,7 @@ body:not(.login-body) .payable-dashboard-grid {
 
 .dashboard-loading-overlay {
   position: absolute;
-  inset: 0;
+  inset: var(--dashboard-loading-overlay-top, 0) 0 0;
   z-index: 80;
   display: grid;
   place-items: center;

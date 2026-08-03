@@ -201,6 +201,7 @@ font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
 - 控件高度统一用 `--tj-control-height-compact`，圆角用 `--tj-control-radius`，字号 13px，focus 使用 `--tj-focus-ring`。
 - `.filters` 默认字段宽度为 116px，日期字段 240px，搜索字段 220px；`.filter-toolbar` 默认字段宽度为 150px，日期字段 240px，直接 search 输入 180px，按钮宽度按内容自适应。
 - 当 .filters 或 .filter-toolbar 紧跟 .module-hero 后面时，筛选栏必须使用共享 sticky 规则固定在 topbar 下方；页面 CSS 不得为单个板块重复写 sticky 筛选栏规则。
+- 所有当前站点的读取型 `/api/*` 请求都由 `assets/js/dashboard-loader.js` 的全局页面加载器统一呈现。请求超过 300ms 时，只在当前活动页面的数据区显示遮罩、状态文案与进度条；侧边栏、顶部栏和筛选栏保持可操作。加载器优先使用 `.dashboard-loading-scope`，否则从当前页面首个筛选栏下方开始覆盖；已使用 `loadDashboardSection()` 的模块不得另行产生第二层遮罩。
 - checkbox 型筛选使用 `.checkbox-label`，由共享筛选栏规则统一控制字号、间距和 checkbox 尺寸。
 - 页面级 CSS 不允许重新定义 `.filters` / `.filter-toolbar` / `*-filters` / `*-toolbar` 的 `display`、`grid-template-*`、`gap`、`padding`、`border`、控件高度、控件边框、focus 样式或日期控件宽度。页面可以控制筛选栏是否显示，也可以调整所在业务面板、KPI、表格和图表布局。
 - 结构测试会扫描 page CSS，防止新页面继续用页面私有规则覆盖共享筛选栏基线。

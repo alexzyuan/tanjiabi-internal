@@ -1,6 +1,6 @@
 import { renderKpiProgress } from "../ui-components.js?v=20260707-ui-components-v1";
 import { FRONT_OWNER_QUICK_FILTERS } from "../front-shop-filters.js?v=20260724-sales-owner-detail-jump-v1";
-import { startDashboardLoadingOverlay } from "../dashboard-loader.js?v=20260730-loading-overlay-v1";
+import { markDashboardLoadingRequest, startDashboardLoadingOverlay } from "../dashboard-loader.js?v=20260803-global-page-loading-v1";
 
 export function createSalesDashboardFeature({
   root = globalThis.document,
@@ -466,10 +466,10 @@ export function createSalesDashboardFeature({
     try {
       const params = new URLSearchParams(buildDashboardQuery());
       params.set("_", String(Date.now()));
-      const response = await fetchImpl(`/api/dashboard/sales-weekly?${params.toString()}`, {
+      const response = await fetchImpl(`/api/dashboard/sales-weekly?${params.toString()}`, markDashboardLoadingRequest({
         cache: "no-store",
         credentials: "same-origin",
-      });
+      }));
       if (response.status === 401) {
         redirectToLogin?.();
         throw new Error("登录状态已失效");

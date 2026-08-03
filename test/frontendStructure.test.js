@@ -402,7 +402,7 @@ test("app.js starts using shared dashboard section loader", async () => {
     appSource.indexOf("createSyncCenterFeature({"),
   );
 
-  assert.match(appSource, /import \{ loadDashboardSection \} from "\.\/assets\/js\/dashboard-loader\.js/);
+  assert.match(appSource, /import \{[^}]*\bloadDashboardSection\b[^}]*\} from "\.\/assets\/js\/dashboard-loader\.js/);
   assert.match(appSource, /from "\.\/assets\/js\/date-utils\.js/);
   assert.match(appSource, /import \{ createFbaUtils \} from "\.\/assets\/js\/fba-utils\.js/);
   assert.match(appSource, /from "\.\/assets\/js\/front-shop-filters\.js/);
@@ -509,11 +509,14 @@ test("app.js starts using shared dashboard section loader", async () => {
   assert.equal(appSource.includes("async function loadStoreInspectionDashboard"), false);
   assert.equal(appSource.includes("async function loadClearanceInventory"), false);
   assert.equal(appSource.includes("function renderClearanceCalculator"), false);
+  assert.match(appSource, /installDashboardLoadingFetchOverlay\(\{ root: document \}\)/);
   assert.equal(appSource.includes('bind(document, "#front-country-filter"'), false);
   assert.equal(appSource.includes('bind(document, "#front-shop-filter"'), false);
   assert.equal(appSource.includes('bind(document, "#front-owner-filter"'), false);
   assert.equal(appSource.includes('bind(document, "#front-currency-filter"'), false);
   assert.match(helperSource, /export async function loadDashboardSection/);
+  assert.match(helperSource, /export function installDashboardLoadingFetchOverlay/);
+  assert.match(helperSource, /export function markDashboardLoadingRequest/);
   assert.match(dateUtilsSource, /export function getDateRangeByPreset/);
   assert.match(dateUtilsSource, /export function formatCompactDateTime/);
   assert.match(fbaUtilsSource, /export function createFbaUtils/);
