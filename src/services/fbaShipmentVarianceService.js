@@ -2,6 +2,7 @@ import { getFbaShipmentCandidates } from "./fbaShipmentCandidateService.js";
 import { listFbaShipmentVarianceFollowupsByKeys } from "./fbaShipmentVarianceFollowupStore.js";
 
 const INTERNAL_SLA_MS = 7 * 24 * 60 * 60 * 1000;
+const STAGE_DATE_LOOKBACK_DAYS = 180;
 
 function firstText(...values) {
   for (const value of values) {
@@ -109,6 +110,30 @@ function itemTotals(items = []) {
   }), { shippedQuantity: 0, receivedQuantity: 0 });
 }
 
+function subtractDays(dateText, days) {
+  const date = new Date(`${dateText}T00:00:00`);
+  if (Number.isNaN(date.valueOf())) throw new Error(`货件收发差异读取失败：日期无效 ${dateText}。`);
+  date.setDate(date.getDate() - days);
+  return formatDate(date);
+}
+
+function dateText(value) {
+  const text = firstText(value);
+  return /^\d{4}-\d{2}-\d{2}/.test(text) ? text.slice(0, 10) : "";
+}
+
+function stageDateForShipment(shipment = {}) {
+  const status = firstText(shipment.shipmentStatus).toUpperCase();
+  if (status === "RECEIVING") return firstText(shipment.receivingAt, shipment.raw?.receiving_time, shipment.raw?.receivingAt, shipment.createdAt);
+  if (status === "CLOSED") return firstText(shipment.closedAt, shipment.raw?.closed_time, shipment.raw?.closedAt, shipment.createdAt);
+  return firstText(shipment.createdAt);
+}
+
+function isWithinSelectedStageDate(shipment, filters) {
+  const stageDate = dateText(stageDateForShipment(shipment));
+  return Boolean(stageDate && stageDate >= filters.startDate && stageDate <= filters.endDate);
+}
+
 function shipmentKey(row = {}) {
   return `${Number(row.sid)}:${firstText(row.shipmentId)}`;
 }
@@ -131,6 +156,7 @@ function buildRow(shipment, followups, now) {
   const differenceQuantity = shippedQuantity - receivedQuantity;
   const shipmentStatus = firstText(shipment.shipmentStatus).toUpperCase();
   const closedAt = firstText(shipment.closedAt, shipment.raw?.closed_time, shipment.raw?.closedAt);
+  const mskus = [...new Set((shipment.items || []).map((item) => firstText(item.msku)).filter(Boolean))].join("、");
   const sla = buildSla({ shipmentStatus, differenceQuantity, closedAt, now });
   const key = shipmentKey(shipment);
 
@@ -138,6 +164,7 @@ function buildRow(shipment, followups, now) {
     ...shipment,
     shipmentStatus,
     closedAt,
+    mskus,
     shippedQuantity,
     receivedQuantity,
     differenceQuantity,
@@ -171,8 +198,15 @@ export async function getFbaShipmentVariances(filters = {}, {
   const current = normalizedNow(now);
   const normalizedFilters = normalizeFbaShipmentVarianceFilters(filters, { now: current });
   const shipmentStatuses = new Set(normalizedFilters.shipmentStatus.split(",").map((status) => firstText(status).toUpperCase()).filter(Boolean));
-  const candidateResult = await getCandidates({ ...normalizedFilters, shipmentStatus: shipmentStatuses.size > 1 ? "" : normalizedFilters.shipmentStatus }, { now: current.valueOf() });
-  const candidateRows = (Array.isArray(candidateResult?.rows) ? candidateResult.rows : []).filter((row) => !shipmentStatuses.size || shipmentStatuses.has(firstText(row.shipmentStatus).toUpperCase()));
+  const sourceFilters = {
+    ...normalizedFilters,
+    startDate: subtractDays(normalizedFilters.startDate, STAGE_DATE_LOOKBACK_DAYS),
+    shipmentStatus: "",
+  };
+  const candidateResult = await getCandidates(sourceFilters, { now: current.valueOf() });
+  const candidateRows = (Array.isArray(candidateResult?.rows) ? candidateResult.rows : []).filter((row) =>
+    (!shipmentStatuses.size || shipmentStatuses.has(firstText(row.shipmentStatus).toUpperCase()))
+    && isWithinSelectedStageDate(row, normalizedFilters));
   const keys = candidateRows.map(shipmentKey).filter((key) => !key.startsWith("0:"));
   const followups = await listFollowups(keys);
   const allRows = candidateRows.map((shipment) => buildRow(shipment, followups, current));
@@ -188,6 +222,8 @@ export async function getFbaShipmentVariances(filters = {}, {
       counts[row.shipmentStatus || "UNKNOWN"] = (counts[row.shipmentStatus || "UNKNOWN"] || 0) + 1;
       return counts;
     }, {}),
+    sourceStartDate: sourceFilters.startDate,
+    selectedStageDateRange: `${normalizedFilters.startDate}..${normalizedFilters.endDate}`,
   });
 
   return {
