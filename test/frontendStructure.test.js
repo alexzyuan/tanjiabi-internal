@@ -43,6 +43,15 @@ test("frontend module cache-bust versions stay aligned", async () => {
   assert.equal(dashboardLoaderUiUtilsVersion, indexUiUtilsVersion);
 });
 
+test("date range completion uses the shared auto-refresh convention", async () => {
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const appSource = await readFile(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.match(appSource, /installDateRangeAutoRefresh\(\{ root: document \}\)/);
+  assert.match(indexSource, /id="fba-freight-refresh" data-date-range-auto-refresh/);
+  assert.match(indexSource, /id="fba-shipment-variance-refresh" data-date-range-auto-refresh/);
+});
+
 test("sales forecast delegates default column widths to the shared table manager", async () => {
   const source = await readFile(new URL("../assets/js/features/sales-forecast.js", import.meta.url), "utf8");
   const columnsSource = source.slice(source.indexOf("const salesForecastColumns"), source.indexOf("function renderSalesForecastHeader"));
@@ -1153,7 +1162,7 @@ test("FBA shop picker preserves the shared dropdown label contract", async () =>
 test("sales shell centralizes front date popover visibility", async () => {
   const appSource = await readFile(new URL("../app.js", import.meta.url), "utf8");
   const source = await readFile(new URL("../assets/js/sales-shell.js", import.meta.url), "utf8");
-  assert.match(source, /import \{ createDateRangePicker \} from "\.\/date-range-picker\.js"/);
+  assert.match(source, /import \{ createDateRangePicker \} from "\.\/date-range-picker\.js(?:\?v=[^"]+)?"/);
   assert.match(source, /function setFrontDatePopoverOpen\(open\) \{[\s\S]*?setElementsHidden\(popover, !open\)/);
   assert.match(source, /function toggleFrontDatePopover\(\) \{[\s\S]*?setFrontDatePopoverOpen\(popover.hidden\)/);
   assert.match(source, /function setupFrontDateRangeControls\(\) \{[\s\S]*?createDateRangePickerImpl\(\{/);

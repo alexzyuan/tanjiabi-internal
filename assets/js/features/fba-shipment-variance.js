@@ -1,4 +1,4 @@
-import { createDateRangePicker } from "../date-range-picker.js";
+import { createDateRangePicker } from "../date-range-picker.js?v=20260803-date-auto-refresh-v1";
 
 export function createFbaShipmentVarianceFeature({
   root = globalThis.document,

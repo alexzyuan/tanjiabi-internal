@@ -2036,7 +2036,7 @@
                   <option value="">请选择发货仓库</option>
                 </select>
               </label>
-              <button class="secondary-button" id="fba-freight-refresh" type="button">读取货件</button>
+              <button class="secondary-button" id="fba-freight-refresh" data-date-range-auto-refresh type="button">读取货件</button>
               <button class="secondary-button" id="fba-freight-export" type="button">生成表格</button>
               <button class="primary-button" id="fba-freight-batch-convert" type="button">批量转表格</button>
             </section>
@@ -2127,7 +2127,7 @@
               <label>店铺<select id="fba-shipment-variance-sid"><option value="">全部店铺</option></select></label>
               <label>货件状态<select id="fba-shipment-variance-status-filter"><option value="RECEIVING,CLOSED" selected>RECEIVING、CLOSED</option><option value="RECEIVING">RECEIVING</option><option value="CLOSED">CLOSED</option><option value="">全部状态</option></select></label>
               <label>跟进状态<select id="fba-shipment-variance-followup-status"><option value="">全部</option><option value="pending">待跟进</option><option value="followed-up">已跟进</option><option value="overdue">已超期</option></select></label>
-              <button class="secondary-button" id="fba-shipment-variance-refresh" type="button">读取/刷新</button>
+              <button class="secondary-button" id="fba-shipment-variance-refresh" data-date-range-auto-refresh type="button">读取/刷新</button>
             </section>
             <section class="metric-grid fba-shipment-variance-summary"><article class="metric-tile"><span>收货中</span><strong id="fba-shipment-variance-receiving">0</strong></article><article class="metric-tile"><span>已关闭短收</span><strong id="fba-shipment-variance-closed-shortage">0</strong></article><article class="metric-tile"><span>七天内到期</span><strong id="fba-shipment-variance-due">0</strong></article><article class="metric-tile"><span>已超内部 SLA</span><strong id="fba-shipment-variance-overdue">0</strong></article></section>
             <div class="table-shell fba-shipment-variance-table-shell"><table class="data-table fba-shipment-variance-table" data-table-key="fba-shipment-variance"><thead><tr><th data-column-key="store-name">店铺</th><th data-column-key="shipment-id">货件单号</th><th data-column-key="msku">MSKU</th><th data-column-key="shipment-status">状态</th><th data-column-key="shipped-quantity">发货数量</th><th data-column-key="received-quantity">实收数量</th><th data-column-key="difference-quantity">差异数量</th><th data-column-key="created-at">货件创建时间</th><th data-column-key="updated-at">货件更新时间</th><th data-column-key="closed-at">关闭时间</th><th data-column-key="investigation-window">剩余调查申请窗口</th><th data-column-key="followup-status">跟进状态</th><th data-column-key="actions">操作</th></tr></thead><tbody id="fba-shipment-variance-table"><tr><td colspan="13">请选择条件后读取货件。</td></tr></tbody></table></div>
@@ -2583,6 +2583,6 @@
       });
     </script>
     <script type="module" src="./assets/js/ui-utils.js?v=20260706-frontend-refactor-v41" onerror="document.querySelector('#data-source').textContent='脚本未加载';document.querySelector('#data-source-note').textContent='ui-utils.js 请求失败，请检查服务器静态文件';"></script>
-    <script type="module" src="./app.js?v=20260803-global-page-loading-v1" onerror="document.querySelector('#data-source').textContent='脚本未加载';document.querySelector('#data-source-note').textContent='app.js 请求失败，请检查服务器静态文件';document.querySelector('#topbar-sync-state').textContent='脚本未加载';document.querySelector('#topbar-sync-time').textContent='app.js 失败';"></script>
+    <script type="module" src="./app.js?v=20260803-date-auto-refresh-v1" onerror="document.querySelector('#data-source').textContent='脚本未加载';document.querySelector('#data-source-note').textContent='app.js 请求失败，请检查服务器静态文件';document.querySelector('#topbar-sync-state').textContent='脚本未加载';document.querySelector('#topbar-sync-time').textContent='app.js 失败';"></script>
   </body>
 </html>

@@ -1,5 +1,6 @@
 import TanjiaUiUtils from "./assets/js/ui-utils.js?v=20260706-frontend-refactor-v41";
 import { installDashboardLoadingFetchOverlay, loadDashboardSection } from "./assets/js/dashboard-loader.js?v=20260803-global-page-loading-v1";
+import { installDateRangeAutoRefresh } from "./assets/js/date-range-picker.js?v=20260803-date-auto-refresh-v1";
 import { createFilterControls } from "./assets/js/filter-controls.js?v=20260707-frontend-refactor-v1";
 import {
   createFrontShopFilters,
@@ -74,6 +75,7 @@ if (!TanjiaUiUtils) {
 }
 
 installDashboardLoadingFetchOverlay({ root: document });
+installDateRangeAutoRefresh({ root: document });
 
 const {
   bind,

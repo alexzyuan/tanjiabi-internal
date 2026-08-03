@@ -4,7 +4,9 @@ import test from "node:test";
 import {
   buildCalendarMonth,
   createDateRangePicker,
+  DATE_RANGE_CHANGE_EVENT,
   formatDateRangeLabel,
+  installDateRangeAutoRefresh,
   normalizeDateRange,
   resolveDateRangePreset,
 } from "../assets/js/date-range-picker.js";
@@ -13,7 +15,10 @@ function createFakeElement() {
   const listeners = {};
   return {
     classList: { add() {} },
-    dispatchEvent() {},
+    dispatchedEvents: [],
+    dispatchEvent(event) {
+      this.dispatchedEvents.push(event);
+    },
     focusCalled: false,
     hidden: true,
     innerHTML: "",
@@ -29,6 +34,28 @@ function createFakeElement() {
     },
     textContent: "",
     value: "",
+  };
+}
+
+function createAutoRefreshRoot(refreshButton) {
+  const listeners = {};
+  const view = {
+    querySelector(selector) {
+      return selector === "[data-date-range-auto-refresh]" ? refreshButton : null;
+    },
+  };
+  return {
+    addEventListener(type, listener) {
+      listeners[type] = listener;
+    },
+    removeEventListener(type) {
+      delete listeners[type];
+    },
+    listeners,
+    querySelector(selector) {
+      return selector === ".view.active" ? view : null;
+    },
+    view,
   };
 }
 
@@ -206,6 +233,48 @@ test("date range picker requires the end date within 30 days after the selected 
   assert.equal(endInput.value, "2026-07-01");
   assert.equal(popover.hidden, false);
   assert.deepEqual(changes, []);
+});
+
+test("date range picker emits one shared completion event after a range is confirmed", () => {
+  const trigger = createFakeElement();
+  const popover = createFakeElement();
+  const picker = createDateRangePicker({
+    trigger,
+    popover,
+    startInput: createFakeElement(),
+    endInput: createFakeElement(),
+    today: new Date("2026-07-17T08:00:00Z"),
+  });
+
+  picker.setup();
+  picker.open();
+  popover.listeners.click(createDateClickEvent("2026-07-03"));
+  popover.listeners.click(createDateClickEvent("2026-07-07"));
+
+  assert.equal(trigger.dispatchedEvents.length, 1);
+  assert.equal(trigger.dispatchedEvents[0].type, DATE_RANGE_CHANGE_EVENT);
+  assert.deepEqual(trigger.dispatchedEvents[0].detail, {
+    range: { start: "2026-07-03", end: "2026-07-07" },
+  });
+});
+
+test("date range auto refresh only clicks the current view's declared refresh control", () => {
+  let clickCount = 0;
+  const refreshButton = { click: () => { clickCount += 1; } };
+  const root = createAutoRefreshRoot(refreshButton);
+  const cleanup = installDateRangeAutoRefresh({ root });
+
+  root.listeners[DATE_RANGE_CHANGE_EVENT]({
+    target: {
+      closest(selector) {
+        return selector === ".view" ? root.view : null;
+      },
+    },
+  });
+
+  assert.equal(clickCount, 1);
+  cleanup();
+  assert.equal(root.listeners[DATE_RANGE_CHANGE_EVENT], undefined);
 });
 
 test("date range picker previews the selectable end range while hovering after start selection", () => {

@@ -210,6 +210,7 @@ font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
 
 - 新增日期范围筛选优先使用 `assets/js/date-range-picker.js` 和 `assets/css/components/36-date-range-picker.css` 的共享双月日期控件。
 - 默认展开视图是前 30 天到今天；开始日期选中后，结束日期只能在开始日期起 30 天内，并且不能超过今天。
+- 日期范围在结束日期确认或使用快捷日期后，组件统一派发 `tanjia:date-range-change`；筛选板块需要自动读取时，在本板块既有刷新按钮声明 `data-date-range-auto-refresh`。全局监听器只触发当前板块已声明的按钮，销售复盘等已有专用回调的页面不得重复声明该标记。
 - 日期弹层宽度为 `min(760px, 96vw)`，左侧快捷项宽度 112px；快捷项 hover/focus 使用淡蓝底。
 - 选中开始/结束日期使用蓝色圆形填充，今天使用蓝色细圆边框，范围预览使用淡蓝底。
 - 日期按钮不使用额外伪元素图标；弹层必须显式设置字体大小，不能继承外层 label 的隐藏文字规则。

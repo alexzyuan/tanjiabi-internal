@@ -1,5 +1,7 @@
 const dayMs = 24 * 60 * 60 * 1000;
 const maxRangeDays = 30;
+export const DATE_RANGE_CHANGE_EVENT = "tanjia:date-range-change";
+const autoRefreshRegistrations = new WeakMap();
 const weekdayLabels = ["日", "一", "二", "三", "四", "五", "六"];
 const defaultPresets = [
   ["today", "今天"],
@@ -181,6 +183,37 @@ function setInputValue(input, value) {
   input.dispatchEvent?.(new Event("change", { bubbles: true }));
 }
 
+function dispatchDateRangeChange(trigger, range) {
+  if (!trigger?.dispatchEvent) return;
+  const detail = { range: { ...range } };
+  const event = typeof globalThis.CustomEvent === "function"
+    ? new CustomEvent(DATE_RANGE_CHANGE_EVENT, { bubbles: true, detail })
+    : Object.assign(new Event(DATE_RANGE_CHANGE_EVENT, { bubbles: true }), { detail });
+  trigger.dispatchEvent(event);
+}
+
+export function installDateRangeAutoRefresh({
+  root = globalThis.document,
+  refreshSelector = "[data-date-range-auto-refresh]",
+} = {}) {
+  if (!root?.addEventListener || !root?.removeEventListener) return () => {};
+  const existing = autoRefreshRegistrations.get(root);
+  if (existing) return existing;
+
+  const handler = (event) => {
+    const view = event?.target?.closest?.(".view") || root.querySelector?.(".view.active");
+    view?.querySelector?.(refreshSelector)?.click?.();
+  };
+  const cleanup = () => {
+    root.removeEventListener(DATE_RANGE_CHANGE_EVENT, handler);
+    autoRefreshRegistrations.delete(root);
+  };
+
+  root.addEventListener(DATE_RANGE_CHANGE_EVENT, handler);
+  autoRefreshRegistrations.set(root, cleanup);
+  return cleanup;
+}
+
 export function createDateRangePicker({
   root = globalThis.document,
   trigger,
@@ -301,6 +334,7 @@ export function createDateRangePicker({
     resetSelectionDraft();
     syncInputs();
     render();
+    dispatchDateRangeChange(triggerElement, range);
     onChange({ ...range });
   }
 
