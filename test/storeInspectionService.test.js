@@ -371,7 +371,7 @@ test("buildStoreInspectionMarkdown reports fee-only stores without notifying the
 
   const markdown = buildStoreInspectionMarkdown(result, [], mentionConfig);
 
-  assert.match(markdown, /## xiamentanjia-US[\s\S]*- 本周低库存费 MSKU：FEE-2、FEE-1。/);
+  assert.match(markdown, /## xiamentanjia-US[\s\S]*- <font color="#D7373F">\*\*本周低库存费 MSKU：FEE-2、FEE-1，已产生附加费，请及时关注。\*\*<\/font>/);
   assert.equal(buildStoreInspectionMentionText(result, mentionConfig), "");
   assert.deepEqual(storeInspectionMentionUserIds(result, mentionConfig), []);
 });

@@ -1173,7 +1173,7 @@ function buildStoreReportSection(storeName, latest, previous, config = getConfig
     ownerMentionLine,
     "",
     ...feedbackReviewLines,
-    lowInventoryFeeMskus.length ? `- 本周低库存费 MSKU：${lowInventoryFeeMskus.join("、")}。` : "",
+    lowInventoryFeeMskus.length ? `- <font color="#D7373F">**本周低库存费 MSKU：${lowInventoryFeeMskus.join("、")}，已产生附加费，请及时关注。**</font>` : "",
     stationMessageCount > 0 ? `- 新增 ${reportCount(stationMessageCount)} 封亚马逊站内信。` : "- 亚马逊站内信无新增。",
     `- 店铺健康，目前 ${reportCount(policyCount)} 条合规性问题待处理，新增 ${reportCount(newPolicyCount)} 条。`,
   ].filter((line, index) => line || index === 2).join("\n");
