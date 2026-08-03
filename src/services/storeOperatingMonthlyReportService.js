@@ -321,3 +321,67 @@ export async function getStoreOperatingMonthlyReport(filters, {
     throw error;
   }
 }
+
+function requireStoreOperatingMonthlyReportExportResult(report) {
+  if (!report || typeof report !== "object" || Array.isArray(report) || !Array.isArray(report.groups)) {
+    throw new Error("店铺经营月报导出数据缺少 groups 数组");
+  }
+  if (!report.filters || typeof report.filters !== "object" || Array.isArray(report.filters)) {
+    throw new Error("店铺经营月报导出数据缺少 filters 对象");
+  }
+  if (!MONTH_PATTERN.test(report.filters.startMonth || "") || !MONTH_PATTERN.test(report.filters.endMonth || "")) {
+    throw new Error("店铺经营月报导出数据缺少有效月份范围");
+  }
+  return report;
+}
+
+function exportCell(value) {
+  return value === null || value === undefined ? "—" : value;
+}
+
+function storeOperatingMonthlyReportExportRows(report) {
+  return report.groups.flatMap((group) => {
+    if (!group || typeof group !== "object" || Array.isArray(group) || typeof group.currencyCode !== "string" || !Array.isArray(group.rows)) {
+      throw new Error("店铺经营月报导出分组缺少 rows 数组");
+    }
+    return group.rows.map((row) => {
+      if (!row || typeof row !== "object" || Array.isArray(row)
+        || typeof row.category !== "string" || typeof row.name !== "string"
+        || typeof row.available !== "boolean") {
+        throw new Error("店铺经营月报导出行缺少必要字段");
+      }
+      return [
+        group.currencyCode,
+        row.category,
+        row.name,
+        exportCell(row.actual),
+        exportCell(row.budget),
+        exportCell(row.share),
+        exportCell(row.achievement),
+        row.available ? "是" : "否",
+      ];
+    });
+  });
+}
+
+export async function exportStoreOperatingMonthlyReportXlsx(filters = {}, {
+  getStoreOperatingMonthlyReport: loadReport = getStoreOperatingMonthlyReport,
+} = {}) {
+  const report = requireStoreOperatingMonthlyReportExportResult(await loadReport(filters));
+  const module = await import("xlsx");
+  const XLSX = module.default || module;
+  const workbook = XLSX.utils.book_new();
+  const headers = ["币种", "分类", "科目", "实际值", "预算值", "占比", "达成率", "数据可用"];
+  const rows = storeOperatingMonthlyReportExportRows(report);
+  const sheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  const lastColumn = XLSX.utils.encode_col(headers.length - 1);
+  sheet["!autofilter"] = { ref: `A1:${lastColumn}${Math.max(1, rows.length + 1)}` };
+  sheet["!cols"] = [10, 18, 24, 16, 16, 12, 12, 12].map((wch) => ({ wch }));
+  XLSX.utils.book_append_sheet(workbook, sheet, "店铺经营月报");
+
+  return {
+    filename: `店铺经营月报-${report.filters.startMonth}至${report.filters.endMonth}.xlsx`,
+    buffer: XLSX.write(workbook, { bookType: "xlsx", type: "buffer" }),
+    rowCount: rows.length,
+  };
+}

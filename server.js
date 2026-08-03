@@ -62,6 +62,10 @@ import { startFactoryInventoryWarmupScheduler } from "./src/services/factoryInve
 import { startDefaultDashboardWarmupScheduler } from "./src/services/defaultDashboardWarmupService.js";
 import { getSupplierBoardDashboard } from "./src/services/supplierBoardService.js";
 import {
+  exportStoreOperatingMonthlyReportXlsx,
+  getStoreOperatingMonthlyReport,
+} from "./src/services/storeOperatingMonthlyReportService.js";
+import {
   deleteSupplierDetail,
   importSupplierDetails,
   listSupplierDetails,
@@ -823,6 +827,8 @@ const apiRoutes = createApiRoutes(buildApiRoutes({
   getPlatformCashflowDashboard,
   getPayablesDashboard,
   getSupplierBoardDashboard,
+  getStoreOperatingMonthlyReport,
+  exportStoreOperatingMonthlyReportXlsx,
   runPlatformCashflowCapture,
   listSupplierDetails,
   saveSupplierDetail,

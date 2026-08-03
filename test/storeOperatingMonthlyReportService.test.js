@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  exportStoreOperatingMonthlyReportXlsx,
   getStoreOperatingMonthlyReport as getStoreOperatingMonthlyReportWithLogging,
   normalizeStoreOperatingMonthlyReportFilters,
 } from "../src/services/storeOperatingMonthlyReportService.js";
@@ -481,4 +482,61 @@ test("service logs trace metadata without order or budget payloads", async () =>
   assert.equal(entries[0].details.budgetMatchCount, 1);
   assert.equal(typeof entries[0].details.elapsedMs, "number");
   assert.doesNotMatch(JSON.stringify(entries), /do-not-log/);
+});
+
+test("monthly report export builds its workbook from the same report result and filters", async () => {
+  const filters = {
+    startMonth: "2026-06",
+    endMonth: "2026-07",
+    stores: ["Store-US"],
+    countries: ["美国"],
+  };
+  let receivedFilters;
+  const result = await exportStoreOperatingMonthlyReportXlsx(filters, {
+    getStoreOperatingMonthlyReport: async (value) => {
+      receivedFilters = value;
+      return {
+        filters: { ...value, months: ["2026-06", "2026-07"] },
+        meta: { currencyMode: "ORIGINAL", generatedAt: "2026-08-03T08:00:00.000Z" },
+        groups: [{
+          currencyCode: "USD",
+          currencyAvailable: true,
+          rows: [{
+            category: "销售收入",
+            name: "销售收入净额",
+            actual: 90,
+            budget: 120,
+            share: 1,
+            achievement: 0.75,
+            available: true,
+          }],
+        }],
+      };
+    },
+  });
+
+  const xlsxModule = await import("xlsx");
+  const XLSX = xlsxModule.default || xlsxModule;
+  const workbook = XLSX.read(result.buffer, { type: "buffer" });
+  const rows = XLSX.utils.sheet_to_json(workbook.Sheets["店铺经营月报"], { header: 1 });
+
+  assert.deepEqual(receivedFilters, filters);
+  assert.equal(result.filename, "店铺经营月报-2026-06至2026-07.xlsx");
+  assert.deepEqual(rows[0], ["币种", "分类", "科目", "实际值", "预算值", "占比", "达成率", "数据可用"]);
+  assert.deepEqual(rows[1], ["USD", "销售收入", "销售收入净额", 90, 120, 1, 0.75, "是"]);
+});
+
+test("monthly report export rejects malformed source rows instead of writing a misleading workbook", async () => {
+  await assert.rejects(
+    () => exportStoreOperatingMonthlyReportXlsx(
+      { startMonth: "2026-06", endMonth: "2026-07" },
+      {
+        getStoreOperatingMonthlyReport: async () => ({
+          filters: { startMonth: "2026-06", endMonth: "2026-07" },
+          groups: [{ currencyCode: "USD", rows: [{}] }],
+        }),
+      },
+    ),
+    /导出行缺少/,
+  );
 });
