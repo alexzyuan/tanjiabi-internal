@@ -97,6 +97,23 @@ test("monthly report delegates business column width and sorting to shared table
   assert.equal(/\.store-operating[^,{]*\{[^}]*min-width\s*:/.test(css), false);
 });
 
+test("browser CSS cascade runner is pinned, bounded, and included in CI", async () => {
+  const packageSource = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  const browserRunner = await readFile(new URL("../scripts/verify-store-operating-monthly-report-css-browser.js", import.meta.url), "utf8");
+  const ciSource = await readFile(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
+
+  assert.equal(packageSource.devDependencies["@playwright/cli"], "0.1.17");
+  assert.match(packageSource.scripts.test, /test:store-operating-css-browser/);
+  assert.match(browserRunner, /node_modules", "\.bin", process\.platform === "win32" \? "playwright-cli\.cmd" : "playwright-cli"/);
+  assert.match(browserRunner, /"--browser=chromium"/);
+  assert.match(browserRunner, /NO_UPDATE_NOTIFIER: "1"/);
+  assert.match(browserRunner, /const testDeadline = Date\.now\(\) \+ 45_000/);
+  assert.match(browserRunner, /const cleanupDeadline = Date\.now\(\) \+ cleanupTimeoutMs/);
+  assert.match(browserRunner, /process\.kill\(browserDaemonPid, "SIGKILL"\)/);
+  assert.match(browserRunner, /clearTimeout\(timeoutId\)/);
+  assert.match(ciSource, /\.\/node_modules\/\.bin\/playwright install --with-deps chromium/);
+});
+
 test("index.html startup health check centralizes sync tone class switching", async () => {
   const source = await readFile(new URL("../index.html", import.meta.url), "utf8");
   const healthStart = source.indexOf("window.__tanjiaBasicNavigationReady = true;");

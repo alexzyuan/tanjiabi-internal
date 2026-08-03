@@ -13,8 +13,17 @@ const rootPath = fileURLToPath(rootDir);
 const browserCliPath = join(rootPath, "node_modules", ".bin", process.platform === "win32" ? "playwright-cli.cmd" : "playwright-cli");
 const browserTimeoutMs = 15_000;
 const testDeadline = Date.now() + 45_000;
+const cleanupTimeoutMs = 5_000;
+const browserEnvironment = {
+  ...process.env,
+  CI: "1",
+  NO_UPDATE_NOTIFIER: "1",
+  NPM_CONFIG_UPDATE_NOTIFIER: "false",
+  npm_config_update_notifier: "false",
+};
 const fixtures = new Map();
 const execFileAsync = promisify(execFile);
+let browserDaemonPid;
 const server = createServer((request, response) => {
   if (request.url === "/styles.css") {
     response.writeHead(200, { "content-type": "text/css; charset=utf-8" });
@@ -34,16 +43,25 @@ const serverAddress = server.address();
 assert.ok(serverAddress && typeof serverAddress !== "string");
 const fixtureOrigin = `http://127.0.0.1:${serverAddress.port}`;
 
-async function runBrowser(args, timeoutMs = browserTimeoutMs) {
-  const remainingMs = testDeadline - Date.now();
-  assert.ok(remainingMs > 0, "browser computed-style test exceeded its 45 second deadline");
+async function runBrowser(args, { timeoutMs = browserTimeoutMs, deadline = testDeadline } = {}) {
+  const remainingMs = deadline - Date.now();
+  assert.ok(remainingMs > 0, "browser computed-style test exceeded its deadline");
   try {
-    const { stdout } = await execFileAsync(browserCliPath, [`-s=${session}`, ...args], {
+    const cliArgs = args[0] === "open"
+      ? ["--browser=chromium", `-s=${session}`, ...args]
+      : [`-s=${session}`, ...args];
+    const { stdout } = await execFileAsync(browserCliPath, cliArgs, {
       cwd: rootPath,
       encoding: "utf8",
+      env: browserEnvironment,
       timeout: Math.min(timeoutMs, remainingMs),
       killSignal: "SIGTERM",
     });
+    if (args[0] === "open") {
+      const daemonPidMatch = stdout.match(/opened with pid (\d+)/);
+      assert.ok(daemonPidMatch, `Playwright did not report a daemon PID:\n${stdout}`);
+      browserDaemonPid = Number(daemonPidMatch[1]);
+    }
     return stdout;
   } catch (error) {
     const details = [error.message, error.stdout, error.stderr].filter(Boolean).join("\n");
@@ -93,6 +111,63 @@ async function inspectComputedLayout(filename, overrides = "") {
   return parseJsonResult(result);
 }
 
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isDaemonRunning() {
+  if (!browserDaemonPid) return false;
+  try {
+    process.kill(browserDaemonPid, 0);
+    return true;
+  } catch (error) {
+    if (error.code === "ESRCH") return false;
+    throw error;
+  }
+}
+
+async function waitForDaemonExit(deadline) {
+  while (Date.now() < deadline) {
+    if (!isDaemonRunning()) return true;
+    await delay(50);
+  }
+  return !isDaemonRunning();
+}
+
+async function closeBrowser(deadline) {
+  const errors = [];
+  try {
+    await runBrowser(["close"], { timeoutMs: cleanupTimeoutMs, deadline });
+    return errors;
+  } catch (error) {
+    errors.push(new Error("Playwright session close failed", { cause: error }));
+  }
+  if (!browserDaemonPid || !isDaemonRunning()) return errors;
+  try {
+    process.kill(browserDaemonPid, "SIGTERM");
+    if (await waitForDaemonExit(deadline)) return errors;
+    process.kill(browserDaemonPid, "SIGKILL");
+    if (await waitForDaemonExit(deadline)) return errors;
+    errors.push(new Error(`Playwright daemon ${browserDaemonPid} remained running after SIGKILL`));
+  } catch (error) {
+    errors.push(new Error(`Playwright daemon ${browserDaemonPid} kill fallback failed`, { cause: error }));
+  }
+  return errors;
+}
+
+async function closeFixtureServer(timeoutMs) {
+  let timeoutId;
+  try {
+    await new Promise((resolve, reject) => {
+      timeoutId = setTimeout(() => reject(new Error("fixture server cleanup timed out")), timeoutMs);
+      server.close((error) => (error ? reject(error) : resolve()));
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+let testError;
 try {
   const baseline = await inspectComputedLayout("baseline.html");
   assert.equal(baseline.worldClock, "none");
@@ -109,14 +184,22 @@ try {
   assert.equal(laterOverrides.worldClock, "block");
   assert.equal(laterOverrides.heroDisplay, "flex");
   assert.equal(laterOverrides.heroFlexDirection, "row");
-} finally {
-  try {
-    await runBrowser(["close"], 5_000);
-  } catch {
-    // The assertion failure is more useful than a best-effort browser cleanup failure.
-  }
-  await Promise.race([
-    new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve()))),
-    new Promise((_, reject) => setTimeout(() => reject(new Error("fixture server cleanup timed out")), 5_000)),
-  ]);
+} catch (error) {
+  testError = error;
+}
+
+const cleanupDeadline = Date.now() + cleanupTimeoutMs;
+const cleanupErrors = await closeBrowser(cleanupDeadline);
+try {
+  await closeFixtureServer(cleanupTimeoutMs);
+} catch (error) {
+  cleanupErrors.push(new Error("Fixture server close failed", { cause: error }));
+}
+
+if (testError && cleanupErrors.length) {
+  throw new AggregateError([testError, ...cleanupErrors], "Browser computed-style test and cleanup failed");
+}
+if (testError) throw testError;
+if (cleanupErrors.length) {
+  throw new AggregateError(cleanupErrors, "Browser computed-style test cleanup failed");
 }
