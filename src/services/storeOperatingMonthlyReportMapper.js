@@ -14,6 +14,13 @@ const METRICS = [
 
 const BUDGET_METRICS = new Set(["net-sales", "ad-spend", "refunds", "sales-profit"]);
 
+const BUDGET_FIELDS = [
+  ["net-sales", "salesTarget"],
+  ["ad-spend", "adBudget"],
+  ["refunds", "refundTarget"],
+  ["sales-profit", "profitTarget"],
+];
+
 const CATEGORIES = [
   ["revenue", "销售收入"],
   ["sales-cost", "销售成本"],
@@ -78,6 +85,16 @@ function createRow({ key, category, name, level, actual, budget = null, children
     available,
     children,
   };
+}
+
+export function mapStoreOperatingBudgetMetrics(totals = {}) {
+  if (totals === null || typeof totals !== "object" || Array.isArray(totals)) {
+    throw new Error("预算汇总必须是对象");
+  }
+  return Object.fromEntries(BUDGET_FIELDS.flatMap(([metric, field]) => {
+    if (!Object.hasOwn(totals, field) || !isPresent(totals[field])) return [];
+    return [[metric, toFiniteNumber(totals[field], `预算字段 ${field}`)]];
+  }));
 }
 
 export function buildStoreOperatingReportRows({ records, budgetByMetric = {}, currencyCode } = {}) {

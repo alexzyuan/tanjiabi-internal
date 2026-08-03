@@ -1,6 +1,25 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildStoreOperatingReportRows } from "../src/services/storeOperatingMonthlyReportMapper.js";
+import {
+  buildStoreOperatingReportRows,
+  mapStoreOperatingBudgetMetrics,
+} from "../src/services/storeOperatingMonthlyReportMapper.js";
+
+test("budget target fields map only to the four confirmed report metrics", () => {
+  assert.deepEqual(mapStoreOperatingBudgetMetrics({
+    salesTarget: 100,
+    adBudget: 10,
+    refundTarget: 4,
+    profitTarget: 20,
+    purchaseCost: 30,
+  }), {
+    "net-sales": 100,
+    "ad-spend": 10,
+    refunds: 4,
+    "sales-profit": 20,
+  });
+  assert.deepEqual(mapStoreOperatingBudgetMetrics({ salesTarget: null }), {});
+});
 
 test("missing order-profit fields stay unavailable rather than becoming zero", () => {
   const result = buildStoreOperatingReportRows({
