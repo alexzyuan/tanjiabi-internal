@@ -287,6 +287,39 @@ test("a stale month response cannot replace the newer report DOM, URL, or status
   assert.equal(elements["#store-operating-report-status"].textContent, "预算已匹配 1 条");
 });
 
+test("store and country edits invalidate an in-flight report scope", async () => {
+  for (const scope of ["store", "country"]) {
+    const pending = createDeferred();
+    const { feature, elements, location } = makeFeatureHarness({
+      fetchImpl: () => pending.promise,
+    });
+    const request = feature.loadStoreOperatingMonthlyReport();
+
+    if (scope === "store") {
+      elements["#store-operating-report-store"].selectedValues = ["A"];
+      feature.handleStoreChange();
+    } else {
+      elements["#store-operating-report-country"].selectedValues = ["美国"];
+      feature.handleCountryChange();
+    }
+    pending.resolve(makeReportResponse({ name: `${scope} 旧筛选数据` }));
+    await request;
+
+    assert.doesNotMatch(elements["#store-operating-report-body"].innerHTML, /旧筛选数据/);
+    assert.equal(location.search, "");
+    assert.equal(elements["#store-operating-report-export"].disabled, true);
+
+    if (scope === "store") {
+      elements["#store-operating-report-store"].selectedValues = [];
+      feature.handleStoreChange();
+    } else {
+      elements["#store-operating-report-country"].selectedValues = [];
+      feature.handleCountryChange();
+    }
+    assert.equal(elements["#store-operating-report-export"].disabled, true);
+  }
+});
+
 test("failed rendering refreshes the managed table after replacing the header", async () => {
   const { feature, elements, refreshes } = makeFeatureHarness({
     fetchImpl: async () => ({

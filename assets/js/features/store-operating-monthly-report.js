@@ -378,6 +378,7 @@ export function createStoreOperatingMonthlyReportFeature({
   }
 
   function handleCountryChange() {
+    invalidateActiveReportLoad();
     syncAllOptionSelection(query("#store-operating-report-country"));
     refreshStoreOptions({ showScopeWarning: true });
     const exportButton = query("#store-operating-report-export");
@@ -385,6 +386,7 @@ export function createStoreOperatingMonthlyReportFeature({
   }
 
   function handleStoreChange() {
+    invalidateActiveReportLoad();
     syncAllOptionSelection(query("#store-operating-report-store"));
     const exportButton = query("#store-operating-report-export");
     if (exportButton) exportButton.disabled = !sameQuery(buildReportQuery(), lastSuccessfulQuery);

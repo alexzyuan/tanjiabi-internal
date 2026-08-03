@@ -47,7 +47,7 @@ import { createAiImageWorkflowFeature } from "./assets/js/features/ai-image-work
 import { createAdminSettingsFeature } from "./assets/js/features/admin-settings.js?v=20260706-frontend-refactor-v1";
 import { createWebhookAssistantFeature } from "./assets/js/features/webhook-assistant.js?v=20260720-webhook-assistant-v1";
 import { createBudgetTargetsFeature } from "./assets/js/features/budget-targets.js?v=20260706-frontend-refactor-v1";
-import { createStoreOperatingMonthlyReportFeature } from "./assets/js/features/store-operating-monthly-report.js?v=20260803-store-operating-monthly-report-v2";
+import { createStoreOperatingMonthlyReportFeature } from "./assets/js/features/store-operating-monthly-report.js?v=20260803-store-operating-monthly-report-v3";
 import { createSyncCenterFeature } from "./assets/js/features/sync-center.js?v=20260706-frontend-refactor-v1";
 import { createFbaFreightFeature } from "./assets/js/features/fba-freight.js?v=20260717-shared-logistics-channels";
 import { createFbaShipmentVarianceFeature } from "./assets/js/features/fba-shipment-variance.js?v=20260803-shipment-variance-v1";
