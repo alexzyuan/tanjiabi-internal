@@ -34,6 +34,8 @@ test("variance service aggregates SKU quantities and only starts the internal SL
             sid: 1,
             shipmentId: "RECEIVING-1",
             shipmentStatus: "receiving",
+            createdAt: "2026-06-01 10:00:00",
+            receivingAt: "2026-07-27 05:03:00",
             items: [{ shippedQuantity: 10, receivedQuantity: 7 }],
           },
           {
@@ -41,6 +43,7 @@ test("variance service aggregates SKU quantities and only starts the internal SL
             shipmentId: "CLOSED-1",
             shipmentStatus: "CLOSED",
             closedAt: "2026-08-01T12:00:00.000Z",
+            createdAt: "2026-02-01 10:00:00",
             items: [
               { msku: "A", shippedQuantity: 10, receivedQuantity: 8 },
               { msku: "B", shippedQuantity: 5, receivedQuantity: 5 },
@@ -57,6 +60,7 @@ test("variance service aggregates SKU quantities and only starts the internal SL
             sid: 4,
             shipmentId: "CLOSED-MISSING-TIME",
             shipmentStatus: "CLOSED",
+            createdAt: "2026-07-10 10:00:00",
             items: [{ shippedQuantity: 10, receivedQuantity: 8 }],
           },
         ],
@@ -72,13 +76,14 @@ test("variance service aggregates SKU quantities and only starts the internal SL
   });
 
   assert.equal(candidateCalls.length, 1);
-  assert.equal(candidateCalls[0].startDate, "2026-07-05");
+  assert.equal(candidateCalls[0].startDate, "2026-01-06");
   assert.equal(candidateCalls[0].endDate, "2026-08-03");
   assert.equal(result.rows[0].investigationStatus, "收货中");
   assert.equal(result.rows[0].sla.status, "not-applicable");
   assert.equal(result.rows[1].shippedQuantity, 15);
   assert.equal(result.rows[1].receivedQuantity, 13);
   assert.equal(result.rows[1].differenceQuantity, 2);
+  assert.equal(result.rows[1].mskus, "A、B");
   assert.equal(result.rows[1].investigationStatus, "待调查");
   assert.equal(result.rows[1].sla.deadlineAt, "2026-08-08T12:00:00.000Z");
   assert.equal(result.rows[1].sla.display, "还剩 5 天 0 小时");

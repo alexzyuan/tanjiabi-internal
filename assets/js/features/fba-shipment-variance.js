@@ -78,15 +78,15 @@ export function createFbaShipmentVarianceFeature({
   function renderRows() {
     const table = query("#fba-shipment-variance-table");
     if (!table) return;
-    if (!rows.length) return renderTableMessage(table, 10, "当前筛选没有货件差异。");
+    if (!rows.length) return renderTableMessage(table, 13, "当前筛选没有货件差异。");
     table.innerHTML = rows.map((row) => {
       const canFollow = row.investigationStatus === "待调查";
       const followed = Boolean(row.followup?.followedUp);
       return `<tr>
-        <td>${escapeHtml(row.storeName || row.sid || "-")}</td><td>${escapeHtml(row.shipmentId || "-")}</td>
+        <td>${escapeHtml(row.storeName || row.sid || "-")}</td><td>${escapeHtml(row.shipmentId || "-")}</td><td>${escapeHtml(row.mskus || "-")}</td>
         <td><span class="risk-badge">${escapeHtml(row.shipmentStatus || "-")}</span><br /><small>${escapeHtml(row.investigationStatus || "-")}</small></td>
         <td>${formatNumber(row.shippedQuantity || 0)}</td><td>${formatNumber(row.receivedQuantity || 0)}</td><td>${formatNumber(row.differenceQuantity || 0)}</td>
-        <td>${escapeHtml(row.closedAt || "-")}</td><td>${escapeHtml(row.sla?.display || "—")}</td>
+        <td>${escapeHtml(row.createdAt || "-")}</td><td>${escapeHtml(row.updatedAt || "-")}</td><td>${escapeHtml(row.closedAt || "-")}</td><td>${escapeHtml(row.sla?.display || "—")}</td>
         <td>${followed ? `${escapeHtml(row.followup.status || "已跟进")}<br /><small>${escapeHtml(row.followup.followedUpBy || "")}</small>` : "待跟进"}</td>
         <td class="table-actions">${canFollow ? `<button class="primary-button compact-button" type="button" data-fba-shipment-variance-followup="${escapeHtml(`${row.sid}:${row.shipmentId}`)}" data-fba-shipment-variance-followup-status="${escapeHtml(row.followup?.status || "已跟进")}">跟进</button>` : ""}</td>
       </tr>`;
@@ -111,7 +111,7 @@ export function createFbaShipmentVarianceFeature({
       if (!response.ok || data.ok === false) throw new Error(data.error || `API ${response.status}`);
       rows = data.rows || []; loaded = true; renderSummary(data.summary); renderRows(); setStatus(`已读取 ${formatNumber(rows.length)} 个货件`);
     } catch (error) {
-      rows = []; renderSummary(); renderTableMessage(query("#fba-shipment-variance-table"), 10, `读取失败：${error.message || error}`); setStatus(`读取失败：${error.message || error}`);
+      rows = []; renderSummary(); renderTableMessage(query("#fba-shipment-variance-table"), 13, `读取失败：${error.message || error}`); setStatus(`读取失败：${error.message || error}`);
     } finally { setLoading(false); }
   }
 
