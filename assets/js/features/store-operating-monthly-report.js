@@ -1,0 +1,427 @@
+const MONTH_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])$/;
+
+function defaultCurrentMonth() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
+export function listInclusiveMonths(startMonth, endMonth) {
+  if (!MONTH_PATTERN.test(startMonth || "") || !MONTH_PATTERN.test(endMonth || "")) return [];
+  const [startYear, startNumber] = startMonth.split("-").map(Number);
+  const [endYear, endNumber] = endMonth.split("-").map(Number);
+  const startIndex = startYear * 12 + startNumber - 1;
+  const endIndex = endYear * 12 + endNumber - 1;
+  if (endIndex < startIndex) return [];
+  return Array.from({ length: endIndex - startIndex + 1 }, (_value, index) => {
+    const monthIndex = startIndex + index;
+    const year = Math.floor(monthIndex / 12);
+    const month = monthIndex % 12 + 1;
+    return `${year}-${String(month).padStart(2, "0")}`;
+  });
+}
+
+export function validateMonthRange(startMonth, endMonth) {
+  if (!MONTH_PATTERN.test(startMonth || "") || !MONTH_PATTERN.test(endMonth || "")) {
+    return { ok: false, error: "请选择有效的开始月份和结束月份" };
+  }
+  const months = listInclusiveMonths(startMonth, endMonth);
+  if (!months.length) return { ok: false, error: "结束月份不能早于开始月份" };
+  if (months.length > 12) return { ok: false, error: "统计范围最多 12 个月" };
+  return { ok: true, months };
+}
+
+function normalizeStoreOption(item = {}) {
+  if (typeof item === "string") return { name: item, label: item, country: "" };
+  const name = String(item.name || item.value || item.label || "").trim();
+  return {
+    name,
+    label: String(item.label || name).trim(),
+    country: String(item.country || "").trim(),
+  };
+}
+
+function sameQuery(left, right) {
+  return String(left || "") === String(right || "");
+}
+
+export function createStoreOperatingMonthlyReportFeature({
+  root = globalThis.document,
+  bind,
+  clickVisibleNavItem,
+  downloadBlob,
+  escapeHtml,
+  fetchImpl = globalThis.fetch,
+  formatActualMoney,
+  getCurrentMonth = defaultCurrentMonth,
+  getStoreOptions = () => [],
+  historyRef = globalThis.history,
+  locationRef = globalThis.location,
+  refreshTable = () => null,
+  selectedFilterValues,
+  setButtonBusy,
+  setSelectOptions,
+  setText,
+  syncAllOptionSelection,
+} = {}) {
+  if (typeof bind !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires bind.");
+  if (typeof clickVisibleNavItem !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires clickVisibleNavItem.");
+  if (typeof downloadBlob !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires downloadBlob.");
+  if (typeof escapeHtml !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires escapeHtml.");
+  if (typeof fetchImpl !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires fetch.");
+  if (typeof formatActualMoney !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires formatActualMoney.");
+  if (typeof selectedFilterValues !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires selectedFilterValues.");
+  if (typeof setSelectOptions !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires setSelectOptions.");
+  if (typeof setText !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires setText.");
+  if (typeof syncAllOptionSelection !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires syncAllOptionSelection.");
+
+  let storeOptions = [];
+  let lastSuccessfulQuery = "";
+  let initializedFromUrl = false;
+  let initialUrlScopeApplied = false;
+  let initialUrlStores = [];
+  let initialUrlCountries = [];
+
+  function query(selector) {
+    return root?.querySelector?.(selector) || null;
+  }
+
+  function readFilters() {
+    return {
+      startMonth: String(query("#store-operating-report-start-month")?.value || "").trim(),
+      endMonth: String(query("#store-operating-report-end-month")?.value || "").trim(),
+      stores: selectedFilterValues(query("#store-operating-report-store")),
+      countries: selectedFilterValues(query("#store-operating-report-country")),
+    };
+  }
+
+  function buildReportQuery(filters = readFilters()) {
+    const params = new URLSearchParams();
+    params.set("startMonth", filters.startMonth);
+    params.set("endMonth", filters.endMonth);
+    filters.stores.forEach((value) => params.append("stores", value));
+    filters.countries.forEach((value) => params.append("countries", value));
+    return params.toString();
+  }
+
+  function replaceLocationSearch(params) {
+    const suffix = params.toString();
+    const pathname = locationRef?.pathname || "";
+    historyRef?.replaceState?.({}, "", `${pathname}${suffix ? `?${suffix}` : ""}`);
+  }
+
+  function syncReportUrl(filters) {
+    const params = new URLSearchParams({ view: "store-operating-monthly-report" });
+    params.set("startMonth", filters.startMonth);
+    params.set("endMonth", filters.endMonth);
+    filters.stores.forEach((value) => params.append("stores", value));
+    filters.countries.forEach((value) => params.append("countries", value));
+    replaceLocationSearch(params);
+  }
+
+  function selectValues(select, values = []) {
+    if (!select?.options) return;
+    const selected = new Set(values);
+    [...select.options].forEach((option) => {
+      option.selected = option.value ? selected.has(option.value) : selected.size === 0;
+    });
+  }
+
+  function refreshStoreOptions({ showScopeWarning = false } = {}) {
+    storeOptions = (getStoreOptions() || []).map(normalizeStoreOption).filter((item) => item.name);
+    const countrySelect = query("#store-operating-report-country");
+    const storeSelect = query("#store-operating-report-store");
+    const previousStores = [...new Set([...selectedFilterValues(storeSelect), ...initialUrlStores])];
+    const countries = [...new Set([
+      ...storeOptions.map((item) => item.country).filter(Boolean),
+      ...initialUrlCountries,
+    ])].sort((a, b) => a.localeCompare(b, "zh-CN"));
+    setSelectOptions(countrySelect, countries, "全部国家");
+    if (!initialUrlScopeApplied && initialUrlCountries.length) {
+      selectValues(countrySelect, initialUrlCountries);
+      setSelectOptions(countrySelect, countries, "全部国家");
+    }
+
+    const selectedCountries = selectedFilterValues(countrySelect);
+    const visibleOptions = storeOptions.filter((item) => !selectedCountries.length || selectedCountries.includes(item.country));
+    const visibleNames = new Set(visibleOptions.map((item) => item.name));
+    const knownPreservedOptions = storeOptions
+      .filter((item) => previousStores.includes(item.name) && !visibleNames.has(item.name));
+    const knownNames = new Set([...visibleNames, ...knownPreservedOptions.map((item) => item.name)]);
+    const unknownPreservedOptions = previousStores
+      .filter((name) => !knownNames.has(name))
+      .map((name) => ({ name, label: name, country: "" }));
+    const preservedOutsideScope = [...knownPreservedOptions, ...unknownPreservedOptions]
+      .map((item) => ({ ...item, label: `${item.label}（不在当前国家）` }));
+    const nextStoreOptions = [...visibleOptions, ...preservedOutsideScope];
+    setSelectOptions(storeSelect, nextStoreOptions, "全部店铺", { groupByCountry: true });
+    if (!initialUrlScopeApplied && initialUrlStores.length) {
+      selectValues(storeSelect, initialUrlStores);
+      setSelectOptions(storeSelect, nextStoreOptions, "全部店铺", { groupByCountry: true });
+    }
+    initialUrlScopeApplied = true;
+
+    if (showScopeWarning && preservedOutsideScope.length) {
+      setText(
+        "#store-operating-report-status",
+        `已选店铺 ${preservedOutsideScope.map((item) => item.name).join("、")} 不在当前国家范围；点击查询将按店铺与国家交集读取。`,
+        root,
+      );
+    }
+  }
+
+  function initializeFromLocation() {
+    if (initializedFromUrl) return;
+    initializedFromUrl = true;
+    const params = new URLSearchParams(locationRef?.search || "");
+    initialUrlStores = params.getAll("stores").filter(Boolean);
+    initialUrlCountries = params.getAll("countries").filter(Boolean);
+    const startMonth = params.get("startMonth");
+    const endMonth = params.get("endMonth");
+    const startInput = query("#store-operating-report-start-month");
+    const endInput = query("#store-operating-report-end-month");
+    if (startInput && MONTH_PATTERN.test(startMonth || "")) startInput.value = startMonth;
+    if (endInput && MONTH_PATTERN.test(endMonth || "")) endInput.value = endMonth;
+    refreshStoreOptions();
+  }
+
+  function initializeStoreOperatingMonthlyReportDefaults() {
+    const currentMonth = getCurrentMonth();
+    const startInput = query("#store-operating-report-start-month");
+    const endInput = query("#store-operating-report-end-month");
+    if (startInput && !startInput.value) startInput.value = currentMonth;
+    if (endInput && !endInput.value) endInput.value = currentMonth;
+    initializeFromLocation();
+    refreshStoreOptions();
+  }
+
+  function formatAmount(value) {
+    return value === null || value === undefined || value === "" ? "—" : formatActualMoney(value);
+  }
+
+  function formatRate(value) {
+    return value === null || value === undefined || value === "" ? "—" : `${(Number(value) * 100).toFixed(2)}%`;
+  }
+
+  function renderHeader() {
+    const head = query("#store-operating-report-head");
+    if (!head) return;
+    head.innerHTML = `
+      <tr>
+        <th data-column-key="category">分类</th>
+        <th data-column-key="name">名称</th>
+        <th data-column-key="actual" data-column-profile="numeric">实际完成值</th>
+        <th data-column-key="share" data-column-profile="numeric">占比</th>
+        <th data-column-key="budget" data-column-profile="numeric">预算值</th>
+        <th data-column-key="achievement" data-column-profile="numeric">达成率</th>
+      </tr>
+    `;
+  }
+
+  function reportGroups(data) {
+    if (!Array.isArray(data?.groups)) throw new Error("店铺经营月报响应缺少 groups 数组");
+    return data.groups;
+  }
+
+  function renderRows(data) {
+    const body = query("#store-operating-report-body");
+    if (!body) return;
+    const groups = reportGroups(data);
+    if (!groups.length) {
+      body.innerHTML = '<tr><td colspan="6">当前筛选范围暂无经营数据。</td></tr>';
+      return;
+    }
+    const showCurrencyInRows = groups.length > 1;
+    body.innerHTML = groups.map((group) => {
+      if (!Array.isArray(group?.rows)) throw new Error("店铺经营月报币种分组缺少 rows 数组");
+      const currency = group.currencyAvailable === false ? "币种不可用" : (group.currencyCode || "币种不可用");
+      const rows = group.rows.map((row) => `
+        <tr data-report-row-key="${escapeHtml(row.key || "")}" data-report-row-level="${Number(row.level || 0)}" data-currency-code="${escapeHtml(group.currencyCode || "")}">
+          <td>${escapeHtml(showCurrencyInRows ? `${currency} · ${row.category || "—"}` : (row.category || "—"))}</td>
+          <td>${escapeHtml(row.name || "—")}</td>
+          <td>${escapeHtml(formatAmount(row.actual))}</td>
+          <td>${escapeHtml(formatRate(row.share))}</td>
+          <td>${escapeHtml(formatAmount(row.budget))}</td>
+          <td>${escapeHtml(formatRate(row.achievement))}</td>
+        </tr>
+      `).join("");
+      return rows;
+    }).join("");
+  }
+
+  function budgetStatusText(status = {}) {
+    if (status.state === "configured") return `预算已匹配 ${status.matchCount || 0} 条`;
+    if (status.state === "partial") return "预算部分可用，请检查币种或汇率";
+    if (status.state === "unavailable") return "预算币种不可用";
+    return "未配置预算";
+  }
+
+  function renderReport(data, filters) {
+    if (!data?.meta || typeof data.meta !== "object") throw new Error("店铺经营月报响应缺少 meta 对象");
+    renderHeader();
+    renderRows(data);
+    const currencyText = data.meta.currencyMode === "CNY"
+      ? "人民币汇总"
+      : `原币分币种${data.meta.currencyCodes?.length ? `（${data.meta.currencyCodes.join("、") || "币种不可用"}）` : ""}`;
+    const storeText = filters.stores.length ? filters.stores.join("、") : "全部店铺";
+    const countryText = filters.countries.length ? filters.countries.join("、") : "全部国家";
+    const generatedAt = String(data.meta.generatedAt || "").replace("T", " ").slice(0, 19) || "时间未知";
+    setText(
+      "#store-operating-report-meta",
+      `${filters.startMonth} 至 ${filters.endMonth} · ${storeText} · ${countryText} · ${currencyText} · 更新于 ${generatedAt}`,
+      root,
+    );
+    const missingText = data.meta.missingExchangeRateCount
+      ? ` · 缺少 ${data.meta.missingExchangeRateCount} 条汇率`
+      : "";
+    const unavailableText = data.meta.unavailableMetrics?.length
+      ? ` · ${data.meta.unavailableMetrics.length} 个科目不可用`
+      : "";
+    setText(
+      "#store-operating-report-status",
+      `${budgetStatusText(data.budgetStatus)}${missingText}${unavailableText}`,
+      root,
+    );
+    refreshTable(query("#store-operating-report-table"));
+  }
+
+  async function loadStoreOperatingMonthlyReport() {
+    initializeStoreOperatingMonthlyReportDefaults();
+    const filters = readFilters();
+    const validation = validateMonthRange(filters.startMonth, filters.endMonth);
+    if (!validation.ok) {
+      setText("#store-operating-report-status", validation.error, root);
+      return null;
+    }
+    const reportQuery = buildReportQuery(filters);
+    const exportButton = query("#store-operating-report-export");
+    if (exportButton) exportButton.disabled = true;
+    setText("#store-operating-report-status", "正在读取店铺经营月报…", root);
+    try {
+      const response = await fetchImpl(`/api/finance/store-operating-monthly-report?${reportQuery}`, { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok || data?.ok === false) throw new Error(data?.error || `API ${response.status}`);
+      renderReport(data, filters);
+      lastSuccessfulQuery = reportQuery;
+      syncReportUrl(filters);
+      if (exportButton) exportButton.disabled = false;
+      return data;
+    } catch (error) {
+      lastSuccessfulQuery = "";
+      renderHeader();
+      const body = query("#store-operating-report-body");
+      if (body) body.innerHTML = `<tr><td colspan="6">加载失败：${escapeHtml(error?.message || String(error))}</td></tr>`;
+      setText("#store-operating-report-status", `店铺经营月报加载失败：${error?.message || String(error)}`, root);
+      console.error("[store-operating-monthly-report] load failed", error);
+      return null;
+    }
+  }
+
+  function handleMonthChange() {
+    const filters = readFilters();
+    const validation = validateMonthRange(filters.startMonth, filters.endMonth);
+    if (!validation.ok) {
+      setText("#store-operating-report-status", validation.error, root);
+      const exportButton = query("#store-operating-report-export");
+      if (exportButton) exportButton.disabled = true;
+      return null;
+    }
+    return loadStoreOperatingMonthlyReport();
+  }
+
+  function handleCountryChange() {
+    syncAllOptionSelection(query("#store-operating-report-country"));
+    refreshStoreOptions({ showScopeWarning: true });
+    const exportButton = query("#store-operating-report-export");
+    if (exportButton) exportButton.disabled = !sameQuery(buildReportQuery(), lastSuccessfulQuery);
+  }
+
+  function handleStoreChange() {
+    syncAllOptionSelection(query("#store-operating-report-store"));
+    const exportButton = query("#store-operating-report-export");
+    if (exportButton) exportButton.disabled = !sameQuery(buildReportQuery(), lastSuccessfulQuery);
+  }
+
+  function resetStoreOperatingMonthlyReport() {
+    const month = getCurrentMonth();
+    const startInput = query("#store-operating-report-start-month");
+    const endInput = query("#store-operating-report-end-month");
+    if (startInput) startInput.value = month;
+    if (endInput) endInput.value = month;
+    selectValues(query("#store-operating-report-country"), []);
+    selectValues(query("#store-operating-report-store"), []);
+    refreshStoreOptions();
+    return loadStoreOperatingMonthlyReport();
+  }
+
+  function openBudgetTargets() {
+    const filters = readFilters();
+    const validation = validateMonthRange(filters.startMonth, filters.endMonth);
+    if (!validation.ok) {
+      setText("#store-operating-report-status", validation.error, root);
+      return;
+    }
+    const params = new URLSearchParams({
+      view: "budget",
+      budgetMonths: validation.months.join(","),
+    });
+    filters.stores.forEach((value) => params.append("budgetStores", value));
+    filters.countries.forEach((value) => params.append("budgetCountries", value));
+    replaceLocationSearch(params);
+    clickVisibleNavItem("budget");
+  }
+
+  function exportFilenameFromResponse(response, filters) {
+    const disposition = response.headers?.get?.("content-disposition") || "";
+    const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+    if (encoded) return decodeURIComponent(encoded);
+    return `店铺经营月报-${filters.startMonth}至${filters.endMonth}.xlsx`;
+  }
+
+  async function exportStoreOperatingMonthlyReport() {
+    const filters = readFilters();
+    const reportQuery = buildReportQuery(filters);
+    if (!lastSuccessfulQuery || !sameQuery(reportQuery, lastSuccessfulQuery)) {
+      setText("#store-operating-report-status", "筛选条件已变更，请先查询成功后再导出。", root);
+      return;
+    }
+    const button = query("#store-operating-report-export");
+    const restoreButton = typeof setButtonBusy === "function"
+      ? setButtonBusy(button, "导出中…", "导出 Excel", { disable: false })
+      : () => {};
+    try {
+      const response = await fetchImpl(`/api/finance/store-operating-monthly-report/export?${reportQuery}`);
+      if (!response.ok) throw new Error(`API ${response.status}`);
+      downloadBlob(await response.blob(), exportFilenameFromResponse(response, filters), root);
+      setText("#store-operating-report-status", "当前经营月报已导出。", root);
+    } catch (error) {
+      setText("#store-operating-report-status", `导出失败：${error?.message || String(error)}`, root);
+      console.error("[store-operating-monthly-report] export failed", error);
+    } finally {
+      restoreButton();
+    }
+  }
+
+  function setupStoreOperatingMonthlyReport() {
+    bind(root, "#store-operating-report-start-month", "change", handleMonthChange);
+    bind(root, "#store-operating-report-end-month", "change", handleMonthChange);
+    bind(root, "#store-operating-report-country", "change", handleCountryChange);
+    bind(root, "#store-operating-report-store", "change", handleStoreChange);
+    bind(root, "#store-operating-report-query", "click", loadStoreOperatingMonthlyReport);
+    bind(root, "#store-operating-report-reset", "click", resetStoreOperatingMonthlyReport);
+    bind(root, "#store-operating-report-export", "click", exportStoreOperatingMonthlyReport);
+    bind(root, "#store-operating-report-budget", "click", openBudgetTargets);
+  }
+
+  return {
+    exportStoreOperatingMonthlyReport,
+    handleCountryChange,
+    handleMonthChange,
+    handleStoreChange,
+    initializeStoreOperatingMonthlyReportDefaults,
+    loadStoreOperatingMonthlyReport,
+    openBudgetTargets,
+    readFilters,
+    resetStoreOperatingMonthlyReport,
+    setupStoreOperatingMonthlyReport,
+  };
+}

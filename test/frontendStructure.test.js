@@ -2,6 +2,42 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+test("store operating monthly report is a finance-owned feature with shared controls and table management", async () => {
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const appSource = await readFile(new URL("../app.js", import.meta.url), "utf8");
+  const featureSource = await readFile(new URL("../assets/js/features/store-operating-monthly-report.js", import.meta.url), "utf8");
+  const breadcrumbSource = await readFile(new URL("../assets/js/features/breadcrumb-shell.js", import.meta.url), "utf8");
+  const budgetSource = await readFile(new URL("../assets/js/features/budget-targets.js", import.meta.url), "utf8");
+
+  const financeGroup = indexSource.slice(
+    indexSource.indexOf('<section class="nav-group" aria-label="财务"'),
+    indexSource.indexOf('<section class="nav-group" aria-label="知识库"'),
+  );
+  assert.match(financeGroup, /data-view="store-operating-monthly-report"/);
+  assert.match(financeGroup, />店铺经营月报</);
+  assert.match(indexSource, /id="view-store-operating-monthly-report"/);
+  assert.match(indexSource, /id="store-operating-report-store" multiple/);
+  assert.match(indexSource, /id="store-operating-report-country" multiple/);
+  assert.match(indexSource, /id="store-operating-report-table"[^>]*data-table-key="store-operating-monthly-report"/);
+
+  assert.match(appSource, /import \{ createStoreOperatingMonthlyReportFeature \} from "\.\/assets\/js\/features\/store-operating-monthly-report\.js/);
+  assert.match(appSource, /createStoreOperatingMonthlyReportFeature\(\{/);
+  assert.match(appSource, /view === "store-operating-monthly-report"/);
+  assert.match(appSource, /loadStoreOperatingMonthlyReport\(\)/);
+  assert.match(appSource, /initializeStoreOperatingMonthlyReportDefaults\(\)/);
+  assert.match(appSource, /setupStoreOperatingMonthlyReport\(\)/);
+  assert.match(appSource, /new URLSearchParams\(location\.search\)\.get\("view"\)/);
+  assert.match(appSource, /clickVisibleNavItem\(requestedView\)/);
+  assert.match(featureSource, /refreshTable\(query\("#store-operating-report-table"\)\)/);
+  assert.equal(appSource.includes("function renderStoreOperatingMonthlyReport"), false);
+  assert.equal(appSource.includes('bind(document, "#store-operating-report'), false);
+
+  assert.match(breadcrumbSource, /"store-operating-monthly-report": \["首页", "财务", "店铺经营月报"\]/);
+  assert.match(budgetSource, /budgetMonths/);
+  assert.match(budgetSource, /budgetStores/);
+  assert.match(budgetSource, /budgetCountries/);
+});
+
 test("index.html startup health check centralizes sync tone class switching", async () => {
   const source = await readFile(new URL("../index.html", import.meta.url), "utf8");
   const healthStart = source.indexOf("window.__tanjiaBasicNavigationReady = true;");
