@@ -134,24 +134,32 @@ async function waitForDaemonExit(deadline) {
   return !isDaemonRunning();
 }
 
-async function closeBrowser(deadline) {
-  const errors = [];
-  try {
-    await runBrowser(["close"], { timeoutMs: cleanupTimeoutMs, deadline });
-    return errors;
-  } catch (error) {
-    errors.push(new Error("Playwright session close failed", { cause: error }));
-  }
-  if (!browserDaemonPid || !isDaemonRunning()) return errors;
+async function stopBrowserDaemon(errors) {
+  if (!browserDaemonPid || !isDaemonRunning()) return;
   try {
     process.kill(browserDaemonPid, "SIGTERM");
-    if (await waitForDaemonExit(deadline)) return errors;
+    if (await waitForDaemonExit(Date.now() + cleanupTimeoutMs)) return;
     process.kill(browserDaemonPid, "SIGKILL");
-    if (await waitForDaemonExit(deadline)) return errors;
+    if (await waitForDaemonExit(Date.now() + cleanupTimeoutMs)) return;
     errors.push(new Error(`Playwright daemon ${browserDaemonPid} remained running after SIGKILL`));
   } catch (error) {
     errors.push(new Error(`Playwright daemon ${browserDaemonPid} kill fallback failed`, { cause: error }));
   }
+}
+
+async function closeBrowser() {
+  const errors = [];
+  try {
+    await runBrowser(["close"], { timeoutMs: cleanupTimeoutMs, deadline: Date.now() + cleanupTimeoutMs });
+    if (!await waitForDaemonExit(Date.now() + cleanupTimeoutMs)) {
+      errors.push(new Error(`Playwright CLI close reported success but daemon ${browserDaemonPid} remained running`));
+      await stopBrowserDaemon(errors);
+    }
+    return errors;
+  } catch (error) {
+    errors.push(new Error("Playwright session close failed", { cause: error }));
+  }
+  await stopBrowserDaemon(errors);
   return errors;
 }
 
@@ -188,8 +196,7 @@ try {
   testError = error;
 }
 
-const cleanupDeadline = Date.now() + cleanupTimeoutMs;
-const cleanupErrors = await closeBrowser(cleanupDeadline);
+const cleanupErrors = await closeBrowser();
 try {
   await closeFixtureServer(cleanupTimeoutMs);
 } catch (error) {

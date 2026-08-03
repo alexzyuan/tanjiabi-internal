@@ -186,6 +186,45 @@ test("LingxingAdapter sends exclusive end date to Lingxing without mutating UI f
   assert.equal(calls[0].params.endDate, "2026-07-15");
 });
 
+test("LingxingAdapter paginates order profit until the upstream total is exhausted", async () => {
+  const adapter = new LingxingAdapter(lingxingTestConfig);
+  const calls = [];
+  adapter.performSignedRequest = async (_endpoint, options) => {
+    calls.push(options.params);
+    const offset = options.params.offset;
+    return {
+      code: 0,
+      data: {
+        records: Array.from({ length: offset === 0 ? 5000 : 2 }, (_, index) => ({ id: offset + index })),
+        total: 5002,
+      },
+    };
+  };
+
+  const payload = await adapter.fetchMskuOrderProfit({ startDate: "2026-07-01", endDate: "2026-07-31" });
+
+  assert.deepEqual(calls.map(({ offset, length }) => ({ offset, length })), [
+    { offset: 0, length: 5000 },
+    { offset: 5000, length: 5000 },
+  ]);
+  assert.equal(adapter.normalizeRecordList(payload).length, 5002);
+});
+
+test("LingxingAdapter fails observably instead of truncating order profit at its safety cap", async () => {
+  const adapter = new LingxingAdapter({ ...lingxingTestConfig, orderProfitMaxRows: 5000 });
+  adapter.performSignedRequest = async () => ({
+    code: 0,
+    data: { records: Array.from({ length: 5000 }, (_, id) => ({ id })), total: 5001 },
+  });
+
+  await assert.rejects(
+    () => adapter.fetchMskuOrderProfit({ startDate: "2026-07-01", endDate: "2026-07-31" }),
+    (error) => error.endpoint === "/basicOpen/finance/mreport/OrderProfit"
+      && error.details?.fetchedRows === 5000
+      && /安全上限/.test(error.message),
+  );
+});
+
 test("LingxingAdapter applies exclusive end_date to FBA shipment list at the API boundary", async () => {
   const adapter = new LingxingAdapter(lingxingTestConfig);
   const calls = [];

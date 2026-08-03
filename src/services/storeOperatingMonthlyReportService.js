@@ -14,8 +14,15 @@ import {
 const MONTH_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])$/;
 
 function uniqueText(values, label) {
-  if (!Array.isArray(values)) throw new TypeError(`${label}必须是数组`);
+  if (!Array.isArray(values)) throw reportInputError(`${label}必须是数组`);
   return [...new Set(values.map((value) => String(value ?? "").trim()).filter(Boolean))];
+}
+
+function reportInputError(message) {
+  const error = new Error(message);
+  error.name = "StoreOperatingMonthlyReportInputError";
+  error.statusCode = 400;
+  return error;
 }
 
 function monthIndex(month) {
@@ -175,11 +182,11 @@ export function normalizeStoreOperatingMonthlyReportFilters({
   countries = [],
 } = {}) {
   if (!MONTH_PATTERN.test(startMonth || "") || !MONTH_PATTERN.test(endMonth || "")) {
-    throw new Error("请选择开始月份和结束月份");
+    throw reportInputError("请选择开始月份和结束月份");
   }
   const months = listInclusiveMonths(startMonth, endMonth);
-  if (!months.length) throw new Error("结束月份不能早于开始月份");
-  if (months.length > 12) throw new Error("统计范围最多 12 个月");
+  if (!months.length) throw reportInputError("结束月份不能早于开始月份");
+  if (months.length > 12) throw reportInputError("统计范围最多 12 个月");
   return {
     startMonth,
     endMonth,
@@ -378,6 +385,21 @@ export async function exportStoreOperatingMonthlyReportXlsx(filters = {}, {
   sheet["!autofilter"] = { ref: `A1:${lastColumn}${Math.max(1, rows.length + 1)}` };
   sheet["!cols"] = [10, 18, 24, 16, 16, 12, 12, 12].map((wch) => ({ wch }));
   XLSX.utils.book_append_sheet(workbook, sheet, "店铺经营月报");
+  const metadataRows = [
+    ["项目", "值"],
+    ["开始月份", report.filters.startMonth],
+    ["结束月份", report.filters.endMonth],
+    ["店铺范围", report.filters.stores?.length ? report.filters.stores.join("、") : "全部店铺"],
+    ["国家范围", report.filters.countries?.length ? report.filters.countries.join("、") : "全部国家"],
+    ["币种模式", report.meta?.currencyMode === "CNY" ? "人民币汇总" : "原币分币种"],
+    ["币种", Array.isArray(report.meta?.currencyCodes) ? report.meta.currencyCodes.join("、") : ""],
+    ["生成时间", report.meta?.generatedAt || ""],
+    ["预算状态", report.budgetStatus?.state || "unconfigured"],
+    ["预算匹配数", report.budgetStatus?.matchCount ?? 0],
+  ];
+  const metadataSheet = XLSX.utils.aoa_to_sheet(metadataRows);
+  metadataSheet["!cols"] = [{ wch: 16 }, { wch: 48 }];
+  XLSX.utils.book_append_sheet(workbook, metadataSheet, "报表说明");
 
   return {
     filename: `店铺经营月报-${report.filters.startMonth}至${report.filters.endMonth}.xlsx`,

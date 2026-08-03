@@ -5,6 +5,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import test from "node:test";
 import XLSX from "xlsx";
+import { getStoreOperatingMonthlyReport } from "../src/services/storeOperatingMonthlyReportService.js";
 
 const serviceUrl = pathToFileURL(path.resolve("src/services/budgetTargetService.js"));
 
@@ -62,12 +63,65 @@ test("saveBudgetUpload parses a workbook and exposes aggregate budget targets", 
     assert.equal(upload.summary.skuCount, 1);
     assert.equal(upload.summary.salesTarget, 200);
     assert.equal(upload.summary.adBudget, 20);
+    assert.equal(upload.summary.currencyCode, "USD");
+    assert.equal(upload.summary.mskuRows[0].currencyCode, "USD");
     assert.equal(upload.summary.mskuRows[0].msku, "JM-DGC-BLUE");
     assert.equal(targets.rows.length, 1);
     assert.equal(targets.mskuRows.length, 1);
     assert.equal(targets.totals.salesTarget, 200);
     assert.equal(context.matched, true);
     assert.equal(context.totals.profitTarget, 73.5);
+  });
+});
+
+test("parsed workbook preserves absent report budget metrics instead of synthesizing zero", async () => {
+  await withTempService(async ({ saveBudgetUpload }) => {
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
+      ["探嘉美国店铺预算报表"],
+      ["预算月份", "2026-07"],
+      ["销售收入", 200],
+    ]), "汇总");
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
+      ["MSKU", "ASIN", "销售价($)", "销售数量", "销额($)"],
+      ["SKU-1", "ASIN-1", 20, 10, 200],
+    ]), "销售预算");
+    const upload = await saveBudgetUpload({
+      fileName: "探嘉美国-2026年7月预算.xlsx",
+      budgetMonth: "2026-07",
+      base64: XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }).toString("base64"),
+    });
+
+    assert.equal(upload.summary.salesTarget, 200);
+    assert.equal(upload.summary.adBudget, null);
+    assert.equal(upload.summary.refundTarget, null);
+    assert.equal(upload.summary.profitTarget, null);
+    assert.equal(upload.summary.currencyCode, "USD");
+  });
+});
+
+test("parsed workbook currency reaches a single-country original-currency report budget", async () => {
+  await withTempService(async ({ saveBudgetUpload, getBudgetTargetContext }) => {
+    await saveBudgetUpload(uploadPayload());
+    const adapter = {
+      async fetchSellers() { return { data: [{ sid: 1, name: "探嘉美国", country: "美国" }] }; },
+      normalizeRecordList(payload) { return payload.data || payload.records || []; },
+      async fetchMskuOrderProfit() {
+        return { records: [{ sid: 1, currencyCode: "USD", netSalesAmount: 180, totalAdsCost: -18, totalSalesRefunds: -4, grossProfit: 60 }] };
+      },
+      normalizeMskuOrderProfitRecords(records, sellers, reportDate) {
+        return records.map((record) => ({ ...record, storeName: sellers[0].name, country: sellers[0].country, reportDate }));
+      },
+    };
+    const report = await getStoreOperatingMonthlyReport(
+      { startMonth: "2026-07", endMonth: "2026-07", countries: ["美国"] },
+      { adapter, getBudgetTargetContext, logger: { info() {}, error() {} } },
+    );
+
+    assert.equal(report.meta.currencyMode, "ORIGINAL");
+    assert.equal(report.groups[0].currencyCode, "USD");
+    assert.equal(report.groups[0].rows.find((row) => row.key === "net-sales").budget, 200);
+    assert.equal(report.groups[0].rows.find((row) => row.key === "ad-spend").budget, 20);
   });
 });
 

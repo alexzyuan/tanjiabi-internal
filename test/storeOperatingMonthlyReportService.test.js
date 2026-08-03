@@ -49,6 +49,25 @@ test("service rejects a 13-month range without changing either boundary", () => 
   assert.deepEqual(input, { startMonth: "2025-01", endMonth: "2026-01" });
 });
 
+test("filter validation errors carry HTTP 400 while dependency failures remain unclassified for 502 routes", async () => {
+  assert.throws(
+    () => normalizeStoreOperatingMonthlyReportFilters({ startMonth: "2026-13", endMonth: "2026-13" }),
+    (error) => error.statusCode === 400 && error.name === "StoreOperatingMonthlyReportInputError",
+  );
+  const dependencyError = new Error("Lingxing unavailable");
+  const adapter = fakeAdapter({
+    sellers: [{ sid: 1, name: "Store-US", country: "美国" }],
+    recordsForCall: () => { throw dependencyError; },
+  });
+  await assert.rejects(
+    () => getStoreOperatingMonthlyReport(
+      { startMonth: "2026-07", endMonth: "2026-07" },
+      { adapter, getBudgetTargetContext: async () => ({ rows: [], matched: false }) },
+    ),
+    (error) => error === dependencyError && error.statusCode === undefined,
+  );
+});
+
 test("service sums each requested month and uses CNY for multiple effective countries", async () => {
   const calls = [];
   const adapter = fakeAdapter({
@@ -497,7 +516,8 @@ test("monthly report export builds its workbook from the same report result and 
       receivedFilters = value;
       return {
         filters: { ...value, months: ["2026-06", "2026-07"] },
-        meta: { currencyMode: "ORIGINAL", generatedAt: "2026-08-03T08:00:00.000Z" },
+        meta: { currencyMode: "ORIGINAL", currencyCodes: ["USD"], generatedAt: "2026-08-03T08:00:00.000Z" },
+        budgetStatus: { state: "configured", matchCount: 2 },
         groups: [{
           currencyCode: "USD",
           currencyAvailable: true,
@@ -524,6 +544,18 @@ test("monthly report export builds its workbook from the same report result and 
   assert.equal(result.filename, "店铺经营月报-2026-06至2026-07.xlsx");
   assert.deepEqual(rows[0], ["币种", "分类", "科目", "实际值", "预算值", "占比", "达成率", "数据可用"]);
   assert.deepEqual(rows[1], ["USD", "销售收入", "销售收入净额", 90, 120, 1, 0.75, "是"]);
+  const metadata = XLSX.utils.sheet_to_json(workbook.Sheets["报表说明"], { header: 1 });
+  assert.deepEqual(metadata.slice(1), [
+    ["开始月份", "2026-06"],
+    ["结束月份", "2026-07"],
+    ["店铺范围", "Store-US"],
+    ["国家范围", "美国"],
+    ["币种模式", "原币分币种"],
+    ["币种", "USD"],
+    ["生成时间", "2026-08-03T08:00:00.000Z"],
+    ["预算状态", "configured"],
+    ["预算匹配数", 2],
+  ]);
 });
 
 test("monthly report export rejects malformed source rows instead of writing a misleading workbook", async () => {

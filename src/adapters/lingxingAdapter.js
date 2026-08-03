@@ -62,6 +62,23 @@ function lingxingDateRangeParams(params = {}, options = {}) {
   return withLingxingExclusiveEndDate(params, options);
 }
 
+function orderProfitTotal(payload) {
+  const candidates = [payload?.data?.total, payload?.data?.totalCount, payload?.total, payload?.totalCount];
+  const value = candidates.find((candidate) => candidate !== undefined && candidate !== null && candidate !== "");
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : null;
+}
+
+function mergeOrderProfitPayload(firstPayload, records) {
+  if (Array.isArray(firstPayload?.data)) return { ...firstPayload, data: records };
+  const data = firstPayload?.data && typeof firstPayload.data === "object" ? firstPayload.data : {};
+  if (Array.isArray(data.records)) return { ...firstPayload, data: { ...data, records, total: records.length } };
+  if (Array.isArray(data.list)) return { ...firstPayload, data: { ...data, list: records, total: records.length } };
+  if (Array.isArray(data.rows)) return { ...firstPayload, data: { ...data, rows: records, total: records.length } };
+  if (Array.isArray(data.data)) return { ...firstPayload, data: { ...data, data: records, total: records.length } };
+  return { ...firstPayload, data: { ...data, records, total: records.length } };
+}
+
 function adapterConfigKey(config = {}) {
   return JSON.stringify(Object.keys(config)
     .filter((key) => !["accessToken", "refreshToken"].includes(key))
@@ -367,21 +384,49 @@ export class LingxingAdapter {
     });
   }
 
-  fetchMskuOrderProfit(params) {
+  async fetchMskuOrderProfit(params) {
     const { currencyCode, ...restParams } = params || {};
+    const pageSize = 5000;
+    const maxRows = Number(this.config.orderProfitMaxRows || 100000);
+    if (!Number.isInteger(maxRows) || maxRows < pageSize) {
+      throw new Error("orderProfitMaxRows 必须是不小于 5000 的整数");
+    }
     const requestParams = {
-      offset: 0,
-      length: 5000,
       ...lingxingDateRangeParams(restParams),
     };
     if (currencyCode && currencyCode !== "ORIGINAL") {
       requestParams.currencyCode = currencyCode;
     }
-
-    return this.signedRequest("/basicOpen/finance/mreport/OrderProfit", {
-      method: "POST",
-      params: requestParams,
-    });
+    const records = [];
+    let firstPayload;
+    let pageCount = 0;
+    for (let offset = 0; ; offset += pageSize) {
+      if (offset >= maxRows) {
+        const error = new Error(`订单利润分页达到安全上限 ${maxRows} 条，拒绝返回截断结果`);
+        error.endpoint = "/basicOpen/finance/mreport/OrderProfit";
+        error.details = { maxRows, pageSize, fetchedRows: records.length };
+        throw error;
+      }
+      const payload = await this.signedRequest("/basicOpen/finance/mreport/OrderProfit", {
+        method: "POST",
+        params: { ...requestParams, offset, length: pageSize },
+      });
+      if (!firstPayload) firstPayload = payload;
+      const pageRecords = this.normalizeRecordList(payload);
+      records.push(...pageRecords);
+      pageCount += 1;
+      const total = orderProfitTotal(payload);
+      const hasNext = payload?.data?.hasNext ?? payload?.hasNext;
+      if (!pageRecords.length || pageRecords.length < pageSize || hasNext === false || (total !== null && records.length >= total)) break;
+    }
+    if (pageCount > 1) {
+      console.info("[lingxing-adapter] order profit pagination complete", {
+        endpoint: "/basicOpen/finance/mreport/OrderProfit",
+        pageCount,
+        recordCount: records.length,
+      });
+    }
+    return mergeOrderProfitPayload(firstPayload || { data: [] }, records);
   }
 
   fetchReplenishmentAdvice(params = {}, endpoint = "") {

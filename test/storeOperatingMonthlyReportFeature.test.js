@@ -256,7 +256,61 @@ test("successful rendering refreshes the shared managed table and writes filter 
   assert.match(location.search, /stores=A/);
   assert.match(elements["#store-operating-report-head"].innerHTML, /data-column-key="actual" data-column-kind="number" data-column-profile="money-rate"/);
   assert.match(elements["#store-operating-report-head"].innerHTML, /data-column-key="budget" data-column-kind="number" data-column-profile="money-rate"/);
+  assert.equal((elements["#store-operating-report-head"].innerHTML.match(/data-column-sortable="false"/g) || []).length, 6);
   assert.match(elements["#store-operating-report-body"].innerHTML, /销售收入净额/);
+});
+
+test("hierarchy renders expanded disclosure buttons and collapse keeps profit rows visible", async () => {
+  const category = { key: "sales-profit-category", category: "销售利润", name: "销售利润", level: 1, children: ["sales-profit"], available: false };
+  const profit = { key: "sales-profit", category: "销售利润", name: "销售利润", level: 2, actual: -6, budget: 10, share: -0.06, achievement: -0.6, available: true };
+  const { feature, elements } = makeFeatureHarness({
+    groups: [{ currencyCode: "USD", currencyAvailable: true, rows: [category, profit] }],
+  });
+  await feature.loadStoreOperatingMonthlyReport();
+
+  assert.match(elements["#store-operating-report-body"].innerHTML, /data-report-category-toggle="sales-profit-category"/);
+  assert.match(elements["#store-operating-report-body"].innerHTML, /aria-expanded="true"/);
+  assert.doesNotMatch(elements["#store-operating-report-body"].innerHTML, /data-report-row-key="sales-profit"[^>]* hidden/);
+
+  const ordinaryRow = { dataset: { reportRowKey: "ordinary-cost" }, hidden: false };
+  const profitRow = { dataset: { reportRowKey: "sales-profit" }, hidden: false };
+  elements["#store-operating-report-body"].querySelectorAll = () => [ordinaryRow, profitRow];
+  const icon = { textContent: "▾" };
+  const attributes = {};
+  const button = {
+    dataset: { currencyCode: "USD", reportCategoryToggle: "sales-profit-category" },
+    setAttribute(name, value) { attributes[name] = value; },
+    querySelector() { return icon; },
+  };
+  feature.toggleReportCategory({ target: { closest: () => button } });
+
+  assert.equal(attributes["aria-expanded"], "false");
+  assert.equal(icon.textContent, "▸");
+  assert.equal(ordinaryRow.hidden, true);
+  assert.equal(profitRow.hidden, false);
+});
+
+test("export surfaces structured server diagnostics", async () => {
+  let callCount = 0;
+  const { feature, elements } = makeFeatureHarness({
+    fetchImpl: async () => {
+      callCount += 1;
+      if (callCount === 1) return makeReportResponse();
+      return {
+        ok: false,
+        status: 502,
+        async json() {
+          return { error: "订单利润上游失败", details: { requestId: "trace-1" }, endpoint: "/basicOpen/finance/mreport/OrderProfit" };
+        },
+      };
+    },
+  });
+  await feature.loadStoreOperatingMonthlyReport();
+  await feature.exportStoreOperatingMonthlyReport();
+
+  assert.match(elements["#store-operating-report-status"].textContent, /订单利润上游失败/);
+  assert.match(elements["#store-operating-report-status"].textContent, /trace-1/);
+  assert.match(elements["#store-operating-report-status"].textContent, /OrderProfit/);
 });
 
 test("a stale month response cannot replace the newer report DOM, URL, or status", async () => {

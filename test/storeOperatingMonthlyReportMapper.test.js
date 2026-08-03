@@ -159,3 +159,28 @@ test("gross profit is unavailable when a required hierarchy dependency is unavai
   assert.equal(grossProfit.available, false);
   assert.deepEqual(grossProfit.children, ["revenue", "sales-cost"]);
 });
+
+test("signed Lingxing expenses become positive magnitudes while profit keeps its sign", () => {
+  const result = buildStoreOperatingReportRows({
+    records: [{
+      totalSalesAmount: 100,
+      promotionDiscount: -8,
+      totalSalesRefunds: -5,
+      netSalesAmount: 87,
+      purchaseCost: -30,
+      firstLegCost: -3,
+      storageFee: -2,
+      totalAdsCost: -10,
+      platformFee: -12,
+      fbaDeliveryFee: -4,
+      grossProfit: -6,
+    }],
+    currencyCode: "USD",
+  });
+
+  assert.equal(result.rows.find((row) => row.key === "sales-discount").actual, 8);
+  assert.equal(result.rows.find((row) => row.key === "refunds").actual, 5);
+  assert.equal(result.rows.find((row) => row.key === "purchase-cost").actual, 30);
+  assert.equal(result.rows.find((row) => row.key === "ad-spend").actual, 10);
+  assert.equal(result.rows.find((row) => row.key === "sales-profit").actual, -6);
+});

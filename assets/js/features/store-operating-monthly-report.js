@@ -96,6 +96,7 @@ export function createStoreOperatingMonthlyReportFeature({
   let initialUrlCountries = [];
   let activeReportAbortController = null;
   let reportLoadGeneration = 0;
+  const collapsedCategories = new Set();
 
   function query(selector) {
     return root?.querySelector?.(selector) || null;
@@ -225,12 +226,12 @@ export function createStoreOperatingMonthlyReportFeature({
     if (!head) return;
     head.innerHTML = `
       <tr>
-        <th data-column-key="category">分类</th>
-        <th data-column-key="name">名称</th>
-        <th data-column-key="actual" data-column-kind="number" data-column-profile="money-rate">实际完成值</th>
-        <th data-column-key="share" data-column-kind="number" data-column-profile="money-rate">占比</th>
-        <th data-column-key="budget" data-column-kind="number" data-column-profile="money-rate">预算值</th>
-        <th data-column-key="achievement" data-column-kind="number" data-column-profile="money-rate">达成率</th>
+        <th data-column-key="category" data-column-sortable="false">分类</th>
+        <th data-column-key="name" data-column-sortable="false">名称</th>
+        <th data-column-key="actual" data-column-kind="number" data-column-profile="money-rate" data-column-sortable="false">实际完成值</th>
+        <th data-column-key="share" data-column-kind="number" data-column-profile="money-rate" data-column-sortable="false">占比</th>
+        <th data-column-key="budget" data-column-kind="number" data-column-profile="money-rate" data-column-sortable="false">预算值</th>
+        <th data-column-key="achievement" data-column-kind="number" data-column-profile="money-rate" data-column-sortable="false">达成率</th>
       </tr>
     `;
   }
@@ -252,18 +253,49 @@ export function createStoreOperatingMonthlyReportFeature({
     body.innerHTML = groups.map((group) => {
       if (!Array.isArray(group?.rows)) throw new Error("店铺经营月报币种分组缺少 rows 数组");
       const currency = group.currencyAvailable === false ? "币种不可用" : (group.currencyCode || "币种不可用");
-      const rows = group.rows.map((row) => `
-        <tr data-report-row-key="${escapeHtml(row.key || "")}" data-report-row-level="${Number(row.level || 0)}" data-currency-code="${escapeHtml(group.currencyCode || "")}">
-          <td>${escapeHtml(showCurrencyInRows ? `${currency} · ${row.category || "—"}` : (row.category || "—"))}</td>
+      const categoryKeyByName = new Map(group.rows
+        .filter((row) => Number(row.level) === 1)
+        .map((row) => [row.name, row.key]));
+      const rows = group.rows.map((row) => {
+        const categoryKey = Number(row.level) === 2 ? categoryKeyByName.get(row.category) || "" : "";
+        const disclosureKey = `${group.currencyCode || "missing"}:${row.key}`;
+        const isCollapsed = Number(row.level) === 1 && collapsedCategories.has(disclosureKey);
+        const profitAlwaysVisible = row.key === "sales-profit";
+        const hidden = categoryKey && collapsedCategories.has(`${group.currencyCode || "missing"}:${categoryKey}`) && !profitAlwaysVisible;
+        const categoryLabel = showCurrencyInRows ? `${currency} · ${row.category || "—"}` : (row.category || "—");
+        const categoryCell = Number(row.level) === 1 && Array.isArray(row.children) && row.children.length
+          ? `<button class="store-operating-report-disclosure" type="button" data-report-category-toggle="${escapeHtml(row.key || "")}" data-currency-code="${escapeHtml(group.currencyCode || "")}" aria-expanded="${isCollapsed ? "false" : "true"}"><span aria-hidden="true">${isCollapsed ? "▸" : "▾"}</span>${escapeHtml(categoryLabel)}</button>`
+          : escapeHtml(categoryLabel);
+        return `
+        <tr data-report-row-key="${escapeHtml(row.key || "")}" data-report-row-level="${Number(row.level || 0)}" data-report-parent-category="${escapeHtml(categoryKey)}" data-currency-code="${escapeHtml(group.currencyCode || "")}"${hidden ? " hidden" : ""}>
+          <td>${categoryCell}</td>
           <td>${escapeHtml(row.name || "—")}</td>
           <td>${escapeHtml(formatAmount(row.actual))}</td>
           <td>${escapeHtml(formatRate(row.share))}</td>
           <td>${escapeHtml(formatAmount(row.budget))}</td>
           <td>${escapeHtml(formatRate(row.achievement))}</td>
         </tr>
-      `).join("");
+      `;
+      }).join("");
       return rows;
     }).join("");
+  }
+
+  function toggleReportCategory(event) {
+    const button = event?.target?.closest?.("[data-report-category-toggle]");
+    if (!button) return;
+    const key = `${button.dataset.currencyCode || "missing"}:${button.dataset.reportCategoryToggle}`;
+    if (collapsedCategories.has(key)) collapsedCategories.delete(key);
+    else collapsedCategories.add(key);
+    const expanded = !collapsedCategories.has(key);
+    button.setAttribute("aria-expanded", String(expanded));
+    const icon = button.querySelector?.("[aria-hidden='true']");
+    if (icon) icon.textContent = expanded ? "▾" : "▸";
+    query("#store-operating-report-body")?.querySelectorAll?.(
+      `tr[data-currency-code="${globalThis.CSS?.escape?.(button.dataset.currencyCode || "") || button.dataset.currencyCode || ""}"][data-report-parent-category="${globalThis.CSS?.escape?.(button.dataset.reportCategoryToggle || "") || button.dataset.reportCategoryToggle || ""}"]`,
+    ).forEach((row) => {
+      if (row.dataset.reportRowKey !== "sales-profit") row.hidden = !expanded;
+    });
   }
 
   function budgetStatusText(status = {}) {
@@ -428,6 +460,21 @@ export function createStoreOperatingMonthlyReportFeature({
     return `店铺经营月报-${filters.startMonth}至${filters.endMonth}.xlsx`;
   }
 
+  async function readExportError(response) {
+    let payload;
+    try {
+      payload = await response.json();
+    } catch (error) {
+      throw new Error(`API ${response.status} 返回了无法解析的错误响应`, { cause: error });
+    }
+    const message = payload?.error || `API ${response.status}`;
+    const details = payload?.details == null
+      ? ""
+      : `；详情：${typeof payload.details === "string" ? payload.details : JSON.stringify(payload.details)}`;
+    const endpoint = payload?.endpoint ? `；接口：${payload.endpoint}` : "";
+    return new Error(`${message}${details}${endpoint}`);
+  }
+
   async function exportStoreOperatingMonthlyReport() {
     const filters = readFilters();
     const reportQuery = buildReportQuery(filters);
@@ -441,7 +488,7 @@ export function createStoreOperatingMonthlyReportFeature({
       : () => {};
     try {
       const response = await fetchImpl(`/api/finance/store-operating-monthly-report/export?${reportQuery}`);
-      if (!response.ok) throw new Error(`API ${response.status}`);
+      if (!response.ok) throw await readExportError(response);
       downloadBlob(await response.blob(), exportFilenameFromResponse(response, filters), root);
       setText("#store-operating-report-status", "当前经营月报已导出。", root);
     } catch (error) {
@@ -461,6 +508,7 @@ export function createStoreOperatingMonthlyReportFeature({
     bind(root, "#store-operating-report-reset", "click", resetStoreOperatingMonthlyReport);
     bind(root, "#store-operating-report-export", "click", exportStoreOperatingMonthlyReport);
     bind(root, "#store-operating-report-budget", "click", openBudgetTargets);
+    bind(root, "#store-operating-report-body", "click", toggleReportCategory);
   }
 
   return {
@@ -474,5 +522,6 @@ export function createStoreOperatingMonthlyReportFeature({
     readFilters,
     resetStoreOperatingMonthlyReport,
     setupStoreOperatingMonthlyReport,
+    toggleReportCategory,
   };
 }

@@ -6,9 +6,28 @@
 
 #view-store-operating-monthly-report tr[data-report-row-level="0"] > *,
 #view-store-operating-monthly-report tr[data-report-row-level="1"] > * {
-  background: var(--tj-tone-warning-bg);
+  background: var(--tj-tone-neutral-bg);
   color: var(--tj-text-strong);
   font-weight: 700;
+}
+
+#view-store-operating-monthly-report .store-operating-report-disclosure {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spectrum-spacing-75);
+  padding: var(--spectrum-spacing-50);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: var(--spectrum-control-radius);
+  cursor: pointer;
+}
+
+#view-store-operating-monthly-report .store-operating-report-disclosure:focus-visible {
+  outline: var(--spectrum-focus-ring-width) solid var(--spectrum-focus-ring-color);
+  outline-offset: var(--spectrum-focus-ring-gap);
 }
 
 #view-store-operating-monthly-report #store-operating-report-status {

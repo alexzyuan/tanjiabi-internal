@@ -1,15 +1,15 @@
 const METRICS = [
-  ["sales-income", "销售收入", "totalSalesAmount", "revenue"],
-  ["sales-discount", "销售折扣", "promotionDiscount", "revenue"],
-  ["refunds", "退款金额", "totalSalesRefunds", "revenue"],
-  ["net-sales", "销售收入净额", "netSalesAmount", "revenue"],
-  ["purchase-cost", "商品采购成本", "purchaseCost", "sales-cost"],
-  ["first-leg-cost", "头程费用", "firstLegCost", "logistics"],
-  ["storage-fee", "平台仓储费用", "storageFee", "storage"],
-  ["ad-spend", "推广费用", "totalAdsCost", "advertising"],
-  ["platform-fee", "平台费用", "platformFee", "platform"],
-  ["fba-delivery-fee", "FBA 配送费", "fbaDeliveryFee", "logistics"],
-  ["sales-profit", "销售利润", "grossProfit", "sales-profit-category"],
+  ["sales-income", "销售收入", "totalSalesAmount", "revenue", false],
+  ["sales-discount", "销售折扣", "promotionDiscount", "revenue", true],
+  ["refunds", "退款金额", "totalSalesRefunds", "revenue", true],
+  ["net-sales", "销售收入净额", "netSalesAmount", "revenue", false],
+  ["purchase-cost", "商品采购成本", "purchaseCost", "sales-cost", true],
+  ["first-leg-cost", "头程费用", "firstLegCost", "logistics", true],
+  ["storage-fee", "平台仓储费用", "storageFee", "storage", true],
+  ["ad-spend", "推广费用", "totalAdsCost", "advertising", true],
+  ["platform-fee", "平台费用", "platformFee", "platform", true],
+  ["fba-delivery-fee", "FBA 配送费", "fbaDeliveryFee", "logistics", true],
+  ["sales-profit", "销售利润", "grossProfit", "sales-profit-category", false],
 ];
 
 const BUDGET_METRICS = new Set(["net-sales", "ad-spend", "refunds", "sales-profit"]);
@@ -68,11 +68,14 @@ function toFiniteNumber(value, field) {
   return Number(value);
 }
 
-function sumPresent(records, field) {
+function sumPresent(records, field, magnitude = false) {
   if (records.length === 0) return null;
   const values = records.map((row) => row[field]).filter(isPresent);
   if (values.length !== records.length) return null;
-  return values.reduce((sum, value) => sum + toFiniteNumber(value, `订单利润字段 ${field}`), 0);
+  return values.reduce((sum, value) => {
+    const number = toFiniteNumber(value, `订单利润字段 ${field}`);
+    return sum + (magnitude ? Math.abs(number) : number);
+  }, 0);
 }
 
 function readBudget(budgetByMetric, key) {
@@ -157,7 +160,10 @@ export function buildStoreOperatingReportRows({ records, budgetByMetric = {}, cu
     throw new Error("币种代码必须是字符串");
   }
 
-  const metricActuals = new Map(METRICS.map(([key, _name, field]) => [key, sumPresent(records, field)]));
+  const metricActuals = new Map(METRICS.map(([key, _name, field, _category, magnitude]) => [
+    key,
+    sumPresent(records, field, magnitude),
+  ]));
   const netSales = metricActuals.get("net-sales");
   const metricsByCategory = new Map(CATEGORIES.map(([key]) => [key, []]));
   const metricRows = METRICS.map(([key, name, _field, category]) => {
