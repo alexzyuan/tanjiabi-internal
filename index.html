@@ -68,6 +68,7 @@
               <span class="nav-group-caret" aria-hidden="true">⌄</span>
             </button>
             <button class="nav-item" data-view="fba-freight"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 6h16v12H4z"/><path d="M7 10h10"/><path d="M7 14h6"/><path d="M17 18l3 3"/><path d="M20 18l-3 3"/></svg></span><span class="nav-label">FBA货件处理</span></button>
+            <button class="nav-item" data-view="fba-shipment-variance"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5z"/><path d="M8 9h8"/><path d="M8 13h5"/><path d="m14 17 2 2 4-5"/></svg></span><span class="nav-label">货件收发差异</span></button>
             <button class="nav-item" data-view="freight-rates"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h10"/><path d="M17 14l3 3-3 3"/></svg></span><span class="nav-label">运费看板</span></button>
           </section>
           <section class="nav-group" aria-label="产品">
@@ -2115,6 +2116,22 @@
               </div>
             </article>
           </div>
+        </section>
+
+        <section class="view" id="view-fba-shipment-variance">
+          <section class="module-hero"><div><span>货件收发差异</span><h2>货件收发差异</h2><p>查看领星货件发货与实收差异。倒计时为内部调查提醒，不代表亚马逊官方理赔时效。</p></div></section>
+          <article class="panel fba-shipment-variance-panel">
+            <div class="panel-head"><h2>调查跟进</h2><span id="fba-shipment-variance-status">等待读取货件</span></div>
+            <section class="filter-toolbar fba-shipment-variance-toolbar">
+              <label>日期<div class="date-range-control date-range-control--inline"><button id="fba-shipment-variance-date-range-button" class="date-range-button date-range-picker__trigger" type="button">选择日期</button><input id="fba-shipment-variance-start-date" type="hidden" /><input id="fba-shipment-variance-end-date" type="hidden" /><div class="date-range-popover date-range-picker__popover" id="fba-shipment-variance-date-range-popover" hidden></div></div></label>
+              <label>店铺<select id="fba-shipment-variance-sid"><option value="">全部店铺</option></select></label>
+              <label>跟进状态<select id="fba-shipment-variance-followup-status"><option value="">全部</option><option value="pending">待跟进</option><option value="followed-up">已跟进</option><option value="overdue">已超期</option></select></label>
+              <button class="secondary-button" id="fba-shipment-variance-refresh" type="button">读取/刷新</button>
+            </section>
+            <section class="metric-grid fba-shipment-variance-summary"><article class="metric-tile"><span>收货中</span><strong id="fba-shipment-variance-receiving">0</strong></article><article class="metric-tile"><span>已关闭短收</span><strong id="fba-shipment-variance-closed-shortage">0</strong></article><article class="metric-tile"><span>七天内到期</span><strong id="fba-shipment-variance-due">0</strong></article><article class="metric-tile"><span>已超内部 SLA</span><strong id="fba-shipment-variance-overdue">0</strong></article></section>
+            <div class="table-shell fba-shipment-variance-table-shell"><table class="data-table fba-shipment-variance-table" data-table-key="fba-shipment-variance"><thead><tr><th data-column-key="store-name">店铺</th><th data-column-key="shipment-id">货件单号</th><th data-column-key="shipment-status">状态</th><th data-column-key="shipped-quantity">发货数量</th><th data-column-key="received-quantity">实收数量</th><th data-column-key="difference-quantity">差异数量</th><th data-column-key="closed-at">关闭时间</th><th data-column-key="investigation-window">剩余调查申请窗口</th><th data-column-key="followup-status">跟进状态</th><th data-column-key="actions">操作</th></tr></thead><tbody id="fba-shipment-variance-table"><tr><td colspan="10">请选择条件后读取货件。</td></tr></tbody></table></div>
+          </article>
+          <div class="modal-backdrop" id="fba-shipment-variance-detail-modal" hidden><article class="fba-shipment-variance-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="fba-shipment-variance-detail-title"><div class="modal-title-row"><h2 id="fba-shipment-variance-detail-title">货件明细</h2><button class="modal-close-button" id="fba-shipment-variance-detail-close" type="button" aria-label="关闭货件明细">×</button></div><div id="fba-shipment-variance-detail-content"></div></article></div>
         </section>
 
         <section class="view" id="view-freight-rates">
