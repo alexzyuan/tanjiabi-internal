@@ -47,11 +47,19 @@ test("monthly report delegates business column width and sorting to shared table
   const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
   const css = await readFile(new URL("../assets/css/pages/56-store-operating-monthly-report.css", import.meta.url), "utf8");
   const generatedCss = await readFile(new URL("../styles.css", import.meta.url), "utf8");
+  const shellCss = await readFile(new URL("../assets/css/layout/10-shell.css", import.meta.url), "utf8");
   const shellParityCss = await readFile(new URL("../assets/css/legacy/98-shell-topbar-parity.css", import.meta.url), "utf8");
 
   assert.match(indexSource, /data-table-key="store-operating-monthly-report"/);
   assert.match(css, /tr\[data-report-row-level="0"\]/);
-  assert.match(css, /@media \(max-width: 620px\)[\s\S]*#view-store-operating-monthly-report > \.module-hero[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
+  assert.doesNotMatch(css, /module-hero/);
+  assert.match(shellCss, /\/\* Nested module hero and breadcrumb specificity fix v1\. \*\/[\s\S]*@media \(max-width: 900px\) \{[\s\S]*\.view > \.module-hero,[\s\S]*\.view \.module-hero \{[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
+  assert.match(shellCss, /body:not\(\.login-body\) \.topbar \.world-clock \{\n  display: flex;\n\}/);
+  assert.ok(
+    shellCss.indexOf("body:not(.login-body) .topbar .world-clock {\n  display: flex;\n}")
+      < shellCss.indexOf("@media (max-width: 620px)"),
+    "the narrow viewport hide rule must override the desktop world-clock display",
+  );
   assert.match(generatedCss, /#view-store-operating-monthly-report tr\[data-report-row-level="0"\]>/);
   const worldClockParityRule = shellParityCss.slice(
     shellParityCss.indexOf("body:not(.login-body) .topbar .world-clock"),

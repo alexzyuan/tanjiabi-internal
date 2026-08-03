@@ -16,29 +16,3 @@
   font-size: 12px;
   line-height: 1.45;
 }
-
-@media (max-width: 620px) {
-  #view-store-operating-monthly-report > .module-hero {
-    grid-template-columns: minmax(0, 1fr);
-    align-items: stretch;
-  }
-
-  #view-store-operating-monthly-report > .module-hero > div:first-child,
-  #view-store-operating-monthly-report > .module-hero .hero-actions {
-    grid-column: 1 / -1;
-    width: 100%;
-    min-width: 0;
-    max-width: 100%;
-  }
-
-  #view-store-operating-monthly-report > .module-hero h2,
-  #view-store-operating-monthly-report > .module-hero p {
-    width: 100%;
-    max-width: 100%;
-    overflow-wrap: anywhere;
-  }
-
-  #view-store-operating-monthly-report > .module-hero .hero-actions {
-    justify-content: flex-start;
-  }
-}
