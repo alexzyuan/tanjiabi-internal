@@ -6,6 +6,7 @@ import { createFbaRoutes } from "../routes/fba.js";
 function createRoutes(overrides = {}) {
   return createFbaRoutes({
     readFbaShipmentVarianceFilters: (url) => ({ startDate: url.searchParams.get("startDate") || "" }),
+    readJsonBody: async () => ({ followupStatus: "调查中" }),
     sendJson: (_res, status, payload) => { overrides.sent.push({ status, payload }); },
     getFbaShipmentVariances: async (filters) => ({ ok: true, filters, rows: [] }),
     markFbaShipmentVarianceFollowup: async (input) => ({ ...input, followedUp: true }),
@@ -39,7 +40,7 @@ test("shipment variance routes are session-authenticated and preserve filters pl
 
   assert.deepEqual(sent, [
     { status: 200, payload: { ok: true, filters: { startDate: "2026-07-05" }, rows: [] } },
-    { status: 200, payload: { ok: true, row: { sid: "8708", shipmentId: "FBA18QJFDCWJ", operator: "Alice", followedUp: true } } },
+    { status: 200, payload: { ok: true, row: { sid: "8708", shipmentId: "FBA18QJFDCWJ", operator: "Alice", followupStatus: "调查中", followedUp: true } } },
     { status: 200, payload: { ok: true, row: { sid: "8708", shipmentId: "FBA18QJFDCWJ", operator: "Bob", followedUp: false } } },
   ]);
 });

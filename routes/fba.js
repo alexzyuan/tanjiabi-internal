@@ -85,14 +85,15 @@ export function createFbaRoutes(deps = {}) {
       pattern: /^\/api\/fba\/shipment-variances\/(?<sid>[^/]+)\/(?<shipmentId>[^/]+)\/followup$/,
       auth: "session",
       errorStatusCode: 400,
-      handler: async ({ req, res, params }) => sendJson(res, 200, {
-        ok: true,
-        row: await markFbaShipmentVarianceFollowup({
+      handler: async ({ req, res, params }) => {
+        const body = await readJsonBody(req);
+        sendJson(res, 200, { ok: true, row: await markFbaShipmentVarianceFollowup({
           sid: decodeURIComponent(params.sid),
           shipmentId: decodeURIComponent(params.shipmentId),
           operator: requestOperator(req),
-        }),
-      }),
+          followupStatus: body.followupStatus,
+        }) });
+      },
     },
     {
       method: "DELETE",

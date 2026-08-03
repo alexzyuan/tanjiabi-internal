@@ -912,7 +912,7 @@ async function refreshDashboardFromFilters() {
 
 ({ loadFbaShipmentVarianceInitial, setupFbaShipmentVariance } = createFbaShipmentVarianceFeature({
   root: document, bind, bindBackdropClose, closestTarget, escapeHtml, fbaValue,
-  fetchImpl: fetch.bind(window), formatDate, formatNumber, getFbaShops, loadFbaShops,
+  fetchImpl: fetch.bind(window), formatDate, formatNumber, getFbaShops, getCurrentAuthUser: () => getCurrentAuthUser(), loadFbaShops,
   normalizeFbaShop, renderTableMessage, setModalOpenState, setText,
 }));
 

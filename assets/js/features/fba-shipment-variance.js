@@ -11,6 +11,7 @@ export function createFbaShipmentVarianceFeature({
   fetchImpl = globalThis.fetch,
   formatDate,
   formatNumber,
+  getCurrentAuthUser = () => null,
   getFbaShops,
   loadFbaShops,
   normalizeFbaShop,
@@ -24,6 +25,7 @@ export function createFbaShipmentVarianceFeature({
   let loaded = false;
   let loading = false;
   let picker = null;
+  let pendingFollowupKey = "";
   const query = (selector) => root?.querySelector?.(selector) || null;
   const value = (selector) => fbaValue?.(selector) || "";
 
@@ -50,7 +52,7 @@ export function createFbaShipmentVarianceFeature({
 
   function buildQuery({ forceRefresh = false } = {}) {
     const params = new URLSearchParams();
-    [["startDate", value("#fba-shipment-variance-start-date")], ["endDate", value("#fba-shipment-variance-end-date")], ["sids", value("#fba-shipment-variance-sid")], ["followupStatus", value("#fba-shipment-variance-followup-status")]].forEach(([key, item]) => {
+    [["startDate", value("#fba-shipment-variance-start-date")], ["endDate", value("#fba-shipment-variance-end-date")], ["sids", value("#fba-shipment-variance-sid")], ["shipmentStatus", value("#fba-shipment-variance-status-filter") || "RECEIVING,CLOSED"], ["followupStatus", value("#fba-shipment-variance-followup-status")]].forEach(([key, item]) => {
       if (item) params.set(key, item);
     });
     if (forceRefresh) params.set("forceRefresh", "true");
@@ -77,7 +79,7 @@ export function createFbaShipmentVarianceFeature({
     const table = query("#fba-shipment-variance-table");
     if (!table) return;
     if (!rows.length) return renderTableMessage(table, 10, "当前筛选没有货件差异。");
-    table.innerHTML = rows.map((row, index) => {
+    table.innerHTML = rows.map((row) => {
       const canFollow = row.investigationStatus === "待调查";
       const followed = Boolean(row.followup?.followedUp);
       return `<tr>
@@ -85,19 +87,19 @@ export function createFbaShipmentVarianceFeature({
         <td><span class="risk-badge">${escapeHtml(row.shipmentStatus || "-")}</span><br /><small>${escapeHtml(row.investigationStatus || "-")}</small></td>
         <td>${formatNumber(row.shippedQuantity || 0)}</td><td>${formatNumber(row.receivedQuantity || 0)}</td><td>${formatNumber(row.differenceQuantity || 0)}</td>
         <td>${escapeHtml(row.closedAt || "-")}</td><td>${escapeHtml(row.sla?.display || "—")}</td>
-        <td>${followed ? `已跟进<br /><small>${escapeHtml(row.followup.followedUpBy || "")}</small>` : "待跟进"}</td>
-        <td class="table-actions"><button class="secondary-button compact-button" type="button" data-fba-shipment-variance-detail="${index}">查看明细</button>${canFollow ? `<button class="${followed ? "secondary-button" : "primary-button"} compact-button" type="button" data-fba-shipment-variance-${followed ? "clear" : "followup"}="${escapeHtml(`${row.sid}:${row.shipmentId}`)}">${followed ? "撤销跟进" : "已跟进"}</button>` : ""}</td>
+        <td>${followed ? `${escapeHtml(row.followup.status || "已跟进")}<br /><small>${escapeHtml(row.followup.followedUpBy || "")}</small>` : "待跟进"}</td>
+        <td class="table-actions">${canFollow ? `<button class="primary-button compact-button" type="button" data-fba-shipment-variance-followup="${escapeHtml(`${row.sid}:${row.shipmentId}`)}" data-fba-shipment-variance-followup-status="${escapeHtml(row.followup?.status || "已跟进")}">跟进</button>` : ""}</td>
       </tr>`;
     }).join("");
   }
 
-  function renderDetail(index) {
-    const row = rows[Number(index)];
-    if (!row) return;
-    setText?.("#fba-shipment-variance-detail-title", row.shipmentId || "货件明细", root);
-    const content = query("#fba-shipment-variance-detail-content");
-    if (content) content.innerHTML = `<table class="data-table data-table--detail"><thead><tr><th>MSKU</th><th>SKU</th><th>发货</th><th>实收</th><th>差异</th></tr></thead><tbody>${(row.items || []).map((item) => `<tr><td>${escapeHtml(item.msku || "-")}</td><td>${escapeHtml(item.sku || "-")}</td><td>${formatNumber(item.shippedQuantity || 0)}</td><td>${formatNumber(item.receivedQuantity || 0)}</td><td>${formatNumber(Number(item.shippedQuantity || 0) - Number(item.receivedQuantity || 0))}</td></tr>`).join("") || "<tr><td colspan=\"5\">领星未返回 SKU 明细。</td></tr>"}</tbody></table>`;
-    setModalOpenState?.(query("#fba-shipment-variance-detail-modal"), true);
+  function openFollowup(button) {
+    pendingFollowupKey = button.dataset.fbaShipmentVarianceFollowup;
+    const user = getCurrentAuthUser?.() || {};
+    setText?.("#fba-shipment-variance-followup-user", user.displayName || user.nick || user.username || "当前登录用户", root);
+    const status = query("#fba-shipment-variance-followup-select");
+    if (status) status.value = button.dataset.fbaShipmentVarianceFollowupStatus || "已跟进";
+    setModalOpenState?.(query("#fba-shipment-variance-followup-modal"), true);
   }
 
   async function loadFbaShipmentVariances({ forceRefresh = false } = {}) {
@@ -113,11 +115,11 @@ export function createFbaShipmentVarianceFeature({
     } finally { setLoading(false); }
   }
 
-  async function updateFollowup(key, followedUp) {
+  async function updateFollowup(key, followupStatus) {
     const [sid, ...shipmentParts] = String(key || "").split(":");
     const shipmentId = shipmentParts.join(":");
     if (!sid || !shipmentId) throw new Error("货件跟进操作缺少业务键。");
-    const response = await fetchImpl(`/api/fba/shipment-variances/${encodeURIComponent(sid)}/${encodeURIComponent(shipmentId)}/followup`, { method: followedUp ? "PUT" : "DELETE" });
+    const response = await fetchImpl(`/api/fba/shipment-variances/${encodeURIComponent(sid)}/${encodeURIComponent(shipmentId)}/followup`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ followupStatus }) });
     const data = await response.json();
     if (!response.ok || data.ok === false) throw new Error(data.error || `API ${response.status}`);
     await loadFbaShipmentVariances({ forceRefresh: true });
@@ -133,12 +135,11 @@ export function createFbaShipmentVarianceFeature({
     picker.setup?.();
     bind(root, "#fba-shipment-variance-refresh", "click", () => loadFbaShipmentVariances({ forceRefresh: true }));
     bind(root, "#fba-shipment-variance-table", "click", async (event) => {
-      const detail = closestTarget(event, "[data-fba-shipment-variance-detail]"); if (detail) return renderDetail(detail.dataset.fbaShipmentVarianceDetail);
-      const follow = closestTarget(event, "[data-fba-shipment-variance-followup]"); if (follow) return updateFollowup(follow.dataset.fbaShipmentVarianceFollowup, true);
-      const clear = closestTarget(event, "[data-fba-shipment-variance-clear]"); if (clear) return updateFollowup(clear.dataset.fbaShipmentVarianceClear, false);
+      const follow = closestTarget(event, "[data-fba-shipment-variance-followup]"); if (follow) openFollowup(follow);
     });
-    bind(root, "#fba-shipment-variance-detail-close", "click", () => setModalOpenState?.(query("#fba-shipment-variance-detail-modal"), false));
-    bindBackdropClose?.(root, "#fba-shipment-variance-detail-modal", () => setModalOpenState?.(query("#fba-shipment-variance-detail-modal"), false));
+    bind(root, "#fba-shipment-variance-followup-cancel", "click", () => setModalOpenState?.(query("#fba-shipment-variance-followup-modal"), false));
+    bind(root, "#fba-shipment-variance-followup-confirm", "click", async () => { await updateFollowup(pendingFollowupKey, value("#fba-shipment-variance-followup-select")); setModalOpenState?.(query("#fba-shipment-variance-followup-modal"), false); });
+    bindBackdropClose?.(root, "#fba-shipment-variance-followup-modal", () => setModalOpenState?.(query("#fba-shipment-variance-followup-modal"), false));
   }
   return { loadFbaShipmentVarianceInitial, loadFbaShipmentVariances, renderFbaShipmentVarianceShopOptions: renderShopOptions, setupFbaShipmentVariance };
 }
