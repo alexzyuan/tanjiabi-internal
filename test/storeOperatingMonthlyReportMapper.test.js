@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildStoreOperatingReportRows,
+  mapStoreOperatingBudgetRowScope,
   mapStoreOperatingBudgetMetrics,
+  mapStoreOperatingOrderProfitBudgetScope,
+  mapStoreOperatingSellerScope,
+  readStoreOperatingBudgetCurrencyCode,
 } from "../src/services/storeOperatingMonthlyReportMapper.js";
 
 test("budget target fields map only to the four confirmed report metrics", () => {
@@ -19,6 +23,37 @@ test("budget target fields map only to the four confirmed report metrics", () =>
     "sales-profit": 20,
   });
   assert.deepEqual(mapStoreOperatingBudgetMetrics({ salesTarget: null }), {});
+});
+
+test("scope aliases are translated by the mapper boundary", () => {
+  assert.deepEqual(mapStoreOperatingSellerScope({
+    seller_id: 7,
+    seller_name: "Store-US",
+    marketplaceName: "美国",
+  }), {
+    sid: 7,
+    name: "Store-US",
+    country: "美国",
+  });
+  assert.deepEqual(mapStoreOperatingOrderProfitBudgetScope({
+    report_date: "2026-07-31",
+    store_name: "Store-US",
+    country_name: "美国",
+  }), {
+    month: "2026-07",
+    storeName: "Store-US",
+    country: "美国",
+  });
+  assert.deepEqual(mapStoreOperatingBudgetRowScope({
+    budgetMonth: "2026-07",
+    store_name: "Store-US",
+    site: "美国站",
+  }), {
+    month: "2026-07",
+    storeName: "Store-US",
+    country: "美国",
+  });
+  assert.equal(readStoreOperatingBudgetCurrencyCode({ currency_code: "USD" }), "USD");
 });
 
 test("missing order-profit fields stay unavailable rather than becoming zero", () => {

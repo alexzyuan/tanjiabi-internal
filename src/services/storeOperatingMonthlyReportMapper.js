@@ -43,6 +43,22 @@ function isPresent(value) {
   return value !== "" && value !== null && value !== undefined;
 }
 
+function readText(item, keys) {
+  for (const key of keys) {
+    const value = item?.[key];
+    if (isPresent(value) && String(value).trim()) return String(value).trim();
+  }
+  return "";
+}
+
+function readValue(item, keys) {
+  for (const key of keys) {
+    const value = item?.[key];
+    if (isPresent(value)) return value;
+  }
+  return "";
+}
+
 function toFiniteNumber(value, field) {
   const isFiniteNumber = typeof value === "number" && Number.isFinite(value);
   const isNumericString = typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value));
@@ -95,6 +111,39 @@ export function mapStoreOperatingBudgetMetrics(totals = {}) {
     if (!Object.hasOwn(totals, field) || !isPresent(totals[field])) return [];
     return [[metric, toFiniteNumber(totals[field], `预算字段 ${field}`)]];
   }));
+}
+
+export function normalizeStoreOperatingCountryKey(value) {
+  const country = String(value ?? "").trim().replace(/站$/, "");
+  return country === "澳大利亚" ? "澳洲" : country;
+}
+
+export function mapStoreOperatingSellerScope(seller = {}) {
+  return {
+    sid: readValue(seller, ["sid", "seller_id", "sellerId", "store_id", "storeId"]),
+    name: readText(seller, ["name", "seller_name", "shop_name", "store_name", "account_name"]),
+    country: normalizeStoreOperatingCountryKey(readText(seller, ["country", "countryName", "country_name", "marketplace", "marketplaceName"])),
+  };
+}
+
+export function mapStoreOperatingOrderProfitBudgetScope(record = {}) {
+  return {
+    month: readText(record, ["reportDate", "report_date", "date"]).slice(0, 7),
+    storeName: readText(record, ["storeName", "store_name"]),
+    country: normalizeStoreOperatingCountryKey(readText(record, ["country", "countryName", "country_name"])),
+  };
+}
+
+export function mapStoreOperatingBudgetRowScope(row = {}) {
+  return {
+    month: readText(row, ["month", "budgetMonth"]).slice(0, 7),
+    storeName: readText(row, ["storeName", "store_name"]),
+    country: normalizeStoreOperatingCountryKey(readText(row, ["site", "country", "countryName"])),
+  };
+}
+
+export function readStoreOperatingBudgetCurrencyCode(row = {}) {
+  return readText(row, ["currencyCode", "currency_code", "currency"]);
 }
 
 export function buildStoreOperatingReportRows({ records, budgetByMetric = {}, currencyCode } = {}) {

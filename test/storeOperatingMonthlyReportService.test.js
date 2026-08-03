@@ -273,7 +273,44 @@ test("original mode uses only an explicitly declared budget currency", async () 
 
   assert.equal(value.groups.find((group) => group.currencyCode === "USD").rows.find((row) => row.key === "net-sales").budget, 100);
   assert.equal(value.groups.find((group) => group.currencyCode === "CAD").rows.find((row) => row.key === "net-sales").budget, null);
-  assert.equal(value.budgetStatus.state, "configured");
+  assert.equal(value.budgetStatus.state, "partial");
+});
+
+test("a blank original API currency never receives a blank-currency budget", async () => {
+  const adapter = fakeAdapter({
+    sellers: [{ sid: 1, name: "Store-US", country: "美国" }],
+    recordsForCall: () => [{ sid: 1, netSalesAmount: 90, currencyCode: "" }],
+  });
+
+  const value = await getStoreOperatingMonthlyReport(
+    { startMonth: "2026-07", endMonth: "2026-07" },
+    {
+      adapter,
+      getBudgetTargetContext: async () => ({
+        rows: [{ month: "2026-07", storeName: "Store-US", site: "美国", currencyCode: "", salesTarget: 100 }],
+        matched: true,
+      }),
+    },
+  );
+
+  assert.equal(value.groups[0].currencyCode, "");
+  assert.equal(value.groups[0].rows.find((row) => row.key === "net-sales").budget, null);
+  assert.equal(value.budgetStatus.state, "unavailable");
+});
+
+test("service rejects a budget dependency result without an array of rows", async () => {
+  const adapter = fakeAdapter({
+    sellers: [{ sid: 1, name: "Store-US", country: "美国" }],
+    recordsForCall: () => [],
+  });
+
+  await assert.rejects(
+    () => getStoreOperatingMonthlyReport(
+      { startMonth: "2026-07", endMonth: "2026-07" },
+      { adapter, getBudgetTargetContext: async () => ({ matched: false }) },
+    ),
+    /预算上下文 rows 必须是数组/,
+  );
 });
 
 test("CNY mode converts each budget row only with its matching Lingxing month-store-country rate", async () => {

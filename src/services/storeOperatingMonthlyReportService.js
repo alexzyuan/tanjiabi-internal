@@ -3,7 +3,11 @@ import { getLingxingAdapter } from "../adapters/lingxingAdapter.js";
 import { getBudgetTargetContext as readBudgetTargetContext } from "./budgetTargetService.js";
 import {
   buildStoreOperatingReportRows,
+  mapStoreOperatingBudgetRowScope,
   mapStoreOperatingBudgetMetrics,
+  mapStoreOperatingOrderProfitBudgetScope,
+  mapStoreOperatingSellerScope,
+  readStoreOperatingBudgetCurrencyCode,
 } from "./storeOperatingMonthlyReportMapper.js";
 
 const MONTH_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])$/;
@@ -39,28 +43,12 @@ function monthBounds(month) {
   };
 }
 
-function textValue(item, keys) {
-  for (const key of keys) {
-    const value = item?.[key];
-    if (value !== undefined && value !== null && String(value).trim()) return String(value).trim();
-  }
-  return "";
-}
-
-function sellerName(seller) {
-  return textValue(seller, ["name", "seller_name", "shop_name", "store_name", "account_name"]);
-}
-
-function sellerCountry(seller) {
-  return textValue(seller, ["country", "countryName", "country_name", "marketplace", "marketplaceName"]);
-}
-
 function filterSellers(sellers, filters) {
   const stores = new Set(filters.stores);
   const countries = new Set(filters.countries);
   return sellers.filter((seller) =>
-    (!stores.size || stores.has(sellerName(seller)))
-    && (!countries.size || countries.has(sellerCountry(seller))),
+    (!stores.size || stores.has(seller.name))
+    && (!countries.size || countries.has(seller.country)),
   );
 }
 
@@ -69,35 +57,14 @@ function generatedAt(now) {
   return (value instanceof Date ? value : new Date(value)).toISOString();
 }
 
-function normalizeCountryKey(value) {
-  const country = String(value ?? "").trim().replace(/站$/, "");
-  return country === "澳大利亚" ? "澳洲" : country;
-}
-
 function budgetScopeKey({ month, storeName, country }) {
-  return [month, storeName, normalizeCountryKey(country)].join("\u0000");
-}
-
-function recordBudgetScope(record) {
-  return {
-    month: String(record.reportDate || record.report_date || record.date || "").slice(0, 7),
-    storeName: String(record.storeName || record.store_name || "").trim(),
-    country: String(record.country || record.countryName || record.country_name || "").trim(),
-  };
-}
-
-function budgetRowScope(row) {
-  return {
-    month: String(row.month || row.budgetMonth || "").slice(0, 7),
-    storeName: String(row.storeName || row.store_name || "").trim(),
-    country: String(row.site || row.country || row.countryName || "").trim(),
-  };
+  return [month, storeName, country].join("\u0000");
 }
 
 function buildLingxingRateMap(records) {
   const ratesByScope = new Map();
   records.forEach((record) => {
-    const key = budgetScopeKey(recordBudgetScope(record));
+    const key = budgetScopeKey(mapStoreOperatingOrderProfitBudgetScope(record));
     if (!ratesByScope.has(key)) ratesByScope.set(key, new Set());
     const rate = Number(record.exchangeRate);
     if (Number.isFinite(rate) && rate > 0) ratesByScope.get(key).add(rate);
@@ -129,7 +96,7 @@ function buildCnyBudget(rows, records) {
   const rateByScope = buildLingxingRateMap(records);
   const missingRows = new Set();
   const budgetByMetric = sumBudgetRows(rows, (value, row) => {
-    const rate = rateByScope.get(budgetScopeKey(budgetRowScope(row)));
+    const rate = rateByScope.get(budgetScopeKey(mapStoreOperatingBudgetRowScope(row)));
     if (!rate) {
       if (hasBudgetMetrics(row)) missingRows.add(row);
       return null;
@@ -139,15 +106,14 @@ function buildCnyBudget(rows, records) {
   return { budgetByMetric, missingExchangeRateCount: missingRows.size };
 }
 
-function budgetCurrencyCode(row) {
-  return textValue(row, ["currencyCode", "currency_code", "currency"]);
-}
-
 function originalBudgetByCurrency(rows, currencyCodes) {
-  return new Map(currencyCodes.map((currencyCode) => [
-    currencyCode,
-    sumBudgetRows(rows.filter((row) => budgetCurrencyCode(row) === currencyCode)),
-  ]));
+  return new Map(currencyCodes.map((currencyCode) => {
+    if (!currencyCode) return [currencyCode, {}];
+    return [currencyCode, sumBudgetRows(rows.filter((row) => {
+      const budgetCurrencyCode = readStoreOperatingBudgetCurrencyCode(row);
+      return Boolean(budgetCurrencyCode) && budgetCurrencyCode === currencyCode;
+    }))];
+  }));
 }
 
 function budgetState({ matched, budgetRows, budgetByGroups, missingExchangeRateCount, currencyMode }) {
@@ -158,9 +124,10 @@ function budgetState({ matched, budgetRows, budgetByGroups, missingExchangeRateC
   );
   if (missingExchangeRateCount > 0) return "partial";
   if (currencyMode === "ORIGINAL") {
-    const unassignedCount = budgetRows.filter((row) => !budgetCurrencyCode(row)).length;
+    const unassignedCount = budgetRows.filter((row) => !readStoreOperatingBudgetCurrencyCode(row)).length;
     if (!configuredMetricCount) return "unavailable";
-    if (unassignedCount > 0) return "partial";
+    const unmatchedGroupCount = budgetByGroups.filter((budgetByMetric) => !Object.keys(budgetByMetric).length).length;
+    if (unassignedCount > 0 || unmatchedGroupCount > 0) return "partial";
   }
   return configuredMetricCount ? "configured" : "unavailable";
 }
@@ -191,6 +158,13 @@ function buildEmptyResult(normalizedFilters, now) {
 function writeLog(logger, level, details) {
   const method = logger?.[level];
   if (typeof method === "function") method.call(logger, "[store-operating-monthly-report]", details);
+}
+
+function requireBudgetRows(budget) {
+  if (!budget || typeof budget !== "object" || Array.isArray(budget) || !Array.isArray(budget.rows)) {
+    throw new Error("预算上下文 rows 必须是数组");
+  }
+  return budget;
 }
 
 export function normalizeStoreOperatingMonthlyReportFilters({
@@ -226,7 +200,7 @@ export async function getStoreOperatingMonthlyReport(filters, {
   try {
     normalizedFilters = normalizeStoreOperatingMonthlyReportFilters(filters);
     const sellerPayload = await adapter.fetchSellers();
-    const sellers = filterSellers(adapter.normalizeRecordList(sellerPayload), normalizedFilters);
+    const sellers = filterSellers(adapter.normalizeRecordList(sellerPayload).map(mapStoreOperatingSellerScope), normalizedFilters);
     if (!sellers.length) {
       const empty = buildEmptyResult(normalizedFilters, now);
       writeLog(logger, "info", {
@@ -244,7 +218,7 @@ export async function getStoreOperatingMonthlyReport(filters, {
       });
       return empty;
     }
-    const effectiveCountries = [...new Set(sellers.map(sellerCountry).filter(Boolean))];
+    const effectiveCountries = [...new Set(sellers.map((seller) => seller.country).filter(Boolean))];
     const currencyMode = effectiveCountries.length > 1 ? "CNY" : "ORIGINAL";
     const recordsByMonth = await Promise.all(normalizedFilters.months.map(async (month) => {
       const { startDate, endDate } = monthBounds(month);
@@ -259,10 +233,10 @@ export async function getStoreOperatingMonthlyReport(filters, {
     const records = recordsByMonth.flat();
     const budget = await getBudgetTargetContext({
       months: normalizedFilters.months,
-      storeNames: sellers.map(sellerName),
+      storeNames: sellers.map((seller) => seller.name),
       countries: effectiveCountries,
     });
-    const budgetRows = Array.isArray(budget?.rows) ? budget.rows : [];
+    const budgetRows = requireBudgetRows(budget).rows;
     const groupedRecords = currencyMode === "CNY"
       ? new Map([["CNY", records]])
       : new Map([...new Set(records.map((record) => String(record.currencyCode ?? "").trim()))]
