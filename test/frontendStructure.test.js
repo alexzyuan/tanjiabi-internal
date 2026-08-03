@@ -43,6 +43,25 @@ test("store operating monthly report is a finance-owned feature with shared cont
   assert.match(budgetSource, /budgetCountries/);
 });
 
+test("monthly report delegates business column width and sorting to shared table tooling", async () => {
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const css = await readFile(new URL("../assets/css/pages/56-store-operating-monthly-report.css", import.meta.url), "utf8");
+  const generatedCss = await readFile(new URL("../styles.css", import.meta.url), "utf8");
+  const shellParityCss = await readFile(new URL("../assets/css/legacy/98-shell-topbar-parity.css", import.meta.url), "utf8");
+
+  assert.match(indexSource, /data-table-key="store-operating-monthly-report"/);
+  assert.match(css, /tr\[data-report-row-level="0"\]/);
+  assert.match(css, /@media \(max-width: 620px\)[\s\S]*#view-store-operating-monthly-report > \.module-hero[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
+  assert.match(generatedCss, /#view-store-operating-monthly-report tr\[data-report-row-level="0"\]>/);
+  const worldClockParityRule = shellParityCss.slice(
+    shellParityCss.indexOf("body:not(.login-body) .topbar .world-clock"),
+    shellParityCss.indexOf("body:not(.login-body) .world-clock span", shellParityCss.indexOf("body:not(.login-body) .topbar .world-clock")),
+  );
+  assert.doesNotMatch(worldClockParityRule, /display:\s*flex\s*!important/);
+  assert.equal(/(?:th|td):nth-child\([^)]*\)\s*\{[^}]*\b(?:width|min-width)\s*:/.test(css), false);
+  assert.equal(/\.store-operating[^,{]*\{[^}]*min-width\s*:/.test(css), false);
+});
+
 test("index.html startup health check centralizes sync tone class switching", async () => {
   const source = await readFile(new URL("../index.html", import.meta.url), "utf8");
   const healthStart = source.indexOf("window.__tanjiaBasicNavigationReady = true;");
