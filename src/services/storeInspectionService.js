@@ -4,6 +4,7 @@ import { getConfig } from "../config/index.js";
 import { filterCoreSellers, getLingxingAdapter } from "../adapters/lingxingAdapter.js";
 import { sendDingTalkMarkdown, sendDingTalkText } from "./dingtalkService.js";
 import { getAftersalesMailInspectionSummary } from "./aftersalesMailService.js";
+import { getLowInventoryFeeDashboard } from "./lowInventoryFeeService.js";
 import { readLingxingSellersCache, saveLingxingSellersCache } from "../utils/cacheStore.js";
 
 const cacheFile = path.join(process.cwd(), "data-cache", "store-inspection-latest.json");
@@ -849,6 +850,38 @@ async function inspectErpBuyerMessages(adapter, sellers, range, config, previous
   return summary;
 }
 
+export function buildLowInventoryFeeInspectionSummary(dashboard = {}) {
+  const rows = (dashboard.rows || [])
+    .filter((row) => row?.amazonFeeEligible === true)
+    .map((row) => ({
+      storeName: String(row.storeName ?? "").trim(),
+      country: String(row.country ?? "").trim(),
+      msku: String(row.msku ?? "").trim(),
+    }))
+    .filter((row) => row.storeName && row.msku);
+  return {
+    key: "lowInventoryFee",
+    label: "低库存费 MSKU",
+    status: rows.length ? "risk" : "ok",
+    tone: rows.length ? "danger" : "success",
+    count: rows.length,
+    detail: rows.length ? `本周 ${rows.length} 个 MSKU 已进入低库存费区间。` : "本周无 MSKU 进入低库存费区间。",
+    rows,
+  };
+}
+
+export function lowInventoryFeeInspectionError(error) {
+  return {
+    key: "lowInventoryFee",
+    label: "低库存费 MSKU",
+    status: "error",
+    tone: "danger",
+    count: 0,
+    detail: error?.message || "低库存费看板读取失败",
+    rows: [],
+  };
+}
+
 function buildChecks(inspection) {
   return [
     inspection.feedback,
@@ -856,6 +889,7 @@ function buildChecks(inspection) {
     inspection.voiceOfBuyer,
     inspection.accountHealth,
     inspection.aftersalesMail,
+    inspection.lowInventoryFee,
   ].filter(Boolean).map((item) => ({ ...item, autoConnected: !["unavailable", "error"].includes(item.status) }));
 }
 
@@ -1008,11 +1042,15 @@ function collectReportStoreNames(result) {
     ...(result?.voiceOfBuyer?.rows || []),
     ...(result?.accountHealth?.rows || []),
     ...(result?.erpBuyerMessages?.rows || []),
+    ...(result?.lowInventoryFee?.rows || []),
     ...(result?.feedback?.storeStats || []),
     ...(result?.review?.storeStats || []),
     ...(result?.accountHealth?.storeStats || []),
   ].forEach((item) => {
-    if (item?.storeName) names.add(item.storeName);
+    if (item?.storeName) {
+      names.add(item.storeName);
+      if (!countryByStore.has(item.storeName) && item.country) countryByStore.set(item.storeName, item.country);
+    }
   });
   return [...names].sort((left, right) => {
     const countryOrder = reportCountryOrder(countryByStore.get(left), left) - reportCountryOrder(countryByStore.get(right), right);
@@ -1035,6 +1073,7 @@ function storeHasInspectionItems(result, storeName) {
     result?.voiceOfBuyer?.rows,
     result?.accountHealth?.rows,
     result?.erpBuyerMessages?.rows,
+    result?.lowInventoryFee?.rows,
   ].some((rows) => countRowsForStore(rows || [], storeName) > 0);
 }
 
@@ -1105,6 +1144,12 @@ function buildStoreReportSection(storeName, latest, previous, config = getConfig
   const previousPolicyCount = previous ? accountPolicyCount(previous, storeName) : 0;
   const newPolicyCount = previous ? Math.max(policyCount - previousPolicyCount, 0) : policyCount;
   const stationMessageCount = countRowsForStore(latest?.erpBuyerMessages?.rows || [], storeName);
+  const lowInventoryFeeMskus = [...new Set(
+    (latest?.lowInventoryFee?.rows || [])
+      .filter((row) => sameStoreName(row.storeName, storeName))
+      .map((row) => String(row.msku || "").trim())
+      .filter(Boolean),
+  )];
   const reviewLines = lowReviewRows.length
     ? lowReviewRows.map((row) => `  - ${normalizeReportText(row.rating)} 星，review内容：${normalizeReportText(row.content)}，msku：${normalizeReportText(row.msku)}。`)
     : [];
@@ -1128,6 +1173,7 @@ function buildStoreReportSection(storeName, latest, previous, config = getConfig
     ownerMentionLine,
     "",
     ...feedbackReviewLines,
+    lowInventoryFeeMskus.length ? `- 本周低库存费 MSKU：${lowInventoryFeeMskus.join("、")}。` : "",
     stationMessageCount > 0 ? `- 新增 ${reportCount(stationMessageCount)} 封亚马逊站内信。` : "- 亚马逊站内信无新增。",
     `- 店铺健康，目前 ${reportCount(policyCount)} 条合规性问题待处理，新增 ${reportCount(newPolicyCount)} 条。`,
   ].filter((line, index) => line || index === 2).join("\n");
@@ -1153,12 +1199,21 @@ export function buildStoreInspectionMarkdown(latest, history = [], config = getC
     .slice(0, 5)
     .map((row) => `- ${normalizeReportText(row.type)}｜${normalizeReportText(row.item)}`);
   const aftersalesOwnerLine = hasNewAftersalesMail(latest.aftersalesMail) && dingtalkUserIdByName("林芃", config) ? "负责人：林芃" : "";
+  const lowInventoryFeeFailure = latest.lowInventoryFee?.status === "error"
+    ? [
+        "",
+        "## 低库存费 MSKU 巡检失败",
+        "",
+        `- 低库存费 MSKU 看板读取失败：${latest.lowInventoryFee.detail || "低库存费看板读取失败"}`,
+      ]
+    : [];
   return [
     `# 店铺巡检日报 - ${today}`,
     "",
     `自动化巡检结果：共巡检 ${latest.meta?.storeCount ?? stores.length} 个店铺，巡检范围 ${rangeText}，最新巡检时间 ${latest.meta?.updatedAt || "-"}。`,
     "",
     sections.join("\n\n"),
+    ...lowInventoryFeeFailure,
     "",
     "## 站外售后邮箱",
     aftersalesOwnerLine,
@@ -1200,7 +1255,7 @@ export async function readLatestStoreInspection() {
   }
 }
 
-function recomputeInspectionOverall(result) {
+export function recomputeInspectionOverall(result) {
   const coreChecks = [
     result.feedback,
     result.review,
@@ -1208,6 +1263,7 @@ function recomputeInspectionOverall(result) {
     result.accountHealth,
     result.erpBuyerMessages,
     result.aftersalesMail,
+    result.lowInventoryFee,
   ];
   const hasRisk = coreChecks.some((item) => item?.count > 0 || item?.status === "error");
   const hasUnavailable = coreChecks.some((item) => ["warning", "unavailable"].includes(item?.status));
@@ -1282,6 +1338,12 @@ export function getStoreInspectionState() {
 async function runMockInspection({ notify = false } = {}) {
   const range = normalizeRange();
   const aftersalesMail = await getAftersalesMailInspectionSummary({ refresh: true });
+  let lowInventoryFee;
+  try {
+    lowInventoryFee = buildLowInventoryFeeInspectionSummary(await getLowInventoryFeeDashboard({ onlyRisk: "0" }));
+  } catch (error) {
+    lowInventoryFee = lowInventoryFeeInspectionError(error);
+  }
   const result = {
     ok: true,
     provider: "mock",
@@ -1293,6 +1355,7 @@ async function runMockInspection({ notify = false } = {}) {
     accountHealth: { key: "accountHealth", label: "Performance - Account Health", status: "unavailable", tone: "warning", count: 0, total: 0, detail: "mock 环境未读取 Account Health。", rows: [] },
     erpBuyerMessages: { key: "erpBuyerMessages", label: "ERP 售后邮件", status: "unavailable", tone: "warning", count: 0, total: 0, detail: "mock 环境未读取 ERP 售后邮件。", rows: [], snapshotRows: [] },
     aftersalesMail,
+    lowInventoryFee,
     checks: [],
     notification: { ok: false, skipped: true, message: "店铺巡检钉钉推送已关闭。" },
     meta: { updatedAt: nowText(), storeCount: 0, ...range },
@@ -1323,13 +1386,14 @@ export async function runStoreInspection({ trigger = "manual", notify = true } =
     const range = normalizeRange(config);
     const sellers = await getSellers(adapter);
     const previousInspectionResult = await readLatestStoreInspection();
-    const [feedbackResult, reviewResult, voiceResult, accountHealthResult, erpBuyerMessagesResult, aftersalesMailResult] = await Promise.allSettled([
+    const [feedbackResult, reviewResult, voiceResult, accountHealthResult, erpBuyerMessagesResult, aftersalesMailResult, lowInventoryFeeResult] = await Promise.allSettled([
       inspectFeedback(adapter, sellers, range, config),
       inspectReview(adapter, sellers, range),
       inspectVoiceOfBuyer(adapter, sellers),
       inspectAccountHealth(adapter, sellers),
       inspectErpBuyerMessages(adapter, sellers, range, config, previousInspectionResult),
       getAftersalesMailInspectionSummary({ refresh: true }),
+      getLowInventoryFeeDashboard({ onlyRisk: "0" }),
     ]);
     const feedback = feedbackResult.status === "fulfilled"
       ? feedbackResult.value
@@ -1349,7 +1413,10 @@ export async function runStoreInspection({ trigger = "manual", notify = true } =
     const aftersalesMail = aftersalesMailResult.status === "fulfilled"
       ? aftersalesMailResult.value
       : { key: "aftersalesMail", label: "站外售后邮箱", status: "error", tone: "danger", count: 0, detail: aftersalesMailResult.reason?.message || "站外售后邮箱读取失败", rows: [] };
-    const coreChecks = [feedback, review, voiceOfBuyer, accountHealth, erpBuyerMessages, aftersalesMail];
+    const lowInventoryFee = lowInventoryFeeResult.status === "fulfilled"
+      ? buildLowInventoryFeeInspectionSummary(lowInventoryFeeResult.value)
+      : lowInventoryFeeInspectionError(lowInventoryFeeResult.reason);
+    const coreChecks = [feedback, review, voiceOfBuyer, accountHealth, erpBuyerMessages, aftersalesMail, lowInventoryFee];
     const hasRisk = coreChecks.some((item) => item.count > 0 || item.status === "error");
     const hasUnavailable = coreChecks.some((item) => ["warning", "unavailable"].includes(item.status));
     const result = {
@@ -1364,6 +1431,7 @@ export async function runStoreInspection({ trigger = "manual", notify = true } =
       accountHealth,
       erpBuyerMessages,
       aftersalesMail,
+      lowInventoryFee,
       checks: [],
       notification: { ok: false, skipped: true, message: "未推送" },
       meta: {
@@ -1383,6 +1451,7 @@ export async function runStoreInspection({ trigger = "manual", notify = true } =
       const reportNotification = await sendDingTalkMarkdown({
         title: `店铺巡检日报 ${formatDate(new Date())}`,
         text: buildStoreInspectionMarkdown(result, history),
+        inheritConfiguredMentions: false,
       });
       const mentionNotification = atUserIds.length
         ? await sendDingTalkText(mentionText, { atUserIds })

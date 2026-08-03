@@ -16,10 +16,12 @@ function buildDingTalkWebhookUrl(webhook, secret) {
 
 function buildAtPayload(configAt = {}, options = {}) {
   const atAll = options.atAll === true;
+  const inheritedMobiles = options.inheritConfiguredMentions === false ? [] : (configAt.atMobiles || []);
+  const inheritedUserIds = options.inheritConfiguredMentions === false ? [] : (configAt.atUserIds || []);
   return {
     isAtAll: atAll,
-    atMobiles: atAll ? [] : [...new Set([...(configAt.atMobiles || []), ...(options.atMobiles || [])])],
-    atUserIds: atAll ? [] : [...new Set([...(configAt.atUserIds || []), ...(options.atUserIds || [])])],
+    atMobiles: atAll ? [] : [...new Set([...inheritedMobiles, ...(options.atMobiles || [])])],
+    atUserIds: atAll ? [] : [...new Set([...inheritedUserIds, ...(options.atUserIds || [])])],
   };
 }
 
@@ -65,12 +67,12 @@ export async function sendDingTalkTextToWebhook(config, content, options = {}, m
   return sendConfiguredDingTalkText(config, content, options, missingWebhookName, fetchImpl);
 }
 
-export async function sendDingTalkMarkdown({ title, text, atAll = false, atMobiles = [], atUserIds = [] }) {
+export async function sendDingTalkMarkdown({ title, text, atAll = false, atMobiles = [], atUserIds = [], inheritConfiguredMentions = true }) {
   const { webhook, secret, ...configAt } = getConfig().dingtalk;
   if (!webhook) {
     return { ok: false, skipped: true, message: "DINGTALK_WEBHOOK 未配置，已跳过钉钉通知。" };
   }
-  const at = buildAtPayload(configAt, { atAll, atMobiles, atUserIds });
+  const at = buildAtPayload(configAt, { atAll, atMobiles, atUserIds, inheritConfiguredMentions });
 
   const response = await fetch(buildDingTalkWebhookUrl(webhook, secret), {
     method: "POST",

@@ -1,14 +1,24 @@
 import assert from "node:assert/strict";
+import { execFile as execFileCallback } from "node:child_process";
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { promisify } from "node:util";
 import test from "node:test";
 import {
+  buildLowInventoryFeeInspectionSummary,
   buildDingTalkContent,
   buildErpBuyerMessagesInspectionSummary,
   buildErpBuyerMessagesRequestParams,
   buildErpBuyerMessagesRequestParamsList,
   buildStoreInspectionMentionText,
   buildStoreInspectionMarkdown,
+  recomputeInspectionOverall,
+  lowInventoryFeeInspectionError,
   storeInspectionMentionUserIds,
 } from "../src/services/storeInspectionService.js";
+
+const execFile = promisify(execFileCallback);
 
 const mentionConfig = {
   storeInspection: {
@@ -248,6 +258,143 @@ test("buildErpBuyerMessagesRequestParamsList supports multiple ERP-bound mailbox
       end_date: "2026-07-01",
     },
   ]);
+});
+
+test("buildLowInventoryFeeInspectionSummary keeps only fee-eligible rows with store and MSKU", () => {
+  const summary = buildLowInventoryFeeInspectionSummary({
+    rows: [
+      { storeName: "xiamentanjia-US", country: "美国", msku: "fee-eligible", amazonFeeEligible: true, feeAmount: 3.2 },
+      { storeName: "xiamentanjia-US", country: "美国", msku: "early-warning", amazonFeeEligible: false },
+      { storeName: "", country: "美国", msku: "missing-store", amazonFeeEligible: true },
+      { storeName: "tandanbo-US", country: "美国", msku: "", amazonFeeEligible: true },
+    ],
+  });
+
+  assert.deepEqual(summary, {
+    key: "lowInventoryFee",
+    label: "低库存费 MSKU",
+    status: "risk",
+    tone: "danger",
+    count: 1,
+    detail: "本周 1 个 MSKU 已进入低库存费区间。",
+    rows: [{ storeName: "xiamentanjia-US", country: "美国", msku: "fee-eligible" }],
+  });
+});
+
+test("lowInventoryFeeInspectionError returns the low inventory fee error contract", () => {
+  assert.deepEqual(lowInventoryFeeInspectionError(new Error("dashboard unavailable")), {
+    key: "lowInventoryFee",
+    label: "低库存费 MSKU",
+    status: "error",
+    tone: "danger",
+    count: 0,
+    detail: "dashboard unavailable",
+    rows: [],
+  });
+});
+
+test("lowInventoryFeeInspectionError uses the fallback detail without an error object", () => {
+  const summary = lowInventoryFeeInspectionError(undefined);
+
+  assert.equal(summary.status, "error");
+  assert.equal(summary.count, 0);
+  assert.equal(summary.detail, "低库存费看板读取失败");
+});
+
+test("low inventory fee risks require action without notifying store owners", () => {
+  const result = recomputeInspectionOverall({
+    feedback: { status: "ok", count: 0, rows: [] },
+    review: { status: "ok", count: 0, rows: [] },
+    voiceOfBuyer: { status: "ok", count: 0, rows: [] },
+    accountHealth: { status: "ok", count: 0, rows: [] },
+    erpBuyerMessages: { status: "ok", count: 0, rows: [] },
+    aftersalesMail: { status: "ok", count: 0, newCount: 0, rows: [] },
+    lowInventoryFee: buildLowInventoryFeeInspectionSummary({
+      rows: [{ storeName: "xiamentanjia-US", country: "美国", msku: "fee-eligible", amazonFeeEligible: true }],
+    }),
+  });
+
+  assert.equal(result.overallLabel, "需处理");
+  assert.equal(buildStoreInspectionMentionText(result, mentionConfig), "");
+  assert.deepEqual(storeInspectionMentionUserIds(result, mentionConfig), []);
+});
+
+test("mock store inspection uses the deterministic low inventory fee dashboard", async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "store-inspection-test-"));
+  const serviceUrl = path.join(process.cwd(), "src/services/storeInspectionService.js");
+  const script = [
+    `import { runStoreInspection } from ${JSON.stringify(serviceUrl)};`,
+    "const result = await runStoreInspection({ notify: false });",
+    "console.log(JSON.stringify(result.lowInventoryFee));",
+  ].join("\n");
+  try {
+    const { stdout } = await execFile(process.execPath, ["--input-type=module", "--eval", script], {
+      cwd: tempDir,
+      env: { ...process.env, DATA_PROVIDER: "mock" },
+    });
+    const lowInventoryFee = JSON.parse(stdout);
+
+    assert.equal(lowInventoryFee.status, "risk");
+    assert.equal(lowInventoryFee.count, 1);
+    assert.deepEqual(lowInventoryFee.rows, [{
+      storeName: "xiamentanjia-US",
+      country: "美国",
+      msku: "JM-DGC-BLUE",
+    }]);
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("buildStoreInspectionMarkdown reports fee-only stores without notifying their owners", () => {
+  const result = {
+    meta: {
+      storeCount: 1,
+      startDate: "2026-07-01",
+      endDate: "2026-07-01",
+      updatedAt: "2026/7/1 08:30:00",
+    },
+    feedback: { rows: [], storeStats: [] },
+    review: { rows: [], storeStats: [] },
+    voiceOfBuyer: { rows: [], storeStats: [] },
+    accountHealth: { rows: [], storeStats: [] },
+    erpBuyerMessages: { rows: [] },
+    aftersalesMail: { detail: "无待回复邮件。", newCount: 0, rows: [] },
+    lowInventoryFee: {
+      rows: [
+        { storeName: "xiamentanjia-US", country: "美国", msku: "FEE-2" },
+        { storeName: "xiamentanjia-US", country: "美国", msku: "FEE-1" },
+        { storeName: "xiamentanjia-US", country: "美国", msku: "FEE-2" },
+      ],
+    },
+  };
+
+  const markdown = buildStoreInspectionMarkdown(result, [], mentionConfig);
+
+  assert.match(markdown, /## xiamentanjia-US[\s\S]*- 本周低库存费 MSKU：FEE-2、FEE-1。/);
+  assert.equal(buildStoreInspectionMentionText(result, mentionConfig), "");
+  assert.deepEqual(storeInspectionMentionUserIds(result, mentionConfig), []);
+});
+
+test("buildStoreInspectionMarkdown names low inventory fee failures with their exact detail", () => {
+  const markdown = buildStoreInspectionMarkdown({
+    meta: {
+      storeCount: 0,
+      startDate: "2026-07-01",
+      endDate: "2026-07-01",
+      updatedAt: "2026/7/1 08:30:00",
+    },
+    feedback: { rows: [], storeStats: [] },
+    review: { rows: [], storeStats: [] },
+    voiceOfBuyer: { rows: [], storeStats: [] },
+    accountHealth: { rows: [], storeStats: [] },
+    erpBuyerMessages: { rows: [] },
+    aftersalesMail: { detail: "无待回复邮件。", newCount: 0, rows: [] },
+    lowInventoryFee: lowInventoryFeeInspectionError(new Error("低库存费看板请求超时")),
+  }, [], mentionConfig);
+
+  assert.match(markdown, /## 低库存费 MSKU 巡检失败/);
+  assert.match(markdown, /低库存费 MSKU 看板读取失败：低库存费看板请求超时/);
 });
 
 test("buildStoreInspectionMarkdown keeps Amazon station messages inside store sections", () => {
