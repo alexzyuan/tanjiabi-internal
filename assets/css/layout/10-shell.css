@@ -1249,6 +1249,20 @@ body:not(.login-body) .view .module-hero p {
   line-height: 1.5;
 }
 
+@media (max-width: 900px) {
+  body:not(.login-body) .view > .module-hero,
+  body:not(.login-body) .view .module-hero {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  body:not(.login-body) .view > .module-hero .hero-actions,
+  body:not(.login-body) .view .module-hero .hero-actions {
+    justify-content: flex-start;
+  }
+}
+
 /* Breadcrumb width and nav title consistency v1. */
 body:not(.login-body) .nav-group-title,
 html.os-windows body:not(.login-body) .nav-group-title {
@@ -2528,6 +2542,10 @@ body:not(.login-body) .home-panel-actions {
   align-items: center;
   justify-content: flex-end;
   gap: var(--spectrum-spacing-75);
+}
+
+body:not(.login-body) .topbar .world-clock {
+  display: flex;
 }
 
 /* Narrow shell safety override: keep the native app usable on phone-width screens. */

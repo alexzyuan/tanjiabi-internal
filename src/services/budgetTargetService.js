@@ -4,6 +4,7 @@ import path from "node:path";
 const uploadDir = path.join(process.cwd(), "uploads", "budget-targets");
 const summaryDir = path.join(process.cwd(), "data-cache", "budget-targets");
 const allowedExt = ".xlsx";
+const BUDGET_SUMMARY_SCHEMA_VERSION = 2;
 
 function isAppleDoubleFile(name = "") {
   return path.basename(String(name || "")).startsWith("._");
@@ -42,6 +43,13 @@ function parseNumber(value) {
     return Number.isFinite(parsed) ? parsed : 0;
   }
   return 0;
+}
+
+function parseOptionalNumber(value) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value !== "string" || value.trim() === "") return null;
+  const parsed = Number(value.replace(/,/g, "").trim());
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function normalizeText(value) {
@@ -146,22 +154,58 @@ function inferBudgetMonth(range = {}) {
   );
 }
 
-function summarizeBudgetTargetRows(rows = []) {
-  const totals = rows.reduce(
-    (acc, row) => {
-      acc.storeCount += 1;
-      acc.skuCount += row.skuCount || 0;
-      acc.salesTarget += row.salesTarget || 0;
-      acc.adBudget += row.adBudget || 0;
-      acc.refundTarget += row.refundTarget || 0;
-      acc.profitTarget += row.profitTarget || 0;
-      return acc;
-    },
-    { storeCount: 0, skuCount: 0, salesTarget: 0, adBudget: 0, refundTarget: 0, profitTarget: 0 },
-  );
+function normalizeRequestedBudgetMonth(value) {
+  const month = normalizeBudgetMonth(value);
+  if (!month) throw new Error("预算月份必须为 YYYY-MM");
+  return month;
+}
 
-  totals.acosTarget = totals.salesTarget ? totals.adBudget / totals.salesTarget : 0;
-  totals.profitRateTarget = totals.salesTarget ? totals.profitTarget / totals.salesTarget : 0;
+function normalizeRequestedTextList(values, label, normalizer = normalizeText) {
+  if (!Array.isArray(values)) {
+    throw new TypeError(`${label}必须是数组`);
+  }
+  return new Set(values.map(normalizer).filter(Boolean));
+}
+
+function normalizeBudgetCountryKey(value) {
+  const country = normalizeText(value).replace(/站$/, "");
+  return country === "澳大利亚" ? "澳洲" : country;
+}
+
+function normalizeBudgetContextMonths(range = {}) {
+  if (range.months !== undefined) {
+    if (!Array.isArray(range.months)) {
+      throw new TypeError("months必须是数组");
+    }
+    return new Set(range.months.map(normalizeRequestedBudgetMonth));
+  }
+
+  const hasLegacyMonthInput = [range.budgetMonth, range.startDate, range.endDate]
+    .some((value) => normalizeText(value));
+  if (!hasLegacyMonthInput) return new Set();
+
+  const month = inferBudgetMonth(range);
+  if (!month) throw new Error("预算月份必须为 YYYY-MM");
+  return new Set([month]);
+}
+
+function summarizeBudgetTargetRows(rows = []) {
+  const sumMetric = (field) => {
+    if (!rows.length) return 0;
+    const values = rows.map((row) => parseOptionalNumber(row[field]));
+    return values.some((value) => value === null) ? null : values.reduce((sum, value) => sum + value, 0);
+  };
+  const totals = {
+    storeCount: rows.length,
+    skuCount: rows.reduce((sum, row) => sum + (parseOptionalNumber(row.skuCount) ?? 0), 0),
+    salesTarget: sumMetric("salesTarget"),
+    adBudget: sumMetric("adBudget"),
+    refundTarget: sumMetric("refundTarget"),
+    profitTarget: sumMetric("profitTarget"),
+  };
+
+  totals.acosTarget = totals.salesTarget && totals.adBudget !== null ? totals.adBudget / totals.salesTarget : null;
+  totals.profitRateTarget = totals.salesTarget && totals.profitTarget !== null ? totals.profitTarget / totals.salesTarget : null;
   return totals;
 }
 
@@ -200,6 +244,18 @@ function sumByHeader(rows, headerMap, headerName, formulaFallback) {
     return typeof formulaFallback === "function" ? rows.reduce((sum, row) => sum + parseNumber(formulaFallback(row)), 0) : 0;
   }
   return rows.reduce((sum, row) => sum + parseNumber(row[index] ?? formulaFallback?.(row)), 0);
+}
+
+function sumByHeaderOptional(rows, headerMap, headerName, formulaFallback) {
+  const index = headerMap.get(headerName);
+  const values = rows.map((row) => {
+    const direct = index == null ? null : parseOptionalNumber(row[index]);
+    if (direct !== null) return direct;
+    return typeof formulaFallback === "function" ? parseOptionalNumber(formulaFallback(row)) : null;
+  });
+  return values.length && values.every((value) => value !== null)
+    ? values.reduce((sum, value) => sum + value, 0)
+    : null;
 }
 
 function readByHeader(row, headerMap, headerName) {
@@ -262,27 +318,55 @@ function readSummaryOriginalValue(rows, labels) {
   for (const target of normalizedLabels) {
     for (const row of rows) {
       if (normalizeMetricName(row?.[0]) !== target) continue;
-      return parseNumber(row?.[1]);
+      return parseOptionalNumber(row?.[1]);
     }
   }
 
   for (const target of normalizedLabels) {
     for (const row of rows) {
       const metricName = normalizeMetricName(row?.[0]);
-      if (metricName && metricName.includes(target)) return parseNumber(row?.[1]);
+      if (metricName && metricName.includes(target)) return parseOptionalNumber(row?.[1]);
     }
   }
 
-  return 0;
+  return null;
+}
+
+function firstPresent(...values) {
+  return values.find((value) => value !== null && value !== undefined) ?? null;
+}
+
+function normalizeBudgetCurrencyCode(value) {
+  const text = normalizeText(value).toUpperCase();
+  if (!text) return "";
+  if (["$", "US$", "美元", "美金"].includes(text)) return "USD";
+  const matched = text.match(/\b[A-Z]{3}\b/);
+  return matched ? matched[0] : "";
+}
+
+function findExplicitBudgetCurrencyCode(summaryRows, headers) {
+  for (const row of summaryRows.slice(0, 12)) {
+    for (let index = 0; index < Math.min(row.length, 8); index += 1) {
+      if (!/币种|currency/i.test(normalizeText(row[index]))) continue;
+      const code = normalizeBudgetCurrencyCode(row[index + 1]);
+      if (code) return code;
+    }
+  }
+  for (const header of headers) {
+    const text = normalizeText(header);
+    const parenthesized = text.match(/[（(]([A-Za-z]{3})[）)]/);
+    if (parenthesized) return parenthesized[1].toUpperCase();
+  }
+  return "";
 }
 
 function buildStoreSummaryTargets(summaryRows, fallback = {}) {
-  const salesTarget = readSummaryOriginalValue(summaryRows, ["销售收入"]) || readSummaryOriginalValue(summaryRows, ["销售收入净额"]) || fallback.salesTarget || 0;
-  const adBudget = readSummaryOriginalValue(summaryRows, ["广告费用"]) || fallback.adBudget || 0;
-  const refundTarget = readSummaryOriginalValue(summaryRows, ["退款金额"]) || fallback.refundTarget || 0;
-  const purchaseCost = readSummaryOriginalValue(summaryRows, ["商品采购成本"]) || fallback.purchaseCost || 0;
-  const shippingCost = readSummaryOriginalValue(summaryRows, ["头程运费"]) || fallback.shippingCost || 0;
-  const profitTarget = readSummaryOriginalValue(summaryRows, ["营业利润"]) || fallback.profitTarget || 0;
+  const salesTarget = firstPresent(readSummaryOriginalValue(summaryRows, ["销售收入"]), readSummaryOriginalValue(summaryRows, ["销售收入净额"]), fallback.salesTarget);
+  const adBudget = firstPresent(readSummaryOriginalValue(summaryRows, ["广告费用"]), fallback.adBudget);
+  const refundTarget = firstPresent(readSummaryOriginalValue(summaryRows, ["退款金额"]), fallback.refundTarget);
+  const purchaseCost = firstPresent(readSummaryOriginalValue(summaryRows, ["商品采购成本"]), fallback.purchaseCost);
+  const shippingCost = firstPresent(readSummaryOriginalValue(summaryRows, ["头程运费"]), fallback.shippingCost);
+  const profitTarget = firstPresent(readSummaryOriginalValue(summaryRows, ["营业利润"]), fallback.profitTarget);
   const netSales = readSummaryOriginalValue(summaryRows, ["销售收入净额"]);
   const platformFee = readSummaryOriginalValue(summaryRows, ["平台费用合计"]);
   const domesticExpense = readSummaryOriginalValue(summaryRows, ["国内支出费用合计"]);
@@ -297,8 +381,8 @@ function buildStoreSummaryTargets(summaryRows, fallback = {}) {
     netSales,
     platformFee,
     domesticExpense,
-    acosTarget: salesTarget ? adBudget / salesTarget : 0,
-    profitRateTarget: salesTarget ? profitTarget / salesTarget : 0,
+    acosTarget: salesTarget && adBudget !== null ? adBudget / salesTarget : null,
+    profitRateTarget: salesTarget && profitTarget !== null ? profitTarget / salesTarget : null,
   };
 }
 
@@ -350,6 +434,25 @@ async function parseBudgetWorkbook(filePath, fileName, storedName, selectedMonth
   const qtyIndex = headerMap.get("销售数量");
   const discountIndex = headerMap.get("单个折扣($)");
 
+  const optionalSalesTarget = sumByHeaderOptional(dataRows, headerMap, "销额($)", (row) => {
+    const price = parseOptionalNumber(row[priceIndex]);
+    const quantity = parseOptionalNumber(row[qtyIndex]);
+    return price === null || quantity === null ? null : price * quantity;
+  });
+  const optionalRefundTarget = sumByHeaderOptional(dataRows, headerMap, "退款金额($)");
+  const optionalAdBudget = sumByHeaderOptional(dataRows, headerMap, "广告费用($)");
+  const optionalDiscountTarget = sumByHeaderOptional(dataRows, headerMap, "折扣总额($)", (row) => {
+    const discount = parseOptionalNumber(row[discountIndex]);
+    const quantity = parseOptionalNumber(row[qtyIndex]);
+    return discount === null || quantity === null ? null : discount * quantity;
+  });
+  const optionalFbaFee = sumByHeaderOptional(dataRows, headerMap, "FBA配送费($)");
+  const optionalPurchaseCost = sumByHeaderOptional(dataRows, headerMap, "总成本($)");
+  const optionalShippingCost = sumByHeaderOptional(dataRows, headerMap, "总头程费用($)");
+  const optionalStorageFee = sumByHeaderOptional(dataRows, headerMap, "仓储费（$）");
+  const optionalLongTermStorageFee = sumByHeaderOptional(dataRows, headerMap, "长期仓储费（$）");
+  const optionalCouponCommission = sumByHeaderOptional(dataRows, headerMap, "优惠券佣金（$）");
+
   const salesTarget = sumByHeader(dataRows, headerMap, "销额($)", (row) => parseNumber(row[priceIndex]) * parseNumber(row[qtyIndex]));
   const discountTarget = sumByHeader(dataRows, headerMap, "折扣总额($)", (row) => parseNumber(row[discountIndex]) * parseNumber(row[qtyIndex]));
   const refundTarget = sumByHeader(dataRows, headerMap, "退款金额($)");
@@ -367,17 +470,30 @@ async function parseBudgetWorkbook(filePath, fileName, storedName, selectedMonth
   const netSales = salesTarget - discountTarget - refundTarget + salesTarget * 0.0025;
   const platformFee = adBudget + couponCommission + salesTarget * 0.15 + fbaFee + storageFee;
   const profitTarget = netSales - purchaseCost - platformFee - shippingCost;
+  const profitDependencies = [
+    optionalSalesTarget,
+    optionalDiscountTarget,
+    optionalRefundTarget,
+    optionalAdBudget,
+    optionalFbaFee,
+    optionalPurchaseCost,
+    optionalShippingCost,
+    optionalStorageFee,
+    optionalLongTermStorageFee,
+    optionalCouponCommission,
+  ];
   const storeTargets = buildStoreSummaryTargets(summaryRows, {
-    salesTarget,
-    adBudget,
-    refundTarget,
+    salesTarget: optionalSalesTarget,
+    adBudget: optionalAdBudget,
+    refundTarget: optionalRefundTarget,
     purchaseCost,
     shippingCost,
-    profitTarget,
+    profitTarget: profitDependencies.every((value) => value !== null) ? profitTarget : null,
   });
   const month = parseMonth(fileName, summaryRows, selectedMonth);
   const platform = storeName.includes("Tik Tok") ? "Tik Tok" : "Amazon";
   const site = inferSite(storeName);
+  const currencyCode = findExplicitBudgetCurrencyCode(summaryRows, headers);
   const mskuRows = dataRows.map((row) => {
     const rowSalesTarget = parseNumber(readByHeader(row, headerMap, "销额($)")) || parseNumber(row[priceIndex]) * parseNumber(row[qtyIndex]);
     const rowDiscountTarget = parseNumber(readByHeader(row, headerMap, "折扣总额($)")) || parseNumber(readByHeader(row, headerMap, "单个折扣($)")) * parseNumber(row[qtyIndex]);
@@ -400,6 +516,7 @@ async function parseBudgetWorkbook(filePath, fileName, storedName, selectedMonth
       platform,
       storeName,
       site,
+      currencyCode,
       skuOwner: normalizeText(readByHeader(row, headerMap, "SKU负责人")),
       msku: normalizeText(readByHeader(row, headerMap, "MSKU")),
       asin: normalizeText(readByHeader(row, headerMap, "ASIN")),
@@ -429,6 +546,7 @@ async function parseBudgetWorkbook(filePath, fileName, storedName, selectedMonth
     platform,
     storeName,
     site,
+    currencyCode,
     skuCount: dataRows.length,
     salesQty,
     shipmentQty,
@@ -446,6 +564,7 @@ async function parseBudgetWorkbook(filePath, fileName, storedName, selectedMonth
     profitRateTarget: storeTargets.profitRateTarget,
     mskuRows,
     parsedAt: new Date().toISOString(),
+    schemaVersion: BUDGET_SUMMARY_SCHEMA_VERSION,
   };
 }
 
@@ -591,7 +710,11 @@ export async function listBudgetUploads() {
           };
 
           let summary = await readSummary(name);
-          if (!summary || summary.status !== "已解析" || !Array.isArray(summary.mskuRows)) {
+          if (!summary
+            || summary.status !== "已解析"
+            || !Array.isArray(summary.mskuRows)
+            || summary.schemaVersion !== BUDGET_SUMMARY_SCHEMA_VERSION
+            || !Object.hasOwn(summary, "currencyCode")) {
             summary = await parseAndSaveBudgetUpload(upload);
           }
           return {
@@ -619,14 +742,22 @@ export async function listBudgetTargets() {
 }
 
 export async function getBudgetTargetContext(range = {}) {
-  const budgetMonth = inferBudgetMonth(range);
+  if (!range || typeof range !== "object" || Array.isArray(range)) {
+    throw new TypeError("预算筛选条件必须是对象");
+  }
+  const monthSet = normalizeBudgetContextMonths(range);
+  const storeSet = normalizeRequestedTextList(range.storeNames ?? [], "storeNames");
+  const countrySet = normalizeRequestedTextList(range.countries ?? [], "countries", normalizeBudgetCountryKey);
   const targets = await listBudgetTargets();
-  const rows = budgetMonth
-    ? targets.rows.filter((row) => normalizeBudgetMonth(row.month) === budgetMonth)
-    : targets.rows;
+  const rows = targets.rows.filter((row) =>
+    (!monthSet.size || monthSet.has(normalizeBudgetMonth(row.month)))
+    && (!storeSet.size || storeSet.has(normalizeText(row.storeName)))
+    && (!countrySet.size || countrySet.has(normalizeBudgetCountryKey(row.site))),
+  );
 
   return {
-    month: budgetMonth,
+    month: monthSet.size === 1 ? [...monthSet][0] : "",
+    months: [...monthSet],
     rows,
     totals: summarizeBudgetTargetRows(rows),
     matched: rows.length > 0,

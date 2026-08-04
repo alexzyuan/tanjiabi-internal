@@ -2,6 +2,122 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+test("store operating monthly report is a finance-owned feature with shared controls and table management", async () => {
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const appSource = await readFile(new URL("../app.js", import.meta.url), "utf8");
+  const featureSource = await readFile(new URL("../assets/js/features/store-operating-monthly-report.js", import.meta.url), "utf8");
+  const breadcrumbSource = await readFile(new URL("../assets/js/features/breadcrumb-shell.js", import.meta.url), "utf8");
+  const budgetSource = await readFile(new URL("../assets/js/features/budget-targets.js", import.meta.url), "utf8");
+
+  const financeGroup = indexSource.slice(
+    indexSource.indexOf('<section class="nav-group" aria-label="财务"'),
+    indexSource.indexOf('<section class="nav-group" aria-label="知识库"'),
+  );
+  assert.match(financeGroup, /data-view="store-operating-monthly-report"/);
+  assert.match(financeGroup, />店铺经营月报</);
+  assert.match(indexSource, /id="view-store-operating-monthly-report"/);
+  assert.match(indexSource, /id="store-operating-report-store" multiple/);
+  assert.match(indexSource, /id="store-operating-report-country" multiple/);
+  assert.match(indexSource, /id="store-operating-report-table"[^>]*data-table-key="store-operating-monthly-report"/);
+  assert.match(indexSource, /<th data-column-key="category">分类<\/th>/);
+  assert.match(indexSource, /<th data-column-key="name">名称<\/th>/);
+  assert.match(indexSource, /<th data-column-key="actual" data-column-kind="number" data-column-profile="money-rate">实际完成值<\/th>/);
+  assert.match(indexSource, /<th data-column-key="budget" data-column-kind="number" data-column-profile="money-rate">预算值<\/th>/);
+
+  assert.match(appSource, /import \{ createStoreOperatingMonthlyReportFeature \} from "\.\/assets\/js\/features\/store-operating-monthly-report\.js/);
+  assert.match(appSource, /createStoreOperatingMonthlyReportFeature\(\{/);
+  assert.match(appSource, /normalizeCountryName,\n  pickSellerCountry,\n  pickSellerName,\n  refreshTable,/);
+  assert.match(appSource, /view === "store-operating-monthly-report"/);
+  assert.match(appSource, /loadStoreOperatingMonthlyReport\(\)/);
+  assert.match(appSource, /initializeStoreOperatingMonthlyReportDefaults\(\)/);
+  assert.match(appSource, /setupStoreOperatingMonthlyReport\(\)/);
+  assert.match(appSource, /new URLSearchParams\(location\.search\)\.get\("view"\)/);
+  assert.match(appSource, /clickVisibleNavItem\(requestedView\)/);
+  assert.match(featureSource, /refreshTable\(query\("#store-operating-report-table"\)\)/);
+  assert.equal(appSource.includes("function renderStoreOperatingMonthlyReport"), false);
+  assert.equal(appSource.includes('bind(document, "#store-operating-report'), false);
+
+  assert.match(breadcrumbSource, /"store-operating-monthly-report": \["首页", "财务", "店铺经营月报"\]/);
+  assert.match(budgetSource, /budgetMonths/);
+  assert.match(budgetSource, /budgetStores/);
+  assert.match(budgetSource, /budgetCountries/);
+});
+
+test("monthly report delegates widths to shared tooling and sorts hierarchy blocks safely", async () => {
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const css = await readFile(new URL("../assets/css/pages/56-store-operating-monthly-report.css", import.meta.url), "utf8");
+  const generatedCss = await readFile(new URL("../styles.css", import.meta.url), "utf8");
+  const shellCss = await readFile(new URL("../assets/css/layout/10-shell.css", import.meta.url), "utf8");
+  const shellParityCss = await readFile(new URL("../assets/css/legacy/98-shell-topbar-parity.css", import.meta.url), "utf8");
+
+  assert.match(indexSource, /data-table-key="store-operating-monthly-report"/);
+  assert.equal((indexSource.match(/data-column-sortable="false"/g) || []).length, 0);
+  assert.match(indexSource, /data-table-key="store-operating-monthly-report"/);
+  assert.match(css, /tr\[data-report-row-level="0"\]/);
+  assert.doesNotMatch(css, /module-hero/);
+  assert.match(shellCss, /\/\* Nested module hero and breadcrumb specificity fix v1\. \*\/[\s\S]*@media \(max-width: 900px\) \{[\s\S]*\.view > \.module-hero,[\s\S]*\.view \.module-hero \{[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
+  assert.match(shellCss, /body:not\(\.login-body\) \.topbar \.world-clock \{\n  display: flex;\n\}/);
+  assert.ok(
+    shellCss.indexOf("body:not(.login-body) .topbar .world-clock {\n  display: flex;\n}")
+      < shellCss.indexOf("@media (max-width: 620px)"),
+    "the narrow viewport hide rule must override the desktop world-clock display",
+  );
+  assert.match(generatedCss, /#view-store-operating-monthly-report tr\[data-report-row-level="0"\]>/);
+  const generatedDesktopClock = "body:not(.login-body) .topbar .world-clock{display:flex}";
+  const generatedNarrowBreakpoint = "@media(max-width:620px){";
+  const generatedNarrowClock = "body:not(.login-body) .topbar .world-clock{display:none}";
+  const generatedNestedHeroTwoColumns = "body:not(.login-body) .view .module-hero{display:grid;grid-template-columns:minmax(0,1fr) auto";
+  const generatedSharedHeroOneColumn = "@media(max-width:900px){body:not(.login-body) .view>.module-hero,body:not(.login-body) .view .module-hero{grid-template-columns:minmax(0,1fr)";
+  const desktopClockIndex = generatedCss.indexOf(generatedDesktopClock);
+  const narrowBreakpointIndex = generatedCss.indexOf(generatedNarrowBreakpoint);
+  const narrowClockIndex = generatedCss.indexOf(generatedNarrowClock, narrowBreakpointIndex);
+  const nestedHeroTwoColumnsIndex = generatedCss.indexOf(generatedNestedHeroTwoColumns);
+  const sharedHeroOneColumnIndex = generatedCss.indexOf(generatedSharedHeroOneColumn);
+
+  assert.notEqual(desktopClockIndex, -1, "generated CSS must retain the desktop world-clock flex layout");
+  assert.notEqual(narrowClockIndex, -1, "generated CSS must hide the world clock at 620px");
+  assert.ok(desktopClockIndex < narrowBreakpointIndex && narrowBreakpointIndex < narrowClockIndex);
+  assert.doesNotMatch(
+    generatedCss.slice(narrowClockIndex + generatedNarrowClock.length),
+    /body:not\(\.login-body\) \.topbar \.world-clock\{[^}]*display:flex/,
+    "no later generated rule may re-enable the world clock after the 620px hide rule",
+  );
+  assert.notEqual(nestedHeroTwoColumnsIndex, -1, "generated CSS must retain the shared desktop Hero layout");
+  assert.notEqual(sharedHeroOneColumnIndex, -1, "generated CSS must retain the shared 900px Hero layout");
+  assert.ok(nestedHeroTwoColumnsIndex < sharedHeroOneColumnIndex);
+  assert.doesNotMatch(
+    generatedCss.slice(sharedHeroOneColumnIndex + generatedSharedHeroOneColumn.length),
+    /body:not\(\.login-body\) \.view(?:>| )\.module-hero\{[^}]*grid-template-columns:minmax\(0,1fr\) auto/,
+    "no later generated Hero rule may reset the shared 900px single-column layout",
+  );
+  const worldClockParityRule = shellParityCss.slice(
+    shellParityCss.indexOf("body:not(.login-body) .topbar .world-clock"),
+    shellParityCss.indexOf("body:not(.login-body) .world-clock span", shellParityCss.indexOf("body:not(.login-body) .topbar .world-clock")),
+  );
+  assert.doesNotMatch(worldClockParityRule, /display:\s*flex\s*!important/);
+  assert.equal(/(?:th|td):nth-child\([^)]*\)\s*\{[^}]*\b(?:width|min-width)\s*:/.test(css), false);
+  assert.equal(/\.store-operating[^,{]*\{[^}]*min-width\s*:/.test(css), false);
+});
+
+test("browser CSS cascade runner is pinned, bounded, and included in CI", async () => {
+  const packageSource = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  const browserRunner = await readFile(new URL("../scripts/verify-store-operating-monthly-report-css-browser.js", import.meta.url), "utf8");
+  const ciSource = await readFile(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
+
+  assert.equal(packageSource.devDependencies["@playwright/cli"], "0.1.17");
+  assert.match(packageSource.scripts.test, /test:store-operating-css-browser/);
+  assert.match(browserRunner, /node_modules", "\.bin", process\.platform === "win32" \? "playwright-cli\.cmd" : "playwright-cli"/);
+  assert.match(browserRunner, /"--browser=chromium"/);
+  assert.match(browserRunner, /NO_UPDATE_NOTIFIER: "1"/);
+  assert.match(browserRunner, /const testDeadline = Date\.now\(\) \+ 45_000/);
+  assert.match(browserRunner, /close reported success but daemon/);
+  assert.match(browserRunner, /waitForDaemonExit\(Date\.now\(\) \+ cleanupTimeoutMs\)/);
+  assert.match(browserRunner, /await stopBrowserDaemon\(errors\)/);
+  assert.match(browserRunner, /process\.kill\(browserDaemonPid, "SIGKILL"\)/);
+  assert.match(browserRunner, /clearTimeout\(timeoutId\)/);
+  assert.match(ciSource, /\.\/node_modules\/\.bin\/playwright install --with-deps chromium/);
+});
+
 test("index.html startup health check centralizes sync tone class switching", async () => {
   const source = await readFile(new URL("../index.html", import.meta.url), "utf8");
   const healthStart = source.indexOf("window.__tanjiaBasicNavigationReady = true;");

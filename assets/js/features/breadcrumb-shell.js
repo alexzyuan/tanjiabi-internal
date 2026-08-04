@@ -41,6 +41,7 @@ export function createBreadcrumbShellFeature({
     "supplier-detail": ["首页", "采购", "供应商明细"],
     payables: ["首页", "采购", "应付账款"],
     cashflow: ["首页", "财务", "平台回款"],
+    "store-operating-monthly-report": ["首页", "财务", "店铺经营月报"],
     guide: ["首页", "知识库"],
     admin: ["首页", "设置", "后台管理"],
     sync: ["首页", "设置", "同步中心"],

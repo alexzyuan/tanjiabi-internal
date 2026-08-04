@@ -14,6 +14,22 @@ const lingxingTestConfig = {
   appSecret: "secret",
 };
 
+test("normalized order profit keeps currency and Lingxing rate metadata", () => {
+  const adapter = new LingxingAdapter(lingxingTestConfig);
+  const [row] = adapter.normalizeMskuOrderProfitRecords([{
+    sid: 1,
+    amount: 10,
+    net_amount: 9,
+    currency_code: "USD",
+    amount_cny: 72,
+    exchange_rate: 7.2,
+  }], [{ sid: 1, name: "Amazon-US", country: "美国" }]);
+
+  assert.equal(row.currencyCode, "USD");
+  assert.equal(row.cnyAmount, 72);
+  assert.equal(row.exchangeRate, 7.2);
+});
+
 test("filterCoreSellers includes JOI MEW Germany stores", () => {
   const sellers = filterCoreSellers([
     { name: "JOI MEW-US", country: "美国", countryCode: "US" },
@@ -168,6 +184,61 @@ test("LingxingAdapter sends exclusive end date to Lingxing without mutating UI f
   assert.equal(calls[0].endpoint, "/basicOpen/finance/mreport/OrderProfit");
   assert.equal(calls[0].params.startDate, "2026-07-01");
   assert.equal(calls[0].params.endDate, "2026-07-15");
+});
+
+test("LingxingAdapter paginates order profit until the upstream total is exhausted", async () => {
+  const adapter = new LingxingAdapter(lingxingTestConfig);
+  const calls = [];
+  adapter.performSignedRequest = async (_endpoint, options) => {
+    calls.push(options.params);
+    const offset = options.params.offset;
+    return {
+      code: 0,
+      data: {
+        records: Array.from({ length: offset === 0 ? 5000 : 2 }, (_, index) => ({ id: offset + index })),
+        total: 5002,
+      },
+    };
+  };
+
+  const payload = await adapter.fetchMskuOrderProfit({ startDate: "2026-07-01", endDate: "2026-07-31" });
+
+  assert.deepEqual(calls.map(({ offset, length }) => ({ offset, length })), [
+    { offset: 0, length: 5000 },
+    { offset: 5000, length: 5000 },
+  ]);
+  assert.equal(adapter.normalizeRecordList(payload).length, 5002);
+});
+
+test("LingxingAdapter fails observably instead of truncating order profit at its safety cap", async () => {
+  const adapter = new LingxingAdapter({ ...lingxingTestConfig, orderProfitMaxRows: 5000 });
+  adapter.performSignedRequest = async () => ({
+    code: 0,
+    data: { records: Array.from({ length: 5000 }, (_, id) => ({ id })), total: 5001 },
+  });
+
+  await assert.rejects(
+    () => adapter.fetchMskuOrderProfit({ startDate: "2026-07-01", endDate: "2026-07-31" }),
+    (error) => error.endpoint === "/basicOpen/finance/mreport/OrderProfit"
+      && error.details?.fetchedRows === 5000
+      && /安全上限/.test(error.message),
+  );
+});
+
+test("LingxingAdapter continues after a short page when upstream pagination metadata says more rows exist", async () => {
+  const adapter = new LingxingAdapter(lingxingTestConfig);
+  const calls = [];
+  adapter.performSignedRequest = async (_endpoint, options) => {
+    calls.push(options.params);
+    const offset = options.params.offset;
+    if (offset === 0) return { code: 0, data: { records: [{ id: 1 }], total: 2, hasNext: true } };
+    return { code: 0, data: { records: [{ id: 2 }], total: 2, hasNext: false } };
+  };
+
+  const payload = await adapter.fetchMskuOrderProfit({ startDate: "2026-07-01", endDate: "2026-07-31" });
+
+  assert.deepEqual(calls.map(({ offset }) => offset), [0, 1]);
+  assert.equal(adapter.normalizeRecordList(payload).length, 2);
 });
 
 test("LingxingAdapter applies exclusive end_date to FBA shipment list at the API boundary", async () => {

@@ -45,6 +45,8 @@ test("route table requires every API route to declare auth", () => {
 
   assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/dashboard/payables")?.auth, "finance");
   assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/dashboard/supplier-board")?.auth, "finance");
+  assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/finance/store-operating-monthly-report")?.auth, "finance");
+  assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/finance/store-operating-monthly-report/export")?.auth, "finance");
   assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/purchase/supplier-details")?.auth, "session");
   assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/admin/budget/uploads")?.auth, "session");
   assert.equal(routes.find((route) => route.method === "POST" && route.path === "/api/admin/budget/upload")?.auth, "session");

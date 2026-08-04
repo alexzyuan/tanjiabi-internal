@@ -48,6 +48,7 @@ import { createAiImageWorkflowFeature } from "./assets/js/features/ai-image-work
 import { createAdminSettingsFeature } from "./assets/js/features/admin-settings.js?v=20260706-frontend-refactor-v1";
 import { createWebhookAssistantFeature } from "./assets/js/features/webhook-assistant.js?v=20260720-webhook-assistant-v1";
 import { createBudgetTargetsFeature } from "./assets/js/features/budget-targets.js?v=20260706-frontend-refactor-v1";
+import { createStoreOperatingMonthlyReportFeature } from "./assets/js/features/store-operating-monthly-report.js?v=20260803-store-operating-monthly-report-v3";
 import { createSyncCenterFeature } from "./assets/js/features/sync-center.js?v=20260706-frontend-refactor-v1";
 import { createFbaFreightFeature } from "./assets/js/features/fba-freight.js?v=20260717-shared-logistics-channels";
 import { createFbaShipmentVarianceFeature } from "./assets/js/features/fba-shipment-variance.js?v=20260803-shipment-variance-v1";
@@ -217,6 +218,7 @@ let setupAdPerformanceReview = () => {};
 let applyFactoryInventorySort = () => {};
 let applyMskuDetailSort = () => {};
 let applySupplierBoardSort = () => {};
+let applyStoreOperatingMonthlyReportSort = () => {};
 let calculateReviewRating = () => {};
 let closeKnowledgeExternalDocument = () => {};
 let collapseSidebar = () => {};
@@ -233,6 +235,7 @@ let loadAftersalesDashboard = async () => {};
 let loadAftersalesMailDashboard = async () => {};
 let loadBudgetUploads = async () => {};
 let loadBudgetTargets = async () => {};
+let loadStoreOperatingMonthlyReport = async () => {};
 let loadCashflowDashboard = async () => {};
 let loadSlowMovingRiskView = async () => {};
 let loadInventoryProvision = async () => {};
@@ -275,6 +278,7 @@ let setupAdminSettings = () => {};
 let setupWebhookAssistant = () => {};
 let setupBreadcrumbNavigation = () => {};
 let setupBudgetTargets = () => {};
+let setupStoreOperatingMonthlyReport = () => {};
 let setupFbaFreight = () => {};
 let setupFbaShipmentVariance = () => {};
 let setupFreightRatesDashboard = () => {};
@@ -286,6 +290,7 @@ let setupSidebarShell = () => {};
 let setupSyncCenter = () => {};
 let setupStoreInspectionModule = () => {};
 let initializeBudgetDefaults = () => {};
+let initializeStoreOperatingMonthlyReportDefaults = () => {};
 let loadDingtalkAuthUsers = async () => {};
 let setDefaultAftersalesDates = () => {};
 let setupAftersalesDashboard = () => {};
@@ -340,6 +345,7 @@ let loadAuthStatus = async () => ({ enabled: false, authenticated: true });
 let setupAuthShell = () => {};
 let setupTableSortBridge = () => {};
 let setupDataTables = () => {};
+let refreshTable = () => null;
 let makeUnavailableDashboard = (message) => ({
   meta: { syncStatus: message },
   kpis: [],
@@ -358,9 +364,10 @@ let makeUnavailableDashboard = (message) => ({
   getApplyFactoryInventorySort: () => applyFactoryInventorySort,
   getApplyMskuDetailSort: () => applyMskuDetailSort,
   getApplySupplierBoardSort: () => applySupplierBoardSort,
+  getApplyStoreOperatingMonthlyReportSort: () => applyStoreOperatingMonthlyReportSort,
   setTableSortState,
 }));
-({ setupDataTables } = createDataTableManager({
+({ refreshTable, setupDataTables } = createDataTableManager({
   root: document,
   windowRef: window,
 }));
@@ -735,11 +742,39 @@ async function refreshDashboardFromFilters() {
   formatNumber,
   formatPercent,
   getPacificDateParts,
+  locationRef: location,
   renderTableMessage,
   readFileAsBase64,
   setButtonBusy,
   setText,
   trimmedFieldValue,
+}));
+
+({
+  applyStoreOperatingMonthlyReportSort,
+  initializeStoreOperatingMonthlyReportDefaults,
+  loadStoreOperatingMonthlyReport,
+  setupStoreOperatingMonthlyReport,
+} = createStoreOperatingMonthlyReportFeature({
+  root: document,
+  bind,
+  clickVisibleNavItem,
+  downloadBlob,
+  escapeHtml,
+  fetchImpl: fetch.bind(window),
+  formatActualMoney,
+  getStoreOptions: getFrontShopSellers,
+  historyRef: history,
+  locationRef: location,
+  normalizeCountryName,
+  pickSellerCountry,
+  pickSellerName,
+  refreshTable,
+  selectedFilterValues,
+  setButtonBusy,
+  setSelectOptions,
+  setText,
+  syncAllOptionSelection,
 }));
 
 ({ renderTopbarSyncStatus, syncToneClasses, updateWorldClock } = createTopbarStatusFeature({
@@ -1056,6 +1091,7 @@ function setupNavigation() {
     provision: "",
     lowfee: "",
     cashflow: "",
+    "store-operating-monthly-report": "",
     payables: "",
     guide: "",
     budget: "",
@@ -1073,7 +1109,7 @@ function setupNavigation() {
     if (!isVisibleElement(button)) return;
     const view = button.dataset.view;
     const currentAuthUser = getCurrentAuthUser();
-    if (view === "cashflow" && !canAccessFinance(currentAuthUser)) {
+    if (["cashflow", "store-operating-monthly-report"].includes(view) && !canAccessFinance(currentAuthUser)) {
       applyAuthVisibility(currentAuthUser);
       document.querySelector('.nav-item[data-view="home"]')?.click();
       return;
@@ -1153,6 +1189,10 @@ function setupNavigation() {
       setDefaultCashflowDates();
       await loadCashflowDashboard();
     }
+    if (view === "store-operating-monthly-report") {
+      initializeStoreOperatingMonthlyReportDefaults();
+      await loadStoreOperatingMonthlyReport();
+    }
     if (view === "payables") {
       await loadPayablesDashboard();
     }
@@ -1225,6 +1265,7 @@ function setupNavigation() {
   setupTableSortBridge();
   setupAdminSettings();
   setupWebhookAssistant();
+  setupStoreOperatingMonthlyReport();
 
   setupSyncCenter();
   setupFbaFreight();
@@ -1236,6 +1277,12 @@ function setupNavigation() {
   setupFbaTaskForm();
   setupBudgetTargets();
 
+}
+
+function openRequestedViewFromLocation() {
+  const requestedView = new URLSearchParams(location.search).get("view");
+  if (!["store-operating-monthly-report", "budget"].includes(requestedView)) return null;
+  return clickVisibleNavItem(requestedView);
 }
 
 async function init() {
@@ -1257,6 +1304,7 @@ async function init() {
   }
   const authState = await loadAuthStatus({ redirectIfNeeded: true });
   if (authState?.enabled && !authState.authenticated) return;
+  openRequestedViewFromLocation();
   renderHomeQuickLinks();
   resetFrontDateRange();
   renderDashboard(makeUnavailableDashboard("正在读取销售看板真实数据，请稍候。"));
@@ -1268,6 +1316,7 @@ async function init() {
   });
   syncSalesToolbarVisibility(salesActive);
   initializeBudgetDefaults();
+  initializeStoreOperatingMonthlyReportDefaults();
   const pulseDateInput = document.querySelector("#pulse-date");
   if (pulseDateInput && !pulseDateInput.value) pulseDateInput.value = getFrontDateEnd();
   setDefaultInventoryProvisionDate();
@@ -1280,7 +1329,8 @@ async function init() {
       renderDashboard(makeUnavailableDashboard(`销售看板初始化失败：${error.message}`));
     });
 
-  Promise.allSettled([loadSyncStatus(), loadLingxingShops()]);
+  Promise.allSettled([loadSyncStatus(), loadLingxingShops()])
+    .then(() => initializeStoreOperatingMonthlyReportDefaults());
 
   Promise.allSettled([
     loadAdminOverview(),

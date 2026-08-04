@@ -127,6 +127,10 @@
               <span class="nav-group-caret" aria-hidden="true">⌄</span>
             </button>
             <button class="nav-item" data-view="cashflow"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16v11H4z"/><path d="M7 7V5h10v2"/><path d="M16 13h4"/></svg></span><span class="nav-label">平台回款</span></button>
+            <button class="nav-item" data-view="store-operating-monthly-report">
+              <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5z"/><path d="M8 8h8"/><path d="M8 12h8"/><path d="M8 16h5"/></svg></span>
+              <span class="nav-label">店铺经营月报</span>
+            </button>
           </section>
           <section class="nav-group" aria-label="知识库">
             <button class="nav-group-title" type="button" aria-expanded="false">
@@ -814,6 +818,49 @@
               </div>
             </article>
           </section>
+        </section>
+
+        <section class="view" id="view-store-operating-monthly-report">
+          <section class="module-hero">
+            <div>
+              <span>财务</span>
+              <h2>店铺经营月报</h2>
+              <p id="store-operating-report-meta">等待读取经营数据。</p>
+            </div>
+            <div class="hero-actions">
+              <button class="ghost-button" id="store-operating-report-export" type="button" disabled>导出 Excel</button>
+              <button class="primary-button" id="store-operating-report-budget" type="button">查看预算目标</button>
+            </div>
+          </section>
+          <section class="filters" aria-label="店铺经营月报筛选">
+            <label>开始月份<input id="store-operating-report-start-month" type="month" /></label>
+            <label>结束月份<input id="store-operating-report-end-month" type="month" /></label>
+            <label>店铺<select id="store-operating-report-store" multiple size="4"><option value="">全部店铺</option></select></label>
+            <label>国家<select id="store-operating-report-country" multiple size="3"><option value="">全部国家</option></select></label>
+            <button class="primary-button" id="store-operating-report-query" type="button">查询</button>
+            <button class="ghost-button" id="store-operating-report-reset" type="button">重置</button>
+          </section>
+          <article class="panel detail-panel">
+            <div class="panel-head">
+              <h2>经营损益矩阵</h2>
+              <p id="store-operating-report-status" role="status" aria-live="polite">等待查询。</p>
+            </div>
+            <div class="table-wrap store-operating-report-table-wrap">
+              <table class="data-table" id="store-operating-report-table" data-table-key="store-operating-monthly-report">
+                <thead id="store-operating-report-head">
+                  <tr>
+                    <th data-column-key="category">分类</th>
+                    <th data-column-key="name">名称</th>
+                    <th data-column-key="actual" data-column-kind="number" data-column-profile="money-rate">实际完成值</th>
+                    <th data-column-key="share" data-column-kind="number" data-column-profile="money-rate">占比</th>
+                    <th data-column-key="budget" data-column-kind="number" data-column-profile="money-rate">预算值</th>
+                    <th data-column-key="achievement" data-column-kind="number" data-column-profile="money-rate">达成率</th>
+                  </tr>
+                </thead>
+                <tbody id="store-operating-report-body"><tr><td colspan="6">等待查询。</td></tr></tbody>
+              </table>
+            </div>
+          </article>
         </section>
 
         <section class="view" id="view-payables">
