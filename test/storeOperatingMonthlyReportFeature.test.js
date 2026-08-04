@@ -261,7 +261,34 @@ test("successful rendering refreshes the shared managed table and writes filter 
   assert.match(elements["#store-operating-report-body"].innerHTML, /销售收入净额/);
 });
 
-test("hierarchy renders expanded disclosure buttons and collapse keeps profit rows visible", async () => {
+test("monthly report uses an 上级 column and collapses subtotal details by default", async () => {
+  const subtotal = {
+    key: "revenue",
+    category: "销售收入",
+    name: "销售收入",
+    level: 1,
+    actual: 100,
+    children: ["sales-income", "sales-discount"],
+    available: true,
+  };
+  const details = [
+    { key: "sales-income", category: "销售收入", name: "销售收入", level: 2, actual: 120, share: 1.2, available: true },
+    { key: "sales-discount", category: "销售收入", name: "销售折扣", level: 2, actual: 20, share: 0.2, available: true },
+  ];
+  const { feature, elements } = makeFeatureHarness({
+    groups: [{ currencyCode: "USD", currencyAvailable: true, rows: [subtotal, ...details] }],
+  });
+
+  await feature.loadStoreOperatingMonthlyReport();
+
+  assert.match(elements["#store-operating-report-head"].innerHTML, /data-column-key="category"[^>]*>上级<\/th>/);
+  assert.match(elements["#store-operating-report-head"].innerHTML, /data-column-key="name"[^>]*>名称<\/th>/);
+  assert.match(elements["#store-operating-report-body"].innerHTML, /data-report-category-toggle="revenue"[^>]*aria-expanded="false"/);
+  assert.match(elements["#store-operating-report-body"].innerHTML, /销售收入小计/);
+  assert.doesNotMatch(elements["#store-operating-report-body"].innerHTML, /data-report-row-key="sales-income"/);
+});
+
+test("hierarchy renders collapsed subtotals and expands their detail rows", async () => {
   const category = { key: "sales-profit-category", category: "销售利润", name: "销售利润", level: 1, children: ["sales-profit"], available: false };
   const profit = { key: "sales-profit", category: "销售利润", name: "销售利润", level: 2, actual: -6, budget: 10, share: -0.06, achievement: -0.6, available: true };
   const { feature, elements } = makeFeatureHarness({
@@ -269,25 +296,20 @@ test("hierarchy renders expanded disclosure buttons and collapse keeps profit ro
   });
   await feature.loadStoreOperatingMonthlyReport();
 
-  assert.doesNotMatch(elements["#store-operating-report-body"].innerHTML, /data-report-category-toggle="sales-profit-category"/);
-  assert.doesNotMatch(elements["#store-operating-report-body"].innerHTML, /data-report-row-key="sales-profit"[^>]* hidden/);
+  assert.match(elements["#store-operating-report-body"].innerHTML, /data-report-category-toggle="sales-profit-category"[^>]*aria-expanded="false"/);
+  assert.doesNotMatch(elements["#store-operating-report-body"].innerHTML, /data-report-row-key="sales-profit"/);
 
-  const ordinaryRow = { dataset: { reportRowKey: "ordinary-cost" }, hidden: false };
-  const profitRow = { dataset: { reportRowKey: "sales-profit" }, hidden: false };
-  elements["#store-operating-report-body"].querySelectorAll = () => [ordinaryRow, profitRow];
   const icon = { textContent: "▾" };
   const attributes = {};
   const button = {
-    dataset: { currencyCode: "USD", reportCategoryToggle: "sales-profit-category" },
+    dataset: { reportCategoryToggle: "sales-profit-category" },
     setAttribute(name, value) { attributes[name] = value; },
     querySelector() { return icon; },
   };
   feature.toggleReportCategory({ target: { closest: () => button } });
 
-  assert.equal(attributes["aria-expanded"], "false");
-  assert.equal(icon.textContent, "▸");
-  assert.equal(ordinaryRow.hidden, true);
-  assert.equal(profitRow.hidden, false);
+  assert.equal(elements["#store-operating-report-body"].innerHTML.includes('data-report-row-key="sales-profit"'), true);
+  assert.match(elements["#store-operating-report-body"].innerHTML, /data-report-category-toggle="sales-profit-category"[^>]*aria-expanded="true"/);
 });
 
 test("export surfaces structured server diagnostics", async () => {

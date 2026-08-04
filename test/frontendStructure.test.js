@@ -21,7 +21,7 @@ test("store operating monthly report is a finance-owned feature with shared cont
   assert.match(indexSource, /id="store-operating-report-table"[^>]*data-table-key="store-operating-monthly-report"/);
   assert.match(indexSource, /data-table-fixed-width="true"/);
   assert.match(indexSource, /<th colspan="2" data-column-sortable="false">店铺信息<\/th>/);
-  assert.match(indexSource, /<th data-column-key="category" data-column-width="148" data-column-sortable="false"[^>]*>分类<\/th>/);
+  assert.match(indexSource, /<th data-column-key="category" data-column-width="148" data-column-sortable="false"[^>]*>上级<\/th>/);
   assert.match(indexSource, /<th data-column-key="name" data-column-width="176" data-column-sortable="false"[^>]*>名称<\/th>/);
   assert.match(indexSource, /<th data-column-key="group-0-actual" data-column-width="160" data-column-sortable="false" data-column-kind="number" data-column-profile="money-rate">实际完成值<\/th>/);
   assert.match(indexSource, /<th data-column-key="group-0-budget" data-column-width="160" data-column-sortable="false" data-column-kind="number" data-column-profile="money-rate">预算值<\/th>/);
@@ -57,7 +57,7 @@ test("monthly report delegates widths to shared tooling and sorts hierarchy bloc
   assert.match(indexSource, /data-table-key="store-operating-monthly-report"/);
   assert.ok((indexSource.match(/data-column-sortable="false"/g) || []).length >= 6);
   assert.match(indexSource, /data-table-key="store-operating-monthly-report"/);
-  assert.match(css, /tr\[data-report-row-level="0"\]/);
+  assert.match(css, /tr\[data-report-row-level="1"\]/);
   assert.doesNotMatch(css, /module-hero/);
   assert.match(shellCss, /\/\* Nested module hero and breadcrumb specificity fix v1\. \*\/[\s\S]*@media \(max-width: 900px\) \{[\s\S]*\.view > \.module-hero,[\s\S]*\.view \.module-hero \{[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
   assert.match(shellCss, /body:not\(\.login-body\) \.topbar \.world-clock \{\n  display: flex;\n\}/);
@@ -66,7 +66,7 @@ test("monthly report delegates widths to shared tooling and sorts hierarchy bloc
       < shellCss.indexOf("@media (max-width: 620px)"),
     "the narrow viewport hide rule must override the desktop world-clock display",
   );
-  assert.match(generatedCss, /#view-store-operating-monthly-report tr\[data-report-row-level="0"\]>/);
+  assert.match(generatedCss, /#view-store-operating-monthly-report tr\[data-report-row-level="1"\]>/);
   const generatedDesktopClock = "body:not(.login-body) .topbar .world-clock{display:flex}";
   const generatedNarrowBreakpoint = "@media(max-width:620px){";
   const generatedNarrowClock = "body:not(.login-body) .topbar .world-clock{display:none}";

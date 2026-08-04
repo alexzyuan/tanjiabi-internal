@@ -116,7 +116,9 @@ export function createStoreOperatingMonthlyReportFeature({
   let initialUrlCountries = [];
   let activeReportAbortController = null;
   let reportLoadGeneration = 0;
-  const collapsedCategories = new Set();
+  const expandedReportCategories = new Set();
+  let currentReportData = null;
+  let currentReportFilters = null;
   const reportSortState = { key: "", direction: "asc" };
 
   function query(selector) {
@@ -272,6 +274,41 @@ export function createStoreOperatingMonthlyReportFeature({
     return String(row?.key || `${row?.category || ""}\u0000${row?.name || ""}\u0000${index}`);
   }
 
+  function reportRowMap(rows = []) {
+    return new Map(rows.map((row, index) => [reportRowIdentity(row, index), row]));
+  }
+
+  function reportCategoryHasDetails(row, rowsByKey) {
+    return Number(row?.level) === 1
+      && Array.isArray(row?.children)
+      && row.children.some((key) => Number(rowsByKey.get(String(key))?.level) === 2);
+  }
+
+  function reportBlocks(rows = []) {
+    const rowsByKey = reportRowMap(rows);
+    const parentRows = rows.filter((row) => Number(row.level) === 0);
+    if (!parentRows.length) {
+      return [{
+        parent: { category: "—", name: "—" },
+        rows: rows.filter((row) => Number(row.level) > 0),
+        rowsByKey,
+      }];
+    }
+    return parentRows.map((parent) => {
+      const blockRows = [];
+      (Array.isArray(parent.children) ? parent.children : []).forEach((childKey) => {
+        const category = rowsByKey.get(String(childKey));
+        if (!category || Number(category.level) !== 1) return;
+        blockRows.push(category);
+        (Array.isArray(category.children) ? category.children : []).forEach((detailKey) => {
+          const detail = rowsByKey.get(String(detailKey));
+          if (detail && Number(detail.level) === 2) blockRows.push(detail);
+        });
+      });
+      return { parent, rows: blockRows, rowsByKey };
+    });
+  }
+
   function rowMapByKey(group) {
     return new Map((group?.rows || []).map((row, index) => [reportRowIdentity(row, index), row]));
   }
@@ -286,7 +323,7 @@ export function createStoreOperatingMonthlyReportFeature({
         ${groups.map((group) => `<th colspan="4" data-column-sortable="false" data-report-group-index="${group.index}">${escapeHtml(group.label)}</th>`).join("")}
       </tr>
       <tr>
-        <th data-column-key="category" data-column-width="${REPORT_FIXED_COLUMN_WIDTHS.category}" data-column-sortable="false" data-column-profile="name">分类</th>
+        <th data-column-key="category" data-column-width="${REPORT_FIXED_COLUMN_WIDTHS.category}" data-column-sortable="false" data-column-profile="name">上级</th>
         <th data-column-key="name" data-column-width="${REPORT_FIXED_COLUMN_WIDTHS.name}" data-column-sortable="false" data-column-profile="name">名称</th>
         ${groups.flatMap((group) => [
           ["actual", "实际完成值"],
@@ -317,37 +354,51 @@ export function createStoreOperatingMonthlyReportFeature({
     });
     const rowMaps = groups.map(rowMapByKey);
     const baseRows = groups[0].rows;
-    body.innerHTML = baseRows.map((baseRow, rowIndex) => {
-      const rowIdentity = reportRowIdentity(baseRow, rowIndex);
-      const categoryKeyByName = new Map(baseRows
-        .filter((row) => Number(row.level) === 1)
-        .map((row) => [row.name, row.key]));
-      const row = baseRow;
-      const categoryKey = Number(row.level) === 2 ? categoryKeyByName.get(row.category) || "" : "";
-      const disclosureKey = String(row.key || "");
-      const isCollapsed = Number(row.level) === 1 && collapsedCategories.has(disclosureKey);
-      const profitAlwaysVisible = row.key === "sales-profit";
-      const hidden = categoryKey && collapsedCategories.has(categoryKey) && !profitAlwaysVisible;
-      const isExpandableCategory = Number(row.level) === 1 && row.key !== "sales-profit-category" && Array.isArray(row.children) && row.children.length;
-      const categoryCell = isExpandableCategory
-        ? `<button class="store-operating-report-disclosure" type="button" data-report-category-toggle="${escapeHtml(row.key || "")}" aria-expanded="${isCollapsed ? "false" : "true"}"><span aria-hidden="true">${isCollapsed ? "▸" : "▾"}</span>${escapeHtml(row.category || "—")}</button>`
-        : escapeHtml(row.category || "—");
-      const metricCells = groups.flatMap((group, groupIndex) => {
-        const groupRow = rowMaps[groupIndex].get(rowIdentity);
-        return [
-          ["actual", groupRow?.actual],
-          ["share", groupRow?.share],
-          ["budget", groupRow?.budget],
-          ["achievement", groupRow?.achievement],
-        ].map(([metric, value]) => `<td data-report-group-index="${group.index}" data-report-metric="${metric}">${escapeHtml(metric === "share" || metric === "achievement" ? formatRate(value) : formatAmount(value))}</td>`);
-      }).join("");
-      return `
-        <tr data-report-row-key="${escapeHtml(row.key || "")}" data-report-row-level="${Number(row.level || 0)}" data-report-parent-category="${escapeHtml(categoryKey)}"${hidden ? " hidden" : ""}>
-          <td>${categoryCell}</td>
-          <td>${escapeHtml(row.name || "—")}</td>
-          ${metricCells}
-        </tr>
-      `;
+    body.innerHTML = reportBlocks(baseRows).flatMap(({ parent, rows, rowsByKey }) => {
+      const categoryByDetail = new Map();
+      rows.filter((row) => Number(row.level) === 1).forEach((category) => {
+        (Array.isArray(category.children) ? category.children : []).forEach((detailKey) => {
+          categoryByDetail.set(String(detailKey), String(category.key || ""));
+        });
+      });
+      const visibleRows = rows.filter((row) => (
+        Number(row.level) !== 2
+        || !categoryByDetail.has(String(row.key || ""))
+        || expandedReportCategories.has(categoryByDetail.get(String(row.key || "")))
+      ));
+      const parentRowSpan = Math.max(1, visibleRows.length);
+      return visibleRows.map((row, rowIndex) => {
+        const rowIdentity = reportRowIdentity(row, baseRows.indexOf(row));
+        const categoryKey = Number(row.level) === 2 ? categoryByDetail.get(String(row.key || "")) || "" : "";
+        const isExpandableCategory = reportCategoryHasDetails(row, rowsByKey);
+        const isExpanded = expandedReportCategories.has(String(row.key || ""));
+        const rowName = Number(row.level) === 1 && !String(row.name || "").endsWith("小计")
+          ? `${row.name || "—"}小计`
+          : String(row.name || "—");
+        const nameCell = isExpandableCategory
+          ? `<button class="store-operating-report-disclosure" type="button" data-report-category-toggle="${escapeHtml(row.key || "")}" aria-expanded="${isExpanded ? "true" : "false"}" aria-label="${escapeHtml(`${isExpanded ? "收起" : "展开"}${rowName}`)}"><span aria-hidden="true">${isExpanded ? "▾" : "▸"}</span>${escapeHtml(rowName)}</button>`
+          : escapeHtml(rowName);
+        const resultRow = ["net-sales", "gross-profit", "sales-profit"].includes(String(row.key || ""));
+        const metricCells = groups.flatMap((group, groupIndex) => {
+          const groupRow = rowMaps[groupIndex].get(rowIdentity);
+          return [
+            ["actual", groupRow?.actual],
+            ["share", groupRow?.share],
+            ["budget", groupRow?.budget],
+            ["achievement", groupRow?.achievement],
+          ].map(([metric, value]) => `<td data-report-group-index="${group.index}" data-report-metric="${metric}">${escapeHtml(metric === "share" || metric === "achievement" ? formatRate(value) : formatAmount(value))}</td>`);
+        }).join("");
+        const parentCell = rowIndex === 0
+          ? `<td class="store-operating-report-parent" rowspan="${parentRowSpan}">${escapeHtml(parent.category || parent.name || "—")}</td>`
+          : "";
+        return `
+          <tr class="${resultRow ? "store-operating-report-result-row" : ""}" data-report-row-key="${escapeHtml(row.key || "")}" data-report-row-level="${Number(row.level || 0)}" data-report-parent-category="${escapeHtml(categoryKey)}">
+            ${parentCell}
+            <td class="${Number(row.level) === 2 ? "store-operating-report-detail" : "store-operating-report-subtotal"}">${nameCell}</td>
+            ${metricCells}
+          </tr>
+        `;
+      });
     }).join("");
   }
 
@@ -355,16 +406,21 @@ export function createStoreOperatingMonthlyReportFeature({
     const button = event?.target?.closest?.("[data-report-category-toggle]");
     if (!button) return;
     const key = button.dataset.reportCategoryToggle || "";
-    if (collapsedCategories.has(key)) collapsedCategories.delete(key);
-    else collapsedCategories.add(key);
-    const expanded = !collapsedCategories.has(key);
+    if (expandedReportCategories.has(key)) expandedReportCategories.delete(key);
+    else expandedReportCategories.add(key);
+    if (currentReportData && currentReportFilters) {
+      renderRows(currentReportData, currentReportFilters);
+      refreshTable(query("#store-operating-report-table"));
+      return;
+    }
+    const expanded = expandedReportCategories.has(key);
     button.setAttribute("aria-expanded", String(expanded));
     const icon = button.querySelector?.("[aria-hidden='true']");
     if (icon) icon.textContent = expanded ? "▾" : "▸";
     query("#store-operating-report-body")?.querySelectorAll?.(
-      `tr[data-report-parent-category="${globalThis.CSS?.escape?.(button.dataset.reportCategoryToggle || "") || button.dataset.reportCategoryToggle || ""}"]`,
+      `tr[data-report-parent-category="${globalThis.CSS?.escape?.(key) || key}"]`,
     ).forEach((row) => {
-      if (row.dataset.reportRowKey !== "sales-profit") row.hidden = !expanded;
+      row.hidden = !expanded;
     });
   }
 
@@ -427,6 +483,9 @@ export function createStoreOperatingMonthlyReportFeature({
 
   function renderReport(data, filters) {
     if (!data?.meta || typeof data.meta !== "object") throw new Error("店铺经营月报响应缺少 meta 对象");
+    expandedReportCategories.clear();
+    currentReportData = data;
+    currentReportFilters = filters;
     renderHeader(data, filters);
     renderRows(data, filters);
     const currencyText = data.meta.currencyMode === "CNY"

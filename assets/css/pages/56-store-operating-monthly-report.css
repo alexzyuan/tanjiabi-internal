@@ -7,12 +7,14 @@
 #view-store-operating-monthly-report #store-operating-report-table th {
   text-align: center;
   white-space: nowrap;
+  background: var(--tj-action-blue);
+  color: var(--tj-text-inverse);
 }
 
-#view-store-operating-monthly-report tr[data-report-row-level="0"] > *,
+.store-operating-report-result-row > td { background: var(--tj-tone-caution-row-bg); }
+
 #view-store-operating-monthly-report tr[data-report-row-level="1"] > * {
   background: var(--tj-tone-neutral-bg);
-  color: var(--tj-text-strong);
   font-weight: 700;
 }
 
