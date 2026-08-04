@@ -23,6 +23,7 @@ function createResizeInteractionHarness({
   viewId = "view-test",
   headerControl = "",
   tableVariant = "standard",
+  fixedWidth = false,
 } = {}) {
   const rootListeners = new Map();
   const windowListeners = new Map();
@@ -86,7 +87,7 @@ function createResizeInteractionHarness({
   const table = {
     id: tableId,
     className: "data-table",
-    dataset: { tableKey },
+    dataset: { tableKey, fixedWidth: fixedWidth ? "true" : "" },
     style: {
       setProperty(name, value) {
         this[name] = value;
@@ -134,6 +135,7 @@ function createResizeInteractionHarness({
       sortButton = child;
       child.parentElement = header;
       this.sortButton = child;
+      this.textContent = child.textContent;
       return child;
     },
     querySelector(selector) {
@@ -429,6 +431,38 @@ test("data table manager restores saved column widths during enhancement", () =>
 
   assert.equal(restoredCol.style.width, "188px");
   assert.equal(restoredCol.dataset.userWidth, "188");
+});
+
+test("data table manager expands stale saved widths so sortable headers remain readable", () => {
+  const storageData = new Map([
+    ["tanjia:tableColumnWidths:v1:test-table", JSON.stringify({ widths: { sales: 60 } })],
+  ]);
+  const { col } = createResizeInteractionHarness({
+    enableHeaderAppend: true,
+    explicitWidth: "",
+    headerLabel: "销售收入目标",
+    storageData,
+  });
+
+  assert.ok(Number.parseFloat(col.style.width) >= 115);
+  assert.equal(col.dataset.userWidth, col.style.width.replace("px", ""));
+});
+
+test("data table manager keeps fixed-width tables explicit and non-resizable", () => {
+  const storageData = new Map([
+    ["tanjia:tableColumnWidths:v1:test-table", JSON.stringify({ widths: { sales: 188 } })],
+  ]);
+  const { col, header, table } = createResizeInteractionHarness({
+    explicitWidth: "148",
+    fixedWidth: true,
+    storageData,
+  });
+
+  assert.equal(table.dataset.fixedWidth, "true");
+  assert.equal(col.style.width, "148px");
+  assert.equal(col.dataset.widthSource, "explicit");
+  assert.equal(col.dataset.userWidth, "");
+  assert.equal(header.sortButton, undefined);
 });
 
 test("data table manager keeps active user widths when enhancement reruns", () => {

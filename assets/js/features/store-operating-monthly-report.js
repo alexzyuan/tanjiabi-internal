@@ -1,4 +1,12 @@
 const MONTH_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])$/;
+const REPORT_FIXED_COLUMN_WIDTHS = Object.freeze({
+  category: 148,
+  name: 176,
+  actual: 160,
+  share: 104,
+  budget: 160,
+  achievement: 112,
+});
 
 function defaultCurrentMonth() {
   const now = new Date();
@@ -274,17 +282,18 @@ export function createStoreOperatingMonthlyReportFeature({
     const groups = reportColumnGroups(data, filters);
     head.innerHTML = `
       <tr>
-        <th rowspan="2" data-column-key="category">分类</th>
-        <th rowspan="2" data-column-key="name">名称</th>
-        ${groups.map((group) => `<th colspan="4" data-report-group-index="${group.index}">${escapeHtml(group.label)}</th>`).join("")}
+        <th colspan="2" data-column-sortable="false">店铺信息</th>
+        ${groups.map((group) => `<th colspan="4" data-column-sortable="false" data-report-group-index="${group.index}">${escapeHtml(group.label)}</th>`).join("")}
       </tr>
       <tr>
+        <th data-column-key="category" data-column-width="${REPORT_FIXED_COLUMN_WIDTHS.category}" data-column-sortable="false" data-column-profile="name">分类</th>
+        <th data-column-key="name" data-column-width="${REPORT_FIXED_COLUMN_WIDTHS.name}" data-column-sortable="false" data-column-profile="name">名称</th>
         ${groups.flatMap((group) => [
           ["actual", "实际完成值"],
           ["share", "占比"],
           ["budget", "预算值"],
           ["achievement", "达成率"],
-        ].map(([metric, label]) => `<th data-column-key="group-${group.index}-${metric}" data-report-group-index="${group.index}" data-report-metric="${metric}" data-column-kind="number" data-column-profile="money-rate">${label}</th>`)).join("")}
+        ].map(([metric, label]) => `<th data-column-key="group-${group.index}-${metric}" data-column-width="${REPORT_FIXED_COLUMN_WIDTHS[metric]}" data-column-sortable="false" data-report-group-index="${group.index}" data-report-metric="${metric}" data-column-kind="number" data-column-profile="money-rate">${label}</th>`)).join("")}
       </tr>
     `;
   }

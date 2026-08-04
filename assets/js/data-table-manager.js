@@ -350,17 +350,33 @@ function extractSampleCellText(cell) {
   return String(clone.textContent || "").replace(/\s+/g, " ").trim();
 }
 
-function createTextMeasurer(table) {
+function createTextMeasurer(table, referenceElement = null) {
   try {
     const canvas = table?.ownerDocument?.createElement?.("canvas");
     const context = canvas?.getContext?.("2d");
     if (!context) throw new Error("canvas context unavailable");
-    const style = table.ownerDocument?.defaultView?.getComputedStyle?.(table);
+    const style = table.ownerDocument?.defaultView?.getComputedStyle?.(referenceElement || table);
     if (style) context.font = style.font || `${style.fontSize || "14px"} ${style.fontFamily || "sans-serif"}`;
     return (value) => context.measureText(String(value || "")).width;
   } catch {
     return (value) => Array.from(String(value || "")).reduce((width, character) => width + (/[^\u0000-\u00ff]/.test(character) ? 14 : 8), 0);
   }
+}
+
+function isFixedWidthTable(table) {
+  return table?.dataset?.fixedWidth === "true" || table?.getAttribute?.("data-table-fixed-width") === "true";
+}
+
+function measureHeaderRequiredWidth(header) {
+  const target = header?.querySelector?.(".sort-button") || header;
+  const intrinsicWidth = Number(target?.scrollWidth || 0);
+  if (!Number.isFinite(intrinsicWidth) || intrinsicWidth <= 0) return 0;
+  if (target === header) return intrinsicWidth;
+  const style = header?.ownerDocument?.defaultView?.getComputedStyle?.(header);
+  if (!style) return intrinsicWidth;
+  const horizontalPadding = Number.parseFloat(style.paddingLeft || 0) + Number.parseFloat(style.paddingRight || 0);
+  const horizontalBorder = Number.parseFloat(style.borderLeftWidth || 0) + Number.parseFloat(style.borderRightWidth || 0);
+  return Math.ceil(intrinsicWidth + horizontalPadding + horizontalBorder);
 }
 
 function sampleTableColumns(table, columnCount) {
@@ -436,6 +452,13 @@ function syncSmartWidthResetControl(table, storage) {
   const documentRef = table?.ownerDocument;
   if (!wrap?.appendChild || !documentRef?.createElement) return null;
   const tableKey = String(table.dataset.tableKey || table.id || "");
+  const existingControls = Array.from(wrap.querySelectorAll?.(":scope > .table-width-reset") || [])
+    .filter((candidate) => candidate.dataset.tableKey === tableKey);
+  if (isFixedWidthTable(table)) {
+    existingControls.forEach((control) => control.remove?.());
+    wrap.classList?.remove?.("has-user-column-widths");
+    return null;
+  }
   let control = Array.from(wrap.querySelectorAll?.(":scope > .table-width-reset") || [])
     .find((candidate) => candidate.dataset.tableKey === tableKey);
   if (!control) {
@@ -458,7 +481,8 @@ export function applySmartColumnWidths(table, storage, { force = false } = {}) {
   const headers = getLeafHeaderCells(table);
   const columns = Array.from(table.querySelectorAll(":scope > colgroup > col"));
   if (!headers.length || !columns.length) return [];
-  const savedWidths = readSavedColumnWidths(table, storage);
+  const fixedWidth = isFixedWidthTable(table);
+  const savedWidths = fixedWidth ? {} : readSavedColumnWidths(table, storage);
   const samples = sampleTableColumns(table, headers.length);
   const signature = smartWidthSignature(headers, columns, samples, savedWidths);
   if (!force && smartWidthSignatures.get(table) === signature && columns.every((column) => column.style.width)) {
@@ -466,7 +490,7 @@ export function applySmartColumnWidths(table, storage, { force = false } = {}) {
     return columns.map((column) => Number.parseFloat(column.style.width || "0"));
   }
 
-  const measureText = createTextMeasurer(table);
+  const measureText = createTextMeasurer(table, headers.find((header) => header?.querySelector?.(".sort-button")) || headers[0]);
   const details = [];
   let totalWidth = 0;
 
@@ -487,10 +511,14 @@ export function applySmartColumnWidths(table, storage, { force = false } = {}) {
     let source = "smart";
     let width = estimate.width;
 
-    if (col.dataset.userWidth) {
+    if (fixedWidth && !defaultWidth) {
+      throw new Error(`[data-table-manager] fixed-width table column requires data-column-width: ${columnKey}`);
+    }
+
+    if (!fixedWidth && col.dataset.userWidth) {
       source = "user";
       width = normalizeColumnWidth(col.dataset.userWidth);
-    } else if (savedWidth) {
+    } else if (!fixedWidth && savedWidth) {
       source = "user";
       width = normalizeColumnWidth(savedWidth);
       col.dataset.userWidth = String(width);
@@ -500,6 +528,12 @@ export function applySmartColumnWidths(table, storage, { force = false } = {}) {
       col.dataset.userWidth = "";
     } else {
       col.dataset.userWidth = "";
+    }
+
+    const minimumHeaderWidth = Math.max(estimate.minWidth, estimate.width, measureHeaderRequiredWidth(header));
+    if (width < minimumHeaderWidth) {
+      width = minimumHeaderWidth;
+      if (source === "user") col.dataset.userWidth = String(width);
     }
 
     const widthValue = `${width}px`;
@@ -657,6 +691,7 @@ function markStateRows(table) {
 }
 
 function ensureResizeHandles(table) {
+  if (isFixedWidthTable(table)) return;
   getLeafHeaderCells(table).forEach((header, index) => {
     header.dataset.columnIndex = String(index);
     if (header.querySelector(":scope > .table-resize-handle")) return;
@@ -769,6 +804,7 @@ export function createDataTableManager({
 
   function restoreSmartWidths(table) {
     if (!table) throw new Error("[data-table-manager] restore requires a managed table");
+    if (isFixedWidthTable(table)) throw new Error("[data-table-manager] fixed-width table does not support restoring column widths");
     const storage = table.ownerDocument?.defaultView?.localStorage || windowRef?.localStorage || globalThis.localStorage;
     const key = tableStorageKey(table);
     if (!key || !storage?.removeItem) {
@@ -797,6 +833,7 @@ export function createDataTableManager({
     const table = handle.closest("table");
     const header = handle.closest("th");
     if (!table || !header) return;
+    if (isFixedWidthTable(table)) return;
     const columnIndex = Number.parseInt(handle.dataset.columnIndex || header.dataset.columnIndex || "", 10);
     if (!Number.isFinite(columnIndex)) return;
     lockCurrentColumnWidths(table);

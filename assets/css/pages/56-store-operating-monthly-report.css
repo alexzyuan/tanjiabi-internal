@@ -4,6 +4,11 @@
   overflow-x: auto;
 }
 
+#view-store-operating-monthly-report #store-operating-report-table th {
+  text-align: center;
+  white-space: nowrap;
+}
+
 #view-store-operating-monthly-report tr[data-report-row-level="0"] > *,
 #view-store-operating-monthly-report tr[data-report-row-level="1"] > * {
   background: var(--tj-tone-neutral-bg);

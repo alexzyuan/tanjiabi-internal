@@ -1592,6 +1592,7 @@ body:not(.login-body) .view>.module-hero.ai-workflow-hero p{font-size:11px !impo
 #view-provision .bucket-dot{display:inline-block;width:10px;height:10px;margin-right:8px;border-radius:2px;background:currentColor}
 #view-provision .provision-risk-row{background:var(--tj-tone-warning-row-bg)}
 #view-store-operating-monthly-report .store-operating-report-table-wrap{max-width:100%;overflow-x:auto}
+#view-store-operating-monthly-report #store-operating-report-table th{text-align:center;white-space:nowrap}
 #view-store-operating-monthly-report tr[data-report-row-level="0"]>*,#view-store-operating-monthly-report tr[data-report-row-level="1"]>*{background:var(--tj-tone-neutral-bg);color:var(--tj-text-strong);font-weight:700}
 #view-store-operating-monthly-report .store-operating-report-disclosure{display:inline-flex;align-items:center;gap:var(--spectrum-spacing-75);padding:var(--spectrum-spacing-50);color:inherit;font:inherit;text-align:left;background:transparent;border:0;border-radius:var(--spectrum-control-radius);cursor:pointer}
 #view-store-operating-monthly-report .store-operating-report-disclosure:focus-visible{outline:var(--spectrum-focus-ring-width) solid var(--spectrum-focus-ring-color);outline-offset:var(--spectrum-focus-ring-gap)}

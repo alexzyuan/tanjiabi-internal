@@ -257,7 +257,7 @@ test("successful rendering refreshes the shared managed table and writes filter 
   assert.match(elements["#store-operating-report-head"].innerHTML, /data-column-key="group-0-actual"[^>]*data-column-kind="number"[^>]*data-column-profile="money-rate"/);
   assert.match(elements["#store-operating-report-head"].innerHTML, /data-column-key="group-0-budget"[^>]*data-column-kind="number"[^>]*data-column-profile="money-rate"/);
   assert.match(elements["#store-operating-report-head"].innerHTML, /A · USD/);
-  assert.equal((elements["#store-operating-report-head"].innerHTML.match(/data-column-sortable="false"/g) || []).length, 0);
+  assert.ok((elements["#store-operating-report-head"].innerHTML.match(/data-column-sortable="false"/g) || []).length >= 6);
   assert.match(elements["#store-operating-report-body"].innerHTML, /销售收入净额/);
 });
 

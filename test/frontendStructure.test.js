@@ -19,10 +19,12 @@ test("store operating monthly report is a finance-owned feature with shared cont
   assert.match(indexSource, /id="store-operating-report-store" multiple/);
   assert.match(indexSource, /id="store-operating-report-country" multiple/);
   assert.match(indexSource, /id="store-operating-report-table"[^>]*data-table-key="store-operating-monthly-report"/);
-  assert.match(indexSource, /<th rowspan="2" data-column-key="category">分类<\/th>/);
-  assert.match(indexSource, /<th rowspan="2" data-column-key="name">名称<\/th>/);
-  assert.match(indexSource, /<th data-column-key="group-0-actual" data-column-kind="number" data-column-profile="money-rate">实际完成值<\/th>/);
-  assert.match(indexSource, /<th data-column-key="group-0-budget" data-column-kind="number" data-column-profile="money-rate">预算值<\/th>/);
+  assert.match(indexSource, /data-table-fixed-width="true"/);
+  assert.match(indexSource, /<th colspan="2" data-column-sortable="false">店铺信息<\/th>/);
+  assert.match(indexSource, /<th data-column-key="category" data-column-width="148" data-column-sortable="false"[^>]*>分类<\/th>/);
+  assert.match(indexSource, /<th data-column-key="name" data-column-width="176" data-column-sortable="false"[^>]*>名称<\/th>/);
+  assert.match(indexSource, /<th data-column-key="group-0-actual" data-column-width="160" data-column-sortable="false" data-column-kind="number" data-column-profile="money-rate">实际完成值<\/th>/);
+  assert.match(indexSource, /<th data-column-key="group-0-budget" data-column-width="160" data-column-sortable="false" data-column-kind="number" data-column-profile="money-rate">预算值<\/th>/);
 
   assert.match(appSource, /import \{ createStoreOperatingMonthlyReportFeature \} from "\.\/assets\/js\/features\/store-operating-monthly-report\.js/);
   assert.match(appSource, /createStoreOperatingMonthlyReportFeature\(\{/);
@@ -51,7 +53,7 @@ test("monthly report delegates widths to shared tooling and sorts hierarchy bloc
   const shellParityCss = await readFile(new URL("../assets/css/legacy/98-shell-topbar-parity.css", import.meta.url), "utf8");
 
   assert.match(indexSource, /data-table-key="store-operating-monthly-report"/);
-  assert.equal((indexSource.match(/data-column-sortable="false"/g) || []).length, 0);
+  assert.ok((indexSource.match(/data-column-sortable="false"/g) || []).length >= 6);
   assert.match(indexSource, /data-table-key="store-operating-monthly-report"/);
   assert.match(css, /tr\[data-report-row-level="0"\]/);
   assert.doesNotMatch(css, /module-hero/);
