@@ -515,6 +515,12 @@ test("data table manager preserves wide and matrix minimum table widths", () => 
   assert.equal(matrix.table.style["--tj-table-resolved-width"], "2400px");
 });
 
+test("data table manager does not inflate fixed-width tables to generic variant minimums", () => {
+  const fixedWide = createResizeInteractionHarness({ explicitWidth: "128", tableVariant: "wide", fixedWidth: true });
+
+  assert.equal(fixedWide.table.style["--tj-table-resolved-width"], "128px");
+});
+
 test("data table manager recognizes an unlabeled checkbox header as a selection column", () => {
   const { col, header } = createResizeInteractionHarness({
     columnKey: "selected",

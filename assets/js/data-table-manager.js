@@ -164,6 +164,7 @@ export function classifyDataTableVariant({ className = "", columnCount = 0 } = {
 }
 
 function tableVariantMinimumWidth(table) {
+  if (isFixedWidthTable(table)) return 0;
   if (table?.classList?.contains?.("data-table--matrix")) return 2400;
   if (table?.classList?.contains?.("data-table--wide")) return 1280;
   return 0;
