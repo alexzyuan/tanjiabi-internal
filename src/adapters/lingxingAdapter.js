@@ -1,7 +1,12 @@
 import { getConfig } from "../config/index.js";
 import { getDefaultWeekRange, listDateRange } from "../utils/dateRange.js";
 import { withLingxingExclusiveEndDate } from "../utils/lingxingDateRange.js";
-import { readOrderProfitCache, saveOrderProfitCache } from "../utils/cacheStore.js";
+import {
+  readOrderProfitCache,
+  readProfitReportCache,
+  saveOrderProfitCache,
+  saveProfitReportCache,
+} from "../utils/cacheStore.js";
 import { createLingxingAuth, createLingxingClient, createTokenState, tokenConfigKey } from "./lingxing/index.js";
 
 const CORE_COUNTRY_NAMES = new Set(["美国", "加拿大", "澳洲", "澳大利亚", "德国", "US", "CA", "AU", "DE", "USA", "Canada", "Australia", "Germany", "Deutschland"]);
@@ -9,6 +14,7 @@ const CORE_COUNTRY_CODES = new Set(["US", "CA", "AU", "DE"]);
 const tokenStates = new Map();
 const adapterInstances = new Map();
 const orderProfitInflight = new Map();
+const profitReportInflight = new Map();
 let defaultLingxingAdapter = null;
 let defaultLingxingAdapterKey = "";
 
@@ -46,6 +52,29 @@ function stableOrderProfitCacheKey({ startDate, endDate, sids = [], currencyCode
     endDate,
     currencyCode,
     sids: uniqueNumbers(sids).sort((a, b) => a - b),
+  });
+}
+
+function stableProfitReportCacheValue(value, key = "") {
+  if (Array.isArray(value)) {
+    const normalized = value.map((item) => stableProfitReportCacheValue(item));
+    return ["sids", "seller_ids", "sellerIds", "store_ids", "storeIds"].includes(key)
+      ? normalized.slice().sort((left, right) => String(left).localeCompare(String(right)))
+      : normalized;
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.keys(value)
+      .filter((itemKey) => value[itemKey] !== undefined)
+      .sort()
+      .map((itemKey) => [itemKey, stableProfitReportCacheValue(value[itemKey], itemKey)]));
+  }
+  return value;
+}
+
+function stableProfitReportCacheKey(endpoint, params = {}) {
+  return JSON.stringify({
+    source: endpoint,
+    params: stableProfitReportCacheValue(params),
   });
 }
 
@@ -115,6 +144,7 @@ export function resetLingxingAdapterForTest() {
   tokenStates.clear();
   adapterInstances.clear();
   orderProfitInflight.clear();
+  profitReportInflight.clear();
   defaultLingxingAdapter = null;
   defaultLingxingAdapterKey = "";
 }
@@ -1265,6 +1295,102 @@ export class LingxingAdapter {
     } finally {
       if (orderProfitInflight.get(cacheKey) === loadPromise) orderProfitInflight.delete(cacheKey);
     }
+  }
+
+  async fetchProfitReportCachedInternal({ endpoint, requestParams, sellerList = [], reportDate = "", normalize, label }) {
+    const cacheKey = stableProfitReportCacheKey(endpoint, requestParams);
+    const cached = await readProfitReportCache(cacheKey);
+    if (cached?.data?.profitReportRecords) {
+      console.info("[lingxing-adapter] profit report cache hit", {
+        cacheKey,
+        endpoint,
+        label,
+        recordCount: cached.data.profitReportRecords.length,
+      });
+      return {
+        records: cached.data.profitReportRecords,
+        cacheKey,
+        cacheState: "hit",
+        cacheUpdatedAt: cached.updatedAt || "",
+      };
+    }
+
+    const existing = profitReportInflight.get(cacheKey);
+    if (existing) {
+      console.info("[lingxing-adapter] profit report cache joined in-flight request", {
+        cacheKey,
+        endpoint,
+        label,
+      });
+      const result = await existing;
+      return { ...result, cacheState: "inflight" };
+    }
+
+    const loadPromise = (async () => {
+      const startedAt = Date.now();
+      try {
+        const payload = await this.fetchProfitReportPayload(endpoint, requestParams);
+        const rawRecords = this.normalizeRecordList(payload);
+        const records = normalize
+          ? normalize.call(this, rawRecords, sellerList, reportDate)
+          : rawRecords;
+        await saveProfitReportCache(cacheKey, { profitReportRecords: records });
+        console.info("[lingxing-adapter] profit report cache miss loaded", {
+          cacheKey,
+          endpoint,
+          label,
+          recordCount: records.length,
+          elapsedMs: Date.now() - startedAt,
+        });
+        return { records, cacheKey, cacheState: "miss", cacheUpdatedAt: "" };
+      } catch (error) {
+        console.error("[lingxing-adapter] cached profit report fetch failed", {
+          cacheKey,
+          endpoint,
+          label,
+          elapsedMs: Date.now() - startedAt,
+          error: error.message,
+        });
+        throw error;
+      }
+    })();
+    profitReportInflight.set(cacheKey, loadPromise);
+    try {
+      return await loadPromise;
+    } finally {
+      if (profitReportInflight.get(cacheKey) === loadPromise) profitReportInflight.delete(cacheKey);
+    }
+  }
+
+  async fetchProfitReportPayload(endpoint, requestParams) {
+    if (endpoint === "/bd/profit/report/open/report/order/list") {
+      return this.fetchOrderProfitReport(requestParams);
+    }
+    if (endpoint === "/bd/profit/report/open/report/seller/list") {
+      return this.fetchSellerProfitReport(requestParams);
+    }
+    throw new Error(`不支持的利润报表缓存接口：${endpoint}`);
+  }
+
+  async fetchOrderProfitReportCached({ sellerList = [], reportDate = "", ...params } = {}) {
+    return this.fetchProfitReportCachedInternal({
+      endpoint: "/bd/profit/report/open/report/order/list",
+      requestParams: params,
+      sellerList,
+      reportDate,
+      label: "订单维度",
+    });
+  }
+
+  async fetchSellerProfitReportCached({ sellerList = [], reportDate = "", ...params } = {}) {
+    return this.fetchProfitReportCachedInternal({
+      endpoint: "/bd/profit/report/open/report/seller/list",
+      requestParams: params,
+      sellerList,
+      reportDate,
+      label: "店铺维度",
+      normalize: this.normalizeSellerProfitRecords,
+    });
   }
 
   async fetchSellerProfitStatisticsChunks({ startDate, endDate, sids = [], currencyCode = "CNY", sellerList = [] }) {

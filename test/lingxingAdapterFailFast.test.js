@@ -171,3 +171,100 @@ test("shared order profit cache deduplicates concurrent misses", async () => {
     await rm(tempRoot, { recursive: true, force: true });
   }
 });
+
+test("shared profit report cache returns a normalized hit without calling Lingxing", async () => {
+  const projectRoot = process.cwd();
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lingxing-profit-report-shared-hit-"));
+  try {
+    process.chdir(tempRoot);
+    const { LingxingAdapter } = await importFresh(projectRoot, "src/adapters/lingxingAdapter.js");
+    const adapter = new LingxingAdapter({ baseUrl: "https://openapi.test/", appKey: "1234567890abcdef", appSecret: "secret" });
+    let calls = 0;
+    adapter.fetchOrderProfitReport = async () => {
+      calls += 1;
+      return { data: { records: [{ sid: 8708, fbaReturnsUnsaleableQuantity: 5, cgUnitPrice: -5.6, cgTransportUnitCosts: -1 }] } };
+    };
+    const request = {
+      start_date: "2026-08-01",
+      end_date: "2026-08-31",
+      sids: [8708],
+      currencyCode: "CNY",
+      sellerList: [{ sid: 8708, name: "JOI MEW-US", country: "美国" }],
+    };
+    const first = await adapter.fetchOrderProfitReportCached(request);
+    const second = await adapter.fetchOrderProfitReportCached(request);
+
+    assert.equal(calls, 1);
+    assert.equal(first.cacheState, "miss");
+    assert.equal(second.cacheState, "hit");
+    assert.equal(second.records[0].fbaReturnsUnsaleableQuantity, 5);
+  } finally {
+    process.chdir(projectRoot);
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("shared profit report cache deduplicates concurrent misses", async () => {
+  const projectRoot = process.cwd();
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lingxing-profit-report-shared-inflight-"));
+  try {
+    process.chdir(tempRoot);
+    const { LingxingAdapter } = await importFresh(projectRoot, "src/adapters/lingxingAdapter.js");
+    const adapter = new LingxingAdapter({ baseUrl: "https://openapi.test/", appKey: "1234567890abcdef", appSecret: "secret" });
+    let calls = 0;
+    adapter.fetchOrderProfitReport = async () => {
+      calls += 1;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return { data: { records: [{ sid: 8708, grossProfit: 12 }] } };
+    };
+    const request = {
+      start_date: "2026-09-01",
+      end_date: "2026-09-30",
+      sids: [8708],
+      currencyCode: "CNY",
+      sellerList: [{ sid: 8708, name: "JOI MEW-US", country: "美国" }],
+    };
+    const results = await Promise.all([
+      adapter.fetchOrderProfitReportCached(request),
+      adapter.fetchOrderProfitReportCached(request),
+    ]);
+
+    assert.equal(calls, 1);
+    assert.deepEqual(results.map((result) => result.cacheState).sort(), ["inflight", "miss"]);
+  } finally {
+    process.chdir(projectRoot);
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("shared seller profit report cache normalizes seller scope and reuses the cache", async () => {
+  const projectRoot = process.cwd();
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lingxing-seller-profit-report-shared-hit-"));
+  try {
+    process.chdir(tempRoot);
+    const { LingxingAdapter } = await importFresh(projectRoot, "src/adapters/lingxingAdapter.js");
+    const adapter = new LingxingAdapter({ baseUrl: "https://openapi.test/", appKey: "1234567890abcdef", appSecret: "secret" });
+    let calls = 0;
+    adapter.fetchSellerProfitReport = async () => {
+      calls += 1;
+      return { data: { records: [{ sid: 8708, grossProfit: 12 }] } };
+    };
+    const request = {
+      start_date: "2026-10-01",
+      end_date: "2026-10-31",
+      sids: [8708],
+      sellerList: [{ sid: 8708, name: "JOI MEW-US", country: "美国" }],
+      reportDate: "2026-10-31",
+    };
+    const first = await adapter.fetchSellerProfitReportCached(request);
+    const second = await adapter.fetchSellerProfitReportCached(request);
+
+    assert.equal(calls, 1);
+    assert.equal(first.cacheState, "miss");
+    assert.equal(second.cacheState, "hit");
+    assert.equal(second.records[0].storeName, "JOI MEW-US");
+  } finally {
+    process.chdir(projectRoot);
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
