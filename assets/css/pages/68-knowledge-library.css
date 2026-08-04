@@ -522,7 +522,6 @@ body:not(.login-body) .knowledge-admin-table-wrap {
 }
 
 body:not(.login-body) .knowledge-admin-table-wrap table {
-  width: 100%;
   border-collapse: collapse;
   font-size: 13px;
 }

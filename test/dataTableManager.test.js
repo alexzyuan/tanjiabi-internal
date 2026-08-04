@@ -22,6 +22,7 @@ function createResizeInteractionHarness({
   columnKey = "sales",
   viewId = "view-test",
   headerControl = "",
+  tableVariant = "standard",
 } = {}) {
   const rootListeners = new Map();
   const windowListeners = new Map();
@@ -45,6 +46,8 @@ function createResizeInteractionHarness({
   const col = { dataset: {}, style: colStyle };
   let sortButton = null;
   const tableClassNames = new Set();
+  if (tableVariant === "wide") tableClassNames.add("data-table--wide");
+  if (tableVariant === "matrix") tableClassNames.add("data-table--matrix");
   const headerClassNames = new Set();
   const handle = {
     dataset: { columnIndex: "0" },
@@ -92,6 +95,7 @@ function createResizeInteractionHarness({
     classList: {
       add: (...names) => names.forEach((name) => tableClassNames.add(name)),
       remove: (...names) => names.forEach((name) => tableClassNames.delete(name)),
+      contains: (name) => tableClassNames.has(name),
     },
     ownerDocument,
     closest(selector) {
@@ -443,6 +447,24 @@ test("data table manager applies smart widths from sampled table content", () =>
   assert.equal(header.dataset.widthAlign, "left");
   assert.equal(bodyCells[0].dataset.widthProfile, "name");
   assert.equal(bodyCells[0].dataset.widthAlign, "left");
+});
+
+test("data table manager updates resolved table width after a column drag", () => {
+  const harness = createResizeInteractionHarness({ explicitWidth: "128" });
+  assert.equal(harness.table.style["--tj-table-resolved-width"], "128px");
+
+  harness.rootListeners.get("pointerdown")(createCancelableEvent(harness.handle, { clientX: 100 }));
+  harness.windowListeners.get("pointermove")({ clientX: 160 });
+
+  assert.equal(harness.table.style["--tj-table-resolved-width"], "188px");
+});
+
+test("data table manager preserves wide and matrix minimum table widths", () => {
+  const wide = createResizeInteractionHarness({ explicitWidth: "128", tableVariant: "wide" });
+  const matrix = createResizeInteractionHarness({ explicitWidth: "128", tableVariant: "matrix" });
+
+  assert.equal(wide.table.style["--tj-table-resolved-width"], "1280px");
+  assert.equal(matrix.table.style["--tj-table-resolved-width"], "2400px");
 });
 
 test("data table manager recognizes an unlabeled checkbox header as a selection column", () => {

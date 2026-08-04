@@ -561,10 +561,10 @@ body:not(.login-body) .filter-toolbar>button.primary-button{min-height:var(--tj-
 .risk-low{color:var(--tj-tone-info-text);background:var(--tj-tone-info-bg)}
 .data-table-wrap{position:relative;overflow:auto}
 table.data-table{width:100%;border-collapse:separate;border-spacing:0;color:var(--tj-text-strong);font-size:13px;min-width:var(--tj-table-min-width,980px);font-variant-numeric:tabular-nums}
-table.data-table--standard{--tj-table-min-width:980px}
+table.data-table--standard{--tj-table-min-width:0}
 table.data-table--wide{--tj-table-min-width:1280px}
 table.data-table--matrix{--tj-table-min-width:2400px;font-size:12px}
-table.data-table.is-smart-width{width:max(100%,var(--tj-table-resolved-width,980px));min-width:0;table-layout:fixed}
+table.data-table.is-smart-width{width:var(--tj-table-resolved-width,0px);min-width:0;table-layout:fixed}
 table.data-table.is-column-resized{table-layout:fixed}
 table.data-table :is(th,td){border:1px solid var(--tj-border-subtle)}
 table.data-table th{position:sticky;top:0;z-index:2;height:38px;padding:9px 10px;background:var(--tj-action-blue-soft);color:var(--tj-text-strong);font-weight:850;white-space:nowrap;text-align:left;font-variant-numeric:tabular-nums}
@@ -1764,7 +1764,7 @@ body:not(.login-body) .knowledge-modal-grid label{display:grid;gap:var(--spectru
 body:not(.login-body) .knowledge-modal-grid input,body:not(.login-body) .knowledge-modal-grid select{width:100%;height:var(--tj-control-height);padding:0 var(--spectrum-spacing-150);border:1px solid var(--tj-border-subtle);border-radius:var(--spectrum-control-radius);background:var(--tj-content-bg);color:var(--tj-text-strong);font:inherit;font-weight:600}
 body:not(.login-body) .knowledge-modal-list{margin-top:18px}
 body:not(.login-body) .knowledge-admin-table-wrap{max-height:300px;border:1px solid var(--tj-border-subtle);border-radius:var(--spectrum-control-radius)}
-body:not(.login-body) .knowledge-admin-table-wrap table{width:100%;border-collapse:collapse;font-size:13px}
+body:not(.login-body) .knowledge-admin-table-wrap table{border-collapse:collapse;font-size:13px}
 body:not(.login-body) .knowledge-admin-table-wrap th,body:not(.login-body) .knowledge-admin-table-wrap td{padding:10px var(--spectrum-spacing-150);border-bottom:1px solid var(--tj-border-subtle);vertical-align:middle}
 body:not(.login-body) .knowledge-admin-table-wrap th{color:var(--tj-text-muted);background:var(--tj-surface-muted);font-weight:700}
 body:not(.login-body) .knowledge-embed-panel[hidden]{display:none}

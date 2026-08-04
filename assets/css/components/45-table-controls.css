@@ -15,7 +15,7 @@ table.data-table {
 }
 
 table.data-table--standard {
-  --tj-table-min-width: 980px;
+  --tj-table-min-width: 0;
 }
 
 table.data-table--wide {
@@ -28,7 +28,7 @@ table.data-table--matrix {
 }
 
 table.data-table.is-smart-width {
-  width: max(100%, var(--tj-table-resolved-width, 980px));
+  width: var(--tj-table-resolved-width, 0px);
   min-width: 0;
   table-layout: fixed;
 }

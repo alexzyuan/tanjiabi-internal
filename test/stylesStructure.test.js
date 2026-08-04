@@ -446,7 +446,7 @@ test("shared table controls live outside legacy css and use semantic tokens", as
   assert.match(componentSource, /^table\.data-table--matrix\s*\{/m);
   assert.match(componentSource, /^table\.data-table\.is-smart-width\s*\{/m);
   assert.match(componentSource, /table\.data-table :is\(th, td\)\s*\{[\s\S]*?border:\s*1px solid var\(--tj-border-subtle\)/);
-  assert.match(componentSource, /width:\s*max\(100%,\s*var\(--tj-table-resolved-width/);
+  assert.match(componentSource, /width:\s*var\(--tj-table-resolved-width/);
   assert.match(componentSource, /\[data-width-align="right"\]/);
   assert.match(componentSource, /\[data-width-align="center"\]/);
   assert.match(componentSource, /\[data-width-profile="identifier"\]/);
@@ -481,6 +481,13 @@ test("shared table controls live outside legacy css and use semantic tokens", as
   );
   assert.equal((generatedSource.match(/body:not\(\.login-body\) \.table-select\{/g) || []).length, 1);
   assert.equal((generatedSource.match(/\.table-action\{/g) || []).length, 1);
+});
+
+test("shared smart tables use resolved content width instead of forcing container width", async () => {
+  const source = await readFile(new URL("../assets/css/components/45-table-controls.css", import.meta.url), "utf8");
+  const smartRule = source.match(/table\.data-table\.is-smart-width\s*\{[\s\S]*?\}/)?.[0] || "";
+  assert.match(smartRule, /width:\s*var\(--tj-table-resolved-width/);
+  assert.doesNotMatch(smartRule, /width:\s*max\(100%/);
 });
 
 test("page styles do not override shared smart table widths", async () => {

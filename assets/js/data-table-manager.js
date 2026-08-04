@@ -162,6 +162,12 @@ export function classifyDataTableVariant({ className = "", columnCount = 0 } = {
   return "standard";
 }
 
+function tableVariantMinimumWidth(table) {
+  if (table?.classList?.contains?.("data-table--matrix")) return 2400;
+  if (table?.classList?.contains?.("data-table--wide")) return 1280;
+  return 0;
+}
+
 function cssEscape(value) {
   if (globalThis.CSS?.escape) return globalThis.CSS.escape(String(value));
   return String(value).replace(/["\\]/g, "\\$&");
@@ -455,6 +461,7 @@ export function applySmartColumnWidths(table, storage, { force = false } = {}) {
   const samples = sampleTableColumns(table, headers.length);
   const signature = smartWidthSignature(headers, columns, samples, savedWidths);
   if (!force && smartWidthSignatures.get(table) === signature && columns.every((column) => column.style.width)) {
+    resolveTableWidth(table, { log: smartWidthDebugEnabled(table, storage) });
     return columns.map((column) => Number.parseFloat(column.style.width || "0"));
   }
 
@@ -513,7 +520,7 @@ export function applySmartColumnWidths(table, storage, { force = false } = {}) {
     });
   });
 
-  table.style?.setProperty?.("--tj-table-resolved-width", `${totalWidth}px`);
+  const resolvedWidth = resolveTableWidth(table, { log: smartWidthDebugEnabled(table, storage) });
   table.classList.add("is-smart-width", "is-column-resized");
   table.dataset.smartWidthSampleCount = String(samples.rows.length);
   smartWidthSignatures.set(table, smartWidthSignature(headers, columns, samples, savedWidths));
@@ -522,6 +529,7 @@ export function applySmartColumnWidths(table, storage, { force = false } = {}) {
       tableKey: table.dataset.tableKey || table.id || "",
       sampleCount: samples.rows.length,
       totalWidth,
+      resolvedWidth,
       columns: details,
     });
   }
@@ -532,6 +540,30 @@ function getTableWrap(table) {
   return table?.closest?.(".data-table-wrap, .table-wrap, .table-scroll, .table-shell") || table?.parentElement || null;
 }
 
+function resolveTableWidth(table, { log = false } = {}) {
+  const columns = Array.from(table?.querySelectorAll?.(":scope > colgroup > col") || []);
+  if (!columns.length) throw new Error("[data-table-manager] resolved width requires managed columns");
+  const widths = columns.map((column, index) => {
+    const width = Number.parseFloat(column.style?.width || "");
+    if (!Number.isFinite(width) || width <= 0) {
+      throw new Error(`[data-table-manager] managed column width is invalid at index ${index}`);
+    }
+    return width;
+  });
+  const minimumWidth = tableVariantMinimumWidth(table);
+  const resolvedWidth = Math.max(minimumWidth, widths.reduce((sum, width) => sum + width, 0));
+  table.style?.setProperty?.("--tj-table-resolved-width", `${resolvedWidth}px`);
+  if (log) {
+    console.debug("[data-table-manager] resolved table width", {
+      tableKey: table.dataset.tableKey || table.id || "",
+      columnCount: columns.length,
+      minimumWidth,
+      resolvedWidth,
+    });
+  }
+  return resolvedWidth;
+}
+
 function setColumnWidth(table, index, width) {
   const col = table?.querySelector?.(`colgroup col[data-column-index="${cssEscape(index)}"]`);
   if (!col) return;
@@ -539,6 +571,7 @@ function setColumnWidth(table, index, width) {
   col.style.width = `${normalized}px`;
   col.dataset.userWidth = String(normalized);
   table.classList.add("is-column-resized");
+  resolveTableWidth(table);
 }
 
 function ensureColGroup(table, columnCount) {
@@ -746,6 +779,7 @@ export function createDataTableManager({
     });
     smartWidthSignatures.delete(table);
     const details = applySmartColumnWidths(table, storage, { force: true });
+    resolveTableWidth(table);
     updateStickyOffsets(table);
     updateScrollHint(table);
     syncSmartWidthResetControl(table, storage);
