@@ -1282,14 +1282,14 @@ function setupNavigation() {
 function openRequestedViewFromLocation() {
   const params = new URLSearchParams(location.search);
   const requestedView = params.get("view");
-  if (!["store-operating-monthly-report", "budget"].includes(requestedView)) return null;
-  const result = clickVisibleNavItem(requestedView);
   if (requestedView === "store-operating-monthly-report") {
     params.delete("view");
     const suffix = params.toString();
     history.replaceState({}, "", `${location.pathname}${suffix ? `?${suffix}` : ""}`);
+    return null;
   }
-  return result;
+  if (requestedView !== "budget") return null;
+  return clickVisibleNavItem(requestedView);
 }
 
 async function init() {
