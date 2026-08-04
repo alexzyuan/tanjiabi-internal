@@ -124,6 +124,33 @@ function originalBudgetByCurrency(rows, currencyCodes) {
   }));
 }
 
+function filterBudgetRowsForScope(rows, scope) {
+  const storeNames = new Set(scope.storeNames);
+  const countries = new Set(scope.countries);
+  return rows.filter((row) => {
+    const storeName = String(row?.storeName || row?.store_name || "").trim();
+    const country = normalizeStoreOperatingCountryKey(row?.site || row?.country || row?.countryName || "");
+    return storeNames.has(storeName) && (!country || countries.has(country));
+  });
+}
+
+function buildReportScopes(sellers, normalizedFilters) {
+  if (normalizedFilters.stores.length) {
+    return sellers.map((seller) => ({
+      storeName: seller.name,
+      storeNames: [seller.name],
+      sellers: [seller],
+      countries: seller.country ? [seller.country] : [],
+    }));
+  }
+  return [{
+    storeName: "全部店铺",
+    storeNames: sellers.map((seller) => seller.name),
+    sellers,
+    countries: [...new Set(sellers.map((seller) => seller.country).filter(Boolean))],
+  }];
+}
+
 function budgetState({ matched, budgetRows, budgetByGroups, missingExchangeRateCount, currencyMode }) {
   if (!matched || !budgetRows.length) return "unconfigured";
   const configuredMetricCount = budgetByGroups.reduce(
@@ -228,6 +255,7 @@ export async function getStoreOperatingMonthlyReport(filters, {
     }
     const effectiveCountries = [...new Set(sellers.map((seller) => seller.country).filter(Boolean))];
     const currencyMode = effectiveCountries.length > 1 ? "CNY" : "ORIGINAL";
+    const reportScopes = buildReportScopes(sellers, normalizedFilters);
     const recordsByMonth = await Promise.all(normalizedFilters.months.map(async (month) => {
       const { startDate, endDate } = monthBounds(month);
       const payload = await adapter.fetchMskuOrderProfit({
@@ -245,42 +273,60 @@ export async function getStoreOperatingMonthlyReport(filters, {
       countries: effectiveCountries,
     });
     const budgetRows = requireBudgetRows(budget).rows;
-    const groupedRecords = currencyMode === "CNY"
-      ? new Map([["CNY", records]])
-      : new Map([...new Set(records.map((record) => String(record.currencyCode ?? "").trim()))]
-        .sort((a, b) => a.localeCompare(b))
-        .map((currencyCode) => [currencyCode, records.filter((record) => String(record.currencyCode ?? "").trim() === currencyCode)]));
-    const currencyCodes = [...groupedRecords.keys()];
-    const cnyBudget = currencyMode === "CNY"
-      ? buildCnyBudget(budgetRows, records)
-      : { budgetByMetric: {}, missingExchangeRateCount: 0 };
-    const originalBudgets = currencyMode === "ORIGINAL"
-      ? originalBudgetByCurrency(budgetRows, currencyCodes)
-      : new Map();
-    const budgetByGroups = currencyCodes.map((currencyCode) => currencyMode === "CNY"
-      ? cnyBudget.budgetByMetric
-      : originalBudgets.get(currencyCode) || {});
-    const groups = [...groupedRecords].map(([currencyCode, groupRecords], index) => {
-      const mapped = buildStoreOperatingReportRows({
-        records: groupRecords,
-        budgetByMetric: budgetByGroups[index],
-        currencyCode,
+    const groups = [];
+    let missingExchangeRateCount = 0;
+    reportScopes.forEach((scope) => {
+      const scopeSidSet = new Set(scope.sellers.map((seller) => Number(seller.sid)));
+      const scopeRecords = records.filter((record) => scopeSidSet.has(Number(record.sid)));
+      const scopeBudgetRows = filterBudgetRowsForScope(budgetRows, scope);
+      const groupedRecords = currencyMode === "CNY"
+        ? new Map([["CNY", scopeRecords]])
+        : new Map([...new Set(scopeRecords.map((record) => String(record.currencyCode ?? "").trim()))]
+          .sort((a, b) => a.localeCompare(b))
+          .map((currencyCode) => [currencyCode, scopeRecords.filter((record) => String(record.currencyCode ?? "").trim() === currencyCode)]));
+      if (!groupedRecords.size) groupedRecords.set("", []);
+      const currencyCodes = [...groupedRecords.keys()];
+      const cnyBudget = currencyMode === "CNY"
+        ? buildCnyBudget(scopeBudgetRows, scopeRecords)
+        : { budgetByMetric: {}, missingExchangeRateCount: 0 };
+      missingExchangeRateCount += cnyBudget.missingExchangeRateCount;
+      const originalBudgets = currencyMode === "ORIGINAL"
+        ? originalBudgetByCurrency(scopeBudgetRows, currencyCodes)
+        : new Map();
+      [...groupedRecords].forEach(([currencyCode, groupRecords]) => {
+        const budgetByMetric = currencyMode === "CNY"
+          ? cnyBudget.budgetByMetric
+          : originalBudgets.get(currencyCode) || {};
+        const mapped = buildStoreOperatingReportRows({
+          records: groupRecords,
+          budgetByMetric,
+          currencyCode,
+        });
+        groups.push({
+          storeName: scope.storeName,
+          storeScope: scope.storeNames,
+          currencyCode,
+          currencyAvailable: Boolean(currencyCode),
+          recordCount: groupRecords.length,
+          rows: mapped.rows,
+          unavailableMetrics: mapped.unavailableMetrics,
+        });
       });
-      return {
-        currencyCode,
-        currencyAvailable: Boolean(currencyCode),
-        recordCount: groupRecords.length,
-        rows: mapped.rows,
-        unavailableMetrics: mapped.unavailableMetrics,
-      };
     });
+    const currencyCodes = [...new Set(groups.map((group) => group.currencyCode))];
     const rows = currencyMode === "CNY" || groups.length === 1 ? groups[0]?.rows || [] : [];
     const unavailableMetrics = [...new Set(groups.flatMap((group) => group.unavailableMetrics))];
     const state = budgetState({
       matched: Boolean(budget?.matched),
       budgetRows,
-      budgetByGroups,
-      missingExchangeRateCount: cnyBudget.missingExchangeRateCount,
+      budgetByGroups: groups.map((group) => group.rows.reduce((acc, row) => {
+        if (row.key === "net-sales" && row.budget !== null) acc["net-sales"] = row.budget;
+        if (row.key === "ad-spend" && row.budget !== null) acc["ad-spend"] = row.budget;
+        if (row.key === "refunds" && row.budget !== null) acc.refunds = row.budget;
+        if (row.key === "sales-profit" && row.budget !== null) acc["sales-profit"] = row.budget;
+        return acc;
+      }, {})),
+      missingExchangeRateCount,
       currencyMode,
     });
     const result = {
@@ -291,7 +337,7 @@ export async function getStoreOperatingMonthlyReport(filters, {
         recordCount: records.length,
         budgetMatchCount: budgetRows.length,
         unavailableMetrics,
-        missingExchangeRateCount: cnyBudget.missingExchangeRateCount,
+        missingExchangeRateCount,
         generatedAt: generatedAt(now),
       },
       filters: normalizedFilters,
@@ -311,9 +357,10 @@ export async function getStoreOperatingMonthlyReport(filters, {
       effectiveCountryCount: effectiveCountries.length,
       currencyMode,
       recordCount: records.length,
+      groupCount: groups.length,
       budgetMatchCount: budgetRows.length,
       unavailableMetrics,
-      missingExchangeRateCount: cnyBudget.missingExchangeRateCount,
+      missingExchangeRateCount,
       elapsedMs: Date.now() - startedAt,
     });
     return result;
@@ -346,29 +393,61 @@ function exportCell(value) {
   return value === null || value === undefined ? "—" : value;
 }
 
-function storeOperatingMonthlyReportExportRows(report) {
-  return report.groups.flatMap((group) => {
+function exportGroupLabel(group) {
+  const storeName = String(group.storeName || "全部店铺").trim() || "全部店铺";
+  const currency = group.currencyAvailable === false ? "币种不可用" : String(group.currencyCode || "币种不可用").trim();
+  return `${storeName} · ${currency}`;
+}
+
+function storeOperatingMonthlyReportExportLayout(report) {
+  const groups = report.groups.map((group) => {
     if (!group || typeof group !== "object" || Array.isArray(group) || typeof group.currencyCode !== "string" || !Array.isArray(group.rows)) {
       throw new Error("店铺经营月报导出分组缺少 rows 数组");
     }
-    return group.rows.map((row) => {
+    const rowMap = new Map(group.rows.map((row, index) => {
       if (!row || typeof row !== "object" || Array.isArray(row)
         || typeof row.category !== "string" || typeof row.name !== "string"
         || typeof row.available !== "boolean") {
         throw new Error("店铺经营月报导出行缺少必要字段");
       }
-      return [
-        group.currencyCode,
-        row.category,
-        row.name,
-        exportCell(row.actual),
-        exportCell(row.budget),
-        exportCell(row.share),
-        exportCell(row.achievement),
-        row.available ? "是" : "否",
-      ];
-    });
+      const key = String(row.key || `${row.category}\u0000${row.name}\u0000${index}`);
+      return [key, row];
+    }));
+    return { ...group, rowMap, label: exportGroupLabel(group) };
   });
+  const baseRows = groups[0]?.rows || [];
+  const rows = baseRows.map((baseRow, index) => {
+    const key = String(baseRow.key || `${baseRow.category}\u0000${baseRow.name}\u0000${index}`);
+    return [
+      baseRow.category,
+      baseRow.name,
+      ...groups.flatMap((group) => {
+        const row = group.rowMap.get(key);
+        return [
+          exportCell(row?.actual),
+          exportCell(row?.share),
+          exportCell(row?.budget),
+          exportCell(row?.achievement),
+        ];
+      }),
+    ];
+  });
+  const headerTop = ["分类", "名称", ...groups.flatMap((group) => [group.label, "", "", ""] )];
+  const headerBottom = ["", "", ...groups.flatMap(() => ["实际完成值", "占比", "预算值", "达成率"] )];
+  const merges = [
+    { s: { r: 0, c: 0 }, e: { r: 1, c: 0 } },
+    { s: { r: 0, c: 1 }, e: { r: 1, c: 1 } },
+    ...groups.map((_group, index) => ({
+      s: { r: 0, c: 2 + index * 4 },
+      e: { r: 0, c: 5 + index * 4 },
+    })),
+  ];
+  return {
+    groups,
+    headers: [headerTop, headerBottom],
+    rows,
+    merges,
+  };
 }
 
 export async function exportStoreOperatingMonthlyReportXlsx(filters = {}, {
@@ -378,12 +457,18 @@ export async function exportStoreOperatingMonthlyReportXlsx(filters = {}, {
   const module = await import("xlsx");
   const XLSX = module.default || module;
   const workbook = XLSX.utils.book_new();
-  const headers = ["币种", "分类", "科目", "实际值", "预算值", "占比", "达成率", "数据可用"];
-  const rows = storeOperatingMonthlyReportExportRows(report);
-  const sheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-  const lastColumn = XLSX.utils.encode_col(headers.length - 1);
-  sheet["!autofilter"] = { ref: `A1:${lastColumn}${Math.max(1, rows.length + 1)}` };
-  sheet["!cols"] = [10, 18, 24, 16, 16, 12, 12, 12].map((wch) => ({ wch }));
+  const layout = storeOperatingMonthlyReportExportLayout(report);
+  const rows = layout.rows;
+  const columnCount = layout.headers[0].length;
+  const lastColumn = XLSX.utils.encode_col(columnCount - 1);
+  const sheet = XLSX.utils.aoa_to_sheet([...layout.headers, ...rows]);
+  sheet["!merges"] = layout.merges;
+  sheet["!autofilter"] = { ref: `A2:${lastColumn}${Math.max(2, rows.length + 2)}` };
+  sheet["!cols"] = [
+    { wch: 18 },
+    { wch: 24 },
+    ...layout.groups.flatMap(() => [16, 12, 16, 12].map((wch) => ({ wch }))),
+  ];
   XLSX.utils.book_append_sheet(workbook, sheet, "店铺经营月报");
   const metadataRows = [
     ["项目", "值"],

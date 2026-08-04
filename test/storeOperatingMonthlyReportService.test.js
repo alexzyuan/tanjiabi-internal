@@ -123,6 +123,76 @@ test("single-country result separates original API currencies", async () => {
   assert.deepEqual(value.groups.map((group) => group.rows.find((row) => row.key === "net-sales").actual), [30, 90]);
 });
 
+test("selected stores create separate report groups with store-scoped budgets", async () => {
+  const adapter = fakeAdapter({
+    sellers: [
+      { sid: 1, name: "Store-US", country: "美国" },
+      { sid: 2, name: "Store-CA", country: "加拿大" },
+    ],
+    recordsForCall: () => [
+      { sid: 1, netSalesAmount: 90, currencyCode: "CNY", exchangeRate: 7 },
+      { sid: 2, netSalesAmount: 50, currencyCode: "CNY", exchangeRate: 5 },
+    ],
+  });
+
+  const value = await getStoreOperatingMonthlyReport(
+    { startMonth: "2026-07", endMonth: "2026-07", stores: ["Store-US", "Store-CA"] },
+    {
+      adapter,
+      getBudgetTargetContext: async () => ({
+        rows: [
+          { month: "2026-07", storeName: "Store-US", site: "美国", salesTarget: 10 },
+          { month: "2026-07", storeName: "Store-CA", site: "加拿大", salesTarget: 20 },
+        ],
+        matched: true,
+      }),
+    },
+  );
+
+  assert.deepEqual(value.groups.map((group) => group.storeName), ["Store-US", "Store-CA"]);
+  assert.deepEqual(value.groups.map((group) => group.currencyCode), ["CNY", "CNY"]);
+  assert.deepEqual(value.groups.map((group) => group.rows.find((row) => row.key === "net-sales").actual), [90, 50]);
+  assert.deepEqual(value.groups.map((group) => group.rows.find((row) => row.key === "net-sales").budget), [70, 100]);
+});
+
+test("without a store filter the report uses one all-store total group", async () => {
+  const adapter = fakeAdapter({
+    sellers: [
+      { sid: 1, name: "Store-US", country: "美国" },
+      { sid: 2, name: "Store-CA", country: "加拿大" },
+    ],
+    recordsForCall: () => [
+      { sid: 1, netSalesAmount: 90, currencyCode: "CNY", exchangeRate: 7 },
+      { sid: 2, netSalesAmount: 50, currencyCode: "CNY", exchangeRate: 5 },
+    ],
+  });
+
+  const value = await getStoreOperatingMonthlyReport(
+    { startMonth: "2026-07", endMonth: "2026-07" },
+    { adapter, getBudgetTargetContext: async () => ({ rows: [], matched: false }) },
+  );
+
+  assert.equal(value.groups.length, 1);
+  assert.equal(value.groups[0].storeName, "全部店铺");
+  assert.equal(value.groups[0].rows.find((row) => row.key === "net-sales").actual, 140);
+});
+
+test("all-store header scope remains visible when a single-country query has no records", async () => {
+  const adapter = fakeAdapter({
+    sellers: [{ sid: 1, name: "Store-US", country: "美国" }],
+    recordsForCall: () => [],
+  });
+  const value = await getStoreOperatingMonthlyReport(
+    { startMonth: "2026-07", endMonth: "2026-07", countries: ["美国"] },
+    { adapter, getBudgetTargetContext: async () => ({ rows: [], matched: false }) },
+  );
+
+  assert.equal(value.groups.length, 1);
+  assert.equal(value.groups[0].storeName, "全部店铺");
+  assert.equal(value.groups[0].currencyAvailable, false);
+  assert.equal(value.groups[0].rows.find((row) => row.key === "net-sales").actual, null);
+});
+
 test("service accepts one and twelve months but rejects missing, invalid, and reversed ranges", async () => {
   const calls = [];
   const adapter = fakeAdapter({
@@ -519,9 +589,11 @@ test("monthly report export builds its workbook from the same report result and 
         meta: { currencyMode: "ORIGINAL", currencyCodes: ["USD"], generatedAt: "2026-08-03T08:00:00.000Z", missingExchangeRateCount: 1, unavailableMetrics: ["ad-spend"] },
         budgetStatus: { state: "configured", matchCount: 2 },
         groups: [{
-          currencyCode: "USD",
+          storeName: "Store-US",
           currencyAvailable: true,
+          currencyCode: "USD",
           rows: [{
+            key: "net-sales",
             category: "销售收入",
             name: "销售收入净额",
             actual: 90,
@@ -542,8 +614,9 @@ test("monthly report export builds its workbook from the same report result and 
 
   assert.deepEqual(receivedFilters, filters);
   assert.equal(result.filename, "店铺经营月报-2026-06至2026-07.xlsx");
-  assert.deepEqual(rows[0], ["币种", "分类", "科目", "实际值", "预算值", "占比", "达成率", "数据可用"]);
-  assert.deepEqual(rows[1], ["USD", "销售收入", "销售收入净额", 90, 120, 1, 0.75, "是"]);
+  assert.deepEqual(rows[0], ["分类", "名称", "Store-US · USD", "", "", ""]);
+  assert.deepEqual(rows[1], ["", "", "实际完成值", "占比", "预算值", "达成率"]);
+  assert.deepEqual(rows[2], ["销售收入", "销售收入净额", 90, 1, 120, 0.75]);
   const metadata = XLSX.utils.sheet_to_json(workbook.Sheets["报表说明"], { header: 1 });
   assert.deepEqual(metadata.slice(1), [
     ["开始月份", "2026-06"],

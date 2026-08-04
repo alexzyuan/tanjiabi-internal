@@ -19,10 +19,10 @@ test("store operating monthly report is a finance-owned feature with shared cont
   assert.match(indexSource, /id="store-operating-report-store" multiple/);
   assert.match(indexSource, /id="store-operating-report-country" multiple/);
   assert.match(indexSource, /id="store-operating-report-table"[^>]*data-table-key="store-operating-monthly-report"/);
-  assert.match(indexSource, /<th data-column-key="category">分类<\/th>/);
-  assert.match(indexSource, /<th data-column-key="name">名称<\/th>/);
-  assert.match(indexSource, /<th data-column-key="actual" data-column-kind="number" data-column-profile="money-rate">实际完成值<\/th>/);
-  assert.match(indexSource, /<th data-column-key="budget" data-column-kind="number" data-column-profile="money-rate">预算值<\/th>/);
+  assert.match(indexSource, /<th rowspan="2" data-column-key="category">分类<\/th>/);
+  assert.match(indexSource, /<th rowspan="2" data-column-key="name">名称<\/th>/);
+  assert.match(indexSource, /<th data-column-key="group-0-actual" data-column-kind="number" data-column-profile="money-rate">实际完成值<\/th>/);
+  assert.match(indexSource, /<th data-column-key="group-0-budget" data-column-kind="number" data-column-profile="money-rate">预算值<\/th>/);
 
   assert.match(appSource, /import \{ createStoreOperatingMonthlyReportFeature \} from "\.\/assets\/js\/features\/store-operating-monthly-report\.js/);
   assert.match(appSource, /createStoreOperatingMonthlyReportFeature\(\{/);
