@@ -50,8 +50,13 @@ const CATEGORIES = [
 ];
 
 const RETURN_COST_FIELDS = ["returnCost", "return_cost", "return_goods_cost", "return_goods_cost_amount"];
-const RETURN_QUANTITY_FIELDS = ["returnQuantity", "return_quantity", "returnQty", "return_qty"];
-const SALES_QUANTITY_FIELDS = ["totalSalesQuantity", "total_sales_quantity", "salesQuantity", "sales_quantity", "volume", "quantity", "qty"];
+const UNSALEABLE_RETURN_QUANTITY_FIELDS = [
+  "unsaleableReturnQuantity",
+  "fbaReturnsUnsaleableQuantity",
+  "fba_returns_unsaleable_quantity",
+];
+const PURCHASE_UNIT_COST_FIELDS = ["purchaseUnitCost", "cgUnitPrice", "cg_unit_price"];
+const FIRST_LEG_UNIT_COST_FIELDS = ["firstLegUnitCost", "cgTransportUnitCosts", "cg_transport_unit_costs"];
 const NET_SALES_FIELDS = ["netSalesAmount", "net_sales_amount", "net_amount"];
 
 function isPresent(value) {
@@ -98,15 +103,14 @@ function sumReturnCosts(records) {
   const values = records.map((record) => {
     const directValue = readValue(record, RETURN_COST_FIELDS);
     if (isPresent(directValue)) return Math.abs(toFiniteNumber(directValue, "订单利润字段 returnCost"));
-    const purchaseCost = readValue(record, ["purchaseCost", "purchase_costs", "purchase_cost", "goods_cost"]);
-    const salesQuantity = readValue(record, SALES_QUANTITY_FIELDS);
-    const returnQuantity = readValue(record, RETURN_QUANTITY_FIELDS);
-    if (![purchaseCost, salesQuantity, returnQuantity].every(isPresent)) return null;
-    const cost = Math.abs(toFiniteNumber(purchaseCost, "订单利润字段 purchaseCost"));
-    const quantity = Math.abs(toFiniteNumber(salesQuantity, "订单利润字段 totalSalesQuantity"));
-    const returned = Math.abs(toFiniteNumber(returnQuantity, "订单利润字段 returnQuantity"));
-    if (quantity === 0) return returned === 0 ? 0 : null;
-    return cost * returned / quantity;
+    const returned = readValue(record, UNSALEABLE_RETURN_QUANTITY_FIELDS);
+    const purchaseUnitCost = readValue(record, PURCHASE_UNIT_COST_FIELDS);
+    const firstLegUnitCost = readValue(record, FIRST_LEG_UNIT_COST_FIELDS);
+    if (![returned, purchaseUnitCost, firstLegUnitCost].every(isPresent)) return null;
+    const quantity = Math.abs(toFiniteNumber(returned, "订单利润字段 fbaReturnsUnsaleableQuantity"));
+    const purchase = Math.abs(toFiniteNumber(purchaseUnitCost, "订单利润字段 cgUnitPrice"));
+    const firstLeg = Math.abs(toFiniteNumber(firstLegUnitCost, "订单利润字段 cgTransportUnitCosts"));
+    return quantity * (purchase + firstLeg);
   });
   return values.every((value) => value !== null) ? values.reduce((sum, value) => sum + value, 0) : null;
 }

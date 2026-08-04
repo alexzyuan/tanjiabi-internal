@@ -45,6 +45,21 @@ test("normalized order profit keeps return quantity for monthly return-cost deri
   assert.equal(Number(row.purchaseCost), -30);
 });
 
+test("normalized MSKU profit keeps unsaleable returns and unit landed-cost fields", () => {
+  const adapter = new LingxingAdapter(lingxingTestConfig);
+  const [row] = adapter.normalizeMskuOrderProfitRecords([{
+    sid: 1,
+    volume: 100,
+    fbaReturnsUnsaleableQuantity: 5,
+    cgUnitPrice: -5.6,
+    cgTransportUnitCosts: -1,
+  }], [{ sid: 1, name: "Amazon-US", country: "美国" }]);
+
+  assert.equal(row.unsaleableReturnQuantity, 5);
+  assert.equal(row.purchaseUnitCost, -5.6);
+  assert.equal(row.firstLegUnitCost, -1);
+});
+
 test("filterCoreSellers includes JOI MEW Germany stores", () => {
   const sellers = filterCoreSellers([
     { name: "JOI MEW-US", country: "美国", countryCode: "US" },

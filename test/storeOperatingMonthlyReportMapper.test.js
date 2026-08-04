@@ -87,7 +87,7 @@ test("only the four configured budget metrics receive a budget", () => {
 
 test("explicit zero values remain available while a zero budget has no achievement", () => {
   const result = buildStoreOperatingReportRows({
-    records: [{ totalSalesAmount: 0, netSalesAmount: 0, promotionDiscount: 0, totalSalesRefunds: 0, totalSalesQuantity: 0, returnQuantity: 0, purchaseCost: 0, firstLegCost: 0, storageFee: 0, totalAdsCost: 0, platformFee: 0, fbaDeliveryFee: 0, operationsCost: 0, managementCost: 0, laborCost: 0, assetImpairment: 0, nonOperatingIncome: 0, nonOperatingExpense: 0 }],
+    records: [{ totalSalesAmount: 0, netSalesAmount: 0, promotionDiscount: 0, totalSalesRefunds: 0, totalSalesQuantity: 0, returnQuantity: 0, fbaReturnsUnsaleableQuantity: 0, cgUnitPrice: 0, cgTransportUnitCosts: 0, purchaseCost: 0, firstLegCost: 0, storageFee: 0, totalAdsCost: 0, platformFee: 0, fbaDeliveryFee: 0, operationsCost: 0, managementCost: 0, laborCost: 0, assetImpairment: 0, nonOperatingIncome: 0, nonOperatingExpense: 0 }],
     budgetByMetric: { "net-sales": 0, "ad-spend": 0, refunds: 0, "sales-profit": 0 },
     currencyCode: "USD",
   });
@@ -127,7 +127,7 @@ test("whitespace, boolean, and non-numeric order-profit values are rejected inst
 
 test("rows retain the confirmed category hierarchy and derived rows require every child", () => {
   const result = buildStoreOperatingReportRows({
-    records: [{ totalSalesAmount: 100, promotionDiscount: 5, totalSalesRefunds: 10, netSalesAmount: 85, totalSalesQuantity: 100, returnQuantity: 0, purchaseCost: 30, firstLegCost: 8, storageFee: 2, totalAdsCost: 4, platformFee: 6, fbaDeliveryFee: 7 }],
+    records: [{ totalSalesAmount: 100, promotionDiscount: 5, totalSalesRefunds: 10, netSalesAmount: 85, totalSalesQuantity: 100, returnQuantity: 0, fbaReturnsUnsaleableQuantity: 0, cgUnitPrice: 0, cgTransportUnitCosts: 0, purchaseCost: 30, firstLegCost: 8, storageFee: 2, totalAdsCost: 4, platformFee: 6, fbaDeliveryFee: 7 }],
     budgetByMetric: {},
     currencyCode: "CNY",
   });
@@ -168,6 +168,9 @@ test("signed Lingxing expenses become positive magnitudes while profit keeps its
       totalSalesRefunds: -5,
       totalSalesQuantity: 100,
       returnQuantity: 0,
+      fbaReturnsUnsaleableQuantity: 0,
+      cgUnitPrice: 0,
+      cgTransportUnitCosts: 0,
       netSalesAmount: 87,
       purchaseCost: -30,
       firstLegCost: -3,
@@ -200,6 +203,9 @@ test("profit chain uses sales income as the percentage base and derives return c
       totalSalesRefunds: -10,
       totalSalesQuantity: 100,
       returnQuantity: 10,
+      fbaReturnsUnsaleableQuantity: 1,
+      cgUnitPrice: -3,
+      cgTransportUnitCosts: 0,
       purchaseCost: -30,
       firstLegCost: -8,
       storageFee: -2,
@@ -241,4 +247,22 @@ test("direct return-cost fields keep expense magnitudes positive", () => {
 
   assert.equal(result.rows.find((row) => row.key === "return-cost").actual, 3);
   assert.equal(result.rows.find((row) => row.key === "net-sales-cost").actual, 27);
+});
+
+test("不可售退货成本使用利润报表的不可售退货量、采购单价和单位头程成本", () => {
+  const result = buildStoreOperatingReportRows({
+    records: [{
+      totalSalesAmount: 100,
+      promotionDiscount: 0,
+      totalSalesRefunds: 0,
+      purchaseCost: -30,
+      fbaReturnsUnsaleableQuantity: 5,
+      cgUnitPrice: -5.6,
+      cgTransportUnitCosts: -1,
+    }],
+    budgetByMetric: {},
+    currencyCode: "USD",
+  });
+
+  assert.equal(result.rows.find((row) => row.key === "return-cost").actual, 33);
 });
