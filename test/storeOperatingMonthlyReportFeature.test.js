@@ -245,13 +245,13 @@ test("country and store edits stay local until query while country edits narrow 
   assert.equal(requests.length, 1);
 });
 
-test("successful rendering refreshes the shared managed table and writes filter state to the URL", async () => {
+test("successful rendering refreshes the shared managed table and writes filter state without pinning the startup view", async () => {
   const { feature, location, refreshes, elements } = makeFeatureHarness({ stores: ["A"] });
 
   await feature.loadStoreOperatingMonthlyReport();
 
   assert.deepEqual(refreshes, [elements["#store-operating-report-table"]]);
-  assert.match(location.search, /view=store-operating-monthly-report/);
+  assert.doesNotMatch(location.search, /view=store-operating-monthly-report/);
   assert.match(location.search, /startMonth=2026-06/);
   assert.match(location.search, /stores=A/);
   assert.match(elements["#store-operating-report-head"].innerHTML, /data-column-key="group-0-actual"[^>]*data-column-kind="number"[^>]*data-column-profile="money-rate"/);

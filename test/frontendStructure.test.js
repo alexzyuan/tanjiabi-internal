@@ -40,6 +40,7 @@ test("store operating monthly report is a finance-owned feature with shared cont
   assert.equal(appSource.includes('bind(document, "#store-operating-report'), false);
 
   assert.match(breadcrumbSource, /"store-operating-monthly-report": \["首页", "财务", "店铺经营月报"\]/);
+  assert.doesNotMatch(featureSource, /new URLSearchParams\(\{ view: "store-operating-monthly-report" \}\)/);
   assert.match(budgetSource, /budgetMonths/);
   assert.match(budgetSource, /budgetStores/);
   assert.match(budgetSource, /budgetCountries/);

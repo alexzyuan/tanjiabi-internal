@@ -148,7 +148,7 @@ export function createStoreOperatingMonthlyReportFeature({
   }
 
   function syncReportUrl(filters) {
-    const params = new URLSearchParams({ view: "store-operating-monthly-report" });
+    const params = new URLSearchParams();
     params.set("startMonth", filters.startMonth);
     params.set("endMonth", filters.endMonth);
     filters.stores.forEach((value) => params.append("stores", value));
