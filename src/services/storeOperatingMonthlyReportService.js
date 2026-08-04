@@ -256,16 +256,28 @@ export async function getStoreOperatingMonthlyReport(filters, {
     const effectiveCountries = [...new Set(sellers.map((seller) => seller.country).filter(Boolean))];
     const currencyMode = effectiveCountries.length > 1 ? "CNY" : "ORIGINAL";
     const reportScopes = buildReportScopes(sellers, normalizedFilters);
-    const recordsByMonth = await Promise.all(normalizedFilters.months.map(async (month) => {
+    const recordsByMonthResults = await Promise.all(normalizedFilters.months.map(async (month) => {
       const { startDate, endDate } = monthBounds(month);
-      const payload = await adapter.fetchMskuOrderProfit({
+      const request = {
         startDate,
         endDate,
         sids: sellers.map((seller) => seller.sid),
         currencyCode: currencyMode === "CNY" ? "CNY" : "ORIGINAL",
-      });
-      return adapter.normalizeMskuOrderProfitRecords(adapter.normalizeRecordList(payload), sellers, endDate);
+      };
+      if (typeof adapter.fetchMskuOrderProfitCached === "function") {
+        const result = await adapter.fetchMskuOrderProfitCached({ ...request, sellerList: sellers, reportDate: endDate });
+        return { month, records: result.records, cacheState: result.cacheState, cacheUpdatedAt: result.cacheUpdatedAt };
+      }
+      const payload = await adapter.fetchMskuOrderProfit(request);
+      return {
+        month,
+        records: adapter.normalizeMskuOrderProfitRecords(adapter.normalizeRecordList(payload), sellers, endDate),
+        cacheState: "unsupported",
+        cacheUpdatedAt: "",
+      };
     }));
+    const recordsByMonth = recordsByMonthResults.map((result) => result.records);
+    const cacheStates = Object.fromEntries(recordsByMonthResults.map((result) => [result.month, result.cacheState]));
     const records = recordsByMonth.flat();
     const budget = await getBudgetTargetContext({
       months: normalizedFilters.months,
@@ -361,6 +373,7 @@ export async function getStoreOperatingMonthlyReport(filters, {
       budgetMatchCount: budgetRows.length,
       unavailableMetrics,
       missingExchangeRateCount,
+      cacheStates,
       elapsedMs: Date.now() - startedAt,
     });
     return result;

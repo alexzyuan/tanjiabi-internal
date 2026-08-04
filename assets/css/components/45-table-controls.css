@@ -56,9 +56,13 @@ table.data-table th {
 }
 
 table.data-table td {
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
   padding: 9px 10px;
   color: var(--tj-text-strong);
   text-align: left;
+  text-overflow: ellipsis;
 }
 
 table.data-table tbody tr:hover > td {

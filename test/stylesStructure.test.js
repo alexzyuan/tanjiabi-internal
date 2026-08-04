@@ -490,6 +490,18 @@ test("shared smart tables use resolved content width instead of forcing containe
   assert.doesNotMatch(smartRule, /width:\s*max\(100%/);
 });
 
+test("shared tables contain cell text within its resolved column", async () => {
+  const source = await readFile(new URL("../assets/css/components/45-table-controls.css", import.meta.url), "utf8");
+  const cellRule = source.match(/table\.data-table td\s*\{[\s\S]*?\}/)?.[0] || "";
+  assert.match(cellRule, /overflow:\s*hidden/);
+  assert.match(cellRule, /overflow-wrap:\s*anywhere/);
+});
+
+test("site attainment table treats its hierarchical site column as a name field", async () => {
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  assert.match(indexSource, /<th[^>]*data-column-profile="name"[^>]*>站点<\/th>/);
+});
+
 test("page styles do not override shared smart table widths", async () => {
   const pageFiles = await listCssFiles(new URL("../assets/css/pages/", import.meta.url));
   const violations = [];

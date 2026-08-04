@@ -284,7 +284,21 @@ test("smart width estimator reserves space for sortable table headers", () => {
   const measureText = (value) => Array.from(String(value)).reduce((width, character) => width + (/[^\u0000-\u00ff]/.test(character) ? 14 : 8), 0);
 
   assert.equal(estimateSmartColumnWidth({ label: "实际销量", values: ["0"], measureText }).width, 76);
-  assert.equal(estimateSmartColumnWidth({ label: "实际销量", values: ["0"], sortControlWidth: 9, measureText }).width, 85);
+  assert.equal(estimateSmartColumnWidth({ label: "实际销量", values: ["0"], sortControlWidth: 9, measureText }).width, 87);
+});
+
+test("smart width estimator never clamps a sortable header below its own content", () => {
+  const measureText = (value) => Array.from(String(value)).reduce((width, character) => width + (/[^\u0000-\u00ff]/.test(character) ? 14 : 8), 0);
+
+  const result = estimateSmartColumnWidth({
+    label: "销售收入目标",
+    values: [],
+    sortControlWidth: 9,
+    measureText,
+  });
+
+  assert.equal(result.measuredHeaderWidth, 84);
+  assert.ok(result.width >= 115);
 });
 
 test("data table manager infers numeric columns from BI headers", () => {

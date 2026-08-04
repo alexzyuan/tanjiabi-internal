@@ -101,6 +101,37 @@ test("service sums each requested month and uses CNY for multiple effective coun
   assert.equal(value.meta.generatedAt, "2026-08-03T08:00:00.000Z");
 });
 
+test("monthly report prefers the shared cached order profit adapter method", async () => {
+  const calls = [];
+  let rawCalls = 0;
+  const adapter = fakeAdapter({
+    calls,
+    sellers: [{ sid: 1, name: "Store-US", country: "美国" }],
+    recordsForCall: () => {
+      rawCalls += 1;
+      return [];
+    },
+  });
+  adapter.fetchMskuOrderProfitCached = async (request) => {
+    calls.push(request);
+    return {
+      records: [{ sid: 1, netSalesAmount: 25, currencyCode: "USD", reportDate: request.endDate }],
+      cacheState: "hit",
+      cacheUpdatedAt: "2026-08-04 10:00:00",
+    };
+  };
+
+  const value = await getStoreOperatingMonthlyReport(
+    { startMonth: "2026-07", endMonth: "2026-07" },
+    { adapter, getBudgetTargetContext: async () => ({ rows: [], totals: {}, matched: false }) },
+  );
+
+  assert.equal(rawCalls, 0);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].currencyCode, "ORIGINAL");
+  assert.equal(value.meta.recordCount, 1);
+});
+
 test("single-country result separates original API currencies", async () => {
   const adapter = fakeAdapter({
     sellers: [{ sid: 1, name: "Store-US", country: "美国" }],

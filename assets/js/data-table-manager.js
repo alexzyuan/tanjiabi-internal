@@ -94,6 +94,7 @@ export function estimateSmartColumnWidth({
   const measuredHeaderWidth = measuredTextWidth(measureText, normalizeColumnLabel(label));
   const measuredSortableHeaderWidth = measuredHeaderWidth + Math.max(0, Number(sortControlWidth) || 0);
   let contentTarget = Math.max(measuredSortableHeaderWidth, measuredContentWidth) + profile.padding;
+  const headerMinimumWidth = measuredSortableHeaderWidth + profile.padding + (sortControlWidth ? 2 : 0);
 
   if (profileName === "selection" || profileName === "image") {
     contentTarget = profile.preferred;
@@ -109,7 +110,7 @@ export function estimateSmartColumnWidth({
     measuredContentWidth: Math.round(measuredContentWidth),
     measuredHeaderWidth: Math.round(measuredHeaderWidth),
     sampleCount: samples.length,
-    width: Math.min(profile.max, Math.max(profile.min, Math.round(contentTarget))),
+    width: Math.max(headerMinimumWidth, Math.min(profile.max, Math.max(profile.min, Math.round(contentTarget)))),
   };
 }
 

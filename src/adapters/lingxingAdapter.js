@@ -8,6 +8,7 @@ const CORE_COUNTRY_NAMES = new Set(["美国", "加拿大", "澳洲", "澳大利�
 const CORE_COUNTRY_CODES = new Set(["US", "CA", "AU", "DE"]);
 const tokenStates = new Map();
 const adapterInstances = new Map();
+const orderProfitInflight = new Map();
 let defaultLingxingAdapter = null;
 let defaultLingxingAdapterKey = "";
 
@@ -113,6 +114,7 @@ export function getLingxingAdapter(config = getConfig().lingxing) {
 export function resetLingxingAdapterForTest() {
   tokenStates.clear();
   adapterInstances.clear();
+  orderProfitInflight.clear();
   defaultLingxingAdapter = null;
   defaultLingxingAdapterKey = "";
 }
@@ -1173,6 +1175,90 @@ export class LingxingAdapter {
     });
   }
 
+  async fetchMskuOrderProfitCached({
+    startDate,
+    endDate,
+    sids = [],
+    currencyCode = "CNY",
+    sellerList = [],
+    reportDate = endDate,
+  } = {}) {
+    const selectedSids = uniqueNumbers(sids);
+    const selectedSidSet = new Set(selectedSids);
+    const cacheKey = stableOrderProfitCacheKey({ startDate, endDate, sids: selectedSids, currencyCode });
+    const cached = await readOrderProfitCache(cacheKey);
+    if (cached?.data?.orderProfitRecords) {
+      console.info("[lingxing-adapter] order profit cache hit", {
+        cacheKey,
+        startDate,
+        endDate,
+        currencyCode,
+        sidCount: selectedSids.length,
+        recordCount: cached.data.orderProfitRecords.length,
+      });
+      return {
+        records: cached.data.orderProfitRecords,
+        cacheKey,
+        cacheState: "hit",
+        cacheUpdatedAt: cached.updatedAt || "",
+      };
+    }
+
+    const existing = orderProfitInflight.get(cacheKey);
+    if (existing) {
+      console.info("[lingxing-adapter] order profit cache joined in-flight request", {
+        cacheKey,
+        startDate,
+        endDate,
+        currencyCode,
+        sidCount: selectedSids.length,
+      });
+      const result = await existing;
+      return { ...result, cacheState: "inflight" };
+    }
+
+    const loadPromise = (async () => {
+      const startedAt = Date.now();
+      try {
+        const payload = await this.fetchMskuOrderProfit({ startDate, endDate, sids: selectedSids, currencyCode });
+        const rawRecords = this.normalizeRecordList(payload);
+        const records = this.normalizeMskuOrderProfitRecords(rawRecords, sellerList, reportDate).filter((record) => {
+          if (!selectedSids.length) return true;
+          const recordSid = Number(record.sid || record.seller_id || record.sellerId || record.store_id || record.storeId);
+          return recordSid ? selectedSidSet.has(recordSid) : true;
+        });
+        await saveOrderProfitCache(cacheKey, { orderProfitRecords: records });
+        console.info("[lingxing-adapter] order profit cache miss loaded", {
+          cacheKey,
+          startDate,
+          endDate,
+          currencyCode,
+          sidCount: selectedSids.length,
+          recordCount: records.length,
+          elapsedMs: Date.now() - startedAt,
+        });
+        return { records, cacheKey, cacheState: "miss", cacheUpdatedAt: "" };
+      } catch (error) {
+        console.error("[lingxing-adapter] cached order profit fetch failed", {
+          cacheKey,
+          startDate,
+          endDate,
+          currencyCode,
+          sidCount: selectedSids.length,
+          elapsedMs: Date.now() - startedAt,
+          error: error.message,
+        });
+        throw error;
+      }
+    })();
+    orderProfitInflight.set(cacheKey, loadPromise);
+    try {
+      return await loadPromise;
+    } finally {
+      if (orderProfitInflight.get(cacheKey) === loadPromise) orderProfitInflight.delete(cacheKey);
+    }
+  }
+
   async fetchSellerProfitStatisticsChunks({ startDate, endDate, sids = [], currencyCode = "CNY", sellerList = [] }) {
     const dates = listDateRange(startDate, endDate, 31);
     if (!dates.length) return { records: [], payloads: [] };
@@ -1328,13 +1414,6 @@ export class LingxingAdapter {
     const selectedSids = Array.isArray(filters.sids) && filters.sids.length
       ? filters.sids.map(Number).filter((sid) => allowedSidSet.has(sid))
       : uniqueActiveSids;
-    const selectedSidSet = new Set(selectedSids);
-    const cacheKey = stableOrderProfitCacheKey({
-      startDate: range.startDate,
-      endDate: range.endDate,
-      sids: selectedSids,
-      currencyCode,
-    });
     let orderProfitRecords = [];
     let inventoryRecords = [];
     let cacheState = "miss";
@@ -1342,39 +1421,17 @@ export class LingxingAdapter {
     let sourceWarning = "";
     let inventoryWarning = "";
 
-    const cached = await readOrderProfitCache(cacheKey);
-    if (cached?.data?.orderProfitRecords) {
-      orderProfitRecords = cached.data.orderProfitRecords;
-      cacheState = "hit";
-      cacheUpdatedAt = cached.updatedAt || "";
-    } else {
-      try {
-        const orderProfit = await this.fetchMskuOrderProfit({
-          startDate: range.startDate,
-          endDate: range.endDate,
-          sids: selectedSids,
-          currencyCode,
-        });
-        const rawRecords = this.normalizeRecordList(orderProfit);
-        const reportDate = range.startDate === range.endDate ? range.startDate : range.endDate;
-        orderProfitRecords = this.normalizeMskuOrderProfitRecords(rawRecords, sellerList, reportDate).filter((record) => {
-          if (!selectedSids.length) return true;
-          const recordSid = Number(record.sid || record.seller_id || record.sellerId || record.store_id || record.storeId);
-          return recordSid ? selectedSidSet.has(recordSid) : true;
-        });
-        await saveOrderProfitCache(cacheKey, { orderProfitRecords });
-      } catch (error) {
-        console.error("[lingxing-adapter] order profit fetch failed", {
-          startDate: range.startDate,
-          endDate: range.endDate,
-          sids: selectedSids,
-          currencyCode,
-          cacheKey,
-          error: error.message,
-        });
-        throw error;
-      }
-    }
+    const orderProfitResult = await this.fetchMskuOrderProfitCached({
+      startDate: range.startDate,
+      endDate: range.endDate,
+      sids: selectedSids,
+      currencyCode,
+      sellerList,
+      reportDate: range.startDate === range.endDate ? range.startDate : range.endDate,
+    });
+    orderProfitRecords = orderProfitResult.records;
+    cacheState = orderProfitResult.cacheState;
+    cacheUpdatedAt = orderProfitResult.cacheUpdatedAt;
 
     try {
       inventoryRecords = await this.fetchAllFbaInventoryDetails(selectedSids);

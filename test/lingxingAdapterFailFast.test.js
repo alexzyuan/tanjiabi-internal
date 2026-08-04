@@ -100,3 +100,74 @@ test("LingxingAdapter defaults sales weekly order profit currency to CNY", async
     await rm(tempRoot, { recursive: true, force: true });
   }
 });
+
+test("shared order profit cache returns a normalized hit without calling Lingxing", async () => {
+  const projectRoot = process.cwd();
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lingxing-order-profit-shared-hit-"));
+  try {
+    process.chdir(tempRoot);
+    const { LingxingAdapter } = await importFresh(projectRoot, "src/adapters/lingxingAdapter.js");
+    const adapter = new LingxingAdapter({ baseUrl: "https://openapi.test/", appKey: "1234567890abcdef", appSecret: "secret" });
+    let calls = 0;
+    adapter.fetchMskuOrderProfit = async () => {
+      calls += 1;
+      return { data: { records: [{ sid: 8708, amount: 12, net_amount: 10 }] } };
+    };
+    const first = await adapter.fetchMskuOrderProfitCached({
+      startDate: "2026-08-01",
+      endDate: "2026-08-31",
+      sids: [8708],
+      currencyCode: "CNY",
+      sellerList: [{ sid: 8708, name: "JOI MEW-US", country: "美国" }],
+      reportDate: "2026-08-31",
+    });
+    const second = await adapter.fetchMskuOrderProfitCached({
+      startDate: "2026-08-01",
+      endDate: "2026-08-31",
+      sids: [8708],
+      currencyCode: "CNY",
+      sellerList: [{ sid: 8708, name: "JOI MEW-US", country: "美国" }],
+      reportDate: "2026-08-31",
+    });
+    assert.equal(calls, 1);
+    assert.equal(first.cacheState, "miss");
+    assert.equal(second.cacheState, "hit");
+    assert.equal(second.records[0].storeName, "JOI MEW-US");
+  } finally {
+    process.chdir(projectRoot);
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("shared order profit cache deduplicates concurrent misses", async () => {
+  const projectRoot = process.cwd();
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lingxing-order-profit-shared-inflight-"));
+  try {
+    process.chdir(tempRoot);
+    const { LingxingAdapter } = await importFresh(projectRoot, "src/adapters/lingxingAdapter.js");
+    const adapter = new LingxingAdapter({ baseUrl: "https://openapi.test/", appKey: "1234567890abcdef", appSecret: "secret" });
+    let calls = 0;
+    adapter.fetchMskuOrderProfit = async () => {
+      calls += 1;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return { data: { records: [{ sid: 8708, amount: 12 }] } };
+    };
+    const request = {
+      startDate: "2026-09-01",
+      endDate: "2026-09-30",
+      sids: [8708],
+      currencyCode: "CNY",
+      sellerList: [{ sid: 8708, name: "JOI MEW-US", country: "美国" }],
+      reportDate: "2026-09-30",
+    };
+    const results = await Promise.all([
+      adapter.fetchMskuOrderProfitCached(request),
+      adapter.fetchMskuOrderProfitCached(request),
+    ]);
+    assert.equal(calls, 1);
+    assert.deepEqual(results.map((result) => result.cacheState).sort(), ["inflight", "miss"]);
+  } finally {
+    process.chdir(projectRoot);
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
