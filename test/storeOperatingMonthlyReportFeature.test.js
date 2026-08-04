@@ -254,8 +254,9 @@ test("successful rendering refreshes the shared managed table and writes filter 
   assert.match(location.search, /view=store-operating-monthly-report/);
   assert.match(location.search, /startMonth=2026-06/);
   assert.match(location.search, /stores=A/);
-  assert.match(elements["#store-operating-report-head"].innerHTML, /data-column-key="actual" data-column-kind="number" data-column-profile="money-rate"/);
-  assert.match(elements["#store-operating-report-head"].innerHTML, /data-column-key="budget" data-column-kind="number" data-column-profile="money-rate"/);
+  assert.match(elements["#store-operating-report-head"].innerHTML, /data-column-key="group-0-actual"[^>]*data-column-kind="number"[^>]*data-column-profile="money-rate"/);
+  assert.match(elements["#store-operating-report-head"].innerHTML, /data-column-key="group-0-budget"[^>]*data-column-kind="number"[^>]*data-column-profile="money-rate"/);
+  assert.match(elements["#store-operating-report-head"].innerHTML, /A · USD/);
   assert.equal((elements["#store-operating-report-head"].innerHTML.match(/data-column-sortable="false"/g) || []).length, 0);
   assert.match(elements["#store-operating-report-body"].innerHTML, /销售收入净额/);
 });
@@ -404,11 +405,11 @@ test("failed rendering refreshes the managed table after replacing the header", 
   await feature.loadStoreOperatingMonthlyReport();
 
   assert.deepEqual(refreshes, [elements["#store-operating-report-table"]]);
-  assert.match(elements["#store-operating-report-head"].innerHTML, /data-column-key="actual"/);
+  assert.match(elements["#store-operating-report-head"].innerHTML, /data-column-key="category"/);
   assert.match(elements["#store-operating-report-body"].innerHTML, /加载失败：报告服务不可用/);
 });
 
-test("multi-currency rows keep their currency identity without unsortable group rows", async () => {
+test("multi-currency rows render currency in the group headers", async () => {
   const row = {
     key: "net-sales",
     category: "销售收入",
@@ -429,9 +430,41 @@ test("multi-currency rows keep their currency identity without unsortable group 
 
   await feature.loadStoreOperatingMonthlyReport();
 
-  assert.match(elements["#store-operating-report-body"].innerHTML, /CAD · 销售收入/);
-  assert.match(elements["#store-operating-report-body"].innerHTML, /USD · 销售收入/);
+  assert.match(elements["#store-operating-report-head"].innerHTML, /全部店铺 · CAD/);
+  assert.match(elements["#store-operating-report-head"].innerHTML, /全部店铺 · USD/);
   assert.doesNotMatch(elements["#store-operating-report-body"].innerHTML, /colspan=/);
+});
+
+test("selected stores render one four-metric group per store and merge rows horizontally", async () => {
+  const row = (actual, budget) => ({
+    key: "net-sales",
+    category: "销售收入",
+    name: "销售收入净额",
+    level: 2,
+    actual,
+    share: 1,
+    budget,
+    achievement: actual / budget,
+    available: true,
+  });
+  const { feature, elements } = makeFeatureHarness({
+    stores: ["A", "B"],
+    groups: [
+      { storeName: "A", currencyCode: "CNY", currencyAvailable: true, rows: [row(100, 120)] },
+      { storeName: "B", currencyCode: "CNY", currencyAvailable: true, rows: [row(80, 100)] },
+    ],
+  });
+
+  await feature.loadStoreOperatingMonthlyReport();
+
+  const header = elements["#store-operating-report-head"].innerHTML;
+  assert.match(header, /<th colspan="4"[^>]*>A · CNY<\/th>/);
+  assert.match(header, /<th colspan="4"[^>]*>B · CNY<\/th>/);
+  assert.equal((header.match(/data-report-metric=/g) || []).length, 8);
+  const body = elements["#store-operating-report-body"].innerHTML;
+  assert.equal((body.match(/销售收入净额/g) || []).length, 1);
+  assert.match(body, /data-report-group-index="0" data-report-metric="actual">100/);
+  assert.match(body, /data-report-group-index="1" data-report-metric="actual">80/);
 });
 
 test("budget targets consume report months, stores, and countries once as their initial scope", () => {
