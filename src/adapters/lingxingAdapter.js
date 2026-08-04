@@ -1042,6 +1042,13 @@ export class LingxingAdapter {
         grossRate: record.gross_margin,
         totalSalesQuantity: record.volume,
         returnQuantity: readFirstNumber(record, ["return_quantity", "returnQuantity", "return_qty", "returnQty"]),
+        unsaleableReturnQuantity: readFirstNumber(record, [
+          "fbaReturnsUnsaleableQuantity",
+          "fba_returns_unsaleable_quantity",
+          "unsaleable_return_quantity",
+        ]),
+        purchaseUnitCost: readFirstNumber(record, ["cgUnitPrice", "cg_unit_price"]),
+        firstLegUnitCost: readFirstNumber(record, ["cgTransportUnitCosts", "cg_transport_unit_costs"]),
         totalAdsSales: record.ad_sales_amount,
         totalAdsSalesQuantity: record.ad_volume,
         totalAdsCost: record.spend,
