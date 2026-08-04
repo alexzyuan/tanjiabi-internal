@@ -19,10 +19,10 @@ test("store operating monthly report is a finance-owned feature with shared cont
   assert.match(indexSource, /id="store-operating-report-store" multiple/);
   assert.match(indexSource, /id="store-operating-report-country" multiple/);
   assert.match(indexSource, /id="store-operating-report-table"[^>]*data-table-key="store-operating-monthly-report"/);
-  assert.match(indexSource, /<th data-column-key="category" data-column-sortable="false">分类<\/th>/);
-  assert.match(indexSource, /<th data-column-key="name" data-column-sortable="false">名称<\/th>/);
-  assert.match(indexSource, /<th data-column-key="actual" data-column-kind="number" data-column-profile="money-rate" data-column-sortable="false">实际完成值<\/th>/);
-  assert.match(indexSource, /<th data-column-key="budget" data-column-kind="number" data-column-profile="money-rate" data-column-sortable="false">预算值<\/th>/);
+  assert.match(indexSource, /<th data-column-key="category">分类<\/th>/);
+  assert.match(indexSource, /<th data-column-key="name">名称<\/th>/);
+  assert.match(indexSource, /<th data-column-key="actual" data-column-kind="number" data-column-profile="money-rate">实际完成值<\/th>/);
+  assert.match(indexSource, /<th data-column-key="budget" data-column-kind="number" data-column-profile="money-rate">预算值<\/th>/);
 
   assert.match(appSource, /import \{ createStoreOperatingMonthlyReportFeature \} from "\.\/assets\/js\/features\/store-operating-monthly-report\.js/);
   assert.match(appSource, /createStoreOperatingMonthlyReportFeature\(\{/);
@@ -43,7 +43,7 @@ test("store operating monthly report is a finance-owned feature with shared cont
   assert.match(budgetSource, /budgetCountries/);
 });
 
-test("monthly report delegates widths to shared tooling and disables flat sorting for its hierarchy", async () => {
+test("monthly report delegates widths to shared tooling and sorts hierarchy blocks safely", async () => {
   const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
   const css = await readFile(new URL("../assets/css/pages/56-store-operating-monthly-report.css", import.meta.url), "utf8");
   const generatedCss = await readFile(new URL("../styles.css", import.meta.url), "utf8");
@@ -51,7 +51,8 @@ test("monthly report delegates widths to shared tooling and disables flat sortin
   const shellParityCss = await readFile(new URL("../assets/css/legacy/98-shell-topbar-parity.css", import.meta.url), "utf8");
 
   assert.match(indexSource, /data-table-key="store-operating-monthly-report"/);
-  assert.equal((indexSource.match(/data-column-sortable="false"/g) || []).length >= 6, true);
+  assert.equal((indexSource.match(/data-column-sortable="false"/g) || []).length, 0);
+  assert.match(indexSource, /data-table-key="store-operating-monthly-report"/);
   assert.match(css, /tr\[data-report-row-level="0"\]/);
   assert.doesNotMatch(css, /module-hero/);
   assert.match(shellCss, /\/\* Nested module hero and breadcrumb specificity fix v1\. \*\/[\s\S]*@media \(max-width: 900px\) \{[\s\S]*\.view > \.module-hero,[\s\S]*\.view \.module-hero \{[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);

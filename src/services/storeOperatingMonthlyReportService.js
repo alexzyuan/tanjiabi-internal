@@ -396,6 +396,8 @@ export async function exportStoreOperatingMonthlyReportXlsx(filters = {}, {
     ["生成时间", report.meta?.generatedAt || ""],
     ["预算状态", report.budgetStatus?.state || "unconfigured"],
     ["预算匹配数", report.budgetStatus?.matchCount ?? 0],
+    ["缺少汇率条数", report.meta?.missingExchangeRateCount ?? 0],
+    ["不可用科目", Array.isArray(report.meta?.unavailableMetrics) ? report.meta.unavailableMetrics.join("、") : ""],
   ];
   const metadataSheet = XLSX.utils.aoa_to_sheet(metadataRows);
   metadataSheet["!cols"] = [{ wch: 16 }, { wch: 48 }];

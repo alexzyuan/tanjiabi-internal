@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -27,6 +27,7 @@ function workbookBuffer({ storeTitle = "探嘉美国店铺预算报表", msku = 
   const summaryRows = [
     [storeTitle],
     ["预算月份", "2026-07", "", 7],
+    ["币种", "USD"],
     ["销售收入", salesAmount],
     ["广告费用", adBudget],
     ["退款金额", 5],
@@ -96,7 +97,7 @@ test("parsed workbook preserves absent report budget metrics instead of synthesi
     assert.equal(upload.summary.adBudget, null);
     assert.equal(upload.summary.refundTarget, null);
     assert.equal(upload.summary.profitTarget, null);
-    assert.equal(upload.summary.currencyCode, "USD");
+    assert.equal(upload.summary.currencyCode, "");
   });
 });
 
@@ -154,6 +155,22 @@ test("listBudgetUploads ignores AppleDouble files and empty upload directories",
     });
 
     assert.deepEqual(await listBudgetUploads(), []);
+  });
+});
+
+test("listBudgetUploads reparses historical summaries when the budget schema changes", async () => {
+  await withTempService(async ({ saveBudgetUpload, listBudgetUploads }, dir) => {
+    const upload = await saveBudgetUpload(uploadPayload());
+    const summaryPath = path.join(dir, "data-cache", "budget-targets", `${upload.storedName}.json`);
+    const summary = JSON.parse(await readFile(summaryPath, "utf8"));
+    delete summary.schemaVersion;
+    delete summary.currencyCode;
+    await writeFile(summaryPath, JSON.stringify(summary));
+
+    const uploads = await listBudgetUploads();
+
+    assert.equal(uploads[0].summary.schemaVersion, 2);
+    assert.equal(uploads[0].summary.currencyCode, "USD");
   });
 });
 

@@ -51,6 +51,18 @@ function sameQuery(left, right) {
   return String(left || "") === String(right || "");
 }
 
+function compareReportSortValues(left, right) {
+  const leftText = String(left ?? "").trim();
+  const rightText = String(right ?? "").trim();
+  if (leftText === rightText) return 0;
+  if (!leftText) return 1;
+  if (!rightText) return -1;
+  const leftNumber = Number(leftText.replace(/[,%¥￥$€£]/g, ""));
+  const rightNumber = Number(rightText.replace(/[,%¥￥$€£]/g, ""));
+  if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) return leftNumber - rightNumber;
+  return leftText.localeCompare(rightText, "zh-Hans-CN", { numeric: true, sensitivity: "base" });
+}
+
 export function createStoreOperatingMonthlyReportFeature({
   root = globalThis.document,
   bind,
@@ -97,6 +109,7 @@ export function createStoreOperatingMonthlyReportFeature({
   let activeReportAbortController = null;
   let reportLoadGeneration = 0;
   const collapsedCategories = new Set();
+  const reportSortState = { key: "", direction: "asc" };
 
   function query(selector) {
     return root?.querySelector?.(selector) || null;
@@ -226,12 +239,12 @@ export function createStoreOperatingMonthlyReportFeature({
     if (!head) return;
     head.innerHTML = `
       <tr>
-        <th data-column-key="category" data-column-sortable="false">分类</th>
-        <th data-column-key="name" data-column-sortable="false">名称</th>
-        <th data-column-key="actual" data-column-kind="number" data-column-profile="money-rate" data-column-sortable="false">实际完成值</th>
-        <th data-column-key="share" data-column-kind="number" data-column-profile="money-rate" data-column-sortable="false">占比</th>
-        <th data-column-key="budget" data-column-kind="number" data-column-profile="money-rate" data-column-sortable="false">预算值</th>
-        <th data-column-key="achievement" data-column-kind="number" data-column-profile="money-rate" data-column-sortable="false">达成率</th>
+        <th data-column-key="category">分类</th>
+        <th data-column-key="name">名称</th>
+        <th data-column-key="actual" data-column-kind="number" data-column-profile="money-rate">实际完成值</th>
+        <th data-column-key="share" data-column-kind="number" data-column-profile="money-rate">占比</th>
+        <th data-column-key="budget" data-column-kind="number" data-column-profile="money-rate">预算值</th>
+        <th data-column-key="achievement" data-column-kind="number" data-column-profile="money-rate">达成率</th>
       </tr>
     `;
   }
@@ -263,7 +276,8 @@ export function createStoreOperatingMonthlyReportFeature({
         const profitAlwaysVisible = row.key === "sales-profit";
         const hidden = categoryKey && collapsedCategories.has(`${group.currencyCode || "missing"}:${categoryKey}`) && !profitAlwaysVisible;
         const categoryLabel = showCurrencyInRows ? `${currency} · ${row.category || "—"}` : (row.category || "—");
-        const categoryCell = Number(row.level) === 1 && Array.isArray(row.children) && row.children.length
+        const isExpandableCategory = Number(row.level) === 1 && row.key !== "sales-profit-category" && Array.isArray(row.children) && row.children.length;
+        const categoryCell = isExpandableCategory
           ? `<button class="store-operating-report-disclosure" type="button" data-report-category-toggle="${escapeHtml(row.key || "")}" data-currency-code="${escapeHtml(group.currencyCode || "")}" aria-expanded="${isCollapsed ? "false" : "true"}"><span aria-hidden="true">${isCollapsed ? "▸" : "▾"}</span>${escapeHtml(categoryLabel)}</button>`
           : escapeHtml(categoryLabel);
         return `
@@ -296,6 +310,54 @@ export function createStoreOperatingMonthlyReportFeature({
     ).forEach((row) => {
       if (row.dataset.reportRowKey !== "sales-profit") row.hidden = !expanded;
     });
+  }
+
+  function applyStoreOperatingMonthlyReportSort(key = "") {
+    const table = query("#store-operating-report-table");
+    const body = table?.tBodies?.[0];
+    if (!body || !key) return;
+    reportSortState.direction = reportSortState.key === key && reportSortState.direction === "asc" ? "desc" : "asc";
+    reportSortState.key = key;
+    const columnIndex = { category: 0, name: 1, actual: 2, share: 3, budget: 4, achievement: 5 }[key];
+    if (columnIndex === undefined) return;
+    const rows = Array.from(body.rows);
+    const categoryRows = rows.filter((row) => row.dataset.reportRowLevel === "1");
+    if (!categoryRows.length) return;
+    const blocks = categoryRows.map((categoryRow, index) => {
+      const currency = categoryRow.dataset.currencyCode || "";
+      const categoryKey = categoryRow.dataset.reportRowKey || "";
+      const children = rows.filter((row) => row.dataset.reportParentCategory === categoryKey && (row.dataset.currencyCode || "") === currency);
+      return { categoryRow, children, index };
+    });
+    const overviewRows = rows.filter((row) => row.dataset.reportRowLevel === "0");
+    blocks.sort((left, right) => {
+      const result = compareReportSortValues(left.categoryRow.cells[columnIndex]?.textContent, right.categoryRow.cells[columnIndex]?.textContent);
+      return (result || left.index - right.index) * (reportSortState.direction === "asc" ? 1 : -1);
+    });
+    [...overviewRows, ...blocks.flatMap(({ categoryRow, children }) => [categoryRow, ...children])]
+      .forEach((row) => body.appendChild(row));
+  }
+
+  function structuredApiError(payload, status) {
+    const message = payload?.error || `API ${status}`;
+    const details = payload?.details == null ? "" : `；详情：${typeof payload.details === "string" ? payload.details : JSON.stringify(payload.details)}`;
+    const endpoint = payload?.endpoint ? `；接口：${payload.endpoint}` : "";
+    const error = new Error(`${message}${details}${endpoint}`);
+    error.status = status;
+    error.details = payload?.details;
+    error.endpoint = payload?.endpoint;
+    return error;
+  }
+
+  async function readApiResponse(response) {
+    let payload;
+    try {
+      payload = await response.json();
+    } catch (error) {
+      throw new Error(`API ${response.status} 返回了无法解析的响应`, { cause: error });
+    }
+    if (!response.ok || payload?.ok === false) throw structuredApiError(payload, response.status);
+    return payload;
   }
 
   function budgetStatusText(status = {}) {
@@ -371,8 +433,7 @@ export function createStoreOperatingMonthlyReportFeature({
       const requestOptions = { cache: "no-store" };
       if (abortController) requestOptions.signal = abortController.signal;
       const response = await fetchImpl(`/api/finance/store-operating-monthly-report?${reportQuery}`, requestOptions);
-      const data = await response.json();
-      if (!response.ok || data?.ok === false) throw new Error(data?.error || `API ${response.status}`);
+      const data = await readApiResponse(response);
       if (!isCurrentReportLoad(generation)) return null;
       renderReport(data, filters);
       lastSuccessfulQuery = reportQuery;
@@ -467,12 +528,7 @@ export function createStoreOperatingMonthlyReportFeature({
     } catch (error) {
       throw new Error(`API ${response.status} 返回了无法解析的错误响应`, { cause: error });
     }
-    const message = payload?.error || `API ${response.status}`;
-    const details = payload?.details == null
-      ? ""
-      : `；详情：${typeof payload.details === "string" ? payload.details : JSON.stringify(payload.details)}`;
-    const endpoint = payload?.endpoint ? `；接口：${payload.endpoint}` : "";
-    return new Error(`${message}${details}${endpoint}`);
+    return structuredApiError(payload, response.status);
   }
 
   async function exportStoreOperatingMonthlyReport() {
@@ -523,5 +579,6 @@ export function createStoreOperatingMonthlyReportFeature({
     resetStoreOperatingMonthlyReport,
     setupStoreOperatingMonthlyReport,
     toggleReportCategory,
+    applyStoreOperatingMonthlyReportSort,
   };
 }

@@ -216,6 +216,7 @@ let setupAdPerformanceReview = () => {};
 let applyFactoryInventorySort = () => {};
 let applyMskuDetailSort = () => {};
 let applySupplierBoardSort = () => {};
+let applyStoreOperatingMonthlyReportSort = () => {};
 let calculateReviewRating = () => {};
 let closeKnowledgeExternalDocument = () => {};
 let collapseSidebar = () => {};
@@ -361,6 +362,7 @@ let makeUnavailableDashboard = (message) => ({
   getApplyFactoryInventorySort: () => applyFactoryInventorySort,
   getApplyMskuDetailSort: () => applyMskuDetailSort,
   getApplySupplierBoardSort: () => applySupplierBoardSort,
+  getApplyStoreOperatingMonthlyReportSort: () => applyStoreOperatingMonthlyReportSort,
   setTableSortState,
 }));
 ({ refreshTable, setupDataTables } = createDataTableManager({
@@ -747,6 +749,7 @@ async function refreshDashboardFromFilters() {
 }));
 
 ({
+  applyStoreOperatingMonthlyReportSort,
   initializeStoreOperatingMonthlyReportDefaults,
   loadStoreOperatingMonthlyReport,
   setupStoreOperatingMonthlyReport,

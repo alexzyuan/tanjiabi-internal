@@ -256,7 +256,7 @@ test("successful rendering refreshes the shared managed table and writes filter 
   assert.match(location.search, /stores=A/);
   assert.match(elements["#store-operating-report-head"].innerHTML, /data-column-key="actual" data-column-kind="number" data-column-profile="money-rate"/);
   assert.match(elements["#store-operating-report-head"].innerHTML, /data-column-key="budget" data-column-kind="number" data-column-profile="money-rate"/);
-  assert.equal((elements["#store-operating-report-head"].innerHTML.match(/data-column-sortable="false"/g) || []).length, 6);
+  assert.equal((elements["#store-operating-report-head"].innerHTML.match(/data-column-sortable="false"/g) || []).length, 0);
   assert.match(elements["#store-operating-report-body"].innerHTML, /销售收入净额/);
 });
 
@@ -268,8 +268,7 @@ test("hierarchy renders expanded disclosure buttons and collapse keeps profit ro
   });
   await feature.loadStoreOperatingMonthlyReport();
 
-  assert.match(elements["#store-operating-report-body"].innerHTML, /data-report-category-toggle="sales-profit-category"/);
-  assert.match(elements["#store-operating-report-body"].innerHTML, /aria-expanded="true"/);
+  assert.doesNotMatch(elements["#store-operating-report-body"].innerHTML, /data-report-category-toggle="sales-profit-category"/);
   assert.doesNotMatch(elements["#store-operating-report-body"].innerHTML, /data-report-row-key="sales-profit"[^>]* hidden/);
 
   const ordinaryRow = { dataset: { reportRowKey: "ordinary-cost" }, hidden: false };
@@ -310,6 +309,23 @@ test("export surfaces structured server diagnostics", async () => {
 
   assert.match(elements["#store-operating-report-status"].textContent, /订单利润上游失败/);
   assert.match(elements["#store-operating-report-status"].textContent, /trace-1/);
+  assert.match(elements["#store-operating-report-status"].textContent, /OrderProfit/);
+});
+
+test("report load surfaces structured server diagnostics", async () => {
+  const { feature, elements } = makeFeatureHarness({
+    fetchImpl: async () => ({
+      ok: false,
+      status: 502,
+      async json() {
+        return { error: "订单利润上游失败", details: { requestId: "trace-load" }, endpoint: "/basicOpen/finance/mreport/OrderProfit" };
+      },
+    }),
+  });
+
+  await feature.loadStoreOperatingMonthlyReport();
+
+  assert.match(elements["#store-operating-report-status"].textContent, /trace-load/);
   assert.match(elements["#store-operating-report-status"].textContent, /OrderProfit/);
 });
 

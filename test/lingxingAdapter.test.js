@@ -225,6 +225,22 @@ test("LingxingAdapter fails observably instead of truncating order profit at its
   );
 });
 
+test("LingxingAdapter continues after a short page when upstream pagination metadata says more rows exist", async () => {
+  const adapter = new LingxingAdapter(lingxingTestConfig);
+  const calls = [];
+  adapter.performSignedRequest = async (_endpoint, options) => {
+    calls.push(options.params);
+    const offset = options.params.offset;
+    if (offset === 0) return { code: 0, data: { records: [{ id: 1 }], total: 2, hasNext: true } };
+    return { code: 0, data: { records: [{ id: 2 }], total: 2, hasNext: false } };
+  };
+
+  const payload = await adapter.fetchMskuOrderProfit({ startDate: "2026-07-01", endDate: "2026-07-31" });
+
+  assert.deepEqual(calls.map(({ offset }) => offset), [0, 1]);
+  assert.equal(adapter.normalizeRecordList(payload).length, 2);
+});
+
 test("LingxingAdapter applies exclusive end_date to FBA shipment list at the API boundary", async () => {
   const adapter = new LingxingAdapter(lingxingTestConfig);
   const calls = [];

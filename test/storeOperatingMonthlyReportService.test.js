@@ -516,7 +516,7 @@ test("monthly report export builds its workbook from the same report result and 
       receivedFilters = value;
       return {
         filters: { ...value, months: ["2026-06", "2026-07"] },
-        meta: { currencyMode: "ORIGINAL", currencyCodes: ["USD"], generatedAt: "2026-08-03T08:00:00.000Z" },
+        meta: { currencyMode: "ORIGINAL", currencyCodes: ["USD"], generatedAt: "2026-08-03T08:00:00.000Z", missingExchangeRateCount: 1, unavailableMetrics: ["ad-spend"] },
         budgetStatus: { state: "configured", matchCount: 2 },
         groups: [{
           currencyCode: "USD",
@@ -555,6 +555,8 @@ test("monthly report export builds its workbook from the same report result and 
     ["生成时间", "2026-08-03T08:00:00.000Z"],
     ["预算状态", "configured"],
     ["预算匹配数", 2],
+    ["缺少汇率条数", 1],
+    ["不可用科目", "ad-spend"],
   ]);
 });
 

@@ -57,6 +57,7 @@ export function createTableSorter({
   getApplyFactoryInventorySort = () => null,
   getApplyMskuDetailSort = () => null,
   getApplySupplierBoardSort = () => null,
+  getApplyStoreOperatingMonthlyReportSort = () => null,
   root = globalThis.document,
   setTableSortState,
 } = {}) {
@@ -75,6 +76,10 @@ export function createTableSorter({
     }
     if (table?.id === "factory-inventory-table") {
       getApplyFactoryInventorySort()?.(th.dataset.factorySort || th.querySelector("[data-factory-sort]")?.dataset.factorySort || "");
+      return;
+    }
+    if (table?.id === "store-operating-report-table") {
+      getApplyStoreOperatingMonthlyReportSort()?.(th.dataset.columnKey || "");
       return;
     }
     const mskuSortButton = th.querySelector("[data-msku-sort]");

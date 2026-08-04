@@ -4,6 +4,7 @@ import path from "node:path";
 const uploadDir = path.join(process.cwd(), "uploads", "budget-targets");
 const summaryDir = path.join(process.cwd(), "data-cache", "budget-targets");
 const allowedExt = ".xlsx";
+const BUDGET_SUMMARY_SCHEMA_VERSION = 2;
 
 function isAppleDoubleFile(name = "") {
   return path.basename(String(name || "")).startsWith("._");
@@ -356,7 +357,7 @@ function findExplicitBudgetCurrencyCode(summaryRows, headers) {
     const parenthesized = text.match(/[（(]([A-Za-z]{3})[）)]/);
     if (parenthesized) return parenthesized[1].toUpperCase();
   }
-  return headers.some((header) => /\$|美元|美金/.test(normalizeText(header))) ? "USD" : "";
+  return "";
 }
 
 function buildStoreSummaryTargets(summaryRows, fallback = {}) {
@@ -563,6 +564,7 @@ async function parseBudgetWorkbook(filePath, fileName, storedName, selectedMonth
     profitRateTarget: storeTargets.profitRateTarget,
     mskuRows,
     parsedAt: new Date().toISOString(),
+    schemaVersion: BUDGET_SUMMARY_SCHEMA_VERSION,
   };
 }
 
@@ -708,7 +710,11 @@ export async function listBudgetUploads() {
           };
 
           let summary = await readSummary(name);
-          if (!summary || summary.status !== "已解析" || !Array.isArray(summary.mskuRows)) {
+          if (!summary
+            || summary.status !== "已解析"
+            || !Array.isArray(summary.mskuRows)
+            || summary.schemaVersion !== BUDGET_SUMMARY_SCHEMA_VERSION
+            || !Object.hasOwn(summary, "currencyCode")) {
             summary = await parseAndSaveBudgetUpload(upload);
           }
           return {

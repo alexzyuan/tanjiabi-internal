@@ -400,7 +400,7 @@ export class LingxingAdapter {
     const records = [];
     let firstPayload;
     let pageCount = 0;
-    for (let offset = 0; ; offset += pageSize) {
+    for (let offset = 0; ; ) {
       if (offset >= maxRows) {
         const error = new Error(`订单利润分页达到安全上限 ${maxRows} 条，拒绝返回截断结果`);
         error.endpoint = "/basicOpen/finance/mreport/OrderProfit";
@@ -417,7 +417,16 @@ export class LingxingAdapter {
       pageCount += 1;
       const total = orderProfitTotal(payload);
       const hasNext = payload?.data?.hasNext ?? payload?.hasNext;
-      if (!pageRecords.length || pageRecords.length < pageSize || hasNext === false || (total !== null && records.length >= total)) break;
+      const totalExhausted = total !== null && records.length >= total;
+      const upstreamHasMore = hasNext === true || (total !== null && records.length < total);
+      if (!pageRecords.length && upstreamHasMore) {
+        const error = new Error("订单利润分页返回空页但上游仍声明存在后续数据，拒绝返回不完整结果");
+        error.endpoint = "/basicOpen/finance/mreport/OrderProfit";
+        error.details = { offset, total, hasNext, fetchedRows: records.length };
+        throw error;
+      }
+      if (!upstreamHasMore && (totalExhausted || hasNext === false || pageRecords.length < pageSize || !pageRecords.length)) break;
+      offset += pageRecords.length;
     }
     if (pageCount > 1) {
       console.info("[lingxing-adapter] order profit pagination complete", {
