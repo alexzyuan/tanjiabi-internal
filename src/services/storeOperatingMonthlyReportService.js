@@ -445,7 +445,7 @@ function storeOperatingMonthlyReportExportLayout(report) {
       }),
     ];
   });
-  const headerTop = ["分类", "名称", ...groups.flatMap((group) => [group.label, "", "", ""] )];
+  const headerTop = ["上级", "名称", ...groups.flatMap((group) => [group.label, "", "", ""] )];
   const headerBottom = ["", "", ...groups.flatMap(() => ["实际完成值", "占比", "预算值", "达成率"] )];
   const merges = [
     { s: { r: 0, c: 0 }, e: { r: 1, c: 0 } },

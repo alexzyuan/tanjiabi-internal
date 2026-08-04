@@ -1,15 +1,24 @@
-const METRICS = [
-  ["sales-income", "销售收入", "totalSalesAmount", "revenue", false],
-  ["sales-discount", "销售折扣", "promotionDiscount", "revenue", true],
-  ["refunds", "退款金额", "totalSalesRefunds", "revenue", true],
-  ["net-sales", "销售收入净额", "netSalesAmount", "revenue", false],
-  ["purchase-cost", "商品采购成本", "purchaseCost", "sales-cost", true],
-  ["first-leg-cost", "头程费用", "firstLegCost", "logistics", true],
-  ["storage-fee", "平台仓储费用", "storageFee", "storage", true],
-  ["ad-spend", "推广费用", "totalAdsCost", "advertising", true],
-  ["platform-fee", "平台费用", "platformFee", "platform", true],
-  ["fba-delivery-fee", "FBA 配送费", "fbaDeliveryFee", "logistics", true],
-  ["sales-profit", "销售利润", "grossProfit", "sales-profit-category", false],
+const METRIC_DEFINITIONS = [
+  { key: "sales-income", name: "销售收入", fields: ["totalSalesAmount", "salesAmount", "sales_amount", "amount"], category: "revenue" },
+  { key: "sales-discount", name: "销售折扣", fields: ["promotionDiscount", "promotion_discount", "discount_amount"], category: "revenue", magnitude: true },
+  { key: "refunds", name: "退款金额", fields: ["totalSalesRefunds", "refunds", "refund_amount", "refundAmount"], category: "revenue", magnitude: true },
+  { key: "purchase-cost", name: "销售成本", fields: ["purchaseCost", "purchase_costs", "purchase_cost", "goods_cost"], category: "sales-cost", magnitude: true },
+  { key: "first-leg-cost", name: "头程费用", fields: ["firstLegCost", "logistics_costs", "shipping_cost"], category: "logistics", magnitude: true },
+  { key: "storage-fee", name: "平台仓储费用", fields: ["storageFee", "total_stock_fee", "storage_fee"], category: "storage", magnitude: true },
+  { key: "ad-spend", name: "推广费用", fields: ["totalAdsCost", "adsCost", "ads_cost", "spend"], category: "advertising", magnitude: true },
+  { key: "platform-fee", name: "平台费用", fields: ["platformFee", "platform_fee", "selling_fee"], category: "platform", magnitude: true },
+  { key: "fba-delivery-fee", name: "FBA 配送费", fields: ["fbaDeliveryFee", "fulfillment_fee", "fba_fulfillment_fee"], category: "logistics", magnitude: true },
+  { key: "operations", name: "运营费用", fields: ["operationsCost", "operations_cost", "operating_cost", "operating_expense"], category: "operations", magnitude: true },
+  { key: "management", name: "管理费用", fields: ["managementCost", "management_cost", "management_expense"], category: "management", magnitude: true },
+  { key: "labor", name: "人力费用", fields: ["laborCost", "labor_cost", "labor_expense"], category: "labor", magnitude: true },
+  { key: "asset-impairment", name: "资产减值", fields: ["assetImpairment", "asset_impairment", "impairment_loss"], category: "asset-impairment", magnitude: true },
+  { key: "non-operating-income", name: "营业外收入", fields: ["nonOperatingIncome", "non_operating_income"], category: "non-operating-income" },
+  { key: "non-operating-expense", name: "营业外支出", fields: ["nonOperatingExpense", "non_operating_expense"], category: "non-operating-expense", magnitude: true },
+  { key: "net-sales", name: "销售收入净额", category: "revenue", derived: true },
+  { key: "return-cost", name: "退货成本", category: "sales-cost", derived: true },
+  { key: "net-sales-cost", name: "销售成本净额", category: "sales-cost", derived: true },
+  { key: "platform-sales-profit", name: "平台销售利润", category: "platform-profit-category", derived: true },
+  { key: "sales-profit", name: "公司净利润", category: "sales-profit-category", derived: true },
 ];
 
 const BUDGET_METRICS = new Set(["net-sales", "ad-spend", "refunds", "sales-profit"]);
@@ -29,6 +38,7 @@ const CATEGORIES = [
   ["advertising", "推广费用"],
   ["logistics", "物流费用"],
   ["platform", "平台费用"],
+  ["platform-profit-category", "平台销售利润"],
   ["operations", "运营费用"],
   ["management", "管理费用"],
   ["labor", "人力费用"],
@@ -38,6 +48,11 @@ const CATEGORIES = [
   ["non-operating-expense", "营业外支出"],
   ["sales-profit-category", "销售利润"],
 ];
+
+const RETURN_COST_FIELDS = ["returnCost", "return_cost", "return_goods_cost", "return_goods_cost_amount"];
+const RETURN_QUANTITY_FIELDS = ["returnQuantity", "return_quantity", "returnQty", "return_qty"];
+const SALES_QUANTITY_FIELDS = ["totalSalesQuantity", "total_sales_quantity", "salesQuantity", "sales_quantity", "volume", "quantity", "qty"];
+const NET_SALES_FIELDS = ["netSalesAmount", "net_sales_amount", "net_amount"];
 
 function isPresent(value) {
   return value !== "" && value !== null && value !== undefined;
@@ -68,21 +83,32 @@ function toFiniteNumber(value, field) {
   return Number(value);
 }
 
-function sumPresent(records, field, magnitude = false) {
+function sumPresent(records, fields, magnitude = false, label = fields.join("/") || "字段") {
   if (records.length === 0) return null;
-  const values = records.map((row) => row[field]).filter(isPresent);
-  if (values.length !== records.length) return null;
+  const values = records.map((row) => readValue(row, fields));
+  if (values.some((value) => !isPresent(value))) return null;
   return values.reduce((sum, value) => {
-    const number = toFiniteNumber(value, `订单利润字段 ${field}`);
+    const number = toFiniteNumber(value, `订单利润字段 ${label}`);
     return sum + (magnitude ? Math.abs(number) : number);
   }, 0);
 }
 
-function readBudget(budgetByMetric, key) {
-  if (!BUDGET_METRICS.has(key) || !Object.hasOwn(budgetByMetric, key) || !isPresent(budgetByMetric[key])) {
-    return null;
-  }
-  return toFiniteNumber(budgetByMetric[key], `预算科目 ${key}`);
+function sumReturnCosts(records) {
+  if (records.length === 0) return null;
+  const values = records.map((record) => {
+    const directValue = readValue(record, RETURN_COST_FIELDS);
+    if (isPresent(directValue)) return Math.abs(toFiniteNumber(directValue, "订单利润字段 returnCost"));
+    const purchaseCost = readValue(record, ["purchaseCost", "purchase_costs", "purchase_cost", "goods_cost"]);
+    const salesQuantity = readValue(record, SALES_QUANTITY_FIELDS);
+    const returnQuantity = readValue(record, RETURN_QUANTITY_FIELDS);
+    if (![purchaseCost, salesQuantity, returnQuantity].every(isPresent)) return null;
+    const cost = Math.abs(toFiniteNumber(purchaseCost, "订单利润字段 purchaseCost"));
+    const quantity = Math.abs(toFiniteNumber(salesQuantity, "订单利润字段 totalSalesQuantity"));
+    const returned = Math.abs(toFiniteNumber(returnQuantity, "订单利润字段 returnQuantity"));
+    if (quantity === 0) return returned === 0 ? 0 : null;
+    return cost * returned / quantity;
+  });
+  return values.every((value) => value !== null) ? values.reduce((sum, value) => sum + value, 0) : null;
 }
 
 function deriveFromRequiredChildren(actualByKey, children, calculate) {
@@ -90,7 +116,7 @@ function deriveFromRequiredChildren(actualByKey, children, calculate) {
   return values.every((value) => value !== null && value !== undefined) ? calculate(values) : null;
 }
 
-function createRow({ key, category, name, level, actual, budget = null, children = [] }, netSales) {
+function createRow({ key, category, name, level, actual, budget = null, children = [] }, salesIncome) {
   const available = actual !== null;
   return {
     key,
@@ -99,7 +125,7 @@ function createRow({ key, category, name, level, actual, budget = null, children
     level,
     actual,
     budget,
-    share: available && netSales !== null && netSales !== 0 ? actual / netSales : null,
+    share: available && salesIncome !== null && salesIncome !== 0 ? actual / salesIncome : null,
     achievement: available && budget !== null && budget !== 0 ? actual / budget : null,
     available,
     children,
@@ -150,52 +176,69 @@ export function readStoreOperatingBudgetCurrencyCode(row = {}) {
 }
 
 export function buildStoreOperatingReportRows({ records, budgetByMetric = {}, currencyCode } = {}) {
-  if (!Array.isArray(records)) {
-    throw new Error("订单利润 records 必须是数组");
-  }
+  if (!Array.isArray(records)) throw new Error("订单利润 records 必须是数组");
   if (budgetByMetric === null || typeof budgetByMetric !== "object" || Array.isArray(budgetByMetric)) {
     throw new Error("预算科目必须是对象");
   }
-  if (currencyCode !== undefined && typeof currencyCode !== "string") {
-    throw new Error("币种代码必须是字符串");
-  }
+  if (currencyCode !== undefined && typeof currencyCode !== "string") throw new Error("币种代码必须是字符串");
 
-  const metricActuals = new Map(METRICS.map(([key, _name, field, _category, magnitude]) => [
-    key,
-    sumPresent(records, field, magnitude),
-  ]));
-  const netSales = metricActuals.get("net-sales");
-  const metricsByCategory = new Map(CATEGORIES.map(([key]) => [key, []]));
-  const metricRows = METRICS.map(([key, name, _field, category]) => {
-    metricsByCategory.get(category).push(key);
-    return createRow({
-      key,
-      category: CATEGORIES.find(([categoryKey]) => categoryKey === category)[1],
-      name,
-      level: 2,
-      actual: metricActuals.get(key),
-      budget: readBudget(budgetByMetric, key),
-    }, netSales);
+  const actualByKey = new Map();
+  METRIC_DEFINITIONS.filter((metric) => !metric.derived).forEach((metric) => {
+    actualByKey.set(metric.key, sumPresent(records, metric.fields, metric.magnitude, metric.fields[0]));
   });
 
-  const actualByKey = new Map(metricRows.map((row) => [row.key, row.actual]));
-  actualByKey.set("revenue", actualByKey.get("net-sales"));
-  actualByKey.set("sales-cost", actualByKey.get("purchase-cost"));
-  const grossProfitChildren = ["revenue", "sales-cost"];
-  actualByKey.set("gross-profit", deriveFromRequiredChildren(
+  const rawNetSales = sumPresent(records, NET_SALES_FIELDS, false, "netSalesAmount");
+  const salesIncome = actualByKey.get("sales-income");
+  const netSales = deriveFromRequiredChildren(actualByKey, ["sales-income", "sales-discount", "refunds"], ([income, discount, refunds]) => income - discount - refunds) ?? rawNetSales;
+  actualByKey.set("net-sales", netSales);
+  actualByKey.set("return-cost", sumReturnCosts(records));
+  actualByKey.set("net-sales-cost", deriveFromRequiredChildren(actualByKey, ["purchase-cost", "return-cost"], ([purchaseCost, returnCost]) => purchaseCost - returnCost));
+  actualByKey.set("gross-profit", deriveFromRequiredChildren(actualByKey, ["net-sales", "net-sales-cost"], ([net, cost]) => net - cost));
+  actualByKey.set("platform-sales-profit", deriveFromRequiredChildren(
     actualByKey,
-    grossProfitChildren,
-    ([revenue, salesCost]) => revenue - salesCost,
+    ["gross-profit", "storage-fee", "ad-spend", "first-leg-cost", "platform-fee", "fba-delivery-fee"],
+    ([grossProfit, storage, ads, firstLeg, platform, delivery]) => grossProfit - storage - ads - firstLeg - platform - delivery,
+  ));
+  actualByKey.set("sales-profit", deriveFromRequiredChildren(
+    actualByKey,
+    ["platform-sales-profit", "operations", "management", "labor", "asset-impairment", "non-operating-income", "non-operating-expense"],
+    ([platformProfit, operations, management, labor, impairment, nonOperatingIncome, nonOperatingExpense]) => platformProfit - operations - management - labor - impairment + nonOperatingIncome - nonOperatingExpense,
   ));
 
+  const metricsByCategory = new Map(CATEGORIES.map(([key]) => [key, []]));
+  const metricRows = METRIC_DEFINITIONS.map((metric) => {
+    metricsByCategory.get(metric.category).push(metric.key);
+    return createRow({
+      key: metric.key,
+      category: CATEGORIES.find(([categoryKey]) => categoryKey === metric.category)[1],
+      name: metric.name,
+      level: 2,
+      actual: actualByKey.get(metric.key) ?? null,
+      budget: BUDGET_METRICS.has(metric.key) ? (isPresent(budgetByMetric[metric.key]) ? toFiniteNumber(budgetByMetric[metric.key], `预算科目 ${metric.key}`) : null) : null,
+    }, salesIncome);
+  });
+
+  const categoryChildren = new Map(metricsByCategory);
+  categoryChildren.set("gross-profit", []);
+  categoryChildren.set("non-operating", []);
+  const categoryActuals = new Map([
+    ["revenue", actualByKey.get("net-sales")],
+    ["sales-cost", actualByKey.get("net-sales-cost")],
+    ["gross-profit", actualByKey.get("gross-profit")],
+    ["platform-profit-category", actualByKey.get("platform-sales-profit")],
+    ["sales-profit-category", actualByKey.get("sales-profit")],
+  ]);
+  CATEGORIES.forEach(([key]) => {
+    if (!categoryActuals.has(key)) categoryActuals.set(key, actualByKey.get(key) ?? null);
+  });
   const categoryRows = CATEGORIES.map(([key, name]) => createRow({
     key,
     category: name,
     name,
     level: 1,
-    actual: actualByKey.get(key) ?? null,
-    children: key === "gross-profit" ? grossProfitChildren : metricsByCategory.get(key),
-  }, netSales));
+    actual: categoryActuals.get(key) ?? null,
+    children: categoryChildren.get(key) || [],
+  }, salesIncome));
   const overview = createRow({
     key: "overview",
     category: "总概",
@@ -203,7 +246,7 @@ export function buildStoreOperatingReportRows({ records, budgetByMetric = {}, cu
     level: 0,
     actual: null,
     children: CATEGORIES.map(([key]) => key),
-  }, netSales);
+  }, salesIncome);
   const rows = [overview, ...categoryRows.flatMap((category) => [
     category,
     ...metricRows.filter((metric) => metric.category === category.name),

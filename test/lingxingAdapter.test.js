@@ -30,6 +30,21 @@ test("normalized order profit keeps currency and Lingxing rate metadata", () => 
   assert.equal(row.exchangeRate, 7.2);
 });
 
+test("normalized order profit keeps return quantity for monthly return-cost derivation", () => {
+  const adapter = new LingxingAdapter(lingxingTestConfig);
+  const [row] = adapter.normalizeMskuOrderProfitRecords([{
+    sid: 1,
+    amount: 100,
+    volume: 100,
+    return_quantity: 10,
+    purchase_costs: -30,
+  }], [{ sid: 1, name: "Amazon-US", country: "美国" }]);
+
+  assert.equal(row.totalSalesQuantity, 100);
+  assert.equal(row.returnQuantity, 10);
+  assert.equal(Number(row.purchaseCost), -30);
+});
+
 test("filterCoreSellers includes JOI MEW Germany stores", () => {
   const sellers = filterCoreSellers([
     { name: "JOI MEW-US", country: "美国", countryCode: "US" },

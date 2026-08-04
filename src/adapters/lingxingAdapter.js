@@ -1041,6 +1041,7 @@ export class LingxingAdapter {
         ]),
         grossRate: record.gross_margin,
         totalSalesQuantity: record.volume,
+        returnQuantity: readFirstNumber(record, ["return_quantity", "returnQuantity", "return_qty", "returnQty"]),
         totalAdsSales: record.ad_sales_amount,
         totalAdsSalesQuantity: record.ad_volume,
         totalAdsCost: record.spend,

@@ -645,7 +645,7 @@ test("monthly report export builds its workbook from the same report result and 
 
   assert.deepEqual(receivedFilters, filters);
   assert.equal(result.filename, "店铺经营月报-2026-06至2026-07.xlsx");
-  assert.deepEqual(rows[0], ["分类", "名称", "Store-US · USD", "", "", ""]);
+  assert.deepEqual(rows[0], ["上级", "名称", "Store-US · USD", "", "", ""]);
   assert.deepEqual(rows[1], ["", "", "实际完成值", "占比", "预算值", "达成率"]);
   assert.deepEqual(rows[2], ["销售收入", "销售收入净额", 90, 1, 120, 0.75]);
   const metadata = XLSX.utils.sheet_to_json(workbook.Sheets["报表说明"], { header: 1 });

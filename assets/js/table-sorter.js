@@ -69,6 +69,7 @@ export function createTableSorter({
 
   function sortTableByHeader(th) {
     if (!th || th.closest(".login-body")) return;
+    if (th.dataset?.columnSortable === "false") return;
     const table = th.closest("table");
     if (table?.id === "supplier-board-table") {
       getApplySupplierBoardSort()?.(th.dataset.supplierSort || th.querySelector("[data-supplier-sort]")?.dataset.supplierSort || "");

@@ -113,6 +113,35 @@ test("table sorter routes generated sort buttons through generic table sorting",
   assert.equal(stateCalls.at(-1)[3], generatedButton);
 });
 
+test("table sorter ignores headers explicitly marked non-sortable", () => {
+  const bindCalls = [];
+  let sortCalls = 0;
+  const header = {
+    dataset: { columnSortable: "false" },
+    closest(selector) {
+      if (selector === ".login-body") return null;
+      if (selector === "table") return { id: "store-operating-report-table" };
+      return null;
+    },
+    querySelector: () => null,
+  };
+  const sorter = createTableSorter({
+    root: {},
+    bindEventTarget: (...args) => {
+      bindCalls.push(args);
+      return args[0];
+    },
+    closestTarget: (_event, selector) => (selector === "th" ? header : null),
+    getApplyStoreOperatingMonthlyReportSort: () => () => { sortCalls += 1; },
+    setTableSortState: () => {},
+  });
+
+  sorter.setupTableSortBridge();
+  bindCalls[0][2]({ target: header });
+
+  assert.equal(sortCalls, 0);
+});
+
 test("table sorter click bridge ignores feature-owned sort buttons", () => {
   const bindCalls = [];
   const sorter = createTableSorter({

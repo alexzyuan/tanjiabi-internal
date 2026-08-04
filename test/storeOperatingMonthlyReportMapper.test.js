@@ -69,7 +69,7 @@ test("missing order-profit fields stay unavailable rather than becoming zero", (
   assert.equal(advertising.budget, 18);
   assert.equal(advertising.achievement, null);
   assert.equal(netSales.actual, 90);
-  assert.equal(netSales.share, 1);
+  assert.equal(netSales.share, 0.9);
   assert.ok(result.unavailableMetrics.includes("ad-spend"));
 });
 
@@ -87,7 +87,7 @@ test("only the four configured budget metrics receive a budget", () => {
 
 test("explicit zero values remain available while a zero budget has no achievement", () => {
   const result = buildStoreOperatingReportRows({
-    records: [{ totalSalesAmount: 0, netSalesAmount: 0, promotionDiscount: 0, totalSalesRefunds: 0, purchaseCost: 0, firstLegCost: 0, storageFee: 0, totalAdsCost: 0, platformFee: 0, fbaDeliveryFee: 0, grossProfit: 0 }],
+    records: [{ totalSalesAmount: 0, netSalesAmount: 0, promotionDiscount: 0, totalSalesRefunds: 0, totalSalesQuantity: 0, returnQuantity: 0, purchaseCost: 0, firstLegCost: 0, storageFee: 0, totalAdsCost: 0, platformFee: 0, fbaDeliveryFee: 0, operationsCost: 0, managementCost: 0, laborCost: 0, assetImpairment: 0, nonOperatingIncome: 0, nonOperatingExpense: 0 }],
     budgetByMetric: { "net-sales": 0, "ad-spend": 0, refunds: 0, "sales-profit": 0 },
     currencyCode: "USD",
   });
@@ -127,7 +127,7 @@ test("whitespace, boolean, and non-numeric order-profit values are rejected inst
 
 test("rows retain the confirmed category hierarchy and derived rows require every child", () => {
   const result = buildStoreOperatingReportRows({
-    records: [{ totalSalesAmount: 100, promotionDiscount: 5, totalSalesRefunds: 10, netSalesAmount: 85, purchaseCost: 30, firstLegCost: 8, storageFee: 2, totalAdsCost: 4, platformFee: 6, fbaDeliveryFee: 7, grossProfit: 28 }],
+    records: [{ totalSalesAmount: 100, promotionDiscount: 5, totalSalesRefunds: 10, netSalesAmount: 85, totalSalesQuantity: 100, returnQuantity: 0, purchaseCost: 30, firstLegCost: 8, storageFee: 2, totalAdsCost: 4, platformFee: 6, fbaDeliveryFee: 7 }],
     budgetByMetric: {},
     currencyCode: "CNY",
   });
@@ -144,7 +144,7 @@ test("rows retain the confirmed category hierarchy and derived rows require ever
   assert.equal(salesCost.actual, 30);
   assert.equal(grossProfit.actual, 55);
   assert.equal(grossProfit.available, true);
-  assert.deepEqual(grossProfit.children, ["revenue", "sales-cost"]);
+  assert.deepEqual(grossProfit.children, []);
 });
 
 test("gross profit is unavailable when a required hierarchy dependency is unavailable", () => {
@@ -157,7 +157,7 @@ test("gross profit is unavailable when a required hierarchy dependency is unavai
 
   assert.equal(grossProfit.actual, null);
   assert.equal(grossProfit.available, false);
-  assert.deepEqual(grossProfit.children, ["revenue", "sales-cost"]);
+  assert.deepEqual(grossProfit.children, []);
 });
 
 test("signed Lingxing expenses become positive magnitudes while profit keeps its sign", () => {
@@ -166,6 +166,8 @@ test("signed Lingxing expenses become positive magnitudes while profit keeps its
       totalSalesAmount: 100,
       promotionDiscount: -8,
       totalSalesRefunds: -5,
+      totalSalesQuantity: 100,
+      returnQuantity: 0,
       netSalesAmount: 87,
       purchaseCost: -30,
       firstLegCost: -3,
@@ -173,7 +175,12 @@ test("signed Lingxing expenses become positive magnitudes while profit keeps its
       totalAdsCost: -10,
       platformFee: -12,
       fbaDeliveryFee: -4,
-      grossProfit: -6,
+      operationsCost: -1,
+      managementCost: -1,
+      laborCost: -1,
+      assetImpairment: -1,
+      nonOperatingIncome: 0,
+      nonOperatingExpense: -1,
     }],
     currencyCode: "USD",
   });
@@ -182,5 +189,56 @@ test("signed Lingxing expenses become positive magnitudes while profit keeps its
   assert.equal(result.rows.find((row) => row.key === "refunds").actual, 5);
   assert.equal(result.rows.find((row) => row.key === "purchase-cost").actual, 30);
   assert.equal(result.rows.find((row) => row.key === "ad-spend").actual, 10);
-  assert.equal(result.rows.find((row) => row.key === "sales-profit").actual, -6);
+  assert.equal(result.rows.find((row) => row.key === "sales-profit").actual, 21);
+});
+
+test("profit chain uses sales income as the percentage base and derives return cost and two profit stages", () => {
+  const result = buildStoreOperatingReportRows({
+    records: [{
+      totalSalesAmount: 100,
+      promotionDiscount: -5,
+      totalSalesRefunds: -10,
+      totalSalesQuantity: 100,
+      returnQuantity: 10,
+      purchaseCost: -30,
+      firstLegCost: -8,
+      storageFee: -2,
+      totalAdsCost: -4,
+      platformFee: -6,
+      fbaDeliveryFee: -7,
+      operationsCost: -1,
+      managementCost: -2,
+      laborCost: -3,
+      assetImpairment: -1,
+      nonOperatingIncome: 2,
+      nonOperatingExpense: -1,
+    }],
+    currencyCode: "USD",
+  });
+  const row = (key) => result.rows.find((item) => item.key === key);
+
+  assert.equal(row("sales-income").actual, 100);
+  assert.equal(row("sales-income").share, 1);
+  assert.equal(row("sales-discount").share, 0.05);
+  assert.equal(row("refunds").share, 0.1);
+  assert.equal(row("net-sales").actual, 85);
+  assert.equal(row("net-sales").share, 0.85);
+  assert.equal(row("return-cost").actual, 3);
+  assert.equal(row("net-sales-cost").actual, 27);
+  assert.equal(row("gross-profit").actual, 58);
+  assert.equal(row("platform-sales-profit").actual, 31);
+  assert.equal(row("sales-profit").actual, 25);
+  assert.deepEqual(row("sales-profit-category").children, ["sales-profit"]);
+  const categoryKeys = result.rows.filter((item) => item.level === 1).map((item) => item.key);
+  assert.ok(categoryKeys.indexOf("platform-profit-category") < categoryKeys.indexOf("operations"));
+});
+
+test("direct return-cost fields keep expense magnitudes positive", () => {
+  const result = buildStoreOperatingReportRows({
+    records: [{ totalSalesAmount: 100, promotionDiscount: 0, totalSalesRefunds: 0, purchaseCost: -30, returnCost: -3 }],
+    currencyCode: "USD",
+  });
+
+  assert.equal(result.rows.find((row) => row.key === "return-cost").actual, 3);
+  assert.equal(result.rows.find((row) => row.key === "net-sales-cost").actual, 27);
 });

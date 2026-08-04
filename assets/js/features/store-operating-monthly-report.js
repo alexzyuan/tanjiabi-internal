@@ -378,7 +378,7 @@ export function createStoreOperatingMonthlyReportFeature({
         const nameCell = isExpandableCategory
           ? `<button class="store-operating-report-disclosure" type="button" data-report-category-toggle="${escapeHtml(row.key || "")}" aria-expanded="${isExpanded ? "true" : "false"}" aria-label="${escapeHtml(`${isExpanded ? "收起" : "展开"}${rowName}`)}"><span aria-hidden="true">${isExpanded ? "▾" : "▸"}</span>${escapeHtml(rowName)}</button>`
           : escapeHtml(rowName);
-        const resultRow = ["net-sales", "gross-profit", "sales-profit"].includes(String(row.key || ""));
+        const resultRow = ["net-sales", "net-sales-cost", "gross-profit", "platform-sales-profit", "sales-profit"].includes(String(row.key || ""));
         const metricCells = groups.flatMap((group, groupIndex) => {
           const groupRow = rowMaps[groupIndex].get(rowIdentity);
           return [
