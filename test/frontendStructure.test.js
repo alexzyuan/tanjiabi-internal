@@ -33,8 +33,9 @@ test("store operating monthly report is a finance-owned feature with shared cont
   assert.match(appSource, /loadStoreOperatingMonthlyReport\(\)/);
   assert.match(appSource, /initializeStoreOperatingMonthlyReportDefaults\(\)/);
   assert.match(appSource, /setupStoreOperatingMonthlyReport\(\)/);
-  assert.match(appSource, /new URLSearchParams\(location\.search\)\.get\("view"\)/);
+  assert.match(appSource, /const params = new URLSearchParams\(location\.search\);[\s\S]*const requestedView = params\.get\("view"\)/);
   assert.match(appSource, /clickVisibleNavItem\(requestedView\)/);
+  assert.match(appSource, /requestedView === "store-operating-monthly-report"[\s\S]*params\.delete\("view"\)/);
   assert.match(featureSource, /refreshTable\(query\("#store-operating-report-table"\)\)/);
   assert.equal(appSource.includes("function renderStoreOperatingMonthlyReport"), false);
   assert.equal(appSource.includes('bind(document, "#store-operating-report'), false);

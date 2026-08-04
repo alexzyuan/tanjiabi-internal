@@ -1280,9 +1280,16 @@ function setupNavigation() {
 }
 
 function openRequestedViewFromLocation() {
-  const requestedView = new URLSearchParams(location.search).get("view");
+  const params = new URLSearchParams(location.search);
+  const requestedView = params.get("view");
   if (!["store-operating-monthly-report", "budget"].includes(requestedView)) return null;
-  return clickVisibleNavItem(requestedView);
+  const result = clickVisibleNavItem(requestedView);
+  if (requestedView === "store-operating-monthly-report") {
+    params.delete("view");
+    const suffix = params.toString();
+    history.replaceState({}, "", `${location.pathname}${suffix ? `?${suffix}` : ""}`);
+  }
+  return result;
 }
 
 async function init() {
