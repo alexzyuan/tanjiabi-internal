@@ -46,17 +46,27 @@ function fakeAdapter({ sellers, recordsForCall, feeRecordsForCall = () => [], ca
   };
 }
 
-test("monthly report uses seller-dimension profit instead of MSKU order profit", async () => {
+test("monthly report uses OrderProfit instead of seller-dimension profit", async () => {
   const calls = [];
-  let mskuCalls = 0;
+  let sellerCalls = 0;
   const adapter = fakeAdapter({
     calls,
     sellers: [{ sid: 1, name: "Store-US", country: "美国" }],
     recordsForCall: () => [{ sid: 1, totalSalesAmount: 100, currencyCode: "CNY" }],
   });
+  adapter.fetchSellerProfitReport = async () => {
+    sellerCalls += 1;
+    throw new Error("seller source must not be called");
+  };
   adapter.fetchMskuOrderProfitCached = async () => {
-    mskuCalls += 1;
-    throw new Error("MSKU source must not be called");
+    calls.push({
+      startDate: "2026-07-01",
+      endDate: "2026-07-31",
+      sids: [1],
+      currencyCode: "CNY",
+      source: "order-profit",
+    });
+    return { records: [{ sid: 1, totalSalesAmount: 100, currencyCode: "CNY" }] };
   };
 
   const value = await getStoreOperatingMonthlyReport(
@@ -64,12 +74,10 @@ test("monthly report uses seller-dimension profit instead of MSKU order profit",
     { adapter, getBudgetTargetContext: async () => ({ rows: [], totals: {}, matched: false }) },
   );
 
-  assert.equal(mskuCalls, 0);
+  assert.equal(sellerCalls, 0);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].source, "seller-profit");
-  assert.equal(calls[0].monthlyQuery, true);
-  assert.equal(calls[0].summaryEnabled, true);
-  assert.equal(value.meta.source, "/bd/profit/report/open/report/seller/list");
+  assert.equal(calls[0].source, "order-profit");
+  assert.equal(value.meta.source, "/basicOpen/finance/mreport/OrderProfit");
 });
 
 test("service rejects a 13-month range without changing either boundary", () => {
@@ -147,14 +155,14 @@ test("service sums each requested month and uses CNY for multiple effective coun
   assert.equal(value.meta.currencyMode, "CNY");
   assert.deepEqual(calls.map((call) => call.currencyCode), ["CNY", "CNY"]);
   assert.deepEqual(calls.map(({ startDate, endDate }) => ({ startDate, endDate })), [
-    { startDate: "2026-06", endDate: "2026-06" },
-    { startDate: "2026-07", endDate: "2026-07" },
+    { startDate: "2026-06-01", endDate: "2026-06-30" },
+    { startDate: "2026-07-01", endDate: "2026-07-31" },
   ]);
   assert.equal(value.rows.find((row) => row.key === "net-sales").actual, 180);
   assert.equal(value.meta.generatedAt, "2026-08-03T08:00:00.000Z");
 });
 
-test("monthly report prefers the shared cached seller profit adapter method", async () => {
+test("monthly report prefers the shared cached OrderProfit adapter method", async () => {
   const calls = [];
   let rawCalls = 0;
   const adapter = fakeAdapter({
@@ -165,7 +173,7 @@ test("monthly report prefers the shared cached seller profit adapter method", as
       return [];
     },
   });
-  adapter.fetchSellerProfitReportCached = async (request) => {
+  adapter.fetchMskuOrderProfitCached = async (request) => {
     calls.push(request);
     return {
       records: [{ sid: 1, netSalesAmount: 25, currencyCode: "USD", reportDate: request.endDate }],
@@ -182,6 +190,8 @@ test("monthly report prefers the shared cached seller profit adapter method", as
   assert.equal(rawCalls, 0);
   assert.equal(calls.length, 1);
   assert.equal(calls[0].currencyCode, "CNY");
+  assert.equal(calls[0].startDate, "2026-07-01");
+  assert.equal(calls[0].endDate, "2026-07-31");
   assert.equal(value.meta.recordCount, 1);
 });
 
@@ -332,13 +342,10 @@ test("service accepts one and twelve months but rejects missing, invalid, and re
   );
   assert.deepEqual(oneMonth.filters.months, ["2026-02"]);
   assert.deepEqual(calls[0], {
-    startDate: "2026-02",
-    endDate: "2026-02",
-    monthlyQuery: true,
-    summaryEnabled: true,
+    startDate: "2026-02-01",
+    endDate: "2026-02-28",
     sids: [1],
     currencyCode: "CNY",
-    source: "seller-profit",
   });
 
   calls.length = 0;

@@ -478,9 +478,9 @@ export class LingxingAdapter {
     if (!Number.isInteger(maxRows) || maxRows < pageSize) {
       throw new Error("orderProfitMaxRows 必须是不小于 5000 的整数");
     }
-    const requestParams = {
-      ...lingxingDateRangeParams(restParams),
-    };
+    // OrderProfit treats endDate as an exclusive boundary already. Keep the
+    // visible month end unchanged so July 1–31 does not include August 1.
+    const requestParams = { ...restParams };
     if (currencyCode && currencyCode !== "ORIGINAL") {
       requestParams.currencyCode = currencyCode;
     }

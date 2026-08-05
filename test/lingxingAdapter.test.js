@@ -240,7 +240,7 @@ test("getLingxingAdapter returns the process singleton for matching default conf
   resetLingxingAdapterForTest();
 });
 
-test("LingxingAdapter sends exclusive end date to Lingxing without mutating UI filters", async () => {
+test("LingxingAdapter keeps OrderProfit end date unchanged without mutating UI filters", async () => {
   const adapter = new LingxingAdapter(lingxingTestConfig);
   const calls = [];
   adapter.performSignedRequest = async (endpoint, options) => {
@@ -259,7 +259,7 @@ test("LingxingAdapter sends exclusive end date to Lingxing without mutating UI f
   assert.equal(filters.endDate, "2026-07-14");
   assert.equal(calls[0].endpoint, "/basicOpen/finance/mreport/OrderProfit");
   assert.equal(calls[0].params.startDate, "2026-07-01");
-  assert.equal(calls[0].params.endDate, "2026-07-15");
+  assert.equal(calls[0].params.endDate, "2026-07-14");
 });
 
 test("LingxingAdapter paginates order profit until the upstream total is exhausted", async () => {

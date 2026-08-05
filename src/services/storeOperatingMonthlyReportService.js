@@ -181,7 +181,7 @@ function buildEmptyResult(normalizedFilters, now) {
       currencyCodes: [],
       recordCount: 0,
       budgetMatchCount: 0,
-      source: "/bd/profit/report/open/report/seller/list",
+      source: "/basicOpen/finance/mreport/OrderProfit",
       customFeeSource: "/bd/fee/management/open/feeManagement/otherFee/list",
       customFeeRecordCount: 0,
       unmappedCustomFeeCount: 0,
@@ -279,21 +279,18 @@ export async function getStoreOperatingMonthlyReport(filters, {
     for (const month of normalizedFilters.months) {
       const { startDate, endDate } = monthBounds(month);
       const request = {
-        // 店铺利润月度接口只接受 yyyy-MM；不要把月筛选展开成日范围。
-        startDate: month,
-        endDate: month,
-        monthlyQuery: true,
-        summaryEnabled: true,
+        startDate,
+        endDate,
         sids: sellers.map((seller) => seller.sid),
         currencyCode: currencyMode === "CNY" ? "CNY" : "ORIGINAL",
       };
-      const sellerResult = typeof adapter.fetchSellerProfitReportCached === "function"
-        ? await adapter.fetchSellerProfitReportCached({ ...request, sellerList: sellers, reportDate: month })
-        : await adapter.fetchSellerProfitReport(request);
-      const sellerRecords = sellerResult?.records || adapter.normalizeRecordList(sellerResult);
-      const normalizedSellerRecords = typeof adapter.normalizeSellerProfitRecords === "function"
-        ? adapter.normalizeSellerProfitRecords(sellerRecords, sellers, month)
-        : sellerRecords.map((record) => {
+      const orderProfitResult = typeof adapter.fetchMskuOrderProfitCached === "function"
+        ? await adapter.fetchMskuOrderProfitCached({ ...request, sellerList: sellers, reportDate: month })
+        : await adapter.fetchMskuOrderProfit(request);
+      const orderProfitRecords = orderProfitResult?.records || adapter.normalizeRecordList(orderProfitResult);
+      const normalizedOrderProfitRecords = typeof adapter.normalizeMskuOrderProfitRecords === "function"
+        ? adapter.normalizeMskuOrderProfitRecords(orderProfitRecords, sellers, month)
+        : orderProfitRecords.map((record) => {
           const seller = sellers.find((candidate) => Number(candidate.sid) === Number(record.sid || record.seller_id || record.sellerId));
           return {
             ...record,
@@ -313,14 +310,14 @@ export async function getStoreOperatingMonthlyReport(filters, {
         currency_code: currencyMode === "CNY" ? "CNY" : "ORIGINAL",
       });
       const feeRecords = adapter.normalizeRecordList(feePayload);
-      const mergedFees = mergeStoreOperatingCustomFeeRecords(normalizedSellerRecords, feeRecords, sellers);
+      const mergedFees = mergeStoreOperatingCustomFeeRecords(normalizedOrderProfitRecords, feeRecords, sellers);
       const result = {
         month,
         records: mergedFees.records,
         customFeeRecordCount: feeRecords.length,
         unmappedCustomFeeRecords: mergedFees.unmapped,
-        cacheState: sellerResult?.cacheState || "unsupported",
-        cacheUpdatedAt: sellerResult?.cacheUpdatedAt || "",
+        cacheState: orderProfitResult?.cacheState || "unsupported",
+        cacheUpdatedAt: orderProfitResult?.cacheUpdatedAt || "",
       };
       recordsByMonthResults.push(result);
     }
@@ -402,7 +399,7 @@ export async function getStoreOperatingMonthlyReport(filters, {
       ok: true,
       meta: {
         currencyMode,
-        source: "/bd/profit/report/open/report/seller/list",
+        source: "/basicOpen/finance/mreport/OrderProfit",
         customFeeSource: "/bd/fee/management/open/feeManagement/otherFee/list",
         currencyCodes,
         recordCount: records.length,
