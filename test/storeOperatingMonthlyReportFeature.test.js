@@ -18,7 +18,7 @@ function makeElement(value = "") {
   };
 }
 
-function makeReportResponse({ name = "销售收入净额", unavailableMetricNames = [] } = {}) {
+function makeReportResponse({ name = "销售收入净额", unavailableMetricNames = [], unavailableMetricDetails = [] } = {}) {
   return {
     ok: true,
     async json() {
@@ -30,6 +30,7 @@ function makeReportResponse({ name = "销售收入净额", unavailableMetricName
           generatedAt: "2026-08-03T08:00:00.000Z",
           unavailableMetrics: [],
           unavailableMetricNames,
+          unavailableMetricDetails,
           missingExchangeRateCount: 0,
         },
         groups: [{
@@ -279,12 +280,16 @@ test("successful rendering refreshes the shared managed table and writes filter 
 
 test("successful rendering explains unavailable source metrics in the report status", async () => {
   const { feature, elements } = makeFeatureHarness({
-    fetchImpl: async () => makeReportResponse({ unavailableMetricNames: ["广告费", "FBA国际物流运费"] }),
+    fetchImpl: async () => makeReportResponse({
+      unavailableMetricNames: ["广告费", "FBA国际物流运费"],
+      unavailableMetricDetails: [{ category: "custom-expense" }],
+    }),
   });
 
   await feature.loadStoreOperatingMonthlyReport();
 
   assert.match(elements["#store-operating-report-status"].textContent, /不可用科目：广告费、FBA国际物流运费/);
+  assert.match(elements["#store-operating-report-status"].textContent, /自定义费用未配置独立数据源/);
 });
 
 test("monthly report uses an 上级 column and collapses subtotal details by default", async () => {
@@ -311,10 +316,11 @@ test("monthly report uses an 上级 column and collapses subtotal details by def
   assert.match(elements["#store-operating-report-head"].innerHTML, /data-column-key="name"[^>]*>名称<\/th>/);
   assert.match(elements["#store-operating-report-body"].innerHTML, /data-report-category-toggle="revenue"[^>]*aria-expanded="false"/);
   assert.match(elements["#store-operating-report-body"].innerHTML, /销售收入小计/);
+  assert.doesNotMatch(elements["#store-operating-report-body"].innerHTML, /基础信息小计/);
   assert.doesNotMatch(elements["#store-operating-report-body"].innerHTML, /data-report-row-key="sales-income"/);
 });
 
-test("monthly report renders store-country text without numeric formatting", async () => {
+test("monthly report does not render the removed basic-info block", async () => {
   const rows = [
     { key: "overview", category: "总概", name: "总概", level: 0, children: ["basic-info"] },
     { key: "basic-info", category: "基础信息", name: "基础信息", level: 1, children: ["store-country"], available: true },
@@ -323,10 +329,9 @@ test("monthly report renders store-country text without numeric formatting", asy
   const { feature, elements } = makeFeatureHarness({ groups: [{ currencyCode: "CNY", currencyAvailable: true, rows }] });
 
   await feature.loadStoreOperatingMonthlyReport();
-  feature.toggleReportCategory({ target: { closest: () => ({ dataset: { reportCategoryToggle: "basic-info" } }) } });
-
   const body = elements["#store-operating-report-body"].innerHTML;
-  assert.match(body, /data-report-row-key="store-country"[\s\S]*?data-report-metric="actual">Store-US \/ 美国/);
+  assert.doesNotMatch(body, /基础信息小计/);
+  assert.doesNotMatch(body, /data-report-row-key="store-country"/);
 });
 
 test("hierarchy renders collapsed subtotals and expands their detail rows", async () => {
