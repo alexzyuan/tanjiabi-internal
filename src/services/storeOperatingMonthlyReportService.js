@@ -275,7 +275,8 @@ export async function getStoreOperatingMonthlyReport(filters, {
       throw reportInputError("跨国家只能使用人民币，请将币种切换为 CNY");
     }
     const reportScopes = buildReportScopes(sellers, normalizedFilters);
-    const recordsByMonthResults = await Promise.all(normalizedFilters.months.map(async (month) => {
+    const recordsByMonthResults = [];
+    for (const month of normalizedFilters.months) {
       const { startDate, endDate } = monthBounds(month);
       const request = {
         // 店铺利润月度接口只接受 yyyy-MM；不要把月筛选展开成日范围。
@@ -308,12 +309,12 @@ export async function getStoreOperatingMonthlyReport(filters, {
         start_date: startDate,
         end_date: endDate,
         sids: sellers.map((seller) => seller.sid),
-        dimensions: 3,
+        dimensions: [3],
         currency_code: currencyMode === "CNY" ? "CNY" : "ORIGINAL",
       });
       const feeRecords = adapter.normalizeRecordList(feePayload);
       const mergedFees = mergeStoreOperatingCustomFeeRecords(normalizedSellerRecords, feeRecords, sellers);
-      return {
+      const result = {
         month,
         records: mergedFees.records,
         customFeeRecordCount: feeRecords.length,
@@ -321,7 +322,8 @@ export async function getStoreOperatingMonthlyReport(filters, {
         cacheState: sellerResult?.cacheState || "unsupported",
         cacheUpdatedAt: sellerResult?.cacheUpdatedAt || "",
       };
-    }));
+      recordsByMonthResults.push(result);
+    }
     const recordsByMonth = recordsByMonthResults.map((result) => result.records);
     const cacheStates = Object.fromEntries(recordsByMonthResults.map((result) => [result.month, result.cacheState]));
     const records = recordsByMonth.flat();

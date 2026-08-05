@@ -444,7 +444,7 @@ export class LingxingAdapter {
           offset,
           length: pageSize,
           date_type: "date",
-          dimensions: 3,
+          dimensions: [3],
           ...params,
           offset,
           length: pageSize,

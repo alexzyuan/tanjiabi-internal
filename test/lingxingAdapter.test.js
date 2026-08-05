@@ -70,7 +70,7 @@ test("other fee list requests an inclusive date range at store dimension", async
 
   assert.equal(calls[0].endpoint, "/bd/fee/management/open/feeManagement/otherFee/list");
   assert.equal(calls[0].params.date_type, "date");
-  assert.equal(calls[0].params.dimensions, 3);
+  assert.deepEqual(calls[0].params.dimensions, [3]);
   assert.deepEqual(calls[0].params.sids, [11]);
   assert.equal(calls[0].params.start_date, "2026-07-01");
   assert.equal(calls[0].params.end_date, "2026-07-31");
