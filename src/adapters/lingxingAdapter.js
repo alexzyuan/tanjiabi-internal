@@ -394,14 +394,69 @@ export class LingxingAdapter {
   }
 
   fetchSellerProfitReport(params) {
+    const {
+      startDate: explicitStartDate,
+      endDate: explicitEndDate,
+      start_date,
+      end_date,
+      currencyCode,
+      sids = [],
+      monthlyQuery = true,
+      summaryEnabled = true,
+      ...restParams
+    } = params || {};
+    const startDate = explicitStartDate || start_date;
+    const endDate = explicitEndDate || end_date;
+    const requestParams = {
+      offset: 0,
+      length: 1000,
+      monthlyQuery,
+      summaryEnabled,
+      startDate,
+      endDate,
+      sids,
+      ...restParams,
+    };
+    if (currencyCode && currencyCode !== "ORIGINAL") requestParams.currencyCode = currencyCode;
     return this.signedRequest("/bd/profit/report/open/report/seller/list", {
       method: "POST",
-      params: {
-        offset: 0,
-        length: 1000,
-        ...lingxingDateRangeParams(params),
-      },
+      params: requestParams,
     });
+  }
+
+  async fetchOtherFeeList(params = {}) {
+    const pageSize = Number(params.length || 1000);
+    const maxRows = Number(this.config.otherFeeMaxRows || 10000);
+    if (!Number.isInteger(pageSize) || pageSize <= 0) throw new Error("otherFee length 必须是正整数");
+    if (!Number.isInteger(maxRows) || maxRows < pageSize) throw new Error("otherFeeMaxRows 必须是不小于 length 的整数");
+    const rows = [];
+    let firstPayload;
+    for (let offset = Number(params.offset || 0); ; offset += pageSize) {
+      if (offset >= maxRows) {
+        const error = new Error(`自定义费用分页达到安全上限 ${maxRows} 条，拒绝返回截断结果`);
+        error.endpoint = "/bd/fee/management/open/feeManagement/otherFee/list";
+        error.details = { maxRows, pageSize, fetchedRows: rows.length };
+        throw error;
+      }
+      const payload = await this.signedRequest("/bd/fee/management/open/feeManagement/otherFee/list", {
+        method: "POST",
+        params: {
+          offset,
+          length: pageSize,
+          date_type: "date",
+          dimensions: 3,
+          ...params,
+          offset,
+          length: pageSize,
+        },
+      });
+      if (!firstPayload) firstPayload = payload;
+      const page = this.normalizeRecordList(payload);
+      rows.push(...page);
+      const total = Number(payload?.data?.total || payload?.total || 0);
+      if (!page.length || page.length < pageSize || (total && rows.length >= total)) break;
+    }
+    return mergeOrderProfitPayload(firstPayload || { code: 0 }, rows);
   }
 
   fetchOrderProfitReport(params) {

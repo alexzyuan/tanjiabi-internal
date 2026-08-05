@@ -6,6 +6,7 @@ import {
   mapStoreOperatingBudgetMetrics,
   mapStoreOperatingOrderProfitBudgetScope,
   mapStoreOperatingSellerScope,
+  mergeStoreOperatingCustomFeeRecords,
   readStoreOperatingBudgetCurrencyCode,
 } from "../src/services/storeOperatingMonthlyReportMapper.js";
 
@@ -307,8 +308,60 @@ test("unavailable metrics expose their missing OrderProfit source fields", () =>
     name: "广告费",
     category: "platform-expense",
     reason: "订单利润 API 未返回对应字段",
-    fields: ["adFee", "ad_fee", "advertisingFee", "advertising_fee"],
+    fields: ["totalAdsCost", "total_ads_cost"],
   });
+});
+
+test("store-profit official fields populate the platform expense rows", () => {
+  const result = buildStoreOperatingReportRows({
+    records: [{
+      totalSalesAmount: 100,
+      totalAdsCost: -10,
+      promotionFee: -2,
+      sharedFbaIntegerernationalInboundFee: -3,
+      sharedFbaInboundConvenienceFee: -4,
+      adjustments: -5,
+      totalPlatformOtherFee: -6,
+      purchaseCost: -20,
+      firstLegCost: -8,
+      storageFee: -1,
+      platformFee: -7,
+      fbaDeliveryFee: -9,
+      grossProfit: 60,
+      profit: 20,
+    }],
+    currencyCode: "CNY",
+  });
+  const row = (key) => result.rows.find((item) => item.key === key);
+
+  assert.equal(row("ad-fee").actual, 10);
+  assert.equal(row("ad-spend").actual, 2);
+  assert.equal(row("fba-international-shipping-fee").actual, 3);
+  assert.equal(row("inbound-placement-fee").actual, 4);
+  assert.equal(row("adjustment-fee").actual, 5);
+  assert.equal(row("other-platform-fee").actual, 6);
+});
+
+test("custom fee records populate mapped store-level custom expense rows and expose unknown types", () => {
+  const result = mergeStoreOperatingCustomFeeRecords(
+    [{ sid: 7, storeName: "Store-US", country: "美国" }],
+    [
+      { sid: 7, other_fee_type: "软件费用", fee: -12 },
+      { sid: 7, other_fee_type: "未配置科目", fee: -5 },
+    ],
+    [{ sid: 7, name: "Store-US", country: "美国" }],
+  );
+
+  assert.equal(result.records[0].softwareFee, -12);
+  assert.deepEqual(result.unmapped, [{ sid: 7, storeName: "", type: "未配置科目", reason: "未识别费用类型" }]);
+});
+
+test("seller profit custom order fee principal and commission are combined as offsite promotion expense", () => {
+  const result = buildStoreOperatingReportRows({
+    records: [{ totalSalesAmount: 100, customOrderFeePrincipal: -8, customOrderFeeCommission: -2 }],
+    currencyCode: "CNY",
+  });
+  assert.equal(result.rows.find((row) => row.key === "offsite-ad-spend").actual, 10);
 });
 
 test("gross profit is unavailable when a required hierarchy dependency is unavailable", () => {
@@ -340,6 +393,7 @@ test("signed Lingxing expenses become positive magnitudes while profit keeps its
       firstLegCost: -3,
       storageFee: -2,
       totalAdsCost: -10,
+      promotionFee: 0,
       platformFee: -12,
       fbaDeliveryFee: -4,
       operationsCost: -1,
@@ -355,7 +409,7 @@ test("signed Lingxing expenses become positive magnitudes while profit keeps its
   assert.equal(result.rows.find((row) => row.key === "sales-discount").actual, 8);
   assert.equal(result.rows.find((row) => row.key === "refunds").actual, 5);
   assert.equal(result.rows.find((row) => row.key === "purchase-cost").actual, 30);
-  assert.equal(result.rows.find((row) => row.key === "ad-spend").actual, 10);
+  assert.equal(result.rows.find((row) => row.key === "ad-fee").actual, 10);
   assert.equal(result.rows.find((row) => row.key === "profit").actual, 21);
 });
 
@@ -374,6 +428,7 @@ test("profit chain uses sales income as the percentage base and derives return c
       firstLegCost: -8,
       storageFee: -2,
       totalAdsCost: -4,
+      promotionFee: 0,
       platformFee: -6,
       fbaDeliveryFee: -7,
       operationsCost: -1,

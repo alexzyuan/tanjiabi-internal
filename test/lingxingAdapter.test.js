@@ -30,6 +30,52 @@ test("normalized order profit keeps currency and Lingxing rate metadata", () => 
   assert.equal(row.exchangeRate, 7.2);
 });
 
+test("seller profit report requests one inclusive month using store-level aggregation", async () => {
+  const adapter = new LingxingAdapter(lingxingTestConfig);
+  const calls = [];
+  adapter.performSignedRequest = async (endpoint, options) => {
+    calls.push({ endpoint, params: options.params });
+    return { code: 0, data: { records: [] } };
+  };
+
+  await adapter.fetchSellerProfitReport({
+    startDate: "2026-07-01",
+    endDate: "2026-07-31",
+    sids: [11, 12],
+    currencyCode: "CNY",
+  });
+
+  assert.equal(calls[0].endpoint, "/bd/profit/report/open/report/seller/list");
+  assert.equal(calls[0].params.monthlyQuery, true);
+  assert.equal(calls[0].params.summaryEnabled, true);
+  assert.deepEqual(calls[0].params.sids, [11, 12]);
+  assert.equal(calls[0].params.startDate, "2026-07-01");
+  assert.equal(calls[0].params.endDate, "2026-07-31");
+  assert.equal(calls[0].params.currencyCode, "CNY");
+});
+
+test("other fee list requests an inclusive date range at store dimension", async () => {
+  const adapter = new LingxingAdapter(lingxingTestConfig);
+  const calls = [];
+  adapter.performSignedRequest = async (endpoint, options) => {
+    calls.push({ endpoint, params: options.params });
+    return { code: 0, data: { records: [] } };
+  };
+
+  await adapter.fetchOtherFeeList({
+    start_date: "2026-07-01",
+    end_date: "2026-07-31",
+    sids: [11],
+  });
+
+  assert.equal(calls[0].endpoint, "/bd/fee/management/open/feeManagement/otherFee/list");
+  assert.equal(calls[0].params.date_type, "date");
+  assert.equal(calls[0].params.dimensions, 3);
+  assert.deepEqual(calls[0].params.sids, [11]);
+  assert.equal(calls[0].params.start_date, "2026-07-01");
+  assert.equal(calls[0].params.end_date, "2026-07-31");
+});
+
 test("normalized order profit keeps return quantity for monthly return-cost derivation", () => {
   const adapter = new LingxingAdapter(lingxingTestConfig);
   const [row] = adapter.normalizeMskuOrderProfitRecords([{

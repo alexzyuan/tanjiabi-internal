@@ -83,6 +83,8 @@ Rules for this path:
 
 月报表头直接展示店铺/国家筛选范围，不渲染“基础信息”小计；平台收入小计使用原销售额，其他一级小计按已返回的可用明细汇总。缺失明细仍标记为不可用，不得静默补零。
 
+月报实际值统一以领星店铺维度利润报表 `POST /bd/profit/report/open/report/seller/list` 为主来源；月度请求必须携带 `monthlyQuery=true`、`summaryEnabled=true`，该接口的 `startDate/endDate` 按双闭区间传递，不适用通用左闭右开日期加一天规则。自定义费用明细来自 `POST /bd/fee/management/open/feeManagement/otherFee/list` 的店铺维度（`dimensions=3`）；已识别类型映射到月报自定义费用科目，未识别类型必须在日志和 `meta` 中保留，不得静默丢弃。店铺利润官方字段映射固定为：`totalAdsCost`→广告费、`promotionFee`→推广费、`sharedFbaIntegerernationalInboundFee`→FBA国际物流运费、`sharedFbaInboundConvenienceFee`→入库配置费、`adjustments`→调整费、`totalPlatformOtherFee`→平台其它费。
+
 ## Lingxing Date Ranges
 
 Lingxing date-range APIs that document `start_date`/`end_date` as `左闭右开` must treat the user-facing end date as inclusive and the API `end_date` as exclusive. Frontend controls, dashboard filters, cache keys, logs, and visible metadata keep the real date selected by the user. Only backend request parameters sent to Lingxing add one day to the end boundary. For example, a visible range ending `2026-07-14` is sent to Lingxing as `end_date=2026-07-15`.

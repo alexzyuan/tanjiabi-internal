@@ -12,7 +12,7 @@ function getStoreOperatingMonthlyReport(filters, dependencies = {}) {
   return getStoreOperatingMonthlyReportWithLogging(filters, { logger: silentLogger, ...dependencies });
 }
 
-function fakeAdapter({ sellers, recordsForCall, calls = [] }) {
+function fakeAdapter({ sellers, recordsForCall, feeRecordsForCall = () => [], calls = [] }) {
   return {
     async fetchSellers() {
       return { data: sellers };
@@ -23,6 +23,13 @@ function fakeAdapter({ sellers, recordsForCall, calls = [] }) {
     async fetchMskuOrderProfit(request) {
       calls.push(request);
       return recordsForCall(request);
+    },
+    async fetchSellerProfitReport(request) {
+      calls.push({ ...request, source: "seller-profit" });
+      return recordsForCall(request);
+    },
+    async fetchOtherFeeList(request) {
+      return { data: feeRecordsForCall(request) };
     },
     normalizeMskuOrderProfitRecords(records, sellerList, reportDate) {
       const sellerBySid = new Map(sellerList.map((seller) => [Number(seller.sid), seller]));
@@ -38,6 +45,32 @@ function fakeAdapter({ sellers, recordsForCall, calls = [] }) {
     },
   };
 }
+
+test("monthly report uses seller-dimension profit instead of MSKU order profit", async () => {
+  const calls = [];
+  let mskuCalls = 0;
+  const adapter = fakeAdapter({
+    calls,
+    sellers: [{ sid: 1, name: "Store-US", country: "美国" }],
+    recordsForCall: () => [{ sid: 1, totalSalesAmount: 100, currencyCode: "CNY" }],
+  });
+  adapter.fetchMskuOrderProfitCached = async () => {
+    mskuCalls += 1;
+    throw new Error("MSKU source must not be called");
+  };
+
+  const value = await getStoreOperatingMonthlyReport(
+    { startMonth: "2026-07", endMonth: "2026-07" },
+    { adapter, getBudgetTargetContext: async () => ({ rows: [], totals: {}, matched: false }) },
+  );
+
+  assert.equal(mskuCalls, 0);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].source, "seller-profit");
+  assert.equal(calls[0].monthlyQuery, true);
+  assert.equal(calls[0].summaryEnabled, true);
+  assert.equal(value.meta.source, "/bd/profit/report/open/report/seller/list");
+});
 
 test("service rejects a 13-month range without changing either boundary", () => {
   const input = { startMonth: "2025-01", endMonth: "2026-01" };
@@ -121,7 +154,7 @@ test("service sums each requested month and uses CNY for multiple effective coun
   assert.equal(value.meta.generatedAt, "2026-08-03T08:00:00.000Z");
 });
 
-test("monthly report prefers the shared cached order profit adapter method", async () => {
+test("monthly report prefers the shared cached seller profit adapter method", async () => {
   const calls = [];
   let rawCalls = 0;
   const adapter = fakeAdapter({
@@ -132,7 +165,7 @@ test("monthly report prefers the shared cached order profit adapter method", asy
       return [];
     },
   });
-  adapter.fetchMskuOrderProfitCached = async (request) => {
+  adapter.fetchSellerProfitReportCached = async (request) => {
     calls.push(request);
     return {
       records: [{ sid: 1, netSalesAmount: 25, currencyCode: "USD", reportDate: request.endDate }],
@@ -301,8 +334,11 @@ test("service accepts one and twelve months but rejects missing, invalid, and re
   assert.deepEqual(calls[0], {
     startDate: "2026-02-01",
     endDate: "2026-02-28",
+    monthlyQuery: true,
+    summaryEnabled: true,
     sids: [1],
     currencyCode: "CNY",
+    source: "seller-profit",
   });
 
   calls.length = 0;

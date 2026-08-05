@@ -7,6 +7,7 @@ import {
   mapStoreOperatingBudgetMetrics,
   mapStoreOperatingOrderProfitBudgetScope,
   mapStoreOperatingSellerScope,
+  mergeStoreOperatingCustomFeeRecords,
   normalizeStoreOperatingCountryKey,
   readStoreOperatingBudgetCurrencyCode,
 } from "./storeOperatingMonthlyReportMapper.js";
@@ -180,6 +181,10 @@ function buildEmptyResult(normalizedFilters, now) {
       currencyCodes: [],
       recordCount: 0,
       budgetMatchCount: 0,
+      source: "/bd/profit/report/open/report/seller/list",
+      customFeeSource: "/bd/fee/management/open/feeManagement/otherFee/list",
+      customFeeRecordCount: 0,
+      unmappedCustomFeeCount: 0,
       unavailableMetrics: [],
       missingExchangeRateCount: 0,
       generatedAt: generatedAt(now),
@@ -275,24 +280,52 @@ export async function getStoreOperatingMonthlyReport(filters, {
       const request = {
         startDate,
         endDate,
+        monthlyQuery: true,
+        summaryEnabled: true,
         sids: sellers.map((seller) => seller.sid),
         currencyCode: currencyMode === "CNY" ? "CNY" : "ORIGINAL",
       };
-      if (typeof adapter.fetchMskuOrderProfitCached === "function") {
-        const result = await adapter.fetchMskuOrderProfitCached({ ...request, sellerList: sellers, reportDate: endDate });
-        return { month, records: result.records, cacheState: result.cacheState, cacheUpdatedAt: result.cacheUpdatedAt };
-      }
-      const payload = await adapter.fetchMskuOrderProfit(request);
+      const sellerResult = typeof adapter.fetchSellerProfitReportCached === "function"
+        ? await adapter.fetchSellerProfitReportCached({ ...request, sellerList: sellers, reportDate: endDate })
+        : await adapter.fetchSellerProfitReport(request);
+      const sellerRecords = sellerResult?.records || adapter.normalizeRecordList(sellerResult);
+      const normalizedSellerRecords = typeof adapter.normalizeSellerProfitRecords === "function"
+        ? adapter.normalizeSellerProfitRecords(sellerRecords, sellers, endDate)
+        : sellerRecords.map((record) => {
+          const seller = sellers.find((candidate) => Number(candidate.sid) === Number(record.sid || record.seller_id || record.sellerId));
+          return {
+            ...record,
+            sid: Number(record.sid || record.seller_id || record.sellerId || seller?.sid || 0),
+            storeName: record.storeName || record.store_name || seller?.name || "",
+            country: record.country || record.country_name || seller?.country || "",
+            currencyCode: record.currencyCode || record.currency_code || "",
+            reportDate: record.reportDate || endDate,
+          };
+        });
+      const feePayload = await adapter.fetchOtherFeeList({
+        date_type: "date",
+        start_date: startDate,
+        end_date: endDate,
+        sids: sellers.map((seller) => seller.sid),
+        dimensions: 3,
+        currency_code: currencyMode === "CNY" ? "CNY" : "ORIGINAL",
+      });
+      const feeRecords = adapter.normalizeRecordList(feePayload);
+      const mergedFees = mergeStoreOperatingCustomFeeRecords(normalizedSellerRecords, feeRecords, sellers);
       return {
         month,
-        records: adapter.normalizeMskuOrderProfitRecords(adapter.normalizeRecordList(payload), sellers, endDate),
-        cacheState: "unsupported",
-        cacheUpdatedAt: "",
+        records: mergedFees.records,
+        customFeeRecordCount: feeRecords.length,
+        unmappedCustomFeeRecords: mergedFees.unmapped,
+        cacheState: sellerResult?.cacheState || "unsupported",
+        cacheUpdatedAt: sellerResult?.cacheUpdatedAt || "",
       };
     }));
     const recordsByMonth = recordsByMonthResults.map((result) => result.records);
     const cacheStates = Object.fromEntries(recordsByMonthResults.map((result) => [result.month, result.cacheState]));
     const records = recordsByMonth.flat();
+    const customFeeRecordCount = recordsByMonthResults.reduce((sum, result) => sum + result.customFeeRecordCount, 0);
+    const unmappedCustomFeeRecords = recordsByMonthResults.flatMap((result) => result.unmappedCustomFeeRecords || []);
     const budget = await getBudgetTargetContext({
       months: normalizedFilters.months,
       storeNames: sellers.map((seller) => seller.name),
@@ -366,8 +399,13 @@ export async function getStoreOperatingMonthlyReport(filters, {
       ok: true,
       meta: {
         currencyMode,
+        source: "/bd/profit/report/open/report/seller/list",
+        customFeeSource: "/bd/fee/management/open/feeManagement/otherFee/list",
         currencyCodes,
         recordCount: records.length,
+        customFeeRecordCount,
+        unmappedCustomFeeCount: unmappedCustomFeeRecords.length,
+        unmappedCustomFeeRecords,
         budgetMatchCount: budgetRows.length,
         unavailableMetrics,
         unavailableMetricNames: unavailableMetricDetails.map((detail) => detail.name),
@@ -398,6 +436,9 @@ export async function getStoreOperatingMonthlyReport(filters, {
       unavailableMetricDetails,
       missingExchangeRateCount,
       cacheStates,
+      customFeeRecordCount,
+      unmappedCustomFeeCount: unmappedCustomFeeRecords.length,
+      unmappedCustomFeeRecords,
       elapsedMs: Date.now() - startedAt,
     });
     return result;

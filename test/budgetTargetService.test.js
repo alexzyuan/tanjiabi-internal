@@ -107,10 +107,13 @@ test("parsed workbook currency reaches a single-country original-currency report
     const adapter = {
       async fetchSellers() { return { data: [{ sid: 1, name: "探嘉美国", country: "美国" }] }; },
       normalizeRecordList(payload) { return payload.data || payload.records || []; },
-      async fetchMskuOrderProfit() {
+      async fetchSellerProfitReport() {
         return { records: [{ sid: 1, currencyCode: "USD", netSalesAmount: 180, totalAdsCost: -18, totalSalesRefunds: -4, grossProfit: 60 }] };
       },
-      normalizeMskuOrderProfitRecords(records, sellers, reportDate) {
+      async fetchOtherFeeList() {
+        return { data: [] };
+      },
+      normalizeSellerProfitRecords(records, sellers, reportDate) {
         return records.map((record) => ({ ...record, storeName: sellers[0].name, country: sellers[0].country, reportDate }));
       },
     };
