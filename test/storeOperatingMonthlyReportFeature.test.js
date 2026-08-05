@@ -18,7 +18,7 @@ function makeElement(value = "") {
   };
 }
 
-function makeReportResponse({ name = "销售收入净额" } = {}) {
+function makeReportResponse({ name = "销售收入净额", unavailableMetricNames = [] } = {}) {
   return {
     ok: true,
     async json() {
@@ -29,6 +29,7 @@ function makeReportResponse({ name = "销售收入净额" } = {}) {
           currencyCodes: ["USD"],
           generatedAt: "2026-08-03T08:00:00.000Z",
           unavailableMetrics: [],
+          unavailableMetricNames,
           missingExchangeRateCount: 0,
         },
         groups: [{
@@ -274,6 +275,16 @@ test("successful rendering refreshes the shared managed table and writes filter 
   assert.match(elements["#store-operating-report-head"].innerHTML, /A · USD/);
   assert.ok((elements["#store-operating-report-head"].innerHTML.match(/data-column-sortable="false"/g) || []).length >= 6);
   assert.match(elements["#store-operating-report-body"].innerHTML, /销售收入净额/);
+});
+
+test("successful rendering explains unavailable source metrics in the report status", async () => {
+  const { feature, elements } = makeFeatureHarness({
+    fetchImpl: async () => makeReportResponse({ unavailableMetricNames: ["广告费", "FBA国际物流运费"] }),
+  });
+
+  await feature.loadStoreOperatingMonthlyReport();
+
+  assert.match(elements["#store-operating-report-status"].textContent, /不可用科目：广告费、FBA国际物流运费/);
 });
 
 test("monthly report uses an 上级 column and collapses subtotal details by default", async () => {
