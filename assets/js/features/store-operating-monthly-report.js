@@ -310,6 +310,7 @@ export function createStoreOperatingMonthlyReportFeature({
       (Array.isArray(parent.children) ? parent.children : []).forEach((childKey) => {
         const category = rowsByKey.get(String(childKey));
         if (!category || Number(category.level) !== 1) return;
+        if (String(category.key || "") === "basic-info") return;
         blockRows.push(category);
         (Array.isArray(category.children) ? category.children : []).forEach((detailKey) => {
           const detail = rowsByKey.get(String(detailKey));
@@ -525,9 +526,12 @@ export function createStoreOperatingMonthlyReportFeature({
     const unavailableNames = Array.isArray(data.meta.unavailableMetricNames) && data.meta.unavailableMetricNames.length
       ? `；不可用科目：${data.meta.unavailableMetricNames.join("、")}（领星字段未返回或依赖字段不可用）`
       : "";
+    const unavailableDetails = Array.isArray(data.meta.unavailableMetricDetails) ? data.meta.unavailableMetricDetails : [];
+    const customExpenseUnavailable = unavailableDetails.some((detail) => detail?.category === "custom-expense");
+    const customExpenseText = customExpenseUnavailable ? "；自定义费用未配置独立数据源" : "";
     setText(
       "#store-operating-report-status",
-      `${budgetStatusText(data.budgetStatus)}${missingText}${unavailableText}${unavailableNames}`,
+      `${budgetStatusText(data.budgetStatus)}${missingText}${unavailableText}${unavailableNames}${customExpenseText}`,
       root,
     );
     refreshTable(query("#store-operating-report-table"));

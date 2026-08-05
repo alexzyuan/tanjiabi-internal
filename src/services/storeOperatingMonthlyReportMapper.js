@@ -65,7 +65,6 @@ const BUDGET_FIELDS = [
 ];
 
 const CATEGORIES = [
-  ["basic-info", "基础信息"],
   ["platform-income", "平台收入"],
   ["platform-expense", "平台支出"],
   ["product-cost-expense", "商品成本支出"],
@@ -82,6 +81,8 @@ const UNSALEABLE_RETURN_QUANTITY_FIELDS = [
 const PURCHASE_UNIT_COST_FIELDS = ["purchaseUnitCost", "cgUnitPrice", "cg_unit_price"];
 const FIRST_LEG_UNIT_COST_FIELDS = ["firstLegUnitCost", "cgTransportUnitCosts", "cg_transport_unit_costs"];
 const NET_SALES_FIELDS = ["netSalesAmount", "net_sales_amount", "net_amount"];
+const DIRECT_GROSS_PROFIT_FIELDS = ["grossProfit", "gross_profit", "orderProfit", "order_profit"];
+const DIRECT_SALES_PROFIT_FIELDS = ["profit", "profitAmount", "profit_amount", "sellerProfit", "seller_profit", "salesProfit", "sales_profit", "netProfit", "net_profit"];
 const DERIVED_METRIC_DEPENDENCIES = new Map([
   ["average-daily-sales", ["sales-volume"]],
   ["net-sales", ["sales-income", "sales-discount", "refunds"]],
@@ -228,9 +229,20 @@ const CUSTOM_EXPENSE_KEYS = METRIC_DEFINITIONS
   .filter((metric) => metric.category === "custom-expense")
   .map((metric) => metric.key);
 const PLATFORM_CORE_EXPENSE_KEYS = ["platform-fee", "fba-delivery-fee", "storage-fee", "ad-spend"];
+const PLATFORM_EXPENSE_KEYS = METRIC_DEFINITIONS
+  .filter((metric) => metric.category === "platform-expense" && !metric.derived)
+  .map((metric) => metric.key);
+const PRODUCT_COST_KEYS = METRIC_DEFINITIONS
+  .filter((metric) => metric.category === "product-cost-expense" && !metric.derived)
+  .map((metric) => metric.key);
 
 function sumRequiredKeys(actualByKey, keys) {
   return deriveFromRequiredChildren(actualByKey, keys, (values) => values.reduce((sum, value) => sum + value, 0));
+}
+
+function sumAvailableKeys(actualByKey, keys) {
+  const values = keys.map((key) => actualByKey.get(key)).filter((value) => value !== null && value !== undefined);
+  return values.length ? values.reduce((sum, value) => sum + value, 0) : null;
 }
 
 function ratioFromKeys(actualByKey, numeratorKey, denominatorKey) {
@@ -262,7 +274,8 @@ export function buildStoreOperatingReportRows({ records, budgetByMetric = {}, cu
   actualByKey.set("average-daily-sales", periodDays > 0 && salesVolume !== null ? salesVolume / periodDays : null);
   actualByKey.set("return-cost", sumReturnCosts(records));
   actualByKey.set("net-sales-cost", deriveFromRequiredChildren(actualByKey, ["purchase-cost", "return-cost"], ([purchaseCost, returnCost]) => purchaseCost - returnCost));
-  actualByKey.set("gross-profit", deriveFromRequiredChildren(actualByKey, ["net-sales", "net-sales-cost"], ([net, cost]) => net - cost));
+  const directGrossProfit = sumPresent(records, DIRECT_GROSS_PROFIT_FIELDS, false, "grossProfit");
+  actualByKey.set("gross-profit", directGrossProfit ?? deriveFromRequiredChildren(actualByKey, ["net-sales", "net-sales-cost"], ([net, cost]) => net - cost));
   actualByKey.set("platform-sales-profit", deriveFromRequiredChildren(
     actualByKey,
     ["gross-profit", "storage-fee", "ad-spend", "first-leg-cost", "platform-fee", "fba-delivery-fee"],
@@ -273,14 +286,17 @@ export function buildStoreOperatingReportRows({ records, budgetByMetric = {}, cu
     ["platform-sales-profit", "operations", "management", "labor", "asset-impairment", "non-operating-income", "non-operating-expense"],
     ([platformProfit, operations, management, labor, impairment, nonOperatingIncome, nonOperatingExpense]) => platformProfit - operations - management - labor - impairment + nonOperatingIncome - nonOperatingExpense,
   );
-  const newCustomExpense = sumRequiredKeys(actualByKey, CUSTOM_EXPENSE_KEYS);
-  actualByKey.set("custom-expense", newCustomExpense);
+  const newCustomExpense = sumAvailableKeys(actualByKey, CUSTOM_EXPENSE_KEYS);
+  const completeCustomExpense = sumRequiredKeys(actualByKey, CUSTOM_EXPENSE_KEYS);
+  const legacyCustomExpense = sumAvailableKeys(actualByKey, ["operations", "management", "labor", "asset-impairment", "non-operating-income", "non-operating-expense"]);
+  actualByKey.set("custom-expense", completeCustomExpense);
   const newSalesProfit = deriveFromRequiredChildren(
     actualByKey,
     ["gross-profit", ...PLATFORM_CORE_EXPENSE_KEYS, "first-leg-cost", "custom-expense"],
     ([grossProfit, ...expenses]) => grossProfit - expenses.reduce((sum, value) => sum + value, 0),
   );
-  actualByKey.set("sales-profit", legacySalesProfit ?? newSalesProfit);
+  const directSalesProfit = sumPresent(records, DIRECT_SALES_PROFIT_FIELDS, false, "profit");
+  actualByKey.set("sales-profit", directSalesProfit ?? legacySalesProfit ?? newSalesProfit);
   actualByKey.set("return-rate", ratioFromKeys(actualByKey, "return-volume", "sales-volume"));
   actualByKey.set("refund-rate", ratioFromKeys(actualByKey, "refund-volume", "sales-volume"));
   actualByKey.set("gross-rate", ratioFromKeys(actualByKey, "gross-profit", "sales-income"));
@@ -288,15 +304,7 @@ export function buildStoreOperatingReportRows({ records, budgetByMetric = {}, cu
 
   const metricsByCategory = new Map(CATEGORIES.map(([key]) => [key, []]));
   const categoryNames = new Map(CATEGORIES);
-  const storeCountry = [String(storeName || "").trim(), String(country || "").trim()].filter(Boolean).join(" / ") || null;
-  const metricRows = [createRow({
-    key: "store-country",
-    category: categoryNames.get("basic-info"),
-    name: "店铺/国家",
-    level: 2,
-    actual: storeCountry,
-    valueType: "text",
-  }, salesIncome), ...METRIC_DEFINITIONS.map((metric) => {
+  const metricRows = METRIC_DEFINITIONS.map((metric) => {
     metricsByCategory.get(metric.category).push(metric.key);
     return createRow({
       key: metric.key,
@@ -307,20 +315,16 @@ export function buildStoreOperatingReportRows({ records, budgetByMetric = {}, cu
       valueType: metric.valueType || "number",
       budget: BUDGET_METRICS.has(metric.key) ? (isPresent(budgetByMetric[metric.key]) ? toFiniteNumber(budgetByMetric[metric.key], `预算科目 ${metric.key}`) : null) : null,
     }, salesIncome);
-  })];
-  metricsByCategory.get("basic-info").push("store-country");
-
+  });
   const categoryChildren = new Map(metricsByCategory);
+  const productCostSubtotal = actualByKey.get("net-sales-cost") !== null && actualByKey.get("first-leg-cost") !== null
+    ? actualByKey.get("net-sales-cost") + actualByKey.get("first-leg-cost")
+    : sumAvailableKeys(actualByKey, PRODUCT_COST_KEYS);
   const categoryActuals = new Map([
-    ["basic-info", null],
-    ["platform-income", actualByKey.get("net-sales")],
-    ["platform-expense", sumRequiredKeys(actualByKey, PLATFORM_CORE_EXPENSE_KEYS)],
-    ["product-cost-expense", deriveFromRequiredChildren(actualByKey, ["net-sales-cost", "first-leg-cost"], ([netCost, firstLeg]) => netCost + firstLeg)],
-    ["custom-expense", legacySalesProfit === null ? newCustomExpense : deriveFromRequiredChildren(
-      actualByKey,
-      ["operations", "management", "labor", "asset-impairment", "non-operating-income", "non-operating-expense"],
-      ([operations, management, labor, impairment, income, expense]) => operations + management + labor + impairment + expense - income,
-    )],
+    ["platform-income", salesIncome],
+    ["platform-expense", sumAvailableKeys(actualByKey, PLATFORM_EXPENSE_KEYS)],
+    ["product-cost-expense", productCostSubtotal],
+    ["custom-expense", newCustomExpense ?? legacyCustomExpense],
     ["profit", actualByKey.get("sales-profit")],
   ]);
   CATEGORIES.forEach(([key]) => {
@@ -359,13 +363,17 @@ export function buildStoreOperatingReportRows({ records, budgetByMetric = {}, cu
         return {
           key: row.key,
           name: row.name,
-          reason: "订单利润 API 未返回对应字段",
+          category: metric.category,
+          reason: metric.category === "custom-expense"
+            ? "订单利润 API 未返回对应字段；当前未配置自定义费用独立数据源"
+            : "订单利润 API 未返回对应字段",
           fields: metric.fields,
         };
       }
       return {
         key: row.key,
         name: row.name,
+        category: row.category,
         reason: "依赖科目不可用",
         dependencies: DERIVED_METRIC_DEPENDENCIES.get(row.key) || [],
       };

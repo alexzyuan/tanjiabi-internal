@@ -184,6 +184,41 @@ test("monthly report exposes the five Lingxing-aligned top-level projects", () =
   assert.deepEqual(childrenByName["商品成本支出"], ["purchase-cost", "first-leg-cost", "other-product-cost"]);
   assert.deepEqual(childrenByName["自定义费用"], ["offsite-ad-spend", "office-expense", "office-rent", "certification-testing-fee", "office-supplies", "store-insurance-fee", "software-fee", "product-appearance-design-fee", "product-graphic-design-fee", "service-provider-fee", "office-courier-fee", "office-utility-fee", "credit-card-ad-fee", "office-telecom-fee", "sample-fee", "test-order-commission", "travel-expense", "employee-welfare-fee"]);
   assert.deepEqual(childrenByName["利润"], ["gross-profit", "gross-rate", "net-gross-rate"]);
+  assert.equal(levelOne.some((row) => row.key === "basic-info"), false);
+});
+
+test("category subtotals use sales amount and available expense details", () => {
+  const result = buildStoreOperatingReportRows({
+    records: [{
+      totalSalesAmount: 100,
+      purchaseCost: -30,
+      firstLegCost: -8,
+      platformFee: -6,
+      fbaDeliveryFee: -7,
+      storageFee: -2,
+      totalAdsCost: -4,
+    }],
+    currencyCode: "CNY",
+  });
+  const row = (key) => result.rows.find((item) => item.key === key);
+
+  assert.equal(row("platform-income").actual, 100);
+  assert.equal(row("platform-income").share, 1);
+  assert.equal(row("platform-expense").actual, 19);
+  assert.equal(row("product-cost-expense").actual, 38);
+  assert.equal(row("custom-expense").actual, null);
+  assert.equal(row("profit").actual, null);
+});
+
+test("direct OrderProfit profit fields populate profit subtotals", () => {
+  const result = buildStoreOperatingReportRows({
+    records: [{ totalSalesAmount: 100, grossProfit: 58, profit: 25 }],
+    currencyCode: "CNY",
+  });
+  const row = (key) => result.rows.find((item) => item.key === key);
+
+  assert.equal(row("gross-profit").actual, 58);
+  assert.equal(row("profit").actual, 25);
 });
 
 test("monthly report uses the exact Lingxing subject and detail order from the approved field list", () => {
@@ -204,8 +239,6 @@ test("monthly report uses the exact Lingxing subject and detail order from the a
 
   assert.deepEqual(rowNames, [
     "总概",
-    "基础信息",
-    "店铺/国家",
     "平台收入",
     "销量",
     "平均日销",
@@ -262,7 +295,7 @@ test("monthly report uses the exact Lingxing subject and detail order from the a
     "毛利率",
     "净毛利率",
   ]);
-  assert.equal(result.rows.find((row) => row.key === "store-country").actual, "Store-US / 美国");
+  assert.equal(result.rows.some((row) => row.key === "store-country"), false);
 });
 
 test("unavailable metrics expose their missing OrderProfit source fields", () => {
@@ -272,6 +305,7 @@ test("unavailable metrics expose their missing OrderProfit source fields", () =>
   assert.deepEqual(detail, {
     key: "ad-fee",
     name: "广告费",
+    category: "platform-expense",
     reason: "订单利润 API 未返回对应字段",
     fields: ["adFee", "ad_fee", "advertisingFee", "advertising_fee"],
   });
@@ -365,7 +399,7 @@ test("profit chain uses sales income as the percentage base and derives return c
   assert.equal(row("gross-profit").actual, 58);
   assert.deepEqual(row("profit").children, ["gross-profit", "gross-rate", "net-gross-rate"]);
   const categoryKeys = result.rows.filter((item) => item.level === 1).map((item) => item.key);
-  assert.deepEqual(categoryKeys, ["basic-info", "platform-income", "platform-expense", "product-cost-expense", "custom-expense", "profit"]);
+  assert.deepEqual(categoryKeys, ["platform-income", "platform-expense", "product-cost-expense", "custom-expense", "profit"]);
 });
 
 test("direct return-cost fields keep expense magnitudes positive", () => {

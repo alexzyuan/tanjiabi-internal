@@ -81,6 +81,8 @@ Rules for this path:
 
 店铺经营月报的字段树必须严格按已确认的领星订单利润表：基础信息仅有 `店铺/国家`；一级项目固定为 `平台收入`、`平台支出`、`商品成本支出`、`自定义费用`、`利润`。明细顺序和名称唯一以 `src/services/storeOperatingMonthlyReportMapper.js` 的 `METRIC_DEFINITIONS` 为准：平台收入为 `销量`、`平均日销`、`多渠道销量`、`广告销售额`、`广告销量`、`销售额`、`净销售额`、`买家运费`、`促销折扣`、`退款金额`、`退货量`、`退款量`、`退货率`、`退款率`、`FBA库存赔偿`、`其它收入`；平台支出为 `平台费`、`FBA发货费`、`其他订单费用`、`仓储费`、`广告费`、`推广费`、`FBA国际物流运费`、`入库配置费`、`调整费`、`平台其它费`。领星 API 已返回的费率/占比字段不再作为重复明细行，表格通用 `占比` 列仍保留；商品成本支出为 `采购成本`、`头程成本`、`其它成本`；自定义费用为 `站外推广费`、`办公费用`、`办公费用-租金`、`认证检测费`、`办公用品`、`店铺保险费`、`软件费用`、`产品外观设计费`、`产品平面设计费`、`服务商费用`、`办公费用-快递费`、`办公费用-水电费`、`信用卡广告费`、`办公费用-店铺通讯费`、`样品费`、`送测佣金（刷单）`、`差旅费`、`员工福利费`；利润为 `毛利润`、`毛利率`、`净毛利率`。mapper 负责把领星字段归入这些项目，前端和 Excel 导出不得另行维护一套分类名称。
 
+月报表头直接展示店铺/国家筛选范围，不渲染“基础信息”小计；平台收入小计使用原销售额，其他一级小计按已返回的可用明细汇总。缺失明细仍标记为不可用，不得静默补零。
+
 ## Lingxing Date Ranges
 
 Lingxing date-range APIs that document `start_date`/`end_date` as `左闭右开` must treat the user-facing end date as inclusive and the API `end_date` as exclusive. Frontend controls, dashboard filters, cache keys, logs, and visible metadata keep the real date selected by the user. Only backend request parameters sent to Lingxing add one day to the end boundary. For example, a visible range ending `2026-07-14` is sent to Lingxing as `end_date=2026-07-15`.
