@@ -132,19 +132,58 @@ test("rows retain the confirmed category hierarchy and derived rows require ever
     currencyCode: "CNY",
   });
   const overview = result.rows.find((row) => row.key === "overview");
-  const revenue = result.rows.find((row) => row.key === "revenue");
+  const revenue = result.rows.find((row) => row.key === "platform-income");
   const netSales = result.rows.find((row) => row.key === "net-sales");
-  const salesCost = result.rows.find((row) => row.key === "sales-cost");
+  const salesCost = result.rows.find((row) => row.key === "product-cost-expense");
   const grossProfit = result.rows.find((row) => row.key === "gross-profit");
 
   assert.deepEqual({ category: overview.category, name: overview.name, level: overview.level }, { category: "总概", name: "总概", level: 0 });
-  assert.deepEqual({ category: revenue.category, name: revenue.name, level: revenue.level }, { category: "销售收入", name: "销售收入", level: 1 });
+  assert.deepEqual({ category: revenue.category, name: revenue.name, level: revenue.level }, { category: "平台收入", name: "平台收入", level: 1 });
   assert.equal(netSales.level, 2);
-  assert.equal(netSales.category, "销售收入");
-  assert.equal(salesCost.actual, 30);
+  assert.equal(netSales.category, "平台收入");
+  assert.equal(salesCost.actual, 38);
   assert.equal(grossProfit.actual, 55);
   assert.equal(grossProfit.available, true);
   assert.deepEqual(grossProfit.children, []);
+});
+
+test("monthly report exposes the five Lingxing-aligned top-level projects", () => {
+  const result = buildStoreOperatingReportRows({
+    records: [{
+      totalSalesAmount: 100,
+      promotionDiscount: -5,
+      totalSalesRefunds: -10,
+      purchaseCost: -30,
+      firstLegCost: -8,
+      storageFee: -2,
+      totalAdsCost: -4,
+      platformFee: -6,
+      fbaDeliveryFee: -7,
+      operationsCost: -1,
+      managementCost: -2,
+      laborCost: -3,
+      assetImpairment: -1,
+      nonOperatingIncome: 2,
+      nonOperatingExpense: -1,
+    }],
+    budgetByMetric: {},
+    currencyCode: "CNY",
+  });
+
+  const levelOne = result.rows.filter((row) => row.level === 1);
+  assert.deepEqual(levelOne.map((row) => row.name), [
+    "平台收入",
+    "平台支出",
+    "商品成本支出",
+    "自定义费用",
+    "利润",
+  ]);
+  const childrenByName = Object.fromEntries(levelOne.map((row) => [row.name, row.children]));
+  assert.deepEqual(childrenByName["平台收入"], ["sales-income", "sales-discount", "refunds", "net-sales"]);
+  assert.deepEqual(childrenByName["平台支出"], ["storage-fee", "ad-spend", "platform-fee", "fba-delivery-fee"]);
+  assert.deepEqual(childrenByName["商品成本支出"], ["purchase-cost", "first-leg-cost", "return-cost", "net-sales-cost"]);
+  assert.deepEqual(childrenByName["自定义费用"], ["operations", "management", "labor", "asset-impairment", "non-operating-income", "non-operating-expense"]);
+  assert.deepEqual(childrenByName["利润"], ["gross-profit", "platform-sales-profit", "sales-profit"]);
 });
 
 test("gross profit is unavailable when a required hierarchy dependency is unavailable", () => {
@@ -234,9 +273,9 @@ test("profit chain uses sales income as the percentage base and derives return c
   assert.equal(row("gross-profit").actual, 58);
   assert.equal(row("platform-sales-profit").actual, 31);
   assert.equal(row("sales-profit").actual, 25);
-  assert.deepEqual(row("sales-profit-category").children, ["sales-profit"]);
+  assert.deepEqual(row("profit").children, ["gross-profit", "platform-sales-profit", "sales-profit"]);
   const categoryKeys = result.rows.filter((item) => item.level === 1).map((item) => item.key);
-  assert.ok(categoryKeys.indexOf("platform-profit-category") < categoryKeys.indexOf("operations"));
+  assert.deepEqual(categoryKeys, ["platform-income", "platform-expense", "product-cost-expense", "custom-expense", "profit"]);
 });
 
 test("direct return-cost fields keep expense magnitudes positive", () => {

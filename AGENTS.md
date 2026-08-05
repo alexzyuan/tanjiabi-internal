@@ -79,6 +79,8 @@ Rules for this path:
 
 店铺经营月报的币种筛选默认使用 `CNY`（人民币汇总），并通过页面筛选和 API `currencyCode` 显式传递。只有用户明确选择 `ORIGINAL` 且有效范围为单一国家时，才按领星订单利润返回的原币分币种展示；跨国家原币请求必须返回校验错误，不得静默改成其他币种或混合求和。
 
+店铺经营月报的一级项目固定为 `平台收入`、`平台支出`、`商品成本支出`、`自定义费用`、`利润`。二级项目沿用领星订单利润字段；mapper 负责把领星字段归入这五个项目，前端和 Excel 导出不得另行维护一套分类名称。
+
 ## Lingxing Date Ranges
 
 Lingxing date-range APIs that document `start_date`/`end_date` as `左闭右开` must treat the user-facing end date as inclusive and the API `end_date` as exclusive. Frontend controls, dashboard filters, cache keys, logs, and visible metadata keep the real date selected by the user. Only backend request parameters sent to Lingxing add one day to the end boundary. For example, a visible range ending `2026-07-14` is sent to Lingxing as `end_date=2026-07-15`.

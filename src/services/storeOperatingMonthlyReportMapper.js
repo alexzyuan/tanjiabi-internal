@@ -1,24 +1,25 @@
 const METRIC_DEFINITIONS = [
-  { key: "sales-income", name: "销售收入", fields: ["totalSalesAmount", "salesAmount", "sales_amount", "amount"], category: "revenue" },
-  { key: "sales-discount", name: "销售折扣", fields: ["promotionDiscount", "promotion_discount", "discount_amount"], category: "revenue", magnitude: true },
-  { key: "refunds", name: "退款金额", fields: ["totalSalesRefunds", "refunds", "refund_amount", "refundAmount"], category: "revenue", magnitude: true },
-  { key: "purchase-cost", name: "销售成本", fields: ["purchaseCost", "purchase_costs", "purchase_cost", "goods_cost"], category: "sales-cost", magnitude: true },
-  { key: "first-leg-cost", name: "头程费用", fields: ["firstLegCost", "logistics_costs", "shipping_cost"], category: "logistics", magnitude: true },
-  { key: "storage-fee", name: "平台仓储费用", fields: ["storageFee", "total_stock_fee", "storage_fee"], category: "storage", magnitude: true },
-  { key: "ad-spend", name: "推广费用", fields: ["totalAdsCost", "adsCost", "ads_cost", "spend"], category: "advertising", magnitude: true },
-  { key: "platform-fee", name: "平台费用", fields: ["platformFee", "platform_fee", "selling_fee"], category: "platform", magnitude: true },
-  { key: "fba-delivery-fee", name: "FBA 配送费", fields: ["fbaDeliveryFee", "fulfillment_fee", "fba_fulfillment_fee"], category: "logistics", magnitude: true },
-  { key: "operations", name: "运营费用", fields: ["operationsCost", "operations_cost", "operating_cost", "operating_expense"], category: "operations", magnitude: true },
-  { key: "management", name: "管理费用", fields: ["managementCost", "management_cost", "management_expense"], category: "management", magnitude: true },
-  { key: "labor", name: "人力费用", fields: ["laborCost", "labor_cost", "labor_expense"], category: "labor", magnitude: true },
-  { key: "asset-impairment", name: "资产减值", fields: ["assetImpairment", "asset_impairment", "impairment_loss"], category: "asset-impairment", magnitude: true },
-  { key: "non-operating-income", name: "营业外收入", fields: ["nonOperatingIncome", "non_operating_income"], category: "non-operating-income" },
-  { key: "non-operating-expense", name: "营业外支出", fields: ["nonOperatingExpense", "non_operating_expense"], category: "non-operating-expense", magnitude: true },
-  { key: "net-sales", name: "销售收入净额", category: "revenue", derived: true },
-  { key: "return-cost", name: "退货成本", category: "sales-cost", derived: true },
-  { key: "net-sales-cost", name: "销售成本净额", category: "sales-cost", derived: true },
-  { key: "platform-sales-profit", name: "平台销售利润", category: "platform-profit-category", derived: true },
-  { key: "sales-profit", name: "公司净利润", category: "sales-profit-category", derived: true },
+  { key: "sales-income", name: "销售收入", fields: ["totalSalesAmount", "salesAmount", "sales_amount", "amount"], category: "platform-income" },
+  { key: "sales-discount", name: "销售折扣", fields: ["promotionDiscount", "promotion_discount", "discount_amount"], category: "platform-income", magnitude: true },
+  { key: "refunds", name: "退款金额", fields: ["totalSalesRefunds", "refunds", "refund_amount", "refundAmount"], category: "platform-income", magnitude: true },
+  { key: "purchase-cost", name: "销售成本", fields: ["purchaseCost", "purchase_costs", "purchase_cost", "goods_cost"], category: "product-cost-expense", magnitude: true },
+  { key: "first-leg-cost", name: "头程费用", fields: ["firstLegCost", "logistics_costs", "shipping_cost"], category: "product-cost-expense", magnitude: true },
+  { key: "storage-fee", name: "平台仓储费用", fields: ["storageFee", "total_stock_fee", "storage_fee"], category: "platform-expense", magnitude: true },
+  { key: "ad-spend", name: "推广费用", fields: ["totalAdsCost", "adsCost", "ads_cost", "spend"], category: "platform-expense", magnitude: true },
+  { key: "platform-fee", name: "平台费用", fields: ["platformFee", "platform_fee", "selling_fee"], category: "platform-expense", magnitude: true },
+  { key: "fba-delivery-fee", name: "FBA 配送费", fields: ["fbaDeliveryFee", "fulfillment_fee", "fba_fulfillment_fee"], category: "platform-expense", magnitude: true },
+  { key: "operations", name: "运营费用", fields: ["operationsCost", "operations_cost", "operating_cost", "operating_expense"], category: "custom-expense", magnitude: true },
+  { key: "management", name: "管理费用", fields: ["managementCost", "management_cost", "management_expense"], category: "custom-expense", magnitude: true },
+  { key: "labor", name: "人力费用", fields: ["laborCost", "labor_cost", "labor_expense"], category: "custom-expense", magnitude: true },
+  { key: "asset-impairment", name: "资产减值", fields: ["assetImpairment", "asset_impairment", "impairment_loss"], category: "custom-expense", magnitude: true },
+  { key: "non-operating-income", name: "营业外收入", fields: ["nonOperatingIncome", "non_operating_income"], category: "custom-expense" },
+  { key: "non-operating-expense", name: "营业外支出", fields: ["nonOperatingExpense", "non_operating_expense"], category: "custom-expense", magnitude: true },
+  { key: "net-sales", name: "销售收入净额", category: "platform-income", derived: true },
+  { key: "return-cost", name: "退货成本", category: "product-cost-expense", derived: true },
+  { key: "net-sales-cost", name: "销售成本净额", category: "product-cost-expense", derived: true },
+  { key: "gross-profit", name: "销售毛利", category: "profit", derived: true },
+  { key: "platform-sales-profit", name: "平台销售利润", category: "profit", derived: true },
+  { key: "sales-profit", name: "公司净利润", category: "profit", derived: true },
 ];
 
 const BUDGET_METRICS = new Set(["net-sales", "ad-spend", "refunds", "sales-profit"]);
@@ -31,22 +32,11 @@ const BUDGET_FIELDS = [
 ];
 
 const CATEGORIES = [
-  ["revenue", "销售收入"],
-  ["sales-cost", "销售成本"],
-  ["gross-profit", "销售毛利"],
-  ["storage", "平台仓储"],
-  ["advertising", "推广费用"],
-  ["logistics", "物流费用"],
-  ["platform", "平台费用"],
-  ["platform-profit-category", "平台销售利润"],
-  ["operations", "运营费用"],
-  ["management", "管理费用"],
-  ["labor", "人力费用"],
-  ["asset-impairment", "资产减值"],
-  ["non-operating", "营业外收支"],
-  ["non-operating-income", "营业外收入"],
-  ["non-operating-expense", "营业外支出"],
-  ["sales-profit-category", "销售利润"],
+  ["platform-income", "平台收入"],
+  ["platform-expense", "平台支出"],
+  ["product-cost-expense", "商品成本支出"],
+  ["custom-expense", "自定义费用"],
+  ["profit", "利润"],
 ];
 
 const RETURN_COST_FIELDS = ["returnCost", "return_cost", "return_goods_cost", "return_goods_cost_amount"];
@@ -223,14 +213,24 @@ export function buildStoreOperatingReportRows({ records, budgetByMetric = {}, cu
   });
 
   const categoryChildren = new Map(metricsByCategory);
-  categoryChildren.set("gross-profit", []);
-  categoryChildren.set("non-operating", []);
   const categoryActuals = new Map([
-    ["revenue", actualByKey.get("net-sales")],
-    ["sales-cost", actualByKey.get("net-sales-cost")],
-    ["gross-profit", actualByKey.get("gross-profit")],
-    ["platform-profit-category", actualByKey.get("platform-sales-profit")],
-    ["sales-profit-category", actualByKey.get("sales-profit")],
+    ["platform-income", actualByKey.get("net-sales")],
+    ["platform-expense", deriveFromRequiredChildren(
+      actualByKey,
+      ["storage-fee", "ad-spend", "platform-fee", "fba-delivery-fee"],
+      (values) => values.reduce((sum, value) => sum + value, 0),
+    )],
+    ["product-cost-expense", deriveFromRequiredChildren(
+      actualByKey,
+      ["net-sales-cost", "first-leg-cost"],
+      ([netCost, firstLeg]) => netCost + firstLeg,
+    )],
+    ["custom-expense", deriveFromRequiredChildren(
+      actualByKey,
+      ["operations", "management", "labor", "asset-impairment", "non-operating-income", "non-operating-expense"],
+      ([operations, management, labor, impairment, income, expense]) => operations + management + labor + impairment + expense - income,
+    )],
+    ["profit", actualByKey.get("sales-profit")],
   ]);
   CATEGORIES.forEach(([key]) => {
     if (!categoryActuals.has(key)) categoryActuals.set(key, actualByKey.get(key) ?? null);
