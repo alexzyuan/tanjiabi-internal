@@ -75,6 +75,10 @@ Rules for this path:
 11. Jiufang FBA orders must not send an `Importer` object by default, so the website's 进出口委托 section is not filled from BI payload data. Do not copy `ShipFrom` company name or credit code into `Importer` unless a reviewed customs-declaration workflow explicitly requires it.
 12. Jiufang invoice rows must use Jiufang-documented field names such as `ShipmentId`, `ReferenceId`, `Sku`, `ProductNameCn`, `ProductNameEn`, `HsCode`, `CustomsClearanceCode`, `PurchasingPrice`, `Num`, `DeclareValue`, `IsCharged`, `ImageUrl`, `PerSuitNum`, and `MeasurementUnit`. Jiufang `DeclareValue` is the declared unit price and must default to fixed value `2` for this FBA workflow. Jiufang package details must use `Sku` and `Num`. Do not send only legacy/local names such as `ShipmentID`, `SKU`, `EnglishName`, `CustomsCode`, `UnitPrice`, `Quantity`, or package-detail `ProductName`.
 
+## 店铺经营月报币种口径
+
+店铺经营月报的币种筛选默认使用 `CNY`（人民币汇总），并通过页面筛选和 API `currencyCode` 显式传递。只有用户明确选择 `ORIGINAL` 且有效范围为单一国家时，才按领星订单利润返回的原币分币种展示；跨国家原币请求必须返回校验错误，不得静默改成其他币种或混合求和。
+
 ## Lingxing Date Ranges
 
 Lingxing date-range APIs that document `start_date`/`end_date` as `左闭右开` must treat the user-facing end date as inclusive and the API `end_date` as exclusive. Frontend controls, dashboard filters, cache keys, logs, and visible metadata keep the real date selected by the user. Only backend request parameters sent to Lingxing add one day to the end boundary. For example, a visible range ending `2026-07-14` is sent to Lingxing as `end_date=2026-07-15`.

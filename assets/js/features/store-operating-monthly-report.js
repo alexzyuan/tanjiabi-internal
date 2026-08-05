@@ -114,6 +114,7 @@ export function createStoreOperatingMonthlyReportFeature({
   let initialUrlScopeApplied = false;
   let initialUrlStores = [];
   let initialUrlCountries = [];
+  let initialUrlCurrencyCode = "";
   let activeReportAbortController = null;
   let reportLoadGeneration = 0;
   const expandedReportCategories = new Set();
@@ -131,6 +132,7 @@ export function createStoreOperatingMonthlyReportFeature({
       endMonth: String(query("#store-operating-report-end-month")?.value || "").trim(),
       stores: selectedFilterValues(query("#store-operating-report-store")),
       countries: selectedFilterValues(query("#store-operating-report-country")),
+      currencyCode: String(query("#store-operating-report-currency")?.value || "CNY").trim().toUpperCase() || "CNY",
     };
   }
 
@@ -138,6 +140,7 @@ export function createStoreOperatingMonthlyReportFeature({
     const params = new URLSearchParams();
     params.set("startMonth", filters.startMonth);
     params.set("endMonth", filters.endMonth);
+    params.set("currencyCode", filters.currencyCode || "CNY");
     filters.stores.forEach((value) => params.append("stores", value));
     filters.countries.forEach((value) => params.append("countries", value));
     return params.toString();
@@ -153,6 +156,7 @@ export function createStoreOperatingMonthlyReportFeature({
     const params = new URLSearchParams();
     params.set("startMonth", filters.startMonth);
     params.set("endMonth", filters.endMonth);
+    params.set("currencyCode", filters.currencyCode || "CNY");
     filters.stores.forEach((value) => params.append("stores", value));
     filters.countries.forEach((value) => params.append("countries", value));
     replaceLocationSearch(params);
@@ -217,12 +221,17 @@ export function createStoreOperatingMonthlyReportFeature({
     const params = new URLSearchParams(locationRef?.search || "");
     initialUrlStores = params.getAll("stores").filter(Boolean);
     initialUrlCountries = params.getAll("countries").filter(Boolean);
+    initialUrlCurrencyCode = String(params.get("currencyCode") || "").trim().toUpperCase();
     const startMonth = params.get("startMonth");
     const endMonth = params.get("endMonth");
     const startInput = query("#store-operating-report-start-month");
     const endInput = query("#store-operating-report-end-month");
     if (startInput && MONTH_PATTERN.test(startMonth || "")) startInput.value = startMonth;
     if (endInput && MONTH_PATTERN.test(endMonth || "")) endInput.value = endMonth;
+    const currencySelect = query("#store-operating-report-currency");
+    if (currencySelect && ["CNY", "ORIGINAL"].includes(initialUrlCurrencyCode)) {
+      currencySelect.value = initialUrlCurrencyCode;
+    }
     refreshStoreOptions();
   }
 
@@ -232,6 +241,8 @@ export function createStoreOperatingMonthlyReportFeature({
     const endInput = query("#store-operating-report-end-month");
     if (startInput && !startInput.value) startInput.value = currentMonth;
     if (endInput && !endInput.value) endInput.value = currentMonth;
+    const currencySelect = query("#store-operating-report-currency");
+    if (currencySelect && !currencySelect.value) currencySelect.value = "CNY";
     initializeFromLocation();
     refreshStoreOptions();
   }
@@ -603,6 +614,12 @@ export function createStoreOperatingMonthlyReportFeature({
     if (exportButton) exportButton.disabled = !sameQuery(buildReportQuery(), lastSuccessfulQuery);
   }
 
+  function handleCurrencyChange() {
+    invalidateActiveReportLoad();
+    const exportButton = query("#store-operating-report-export");
+    if (exportButton) exportButton.disabled = !sameQuery(buildReportQuery(), lastSuccessfulQuery);
+  }
+
   function resetStoreOperatingMonthlyReport() {
     const month = getCurrentMonth();
     const startInput = query("#store-operating-report-start-month");
@@ -611,6 +628,8 @@ export function createStoreOperatingMonthlyReportFeature({
     if (endInput) endInput.value = month;
     selectValues(query("#store-operating-report-country"), []);
     selectValues(query("#store-operating-report-store"), []);
+    const currencySelect = query("#store-operating-report-currency");
+    if (currencySelect) currencySelect.value = "CNY";
     refreshStoreOptions();
     return loadStoreOperatingMonthlyReport();
   }
@@ -678,6 +697,7 @@ export function createStoreOperatingMonthlyReportFeature({
     bind(root, "#store-operating-report-end-month", "change", handleMonthChange);
     bind(root, "#store-operating-report-country", "change", handleCountryChange);
     bind(root, "#store-operating-report-store", "change", handleStoreChange);
+    bind(root, "#store-operating-report-currency", "change", handleCurrencyChange);
     bind(root, "#store-operating-report-query", "click", loadStoreOperatingMonthlyReport);
     bind(root, "#store-operating-report-reset", "click", resetStoreOperatingMonthlyReport);
     bind(root, "#store-operating-report-export", "click", exportStoreOperatingMonthlyReport);
@@ -688,6 +708,7 @@ export function createStoreOperatingMonthlyReportFeature({
   return {
     exportStoreOperatingMonthlyReport,
     handleCountryChange,
+    handleCurrencyChange,
     handleMonthChange,
     handleStoreChange,
     initializeStoreOperatingMonthlyReportDefaults,

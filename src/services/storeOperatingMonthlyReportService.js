@@ -171,7 +171,7 @@ function buildEmptyResult(normalizedFilters, now) {
   return {
     ok: true,
     meta: {
-      currencyMode: "ORIGINAL",
+      currencyMode: normalizedFilters.currencyCode,
       currencyCodes: [],
       recordCount: 0,
       budgetMatchCount: 0,
@@ -207,6 +207,7 @@ export function normalizeStoreOperatingMonthlyReportFilters({
   endMonth,
   stores = [],
   countries = [],
+  currencyCode = "CNY",
 } = {}) {
   if (!MONTH_PATTERN.test(startMonth || "") || !MONTH_PATTERN.test(endMonth || "")) {
     throw reportInputError("请选择开始月份和结束月份");
@@ -214,12 +215,17 @@ export function normalizeStoreOperatingMonthlyReportFilters({
   const months = listInclusiveMonths(startMonth, endMonth);
   if (!months.length) throw reportInputError("结束月份不能早于开始月份");
   if (months.length > 12) throw reportInputError("统计范围最多 12 个月");
+  const normalizedCurrencyCode = String(currencyCode || "CNY").trim().toUpperCase();
+  if (!["CNY", "ORIGINAL"].includes(normalizedCurrencyCode)) {
+    throw reportInputError("币种必须是 CNY 或 ORIGINAL");
+  }
   return {
     startMonth,
     endMonth,
     months,
     stores: uniqueText(stores, "stores"),
     countries: uniqueText(countries, "countries"),
+    currencyCode: normalizedCurrencyCode,
   };
 }
 
@@ -254,7 +260,10 @@ export async function getStoreOperatingMonthlyReport(filters, {
       return empty;
     }
     const effectiveCountries = [...new Set(sellers.map((seller) => seller.country).filter(Boolean))];
-    const currencyMode = effectiveCountries.length > 1 ? "CNY" : "ORIGINAL";
+    const currencyMode = normalizedFilters.currencyCode;
+    if (currencyMode === "ORIGINAL" && effectiveCountries.length > 1) {
+      throw reportInputError("跨国家只能使用人民币，请将币种切换为 CNY");
+    }
     const reportScopes = buildReportScopes(sellers, normalizedFilters);
     const recordsByMonthResults = await Promise.all(normalizedFilters.months.map(async (month) => {
       const { startDate, endDate } = monthBounds(month);

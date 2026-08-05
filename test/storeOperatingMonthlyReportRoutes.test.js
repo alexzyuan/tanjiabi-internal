@@ -15,7 +15,7 @@ test("monthly report route is finance-protected and forwards repeated filter val
   assert.equal(route.auth, "finance");
   await route.handler({
     res: {},
-    url: new URL("http://localhost/api/finance/store-operating-monthly-report?startMonth=2026-06&endMonth=2026-07&stores=A&stores=B&countries=%E7%BE%8E%E5%9B%BD"),
+    url: new URL("http://localhost/api/finance/store-operating-monthly-report?startMonth=2026-06&endMonth=2026-07&stores=A&stores=B&countries=%E7%BE%8E%E5%9B%BD&currencyCode=ORIGINAL"),
   });
 
   assert.deepEqual(payload.filters, {
@@ -23,6 +23,7 @@ test("monthly report route is finance-protected and forwards repeated filter val
     endMonth: "2026-07",
     stores: ["A", "B"],
     countries: ["美国"],
+    currencyCode: "ORIGINAL",
   });
 });
 
@@ -45,7 +46,7 @@ test("monthly report export is finance-protected and writes only the same-source
       writeHead: (status, value) => { statusCode = status; headers = value; },
       end: (value) => { bytes = value; },
     },
-    url: new URL("http://localhost/api/finance/store-operating-monthly-report/export?startMonth=2026-06&endMonth=2026-07&stores=A&stores=B&countries=%E7%BE%8E%E5%9B%BD"),
+    url: new URL("http://localhost/api/finance/store-operating-monthly-report/export?startMonth=2026-06&endMonth=2026-07&stores=A&stores=B&countries=%E7%BE%8E%E5%9B%BD&currencyCode=ORIGINAL"),
   });
 
   assert.deepEqual(receivedFilters, {
@@ -53,6 +54,7 @@ test("monthly report export is finance-protected and writes only the same-source
     endMonth: "2026-07",
     stores: ["A", "B"],
     countries: ["美国"],
+    currencyCode: "ORIGINAL",
   });
   assert.equal(statusCode, 200);
   assert.deepEqual(headers, {

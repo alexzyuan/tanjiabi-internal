@@ -49,6 +49,26 @@ test("service rejects a 13-month range without changing either boundary", () => 
   assert.deepEqual(input, { startMonth: "2025-01", endMonth: "2026-01" });
 });
 
+test("monthly report defaults to CNY and accepts ORIGINAL as the explicit original-currency mode", () => {
+  assert.equal(normalizeStoreOperatingMonthlyReportFilters({
+    startMonth: "2026-07",
+    endMonth: "2026-07",
+  }).currencyCode, "CNY");
+  assert.equal(normalizeStoreOperatingMonthlyReportFilters({
+    startMonth: "2026-07",
+    endMonth: "2026-07",
+    currencyCode: "original",
+  }).currencyCode, "ORIGINAL");
+  assert.throws(
+    () => normalizeStoreOperatingMonthlyReportFilters({
+      startMonth: "2026-07",
+      endMonth: "2026-07",
+      currencyCode: "USD",
+    }),
+    /币种必须是 CNY 或 ORIGINAL/,
+  );
+});
+
 test("filter validation errors carry HTTP 400 while dependency failures remain unclassified for 502 routes", async () => {
   assert.throws(
     () => normalizeStoreOperatingMonthlyReportFilters({ startMonth: "2026-13", endMonth: "2026-13" }),
@@ -128,11 +148,11 @@ test("monthly report prefers the shared cached order profit adapter method", asy
 
   assert.equal(rawCalls, 0);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].currencyCode, "ORIGINAL");
+  assert.equal(calls[0].currencyCode, "CNY");
   assert.equal(value.meta.recordCount, 1);
 });
 
-test("single-country result separates original API currencies", async () => {
+test("single-country result uses CNY by default instead of silently switching to original currencies", async () => {
   const adapter = fakeAdapter({
     sellers: [{ sid: 1, name: "Store-US", country: "美国" }],
     recordsForCall: () => [
@@ -149,9 +169,49 @@ test("single-country result separates original API currencies", async () => {
     },
   );
 
+  assert.equal(value.meta.currencyMode, "CNY");
+  assert.deepEqual(value.groups.map((group) => group.currencyCode), ["CNY"]);
+  assert.equal(value.groups[0].rows.find((row) => row.key === "net-sales").actual, 120);
+});
+
+test("single-country ORIGINAL filter preserves separate API currencies", async () => {
+  const adapter = fakeAdapter({
+    sellers: [{ sid: 1, name: "Store-US", country: "美国" }],
+    recordsForCall: () => [
+      { sid: 1, netSalesAmount: 90, currencyCode: "USD" },
+      { sid: 1, netSalesAmount: 30, currencyCode: "CAD" },
+    ],
+  });
+
+  const value = await getStoreOperatingMonthlyReport(
+    { startMonth: "2026-07", endMonth: "2026-07", countries: ["美国"], currencyCode: "ORIGINAL" },
+    {
+      adapter,
+      getBudgetTargetContext: async () => ({ rows: [], totals: {}, matched: false }),
+    },
+  );
+
   assert.equal(value.meta.currencyMode, "ORIGINAL");
   assert.deepEqual(value.groups.map((group) => group.currencyCode), ["CAD", "USD"]);
   assert.deepEqual(value.groups.map((group) => group.rows.find((row) => row.key === "net-sales").actual), [30, 90]);
+});
+
+test("ORIGINAL currency mode rejects multiple effective countries instead of hiding a conversion", async () => {
+  const adapter = fakeAdapter({
+    sellers: [
+      { sid: 1, name: "Store-US", country: "美国" },
+      { sid: 2, name: "Store-CA", country: "加拿大" },
+    ],
+    recordsForCall: () => [],
+  });
+
+  await assert.rejects(
+    () => getStoreOperatingMonthlyReport(
+      { startMonth: "2026-07", endMonth: "2026-07", currencyCode: "ORIGINAL" },
+      { adapter, getBudgetTargetContext: async () => ({ rows: [], matched: false }) },
+    ),
+    /跨国家只能使用人民币/,
+  );
 });
 
 test("selected stores create separate report groups with store-scoped budgets", async () => {
@@ -220,7 +280,7 @@ test("all-store header scope remains visible when a single-country query has no 
 
   assert.equal(value.groups.length, 1);
   assert.equal(value.groups[0].storeName, "全部店铺");
-  assert.equal(value.groups[0].currencyAvailable, false);
+  assert.equal(value.groups[0].currencyAvailable, true);
   assert.equal(value.groups[0].rows.find((row) => row.key === "net-sales").actual, null);
 });
 
@@ -234,7 +294,7 @@ test("service accepts one and twelve months but rejects missing, invalid, and re
   const budget = async () => ({ rows: [], totals: {}, matched: false });
 
   const oneMonth = await getStoreOperatingMonthlyReport(
-    { startMonth: "2026-02", endMonth: "2026-02" },
+    { startMonth: "2026-02", endMonth: "2026-02", currencyCode: "CNY" },
     { adapter, getBudgetTargetContext: budget },
   );
   assert.deepEqual(oneMonth.filters.months, ["2026-02"]);
@@ -242,7 +302,7 @@ test("service accepts one and twelve months but rejects missing, invalid, and re
     startDate: "2026-02-01",
     endDate: "2026-02-28",
     sids: [1],
-    currencyCode: "ORIGINAL",
+    currencyCode: "CNY",
   });
 
   calls.length = 0;
@@ -361,7 +421,7 @@ test("a blank original API currency remains an explicit unavailable group", asyn
   });
 
   const value = await getStoreOperatingMonthlyReport(
-    { startMonth: "2026-07", endMonth: "2026-07" },
+    { startMonth: "2026-07", endMonth: "2026-07", currencyCode: "ORIGINAL" },
     { adapter, getBudgetTargetContext: async () => ({ rows: [], matched: false }) },
   );
 
@@ -378,7 +438,7 @@ test("original mode never assigns a budget row to an inferred currency", async (
   });
 
   const value = await getStoreOperatingMonthlyReport(
-    { startMonth: "2026-07", endMonth: "2026-07" },
+    { startMonth: "2026-07", endMonth: "2026-07", currencyCode: "ORIGINAL" },
     {
       adapter,
       getBudgetTargetContext: async () => ({
@@ -403,7 +463,7 @@ test("original mode uses only an explicitly declared budget currency", async () 
   });
 
   const value = await getStoreOperatingMonthlyReport(
-    { startMonth: "2026-07", endMonth: "2026-07" },
+    { startMonth: "2026-07", endMonth: "2026-07", currencyCode: "ORIGINAL" },
     {
       adapter,
       getBudgetTargetContext: async () => ({
@@ -425,7 +485,7 @@ test("a blank original API currency never receives a blank-currency budget", asy
   });
 
   const value = await getStoreOperatingMonthlyReport(
-    { startMonth: "2026-07", endMonth: "2026-07" },
+    { startMonth: "2026-07", endMonth: "2026-07", currencyCode: "ORIGINAL" },
     {
       adapter,
       getBudgetTargetContext: async () => ({
@@ -505,7 +565,7 @@ test("a missing Lingxing rate makes CNY budgets unavailable without a partial or
   });
 
   const value = await getStoreOperatingMonthlyReport(
-    { startMonth: "2026-07", endMonth: "2026-07" },
+    { startMonth: "2026-07", endMonth: "2026-07", currencyCode: "CNY" },
     {
       adapter,
       getBudgetTargetContext: async () => ({
@@ -597,7 +657,7 @@ test("service logs trace metadata without order or budget payloads", async () =>
   assert.equal(entries[0].level, "info");
   assert.match(entries[0].details.requestId, /^[0-9a-f-]{36}$/);
   assert.equal(entries[0].details.range, "2026-07/2026-07");
-  assert.equal(entries[0].details.currencyMode, "ORIGINAL");
+  assert.equal(entries[0].details.currencyMode, "CNY");
   assert.equal(entries[0].details.recordCount, 1);
   assert.equal(entries[0].details.budgetMatchCount, 1);
   assert.equal(typeof entries[0].details.elapsedMs, "number");

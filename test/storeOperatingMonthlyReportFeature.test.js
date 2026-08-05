@@ -77,6 +77,7 @@ function makeFeatureHarness({
     "#store-operating-report-end-month": makeElement(endMonth),
     "#store-operating-report-store": makeElement(),
     "#store-operating-report-country": makeElement(),
+    "#store-operating-report-currency": makeElement(""),
     "#store-operating-report-status": makeElement(),
     "#store-operating-report-meta": makeElement(),
     "#store-operating-report-head": makeElement(),
@@ -200,6 +201,7 @@ test("valid month edits auto-refresh and invalid 13-month edits do not request",
   });
 
   await feature.loadStoreOperatingMonthlyReport();
+  assert.match(requests[0], /currencyCode=CNY/);
   assert.match(requests[0], /startMonth=2026-06/);
   assert.match(requests[0], /endMonth=2026-07/);
   assert.match(requests[0], /stores=A/);
@@ -210,6 +212,19 @@ test("valid month edits auto-refresh and invalid 13-month edits do not request",
 
   assert.match(elements["#store-operating-report-status"].textContent, /最多 12 个月/);
   assert.equal(requests.length, 1);
+});
+
+test("currency filter defaults to CNY and explicit ORIGINAL selection is sent to the report API", async () => {
+  const { feature, elements, requests } = makeFeatureHarness();
+
+  await feature.loadStoreOperatingMonthlyReport();
+  assert.equal(elements["#store-operating-report-currency"].value, "CNY");
+  assert.match(requests[0], /currencyCode=CNY/);
+
+  elements["#store-operating-report-currency"].value = "ORIGINAL";
+  feature.handleCurrencyChange();
+  await feature.loadStoreOperatingMonthlyReport();
+  assert.match(requests[1], /currencyCode=ORIGINAL/);
 });
 
 test("budget action carries the active scope to the budget view", () => {

@@ -115,7 +115,7 @@ test("parsed workbook currency reaches a single-country original-currency report
       },
     };
     const report = await getStoreOperatingMonthlyReport(
-      { startMonth: "2026-07", endMonth: "2026-07", countries: ["美国"] },
+      { startMonth: "2026-07", endMonth: "2026-07", countries: ["美国"], currencyCode: "ORIGINAL" },
       { adapter, getBudgetTargetContext, logger: { info() {}, error() {} } },
     );
 

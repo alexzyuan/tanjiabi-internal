@@ -30,6 +30,7 @@ export function createFinancePurchaseRoutes(deps = {}) {
     endMonth: url.searchParams.get("endMonth") || "",
     stores: url.searchParams.getAll("stores").filter(Boolean),
     countries: url.searchParams.getAll("countries").filter(Boolean),
+    currencyCode: url.searchParams.get("currencyCode") || "CNY",
   });
 
   return [

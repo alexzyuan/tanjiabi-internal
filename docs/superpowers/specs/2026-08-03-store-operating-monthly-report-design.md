@@ -110,8 +110,8 @@
 
 建议 API 边界：
 
-- `GET /api/finance/store-operating-monthly-report`：接收开始月、结束月、店铺和国家，返回矩阵、币种/来源元数据、预算状态和生成时间。
-- `GET /api/finance/store-operating-monthly-report/export`：只接收与页面相同筛选，调用同一服务生成导出内容；不接受前端提交的金额。
+- `GET /api/finance/store-operating-monthly-report`：接收开始月、结束月、店铺、国家和 `currencyCode`（默认 `CNY`），返回矩阵、币种/来源元数据、预算状态和生成时间。
+- `GET /api/finance/store-operating-monthly-report/export`：只接收与页面相同筛选（包括 `currencyCode`），调用同一服务生成导出内容；不接受前端提交的金额。
 
 ## 5. 错误、可观测性与验收
 
