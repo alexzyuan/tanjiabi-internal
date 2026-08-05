@@ -1,25 +1,62 @@
 const METRIC_DEFINITIONS = [
-  { key: "sales-income", name: "销售收入", fields: ["totalSalesAmount", "salesAmount", "sales_amount", "amount"], category: "platform-income" },
-  { key: "sales-discount", name: "销售折扣", fields: ["promotionDiscount", "promotion_discount", "discount_amount"], category: "platform-income", magnitude: true },
+  { key: "sales-volume", name: "销量", fields: ["totalSalesQuantity", "salesQuantity", "sales_quantity", "volume", "qty"], category: "platform-income", magnitude: true },
+  { key: "average-daily-sales", name: "平均日销", category: "platform-income", derived: true },
+  { key: "multi-channel-sales-volume", name: "多渠道销量", fields: ["multiChannelSalesQuantity", "multi_channel_sales_quantity", "multiChannelVolume", "multi_channel_volume", "multi_channel_qty"], category: "platform-income", magnitude: true },
+  { key: "ads-sales-amount", name: "广告销售额", fields: ["totalAdsSales", "adsSales", "ad_sales_amount", "adSales", "ad_sales"], category: "platform-income", magnitude: true },
+  { key: "ads-volume", name: "广告销量", fields: ["totalAdsSalesQuantity", "adsSalesQuantity", "ad_volume", "adVolume", "ad_qty"], category: "platform-income", magnitude: true },
+  { key: "sales-income", name: "销售额", fields: ["totalSalesAmount", "salesAmount", "sales_amount", "amount"], category: "platform-income" },
+  { key: "net-sales", name: "净销售额", fields: ["netSalesAmount", "net_sales_amount", "net_amount"], category: "platform-income", derived: true },
+  { key: "buyer-shipping-fee", name: "买家运费", fields: ["buyerShippingFee", "buyer_shipping_fee", "shippingFee", "shipping_fee", "buyerShipping"], category: "platform-income", magnitude: true },
+  { key: "sales-discount", name: "促销折扣", fields: ["promotionDiscount", "promotion_discount", "discount_amount"], category: "platform-income", magnitude: true },
   { key: "refunds", name: "退款金额", fields: ["totalSalesRefunds", "refunds", "refund_amount", "refundAmount"], category: "platform-income", magnitude: true },
-  { key: "purchase-cost", name: "销售成本", fields: ["purchaseCost", "purchase_costs", "purchase_cost", "goods_cost"], category: "product-cost-expense", magnitude: true },
-  { key: "first-leg-cost", name: "头程费用", fields: ["firstLegCost", "logistics_costs", "shipping_cost"], category: "product-cost-expense", magnitude: true },
-  { key: "storage-fee", name: "平台仓储费用", fields: ["storageFee", "total_stock_fee", "storage_fee"], category: "platform-expense", magnitude: true },
-  { key: "ad-spend", name: "推广费用", fields: ["totalAdsCost", "adsCost", "ads_cost", "spend"], category: "platform-expense", magnitude: true },
-  { key: "platform-fee", name: "平台费用", fields: ["platformFee", "platform_fee", "selling_fee"], category: "platform-expense", magnitude: true },
-  { key: "fba-delivery-fee", name: "FBA 配送费", fields: ["fbaDeliveryFee", "fulfillment_fee", "fba_fulfillment_fee"], category: "platform-expense", magnitude: true },
-  { key: "operations", name: "运营费用", fields: ["operationsCost", "operations_cost", "operating_cost", "operating_expense"], category: "custom-expense", magnitude: true },
-  { key: "management", name: "管理费用", fields: ["managementCost", "management_cost", "management_expense"], category: "custom-expense", magnitude: true },
-  { key: "labor", name: "人力费用", fields: ["laborCost", "labor_cost", "labor_expense"], category: "custom-expense", magnitude: true },
-  { key: "asset-impairment", name: "资产减值", fields: ["assetImpairment", "asset_impairment", "impairment_loss"], category: "custom-expense", magnitude: true },
-  { key: "non-operating-income", name: "营业外收入", fields: ["nonOperatingIncome", "non_operating_income"], category: "custom-expense" },
-  { key: "non-operating-expense", name: "营业外支出", fields: ["nonOperatingExpense", "non_operating_expense"], category: "custom-expense", magnitude: true },
-  { key: "net-sales", name: "销售收入净额", category: "platform-income", derived: true },
-  { key: "return-cost", name: "退货成本", category: "product-cost-expense", derived: true },
-  { key: "net-sales-cost", name: "销售成本净额", category: "product-cost-expense", derived: true },
-  { key: "gross-profit", name: "销售毛利", category: "profit", derived: true },
-  { key: "platform-sales-profit", name: "平台销售利润", category: "profit", derived: true },
-  { key: "sales-profit", name: "公司净利润", category: "profit", derived: true },
+  { key: "return-volume", name: "退货量", fields: ["returnQuantity", "return_quantity", "return_qty", "returnQty"], category: "platform-income", magnitude: true },
+  { key: "refund-volume", name: "退款量", fields: ["refundsQuantity", "refund_quantity", "refund_qty", "refundQty"], category: "platform-income", magnitude: true },
+  { key: "return-rate", name: "退货率", fields: ["returnRate", "return_rate"], category: "platform-income", derived: true, valueType: "rate" },
+  { key: "refund-rate", name: "退款率", fields: ["refundRate", "refund_rate"], category: "platform-income", derived: true, valueType: "rate" },
+  { key: "fba-inventory-compensation", name: "FBA库存赔偿", fields: ["fbaInventoryCompensation", "fba_inventory_compensation", "inventoryCompensation", "inventory_compensation"], category: "platform-income", magnitude: true },
+  { key: "other-income", name: "其它收入", fields: ["otherIncome", "other_income", "otherIncomeAmount", "other_income_amount"], category: "platform-income" },
+
+  { key: "platform-fee", name: "平台费", fields: ["platformFee", "platform_fee", "selling_fee"], category: "platform-expense", magnitude: true },
+  { key: "platform-fee-ratio", name: "平台费占比", fields: ["platformFeeRate", "platform_fee_rate", "selling_fee_rate"], category: "platform-expense", derived: true, valueType: "rate" },
+  { key: "fba-delivery-fee", name: "FBA发货费", fields: ["fbaDeliveryFee", "fulfillment_fee", "fba_fulfillment_fee"], category: "platform-expense", magnitude: true },
+  { key: "fba-delivery-fee-ratio", name: "FBA发货费占比", fields: ["fbaDeliveryFeeRate", "fulfillment_fee_rate"], category: "platform-expense", derived: true, valueType: "rate" },
+  { key: "other-order-fee", name: "其他订单费用", fields: ["otherOrderFee", "other_order_fee", "other_order_fees", "orderOtherFee"], category: "platform-expense", magnitude: true },
+  { key: "storage-fee", name: "仓储费", fields: ["storageFee", "total_stock_fee", "storage_fee"], category: "platform-expense", magnitude: true },
+  { key: "storage-fee-ratio", name: "仓储费占比", fields: ["storageFeeRate", "storage_fee_rate", "total_stock_fee_rate"], category: "platform-expense", derived: true, valueType: "rate" },
+  { key: "ad-fee", name: "广告费", fields: ["adFee", "ad_fee", "advertisingFee", "advertising_fee"], category: "platform-expense", magnitude: true },
+  { key: "ad-fee-ratio", name: "广告费率", fields: ["adFeeRate", "ad_fee_rate", "advertising_fee_rate"], category: "platform-expense", derived: true, valueType: "rate" },
+  { key: "ad-spend", name: "推广费", fields: ["totalAdsCost", "adsCost", "ads_cost", "spend"], category: "platform-expense", magnitude: true },
+  { key: "fba-international-shipping-fee", name: "FBA国际物流运费", fields: ["fbaInternationalShippingFee", "fba_international_shipping_fee", "fbaInternationalFreight", "fba_international_freight"], category: "platform-expense", magnitude: true },
+  { key: "inbound-placement-fee", name: "入库配置费", fields: ["inboundPlacementFee", "inbound_placement_fee", "inboundConfigurationFee", "inbound_configuration_fee"], category: "platform-expense", magnitude: true },
+  { key: "adjustment-fee", name: "调整费", fields: ["adjustmentFee", "adjustment_fee", "adjustmentAmount", "adjustment_amount"], category: "platform-expense", magnitude: true },
+  { key: "other-platform-fee", name: "平台其它费", fields: ["otherPlatformFee", "other_platform_fee", "platformOtherFee", "platform_other_fee"], category: "platform-expense", magnitude: true },
+
+  { key: "purchase-cost", name: "采购成本", fields: ["purchaseCost", "purchase_costs", "purchase_cost", "goods_cost"], category: "product-cost-expense", magnitude: true },
+  { key: "first-leg-cost", name: "头程成本", fields: ["firstLegCost", "logistics_costs", "shipping_cost"], category: "product-cost-expense", magnitude: true },
+  { key: "other-product-cost", name: "其它成本", fields: ["otherProductCost", "other_product_cost", "otherCost", "other_cost"], category: "product-cost-expense", magnitude: true },
+
+  { key: "offsite-ad-spend", name: "站外推广费", fields: ["offsiteAdSpend", "offsite_ad_spend", "offsiteAdvertisingFee", "offsite_advertising_fee"], category: "custom-expense", magnitude: true },
+  { key: "office-expense", name: "办公费用", fields: ["officeExpense", "office_expense"], category: "custom-expense", magnitude: true },
+  { key: "office-rent", name: "办公费用-租金", fields: ["officeRent", "office_rent", "rentExpense", "rent_expense"], category: "custom-expense", magnitude: true },
+  { key: "certification-testing-fee", name: "认证检测费", fields: ["certificationTestingFee", "certification_testing_fee", "testingFee", "testing_fee"], category: "custom-expense", magnitude: true },
+  { key: "office-supplies", name: "办公用品", fields: ["officeSupplies", "office_supplies"], category: "custom-expense", magnitude: true },
+  { key: "store-insurance-fee", name: "店铺保险费", fields: ["storeInsuranceFee", "store_insurance_fee", "insuranceFee", "insurance_fee"], category: "custom-expense", magnitude: true },
+  { key: "software-fee", name: "软件费用", fields: ["softwareFee", "software_fee"], category: "custom-expense", magnitude: true },
+  { key: "product-appearance-design-fee", name: "产品外观设计费", fields: ["productAppearanceDesignFee", "product_appearance_design_fee"], category: "custom-expense", magnitude: true },
+  { key: "product-graphic-design-fee", name: "产品平面设计费", fields: ["productGraphicDesignFee", "product_graphic_design_fee"], category: "custom-expense", magnitude: true },
+  { key: "service-provider-fee", name: "服务商费用", fields: ["serviceProviderFee", "service_provider_fee"], category: "custom-expense", magnitude: true },
+  { key: "office-courier-fee", name: "办公费用-快递费", fields: ["officeCourierFee", "office_courier_fee", "courierFee", "courier_fee"], category: "custom-expense", magnitude: true },
+  { key: "office-utility-fee", name: "办公费用-水电费", fields: ["officeUtilityFee", "office_utility_fee", "utilityFee", "utility_fee"], category: "custom-expense", magnitude: true },
+  { key: "credit-card-ad-fee", name: "信用卡广告费", fields: ["creditCardAdFee", "credit_card_ad_fee"], category: "custom-expense", magnitude: true },
+  { key: "office-telecom-fee", name: "办公费用-店铺通讯费", fields: ["officeTelecomFee", "office_telecom_fee", "telecomFee", "telecom_fee"], category: "custom-expense", magnitude: true },
+  { key: "sample-fee", name: "样品费", fields: ["sampleFee", "sample_fee"], category: "custom-expense", magnitude: true },
+  { key: "test-order-commission", name: "送测佣金（刷单）", fields: ["testOrderCommission", "test_order_commission", "刷单佣金"], category: "custom-expense", magnitude: true },
+  { key: "travel-expense", name: "差旅费", fields: ["travelExpense", "travel_expense"], category: "custom-expense", magnitude: true },
+  { key: "employee-welfare-fee", name: "员工福利费", fields: ["employeeWelfareFee", "employee_welfare_fee", "welfareFee", "welfare_fee"], category: "custom-expense", magnitude: true },
+
+  { key: "gross-profit", name: "毛利润", category: "profit", derived: true },
+  { key: "gross-rate", name: "毛利率", category: "profit", derived: true, valueType: "rate" },
+  { key: "net-gross-rate", name: "净毛利率", category: "profit", derived: true, valueType: "rate" },
 ];
 
 const BUDGET_METRICS = new Set(["net-sales", "ad-spend", "refunds", "sales-profit"]);
@@ -32,6 +69,7 @@ const BUDGET_FIELDS = [
 ];
 
 const CATEGORIES = [
+  ["basic-info", "基础信息"],
   ["platform-income", "平台收入"],
   ["platform-expense", "平台支出"],
   ["product-cost-expense", "商品成本支出"],
@@ -110,8 +148,10 @@ function deriveFromRequiredChildren(actualByKey, children, calculate) {
   return values.every((value) => value !== null && value !== undefined) ? calculate(values) : null;
 }
 
-function createRow({ key, category, name, level, actual, budget = null, children = [] }, salesIncome) {
+function createRow({ key, category, name, level, actual, budget = null, children = [], valueType = "number" }, salesIncome) {
   const available = actual !== null;
+  const isRate = valueType === "rate";
+  const isNumeric = valueType === "number" || isRate;
   return {
     key,
     category,
@@ -119,10 +159,11 @@ function createRow({ key, category, name, level, actual, budget = null, children
     level,
     actual,
     budget,
-    share: available && salesIncome !== null && salesIncome !== 0 ? actual / salesIncome : null,
-    achievement: available && budget !== null && budget !== 0 ? actual / budget : null,
+    share: isNumeric && available && salesIncome !== null && salesIncome !== 0 ? actual / salesIncome : null,
+    achievement: isNumeric && available && budget !== null && budget !== 0 ? actual / budget : null,
     available,
     children,
+    valueType,
   };
 }
 
@@ -169,7 +210,31 @@ export function readStoreOperatingBudgetCurrencyCode(row = {}) {
   return readText(row, ["currencyCode", "currency_code", "currency"]);
 }
 
-export function buildStoreOperatingReportRows({ records, budgetByMetric = {}, currencyCode } = {}) {
+const LEGACY_CUSTOM_METRIC_DEFINITIONS = [
+  ["operations", ["operationsCost", "operations_cost", "operating_cost", "operating_expense"]],
+  ["management", ["managementCost", "management_cost", "management_expense"]],
+  ["labor", ["laborCost", "labor_cost", "labor_expense"]],
+  ["asset-impairment", ["assetImpairment", "asset_impairment", "impairment_loss"]],
+  ["non-operating-income", ["nonOperatingIncome", "non_operating_income"]],
+  ["non-operating-expense", ["nonOperatingExpense", "non_operating_expense"]],
+];
+
+const CUSTOM_EXPENSE_KEYS = METRIC_DEFINITIONS
+  .filter((metric) => metric.category === "custom-expense")
+  .map((metric) => metric.key);
+const PLATFORM_CORE_EXPENSE_KEYS = ["platform-fee", "fba-delivery-fee", "storage-fee", "ad-spend"];
+
+function sumRequiredKeys(actualByKey, keys) {
+  return deriveFromRequiredChildren(actualByKey, keys, (values) => values.reduce((sum, value) => sum + value, 0));
+}
+
+function ratioFromKeys(actualByKey, numeratorKey, denominatorKey) {
+  return deriveFromRequiredChildren(actualByKey, [numeratorKey, denominatorKey], ([numerator, denominator]) => (
+    denominator === 0 ? null : numerator / denominator
+  ));
+}
+
+export function buildStoreOperatingReportRows({ records, budgetByMetric = {}, currencyCode, storeName = "", country = "", periodDays } = {}) {
   if (!Array.isArray(records)) throw new Error("订单利润 records 必须是数组");
   if (budgetByMetric === null || typeof budgetByMetric !== "object" || Array.isArray(budgetByMetric)) {
     throw new Error("预算科目必须是对象");
@@ -180,11 +245,16 @@ export function buildStoreOperatingReportRows({ records, budgetByMetric = {}, cu
   METRIC_DEFINITIONS.filter((metric) => !metric.derived).forEach((metric) => {
     actualByKey.set(metric.key, sumPresent(records, metric.fields, metric.magnitude, metric.fields[0]));
   });
+  LEGACY_CUSTOM_METRIC_DEFINITIONS.forEach(([key, fields]) => {
+    if (!actualByKey.has(key)) actualByKey.set(key, sumPresent(records, fields, key !== "non-operating-income", fields[0]));
+  });
 
   const rawNetSales = sumPresent(records, NET_SALES_FIELDS, false, "netSalesAmount");
   const salesIncome = actualByKey.get("sales-income");
-  const netSales = deriveFromRequiredChildren(actualByKey, ["sales-income", "sales-discount", "refunds"], ([income, discount, refunds]) => income - discount - refunds) ?? rawNetSales;
+  const salesVolume = actualByKey.get("sales-volume");
+  const netSales = rawNetSales ?? deriveFromRequiredChildren(actualByKey, ["sales-income", "sales-discount", "refunds"], ([income, discount, refunds]) => income - discount - refunds);
   actualByKey.set("net-sales", netSales);
+  actualByKey.set("average-daily-sales", periodDays > 0 && salesVolume !== null ? salesVolume / periodDays : null);
   actualByKey.set("return-cost", sumReturnCosts(records));
   actualByKey.set("net-sales-cost", deriveFromRequiredChildren(actualByKey, ["purchase-cost", "return-cost"], ([purchaseCost, returnCost]) => purchaseCost - returnCost));
   actualByKey.set("gross-profit", deriveFromRequiredChildren(actualByKey, ["net-sales", "net-sales-cost"], ([net, cost]) => net - cost));
@@ -193,39 +263,59 @@ export function buildStoreOperatingReportRows({ records, budgetByMetric = {}, cu
     ["gross-profit", "storage-fee", "ad-spend", "first-leg-cost", "platform-fee", "fba-delivery-fee"],
     ([grossProfit, storage, ads, firstLeg, platform, delivery]) => grossProfit - storage - ads - firstLeg - platform - delivery,
   ));
-  actualByKey.set("sales-profit", deriveFromRequiredChildren(
+  const legacySalesProfit = deriveFromRequiredChildren(
     actualByKey,
     ["platform-sales-profit", "operations", "management", "labor", "asset-impairment", "non-operating-income", "non-operating-expense"],
     ([platformProfit, operations, management, labor, impairment, nonOperatingIncome, nonOperatingExpense]) => platformProfit - operations - management - labor - impairment + nonOperatingIncome - nonOperatingExpense,
-  ));
+  );
+  const newCustomExpense = sumRequiredKeys(actualByKey, CUSTOM_EXPENSE_KEYS);
+  actualByKey.set("custom-expense", newCustomExpense);
+  const newSalesProfit = deriveFromRequiredChildren(
+    actualByKey,
+    ["gross-profit", ...PLATFORM_CORE_EXPENSE_KEYS, "first-leg-cost", "custom-expense"],
+    ([grossProfit, ...expenses]) => grossProfit - expenses.reduce((sum, value) => sum + value, 0),
+  );
+  actualByKey.set("sales-profit", legacySalesProfit ?? newSalesProfit);
+  actualByKey.set("return-rate", ratioFromKeys(actualByKey, "return-volume", "sales-volume"));
+  actualByKey.set("refund-rate", ratioFromKeys(actualByKey, "refund-volume", "sales-volume"));
+  actualByKey.set("platform-fee-ratio", ratioFromKeys(actualByKey, "platform-fee", "sales-income"));
+  actualByKey.set("fba-delivery-fee-ratio", ratioFromKeys(actualByKey, "fba-delivery-fee", "sales-income"));
+  actualByKey.set("storage-fee-ratio", ratioFromKeys(actualByKey, "storage-fee", "sales-income"));
+  actualByKey.set("ad-fee-ratio", ratioFromKeys(actualByKey, "ad-fee", "sales-income"));
+  actualByKey.set("gross-rate", ratioFromKeys(actualByKey, "gross-profit", "sales-income"));
+  actualByKey.set("net-gross-rate", ratioFromKeys(actualByKey, "sales-profit", "sales-income"));
 
   const metricsByCategory = new Map(CATEGORIES.map(([key]) => [key, []]));
-  const metricRows = METRIC_DEFINITIONS.map((metric) => {
+  const categoryNames = new Map(CATEGORIES);
+  const storeCountry = [String(storeName || "").trim(), String(country || "").trim()].filter(Boolean).join(" / ") || null;
+  const metricRows = [createRow({
+    key: "store-country",
+    category: categoryNames.get("basic-info"),
+    name: "店铺/国家",
+    level: 2,
+    actual: storeCountry,
+    valueType: "text",
+  }, salesIncome), ...METRIC_DEFINITIONS.map((metric) => {
     metricsByCategory.get(metric.category).push(metric.key);
     return createRow({
       key: metric.key,
-      category: CATEGORIES.find(([categoryKey]) => categoryKey === metric.category)[1],
+      category: categoryNames.get(metric.category),
       name: metric.name,
       level: 2,
       actual: actualByKey.get(metric.key) ?? null,
+      valueType: metric.valueType || "number",
       budget: BUDGET_METRICS.has(metric.key) ? (isPresent(budgetByMetric[metric.key]) ? toFiniteNumber(budgetByMetric[metric.key], `预算科目 ${metric.key}`) : null) : null,
     }, salesIncome);
-  });
+  })];
+  metricsByCategory.get("basic-info").push("store-country");
 
   const categoryChildren = new Map(metricsByCategory);
   const categoryActuals = new Map([
+    ["basic-info", null],
     ["platform-income", actualByKey.get("net-sales")],
-    ["platform-expense", deriveFromRequiredChildren(
-      actualByKey,
-      ["storage-fee", "ad-spend", "platform-fee", "fba-delivery-fee"],
-      (values) => values.reduce((sum, value) => sum + value, 0),
-    )],
-    ["product-cost-expense", deriveFromRequiredChildren(
-      actualByKey,
-      ["net-sales-cost", "first-leg-cost"],
-      ([netCost, firstLeg]) => netCost + firstLeg,
-    )],
-    ["custom-expense", deriveFromRequiredChildren(
+    ["platform-expense", sumRequiredKeys(actualByKey, PLATFORM_CORE_EXPENSE_KEYS)],
+    ["product-cost-expense", deriveFromRequiredChildren(actualByKey, ["net-sales-cost", "first-leg-cost"], ([netCost, firstLeg]) => netCost + firstLeg)],
+    ["custom-expense", legacySalesProfit === null ? newCustomExpense : deriveFromRequiredChildren(
       actualByKey,
       ["operations", "management", "labor", "asset-impairment", "non-operating-income", "non-operating-expense"],
       ([operations, management, labor, impairment, income, expense]) => operations + management + labor + impairment + expense - income,
@@ -242,6 +332,9 @@ export function buildStoreOperatingReportRows({ records, budgetByMetric = {}, cu
     level: 1,
     actual: categoryActuals.get(key) ?? null,
     children: categoryChildren.get(key) || [],
+    budget: key === "profit" && isPresent(budgetByMetric["sales-profit"])
+      ? toFiniteNumber(budgetByMetric["sales-profit"], "预算科目 sales-profit")
+      : null,
   }, salesIncome));
   const overview = createRow({
     key: "overview",

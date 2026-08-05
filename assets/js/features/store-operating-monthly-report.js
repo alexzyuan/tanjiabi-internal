@@ -389,7 +389,13 @@ export function createStoreOperatingMonthlyReportFeature({
         const nameCell = isExpandableCategory
           ? `<button class="store-operating-report-disclosure" type="button" data-report-category-toggle="${escapeHtml(row.key || "")}" aria-expanded="${isExpanded ? "true" : "false"}" aria-label="${escapeHtml(`${isExpanded ? "收起" : "展开"}${rowName}`)}"><span aria-hidden="true">${isExpanded ? "▾" : "▸"}</span>${escapeHtml(rowName)}</button>`
           : escapeHtml(rowName);
-        const resultRow = ["net-sales", "net-sales-cost", "gross-profit", "platform-sales-profit", "sales-profit"].includes(String(row.key || ""));
+        const resultRow = ["net-sales", "gross-profit", "gross-rate", "net-gross-rate", "profit"].includes(String(row.key || ""));
+        const formatReportCell = (metric, value, groupRow) => {
+          if (value === null || value === undefined || value === "") return "—";
+          if (metric === "actual" && groupRow?.valueType === "text") return String(value);
+          if (metric === "actual" && groupRow?.valueType === "rate") return formatRate(value);
+          return metric === "share" || metric === "achievement" ? formatRate(value) : formatAmount(value);
+        };
         const metricCells = groups.flatMap((group, groupIndex) => {
           const groupRow = rowMaps[groupIndex].get(rowIdentity);
           return [
@@ -397,7 +403,7 @@ export function createStoreOperatingMonthlyReportFeature({
             ["share", groupRow?.share],
             ["budget", groupRow?.budget],
             ["achievement", groupRow?.achievement],
-          ].map(([metric, value]) => `<td data-report-group-index="${group.index}" data-report-metric="${metric}">${escapeHtml(metric === "share" || metric === "achievement" ? formatRate(value) : formatAmount(value))}</td>`);
+          ].map(([metric, value]) => `<td data-report-group-index="${group.index}" data-report-metric="${metric}">${escapeHtml(formatReportCell(metric, value, groupRow))}</td>`);
         }).join("");
         const parentCell = rowIndex === 0
           ? `<td class="store-operating-report-parent" rowspan="${parentRowSpan}">${escapeHtml(parent.category || parent.name || "—")}</td>`

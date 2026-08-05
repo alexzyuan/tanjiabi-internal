@@ -303,6 +303,21 @@ test("monthly report uses an 上级 column and collapses subtotal details by def
   assert.doesNotMatch(elements["#store-operating-report-body"].innerHTML, /data-report-row-key="sales-income"/);
 });
 
+test("monthly report renders store-country text without numeric formatting", async () => {
+  const rows = [
+    { key: "overview", category: "总概", name: "总概", level: 0, children: ["basic-info"] },
+    { key: "basic-info", category: "基础信息", name: "基础信息", level: 1, children: ["store-country"], available: true },
+    { key: "store-country", category: "基础信息", name: "店铺/国家", level: 2, actual: "Store-US / 美国", valueType: "text", available: true },
+  ];
+  const { feature, elements } = makeFeatureHarness({ groups: [{ currencyCode: "CNY", currencyAvailable: true, rows }] });
+
+  await feature.loadStoreOperatingMonthlyReport();
+  feature.toggleReportCategory({ target: { closest: () => ({ dataset: { reportCategoryToggle: "basic-info" } }) } });
+
+  const body = elements["#store-operating-report-body"].innerHTML;
+  assert.match(body, /data-report-row-key="store-country"[\s\S]*?data-report-metric="actual">Store-US \/ 美国/);
+});
+
 test("hierarchy renders collapsed subtotals and expands their detail rows", async () => {
   const category = { key: "sales-profit-category", category: "销售利润", name: "销售利润", level: 1, children: ["sales-profit"], available: false };
   const profit = { key: "sales-profit", category: "销售利润", name: "销售利润", level: 2, actual: -6, budget: 10, share: -0.06, achievement: -0.6, available: true };
@@ -327,36 +342,33 @@ test("hierarchy renders collapsed subtotals and expands their detail rows", asyn
   assert.match(elements["#store-operating-report-body"].innerHTML, /data-report-category-toggle="sales-profit-category"[^>]*aria-expanded="true"/);
 });
 
-test("monthly report renders the two profit stages and net cost as highlighted results", async () => {
+test("monthly report renders the approved profit rows as highlighted results and formats rate actuals", async () => {
   const rows = [
-    { key: "overview", category: "总概", name: "总概", level: 0, children: ["sales-cost", "gross-profit", "sales-profit-category"] },
-    { key: "sales-cost", category: "销售成本", name: "销售成本", level: 1, actual: 20, children: ["net-sales-cost"], available: true },
-    { key: "net-sales-cost", category: "销售成本", name: "销售成本净额", level: 2, actual: 20, available: true },
-    { key: "gross-profit", category: "销售毛利", name: "销售毛利", level: 1, actual: 80, children: [], available: true },
-    { key: "sales-profit-category", category: "销售利润", name: "销售利润", level: 1, actual: 30, children: ["platform-sales-profit", "sales-profit"], available: true },
-    { key: "platform-sales-profit", category: "销售利润", name: "平台销售利润", level: 2, actual: 40, available: true },
-    { key: "sales-profit", category: "销售利润", name: "公司净利润", level: 2, actual: 30, available: true },
+    { key: "overview", category: "总概", name: "总概", level: 0, children: ["platform-income", "profit"] },
+    { key: "platform-income", category: "平台收入", name: "平台收入", level: 1, actual: 100, children: ["net-sales"], available: true },
+    { key: "net-sales", category: "平台收入", name: "净销售额", level: 2, actual: 100, available: true },
+    { key: "profit", category: "利润", name: "利润", level: 1, actual: 30, children: ["gross-profit", "gross-rate", "net-gross-rate"], available: true },
+    { key: "gross-profit", category: "利润", name: "毛利润", level: 2, actual: 80, available: true },
+    { key: "gross-rate", category: "利润", name: "毛利率", level: 2, actual: 0.8, valueType: "rate", available: true },
+    { key: "net-gross-rate", category: "利润", name: "净毛利率", level: 2, actual: 0.3, valueType: "rate", available: true },
   ];
   const { feature, elements } = makeFeatureHarness({ groups: [{ currencyCode: "USD", currencyAvailable: true, rows }] });
 
   await feature.loadStoreOperatingMonthlyReport();
   const body = elements["#store-operating-report-body"].innerHTML;
 
-  assert.match(body, /销售利润小计/);
-  assert.doesNotMatch(body, /销售成本净额/);
-  assert.doesNotMatch(body, /平台销售利润/);
-  assert.doesNotMatch(body, /公司净利润/);
+  assert.match(body, /平台收入小计/);
+  assert.match(body, /利润小计/);
+  assert.doesNotMatch(body, /净销售额/);
+  assert.doesNotMatch(body, /毛利润/);
+  assert.doesNotMatch(body, /毛利率/);
 
-  feature.toggleReportCategory({ target: { closest: () => ({ dataset: { reportCategoryToggle: "sales-cost" } }) } });
-  const expandedCostBody = elements["#store-operating-report-body"].innerHTML;
-  assert.match(expandedCostBody, /class="store-operating-report-result-row"[^>]*data-report-row-key="net-sales-cost"/);
-  assert.match(expandedCostBody, /销售成本净额/);
-
-  feature.toggleReportCategory({ target: { closest: () => ({ dataset: { reportCategoryToggle: "sales-profit-category" } }) } });
+  feature.toggleReportCategory({ target: { closest: () => ({ dataset: { reportCategoryToggle: "profit" } }) } });
   const expandedBody = elements["#store-operating-report-body"].innerHTML;
-  assert.match(expandedBody, /class="store-operating-report-result-row"[^>]*data-report-row-key="sales-profit"/);
-  assert.match(expandedBody, /平台销售利润/);
-  assert.match(expandedBody, /公司净利润/);
+  assert.match(expandedBody, /class="store-operating-report-result-row"[^>]*data-report-row-key="gross-profit"/);
+  assert.match(expandedBody, /class="store-operating-report-result-row"[^>]*data-report-row-key="gross-rate"/);
+  assert.match(expandedBody, /毛利率/);
+  assert.match(expandedBody, /data-report-row-key="gross-rate"[\s\S]*?data-report-metric="actual">80\.00%/);
 });
 
 test("export surfaces structured server diagnostics", async () => {

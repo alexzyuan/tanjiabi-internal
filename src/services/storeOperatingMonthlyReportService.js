@@ -51,6 +51,11 @@ function monthBounds(month) {
   };
 }
 
+function monthDayCount(month) {
+  const [, year, monthNumber] = month.match(MONTH_PATTERN) || [];
+  return year ? new Date(Date.UTC(Number(year), Number(monthNumber), 0)).getUTCDate() : 0;
+}
+
 function filterSellers(sellers, filters) {
   const stores = new Set(filters.stores);
   const countries = new Set(filters.countries.map(normalizeStoreOperatingCountryKey));
@@ -322,6 +327,9 @@ export async function getStoreOperatingMonthlyReport(filters, {
           records: groupRecords,
           budgetByMetric,
           currencyCode,
+          storeName: scope.storeName,
+          country: scope.countries.length === 1 ? scope.countries[0] : "全部国家",
+          periodDays: normalizedFilters.months.reduce((sum, month) => sum + monthDayCount(month), 0),
         });
         groups.push({
           storeName: scope.storeName,
@@ -344,7 +352,7 @@ export async function getStoreOperatingMonthlyReport(filters, {
         if (row.key === "net-sales" && row.budget !== null) acc["net-sales"] = row.budget;
         if (row.key === "ad-spend" && row.budget !== null) acc["ad-spend"] = row.budget;
         if (row.key === "refunds" && row.budget !== null) acc.refunds = row.budget;
-        if (row.key === "sales-profit" && row.budget !== null) acc["sales-profit"] = row.budget;
+        if ((row.key === "sales-profit" || row.key === "profit") && row.budget !== null) acc["sales-profit"] = row.budget;
         return acc;
       }, {})),
       missingExchangeRateCount,

@@ -98,7 +98,7 @@ test("explicit zero values remain available while a zero budget has no achieveme
   assert.equal(netSales.budget, 0);
   assert.equal(netSales.share, null);
   assert.equal(netSales.achievement, null);
-  assert.deepEqual(result.unavailableMetrics, []);
+  assert.ok(result.unavailableMetrics.includes("other-income"));
 });
 
 test("an empty order-profit result does not manufacture zero actuals", () => {
@@ -171,7 +171,7 @@ test("monthly report exposes the five Lingxing-aligned top-level projects", () =
   });
 
   const levelOne = result.rows.filter((row) => row.level === 1);
-  assert.deepEqual(levelOne.map((row) => row.name), [
+  assert.deepEqual(levelOne.filter((row) => row.key !== "basic-info").map((row) => row.name), [
     "平台收入",
     "平台支出",
     "商品成本支出",
@@ -179,11 +179,94 @@ test("monthly report exposes the five Lingxing-aligned top-level projects", () =
     "利润",
   ]);
   const childrenByName = Object.fromEntries(levelOne.map((row) => [row.name, row.children]));
-  assert.deepEqual(childrenByName["平台收入"], ["sales-income", "sales-discount", "refunds", "net-sales"]);
-  assert.deepEqual(childrenByName["平台支出"], ["storage-fee", "ad-spend", "platform-fee", "fba-delivery-fee"]);
-  assert.deepEqual(childrenByName["商品成本支出"], ["purchase-cost", "first-leg-cost", "return-cost", "net-sales-cost"]);
-  assert.deepEqual(childrenByName["自定义费用"], ["operations", "management", "labor", "asset-impairment", "non-operating-income", "non-operating-expense"]);
-  assert.deepEqual(childrenByName["利润"], ["gross-profit", "platform-sales-profit", "sales-profit"]);
+  assert.deepEqual(childrenByName["平台收入"], ["sales-volume", "average-daily-sales", "multi-channel-sales-volume", "ads-sales-amount", "ads-volume", "sales-income", "net-sales", "buyer-shipping-fee", "sales-discount", "refunds", "return-volume", "refund-volume", "return-rate", "refund-rate", "fba-inventory-compensation", "other-income"]);
+  assert.deepEqual(childrenByName["平台支出"], ["platform-fee", "platform-fee-ratio", "fba-delivery-fee", "fba-delivery-fee-ratio", "other-order-fee", "storage-fee", "storage-fee-ratio", "ad-fee", "ad-fee-ratio", "ad-spend", "fba-international-shipping-fee", "inbound-placement-fee", "adjustment-fee", "other-platform-fee"]);
+  assert.deepEqual(childrenByName["商品成本支出"], ["purchase-cost", "first-leg-cost", "other-product-cost"]);
+  assert.deepEqual(childrenByName["自定义费用"], ["offsite-ad-spend", "office-expense", "office-rent", "certification-testing-fee", "office-supplies", "store-insurance-fee", "software-fee", "product-appearance-design-fee", "product-graphic-design-fee", "service-provider-fee", "office-courier-fee", "office-utility-fee", "credit-card-ad-fee", "office-telecom-fee", "sample-fee", "test-order-commission", "travel-expense", "employee-welfare-fee"]);
+  assert.deepEqual(childrenByName["利润"], ["gross-profit", "gross-rate", "net-gross-rate"]);
+});
+
+test("monthly report uses the exact Lingxing subject and detail order from the approved field list", () => {
+  const result = buildStoreOperatingReportRows({
+    records: [{
+      storeName: "Store-US",
+      country: "美国",
+      amount: 100,
+      volume: 20,
+    }],
+    budgetByMetric: {},
+    currencyCode: "CNY",
+    storeName: "Store-US",
+    country: "美国",
+    periodDays: 10,
+  });
+  const rowNames = result.rows.map((row) => row.name);
+
+  assert.deepEqual(rowNames, [
+    "总概",
+    "基础信息",
+    "店铺/国家",
+    "平台收入",
+    "销量",
+    "平均日销",
+    "多渠道销量",
+    "广告销售额",
+    "广告销量",
+    "销售额",
+    "净销售额",
+    "买家运费",
+    "促销折扣",
+    "退款金额",
+    "退货量",
+    "退款量",
+    "退货率",
+    "退款率",
+    "FBA库存赔偿",
+    "其它收入",
+    "平台支出",
+    "平台费",
+    "平台费占比",
+    "FBA发货费",
+    "FBA发货费占比",
+    "其他订单费用",
+    "仓储费",
+    "仓储费占比",
+    "广告费",
+    "广告费率",
+    "推广费",
+    "FBA国际物流运费",
+    "入库配置费",
+    "调整费",
+    "平台其它费",
+    "商品成本支出",
+    "采购成本",
+    "头程成本",
+    "其它成本",
+    "自定义费用",
+    "站外推广费",
+    "办公费用",
+    "办公费用-租金",
+    "认证检测费",
+    "办公用品",
+    "店铺保险费",
+    "软件费用",
+    "产品外观设计费",
+    "产品平面设计费",
+    "服务商费用",
+    "办公费用-快递费",
+    "办公费用-水电费",
+    "信用卡广告费",
+    "办公费用-店铺通讯费",
+    "样品费",
+    "送测佣金（刷单）",
+    "差旅费",
+    "员工福利费",
+    "利润",
+    "毛利润",
+    "毛利率",
+    "净毛利率",
+  ]);
+  assert.equal(result.rows.find((row) => row.key === "store-country").actual, "Store-US / 美国");
 });
 
 test("gross profit is unavailable when a required hierarchy dependency is unavailable", () => {
@@ -231,7 +314,7 @@ test("signed Lingxing expenses become positive magnitudes while profit keeps its
   assert.equal(result.rows.find((row) => row.key === "refunds").actual, 5);
   assert.equal(result.rows.find((row) => row.key === "purchase-cost").actual, 30);
   assert.equal(result.rows.find((row) => row.key === "ad-spend").actual, 10);
-  assert.equal(result.rows.find((row) => row.key === "sales-profit").actual, 21);
+  assert.equal(result.rows.find((row) => row.key === "profit").actual, 21);
 });
 
 test("profit chain uses sales income as the percentage base and derives return cost and two profit stages", () => {
@@ -268,24 +351,22 @@ test("profit chain uses sales income as the percentage base and derives return c
   assert.equal(row("refunds").share, 0.1);
   assert.equal(row("net-sales").actual, 85);
   assert.equal(row("net-sales").share, 0.85);
-  assert.equal(row("return-cost").actual, 3);
-  assert.equal(row("net-sales-cost").actual, 27);
+  assert.equal(row("profit").actual, 25);
+  assert.equal(row("gross-rate").actual, 58 / 100);
+  assert.equal(row("net-gross-rate").actual, 25 / 100);
   assert.equal(row("gross-profit").actual, 58);
-  assert.equal(row("platform-sales-profit").actual, 31);
-  assert.equal(row("sales-profit").actual, 25);
-  assert.deepEqual(row("profit").children, ["gross-profit", "platform-sales-profit", "sales-profit"]);
+  assert.deepEqual(row("profit").children, ["gross-profit", "gross-rate", "net-gross-rate"]);
   const categoryKeys = result.rows.filter((item) => item.level === 1).map((item) => item.key);
-  assert.deepEqual(categoryKeys, ["platform-income", "platform-expense", "product-cost-expense", "custom-expense", "profit"]);
+  assert.deepEqual(categoryKeys, ["basic-info", "platform-income", "platform-expense", "product-cost-expense", "custom-expense", "profit"]);
 });
 
 test("direct return-cost fields keep expense magnitudes positive", () => {
   const result = buildStoreOperatingReportRows({
-    records: [{ totalSalesAmount: 100, promotionDiscount: 0, totalSalesRefunds: 0, purchaseCost: -30, returnCost: -3 }],
+    records: [{ totalSalesAmount: 100, promotionDiscount: 0, totalSalesRefunds: 0, purchaseCost: -30, firstLegCost: 0, returnCost: -3 }],
     currencyCode: "USD",
   });
 
-  assert.equal(result.rows.find((row) => row.key === "return-cost").actual, 3);
-  assert.equal(result.rows.find((row) => row.key === "net-sales-cost").actual, 27);
+  assert.equal(result.rows.find((row) => row.key === "product-cost-expense").actual, 27);
 });
 
 test("不可售退货成本使用利润报表的不可售退货量、采购单价和单位头程成本", () => {
@@ -295,6 +376,7 @@ test("不可售退货成本使用利润报表的不可售退货量、采购单�
       promotionDiscount: 0,
       totalSalesRefunds: 0,
       purchaseCost: -30,
+      firstLegCost: 0,
       fbaReturnsUnsaleableQuantity: 5,
       cgUnitPrice: -5.6,
       cgTransportUnitCosts: -1,
@@ -303,5 +385,5 @@ test("不可售退货成本使用利润报表的不可售退货量、采购单�
     currencyCode: "USD",
   });
 
-  assert.equal(result.rows.find((row) => row.key === "return-cost").actual, 33);
+  assert.equal(result.rows.find((row) => row.key === "product-cost-expense").actual, -3);
 });
