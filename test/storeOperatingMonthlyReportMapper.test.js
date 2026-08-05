@@ -180,7 +180,7 @@ test("monthly report exposes the five Lingxing-aligned top-level projects", () =
   ]);
   const childrenByName = Object.fromEntries(levelOne.map((row) => [row.name, row.children]));
   assert.deepEqual(childrenByName["平台收入"], ["sales-volume", "average-daily-sales", "multi-channel-sales-volume", "ads-sales-amount", "ads-volume", "sales-income", "net-sales", "buyer-shipping-fee", "sales-discount", "refunds", "return-volume", "refund-volume", "return-rate", "refund-rate", "fba-inventory-compensation", "other-income"]);
-  assert.deepEqual(childrenByName["平台支出"], ["platform-fee", "platform-fee-ratio", "fba-delivery-fee", "fba-delivery-fee-ratio", "other-order-fee", "storage-fee", "storage-fee-ratio", "ad-fee", "ad-fee-ratio", "ad-spend", "fba-international-shipping-fee", "inbound-placement-fee", "adjustment-fee", "other-platform-fee"]);
+  assert.deepEqual(childrenByName["平台支出"], ["platform-fee", "fba-delivery-fee", "other-order-fee", "storage-fee", "ad-fee", "ad-spend", "fba-international-shipping-fee", "inbound-placement-fee", "adjustment-fee", "other-platform-fee"]);
   assert.deepEqual(childrenByName["商品成本支出"], ["purchase-cost", "first-leg-cost", "other-product-cost"]);
   assert.deepEqual(childrenByName["自定义费用"], ["offsite-ad-spend", "office-expense", "office-rent", "certification-testing-fee", "office-supplies", "store-insurance-fee", "software-fee", "product-appearance-design-fee", "product-graphic-design-fee", "service-provider-fee", "office-courier-fee", "office-utility-fee", "credit-card-ad-fee", "office-telecom-fee", "sample-fee", "test-order-commission", "travel-expense", "employee-welfare-fee"]);
   assert.deepEqual(childrenByName["利润"], ["gross-profit", "gross-rate", "net-gross-rate"]);
@@ -225,14 +225,10 @@ test("monthly report uses the exact Lingxing subject and detail order from the a
     "其它收入",
     "平台支出",
     "平台费",
-    "平台费占比",
     "FBA发货费",
-    "FBA发货费占比",
     "其他订单费用",
     "仓储费",
-    "仓储费占比",
     "广告费",
-    "广告费率",
     "推广费",
     "FBA国际物流运费",
     "入库配置费",
@@ -267,6 +263,18 @@ test("monthly report uses the exact Lingxing subject and detail order from the a
     "净毛利率",
   ]);
   assert.equal(result.rows.find((row) => row.key === "store-country").actual, "Store-US / 美国");
+});
+
+test("unavailable metrics expose their missing OrderProfit source fields", () => {
+  const result = buildStoreOperatingReportRows({ records: [{ amount: 100, volume: 10 }] });
+  const detail = result.unavailableMetricDetails.find((item) => item.key === "ad-fee");
+
+  assert.deepEqual(detail, {
+    key: "ad-fee",
+    name: "广告费",
+    reason: "订单利润 API 未返回对应字段",
+    fields: ["adFee", "ad_fee", "advertisingFee", "advertising_fee"],
+  });
 });
 
 test("gross profit is unavailable when a required hierarchy dependency is unavailable", () => {

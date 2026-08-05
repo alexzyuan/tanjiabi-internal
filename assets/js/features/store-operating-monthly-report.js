@@ -522,9 +522,12 @@ export function createStoreOperatingMonthlyReportFeature({
     const unavailableText = data.meta.unavailableMetrics?.length
       ? ` · ${data.meta.unavailableMetrics.length} 个科目不可用`
       : "";
+    const unavailableNames = Array.isArray(data.meta.unavailableMetricNames) && data.meta.unavailableMetricNames.length
+      ? `；不可用科目：${data.meta.unavailableMetricNames.join("、")}（领星字段未返回或依赖字段不可用）`
+      : "";
     setText(
       "#store-operating-report-status",
-      `${budgetStatusText(data.budgetStatus)}${missingText}${unavailableText}`,
+      `${budgetStatusText(data.budgetStatus)}${missingText}${unavailableText}${unavailableNames}`,
       root,
     );
     refreshTable(query("#store-operating-report-table"));

@@ -339,12 +339,16 @@ export async function getStoreOperatingMonthlyReport(filters, {
           recordCount: groupRecords.length,
           rows: mapped.rows,
           unavailableMetrics: mapped.unavailableMetrics,
+          unavailableMetricDetails: mapped.unavailableMetricDetails,
         });
       });
     });
     const currencyCodes = [...new Set(groups.map((group) => group.currencyCode))];
     const rows = currencyMode === "CNY" || groups.length === 1 ? groups[0]?.rows || [] : [];
     const unavailableMetrics = [...new Set(groups.flatMap((group) => group.unavailableMetrics))];
+    const unavailableMetricDetails = [...new Map(
+      groups.flatMap((group) => group.unavailableMetricDetails || []).map((detail) => [detail.key, detail]),
+    ).values()];
     const state = budgetState({
       matched: Boolean(budget?.matched),
       budgetRows,
@@ -366,6 +370,8 @@ export async function getStoreOperatingMonthlyReport(filters, {
         recordCount: records.length,
         budgetMatchCount: budgetRows.length,
         unavailableMetrics,
+        unavailableMetricNames: unavailableMetricDetails.map((detail) => detail.name),
+        unavailableMetricDetails,
         missingExchangeRateCount,
         generatedAt: generatedAt(now),
       },
@@ -389,6 +395,7 @@ export async function getStoreOperatingMonthlyReport(filters, {
       groupCount: groups.length,
       budgetMatchCount: budgetRows.length,
       unavailableMetrics,
+      unavailableMetricDetails,
       missingExchangeRateCount,
       cacheStates,
       elapsedMs: Date.now() - startedAt,
@@ -512,7 +519,9 @@ export async function exportStoreOperatingMonthlyReportXlsx(filters = {}, {
     ["预算状态", report.budgetStatus?.state || "unconfigured"],
     ["预算匹配数", report.budgetStatus?.matchCount ?? 0],
     ["缺少汇率条数", report.meta?.missingExchangeRateCount ?? 0],
-    ["不可用科目", Array.isArray(report.meta?.unavailableMetrics) ? report.meta.unavailableMetrics.join("、") : ""],
+    ["不可用科目", Array.isArray(report.meta?.unavailableMetricNames)
+      ? report.meta.unavailableMetricNames.join("、")
+      : (Array.isArray(report.meta?.unavailableMetrics) ? report.meta.unavailableMetrics.join("、") : "")],
   ];
   const metadataSheet = XLSX.utils.aoa_to_sheet(metadataRows);
   metadataSheet["!cols"] = [{ wch: 16 }, { wch: 48 }];
