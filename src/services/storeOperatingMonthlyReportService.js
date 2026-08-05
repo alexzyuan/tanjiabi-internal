@@ -278,19 +278,20 @@ export async function getStoreOperatingMonthlyReport(filters, {
     const recordsByMonthResults = await Promise.all(normalizedFilters.months.map(async (month) => {
       const { startDate, endDate } = monthBounds(month);
       const request = {
-        startDate,
-        endDate,
+        // 店铺利润月度接口只接受 yyyy-MM；不要把月筛选展开成日范围。
+        startDate: month,
+        endDate: month,
         monthlyQuery: true,
         summaryEnabled: true,
         sids: sellers.map((seller) => seller.sid),
         currencyCode: currencyMode === "CNY" ? "CNY" : "ORIGINAL",
       };
       const sellerResult = typeof adapter.fetchSellerProfitReportCached === "function"
-        ? await adapter.fetchSellerProfitReportCached({ ...request, sellerList: sellers, reportDate: endDate })
+        ? await adapter.fetchSellerProfitReportCached({ ...request, sellerList: sellers, reportDate: month })
         : await adapter.fetchSellerProfitReport(request);
       const sellerRecords = sellerResult?.records || adapter.normalizeRecordList(sellerResult);
       const normalizedSellerRecords = typeof adapter.normalizeSellerProfitRecords === "function"
-        ? adapter.normalizeSellerProfitRecords(sellerRecords, sellers, endDate)
+        ? adapter.normalizeSellerProfitRecords(sellerRecords, sellers, month)
         : sellerRecords.map((record) => {
           const seller = sellers.find((candidate) => Number(candidate.sid) === Number(record.sid || record.seller_id || record.sellerId));
           return {
@@ -299,7 +300,7 @@ export async function getStoreOperatingMonthlyReport(filters, {
             storeName: record.storeName || record.store_name || seller?.name || "",
             country: record.country || record.country_name || seller?.country || "",
             currencyCode: record.currencyCode || record.currency_code || "",
-            reportDate: record.reportDate || endDate,
+            reportDate: record.reportDate || month,
           };
         });
       const feePayload = await adapter.fetchOtherFeeList({

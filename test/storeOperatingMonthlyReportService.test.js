@@ -147,8 +147,8 @@ test("service sums each requested month and uses CNY for multiple effective coun
   assert.equal(value.meta.currencyMode, "CNY");
   assert.deepEqual(calls.map((call) => call.currencyCode), ["CNY", "CNY"]);
   assert.deepEqual(calls.map(({ startDate, endDate }) => ({ startDate, endDate })), [
-    { startDate: "2026-06-01", endDate: "2026-06-30" },
-    { startDate: "2026-07-01", endDate: "2026-07-31" },
+    { startDate: "2026-06", endDate: "2026-06" },
+    { startDate: "2026-07", endDate: "2026-07" },
   ]);
   assert.equal(value.rows.find((row) => row.key === "net-sales").actual, 180);
   assert.equal(value.meta.generatedAt, "2026-08-03T08:00:00.000Z");
@@ -332,8 +332,8 @@ test("service accepts one and twelve months but rejects missing, invalid, and re
   );
   assert.deepEqual(oneMonth.filters.months, ["2026-02"]);
   assert.deepEqual(calls[0], {
-    startDate: "2026-02-01",
-    endDate: "2026-02-28",
+    startDate: "2026-02",
+    endDate: "2026-02",
     monthlyQuery: true,
     summaryEnabled: true,
     sids: [1],

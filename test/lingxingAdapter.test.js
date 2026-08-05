@@ -30,7 +30,7 @@ test("normalized order profit keeps currency and Lingxing rate metadata", () => 
   assert.equal(row.exchangeRate, 7.2);
 });
 
-test("seller profit report requests one inclusive month using store-level aggregation", async () => {
+test("seller profit report requests one month using the API yyyy-MM date format", async () => {
   const adapter = new LingxingAdapter(lingxingTestConfig);
   const calls = [];
   adapter.performSignedRequest = async (endpoint, options) => {
@@ -39,8 +39,8 @@ test("seller profit report requests one inclusive month using store-level aggreg
   };
 
   await adapter.fetchSellerProfitReport({
-    startDate: "2026-07-01",
-    endDate: "2026-07-31",
+    startDate: "2026-07",
+    endDate: "2026-07",
     sids: [11, 12],
     currencyCode: "CNY",
   });
@@ -49,8 +49,8 @@ test("seller profit report requests one inclusive month using store-level aggreg
   assert.equal(calls[0].params.monthlyQuery, true);
   assert.equal(calls[0].params.summaryEnabled, true);
   assert.deepEqual(calls[0].params.sids, [11, 12]);
-  assert.equal(calls[0].params.startDate, "2026-07-01");
-  assert.equal(calls[0].params.endDate, "2026-07-31");
+  assert.equal(calls[0].params.startDate, "2026-07");
+  assert.equal(calls[0].params.endDate, "2026-07");
   assert.equal(calls[0].params.currencyCode, "CNY");
 });
 
