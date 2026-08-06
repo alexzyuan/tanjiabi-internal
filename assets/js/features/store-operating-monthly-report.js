@@ -528,7 +528,11 @@ export function createStoreOperatingMonthlyReportFeature({
       : "";
     const unavailableDetails = Array.isArray(data.meta.unavailableMetricDetails) ? data.meta.unavailableMetricDetails : [];
     const customExpenseUnavailable = unavailableDetails.some((detail) => detail?.category === "custom-expense");
-    const customExpenseText = customExpenseUnavailable ? "；自定义费用未配置独立数据源" : "";
+    const customExpenseText = customExpenseUnavailable
+      ? (data.meta.customFeeSource === "/bd/profit/report/open/report/seller/list.otherFeeStr"
+        ? "；店铺利润报表未返回对应费用科目"
+        : "；自定义费用来源不可用")
+      : "";
     setText(
       "#store-operating-report-status",
       `${budgetStatusText(data.budgetStatus)}${missingText}${unavailableText}${unavailableNames}${customExpenseText}`,

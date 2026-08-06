@@ -28,7 +28,7 @@
 
 ## 自定义费用
 
-非订单类自定义费用使用领星费用明细接口：`POST /bd/fee/management/open/feeManagement/otherFee/list`。按月份和 `sids` 查询，使用费用类型名称/ID映射到月报自定义费用细项；无法识别的费用类型进入“未映射费用”状态并记录日志，不计入已确认科目。费用明细接口失败时月报请求失败，不用空结果掩盖错误。
+非订单类自定义费用使用领星店铺利润报表 `POST /bd/profit/report/open/report/seller/list` 的 `otherFeeStr[]`。每项读取 `otherFeeName`、`otherFeeTypeId` 和 `feeAllocation`，按该店铺利润行的 `sid`、店铺和币种归属映射到月报自定义费用细项。ERP 与真实 API 验证表明 `/bd/fee/management/open/feeManagement/otherFee/list` 在此月报口径下只返回部分费用，不能用于月报汇总。无法识别的费用类型进入“未映射费用”状态并记录日志，不计入已确认科目；店铺利润接口失败时月报请求失败，不用空结果掩盖错误。
 
 ## 文件归属
 

@@ -182,7 +182,7 @@ function buildEmptyResult(normalizedFilters, now) {
       recordCount: 0,
       budgetMatchCount: 0,
       source: "/basicOpen/finance/mreport/OrderProfit",
-      customFeeSource: "/bd/fee/management/open/feeManagement/otherFee/list",
+      customFeeSource: "/bd/profit/report/open/report/seller/list.otherFeeStr",
       customFeeRecordCount: 0,
       unmappedCustomFeeCount: 0,
       unavailableMetrics: [],
@@ -301,15 +301,19 @@ export async function getStoreOperatingMonthlyReport(filters, {
             reportDate: record.reportDate || month,
           };
         });
-      const feePayload = await adapter.fetchOtherFeeList({
-        date_type: "date",
-        start_date: startDate,
-        end_date: endDate,
+      if (typeof adapter.fetchSellerProfitReport !== "function" || typeof adapter.normalizeSellerProfitOtherFeeRecords !== "function") {
+        throw new Error("领星适配器缺少店铺利润自定义费用读取能力");
+      }
+      const sellerProfitPayload = await adapter.fetchSellerProfitReport({
+        startDate: month,
+        endDate: month,
         sids: sellers.map((seller) => seller.sid),
-        dimensions: [3],
-        currency_code: currencyMode === "CNY" ? "CNY" : "ORIGINAL",
+        currencyCode: currencyMode === "CNY" ? "CNY" : "ORIGINAL",
+        monthlyQuery: true,
+        summaryEnabled: true,
       });
-      const feeRecords = adapter.normalizeRecordList(feePayload);
+      const sellerProfitRecords = adapter.normalizeRecordList(sellerProfitPayload);
+      const feeRecords = adapter.normalizeSellerProfitOtherFeeRecords(sellerProfitRecords, sellers, month);
       const mergedFees = mergeStoreOperatingCustomFeeRecords(normalizedOrderProfitRecords, feeRecords, sellers);
       const result = {
         month,
@@ -400,7 +404,7 @@ export async function getStoreOperatingMonthlyReport(filters, {
       meta: {
         currencyMode,
         source: "/basicOpen/finance/mreport/OrderProfit",
-        customFeeSource: "/bd/fee/management/open/feeManagement/otherFee/list",
+        customFeeSource: "/bd/profit/report/open/report/seller/list.otherFeeStr",
         currencyCodes,
         recordCount: records.length,
         customFeeRecordCount,

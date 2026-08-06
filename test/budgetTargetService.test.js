@@ -110,9 +110,10 @@ test("parsed workbook currency reaches a single-country original-currency report
       async fetchMskuOrderProfit() {
         return { records: [{ sid: 1, currencyCode: "USD", netSalesAmount: 180, totalAdsCost: -18, totalSalesRefunds: -4, grossProfit: 60 }] };
       },
-      async fetchOtherFeeList() {
+      async fetchSellerProfitReport() {
         return { data: [] };
       },
+      normalizeSellerProfitOtherFeeRecords() { return []; },
       normalizeMskuOrderProfitRecords(records, sellers, reportDate) {
         return records.map((record) => ({ ...record, storeName: sellers[0].name, country: sellers[0].country, reportDate }));
       },

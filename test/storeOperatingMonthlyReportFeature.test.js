@@ -18,7 +18,12 @@ function makeElement(value = "") {
   };
 }
 
-function makeReportResponse({ name = "销售收入净额", unavailableMetricNames = [], unavailableMetricDetails = [] } = {}) {
+function makeReportResponse({
+  name = "销售收入净额",
+  unavailableMetricNames = [],
+  unavailableMetricDetails = [],
+  customFeeSource = "/bd/profit/report/open/report/seller/list.otherFeeStr",
+} = {}) {
   return {
     ok: true,
     async json() {
@@ -31,6 +36,7 @@ function makeReportResponse({ name = "销售收入净额", unavailableMetricName
           unavailableMetrics: [],
           unavailableMetricNames,
           unavailableMetricDetails,
+          customFeeSource,
           missingExchangeRateCount: 0,
         },
         groups: [{
@@ -278,7 +284,7 @@ test("successful rendering refreshes the shared managed table and writes filter 
   assert.match(elements["#store-operating-report-body"].innerHTML, /销售收入净额/);
 });
 
-test("successful rendering explains unavailable source metrics in the report status", async () => {
+test("successful rendering attributes absent custom expense subjects to the seller-profit report", async () => {
   const { feature, elements } = makeFeatureHarness({
     fetchImpl: async () => makeReportResponse({
       unavailableMetricNames: ["广告费", "FBA国际物流运费"],
@@ -289,7 +295,8 @@ test("successful rendering explains unavailable source metrics in the report sta
   await feature.loadStoreOperatingMonthlyReport();
 
   assert.match(elements["#store-operating-report-status"].textContent, /不可用科目：广告费、FBA国际物流运费/);
-  assert.match(elements["#store-operating-report-status"].textContent, /自定义费用未配置独立数据源/);
+  assert.match(elements["#store-operating-report-status"].textContent, /店铺利润报表未返回对应费用科目/);
+  assert.doesNotMatch(elements["#store-operating-report-status"].textContent, /未配置独立数据源/);
 });
 
 test("monthly report uses an 上级 column and collapses subtotal details by default", async () => {

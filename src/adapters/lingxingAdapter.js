@@ -1111,12 +1111,20 @@ export class LingxingAdapter {
         storeName,
         country,
         countryCode: seller.country_code || seller.countryCode || record.country_code || record.countryCode || "",
-        currencyCode: readFirst(record, ["currency_code", "currencyCode", "currency"]),
+        currencyCode: readFirst(record, ["currency_code", "currencyCode", "currency"]) || record.currencyCode || "",
         cnyAmount: readFirstNumber(record, ["amount_cny", "cny_amount", "total_amount_cny"]),
         exchangeRate: readFirstNumber(record, ["exchange_rate", "exchangeRate", "rate_to_cny"]),
-        totalSalesAmount: record.amount,
-        netSalesAmount: record.net_amount,
-        grossProfit: record.gross_profit,
+        totalSalesAmount: record.amount ?? record.totalSalesAmount,
+        netSalesAmount: record.net_amount ?? record.netSalesAmount,
+        grossProfit: record.gross_profit ?? record.grossProfit,
+        salesProfit: readFirstNumber(record, [
+          "salesProfit",
+          "profit",
+          "profit_amount",
+          "sales_profit",
+          "net_profit",
+          "netProfit",
+        ]),
         averageGrossProfit: readFirst(record, [
           "avg_gross_profit",
           "average_gross_profit",
@@ -1267,6 +1275,24 @@ export class LingxingAdapter {
     });
   }
 
+  normalizeSellerProfitOtherFeeRecords(records, sellerList = [], reportDate = "") {
+    if (!Array.isArray(records)) throw new Error("店铺利润 records 必须是数组");
+    return this.normalizeSellerProfitRecords(records, sellerList).flatMap((record) => {
+      if (record.otherFeeStr === undefined || record.otherFeeStr === null || record.otherFeeStr === "") return [];
+      if (!Array.isArray(record.otherFeeStr)) throw new Error("店铺利润 otherFeeStr 必须是数组");
+      return record.otherFeeStr.map((fee) => ({
+        sid: record.sid,
+        storeName: record.storeName,
+        country: record.country,
+        currencyCode: record.currencyCode,
+        reportDate: record.reportDate || reportDate,
+        other_fee_type: readFirst(fee, ["otherFeeName", "other_fee_name", "name"]),
+        other_fee_type_id: readFirst(fee, ["otherFeeTypeId", "other_fee_type_id", "id"]),
+        fee: readFirstNumber(fee, ["feeAllocation", "fee_allocation", "fee", "amount"]),
+      }));
+    });
+  }
+
   async fetchMskuOrderProfitCached({
     startDate,
     endDate,
@@ -1280,16 +1306,24 @@ export class LingxingAdapter {
     const cacheKey = stableOrderProfitCacheKey({ startDate, endDate, sids: selectedSids, currencyCode });
     const cached = await readOrderProfitCache(cacheKey);
     if (cached?.data?.orderProfitRecords) {
+      const cachedRecords = cached.data.orderProfitRecords;
+      const needsNormalization = cachedRecords.some((record) => (
+        record?.salesProfit === undefined
+        && (record?.profit !== undefined || record?.amount !== undefined || record?.net_amount !== undefined)
+      ));
+      const records = needsNormalization
+        ? this.normalizeMskuOrderProfitRecords(cachedRecords, sellerList, reportDate)
+        : cachedRecords;
       console.info("[lingxing-adapter] order profit cache hit", {
         cacheKey,
         startDate,
         endDate,
         currencyCode,
         sidCount: selectedSids.length,
-        recordCount: cached.data.orderProfitRecords.length,
+        recordCount: records.length,
       });
       return {
-        records: cached.data.orderProfitRecords,
+        records,
         cacheKey,
         cacheState: "hit",
         cacheUpdatedAt: cached.updatedAt || "",

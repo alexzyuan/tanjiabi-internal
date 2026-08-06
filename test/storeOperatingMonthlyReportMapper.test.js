@@ -393,6 +393,55 @@ test("custom fee detail rows map each allocated store amount instead of the top-
   assert.deepEqual(result.unmapped, []);
 });
 
+test("custom fee type-name aliases map every approved expense subject", () => {
+  const subjects = [
+    ["办公费用", "office-expense"],
+    ["办公费用-租金", "office-rent"],
+    ["认证检测费", "certification-testing-fee"],
+    ["办公用品", "office-supplies"],
+    ["软件费用", "software-fee"],
+    ["产品外观设计费", "product-appearance-design-fee"],
+    ["产品平面设计费", "product-graphic-design-fee"],
+    ["服务商费用", "service-provider-fee"],
+    ["办公费用-快递费", "office-courier-fee"],
+    ["办公费用-水电费", "office-utility-fee"],
+    ["信用卡广告费", "credit-card-ad-fee"],
+    ["办公费用-店铺通讯费", "office-telecom-fee"],
+    ["样品费", "sample-fee"],
+    ["送测佣金（刷单）", "test-order-commission"],
+    ["差旅费", "travel-expense"],
+    ["员工福利费", "employee-welfare-fee"],
+    ["店铺保险费", "store-insurance-fee"],
+  ];
+  const result = mergeStoreOperatingCustomFeeRecords(
+    [{ sid: 7, storeName: "Store-US", country: "美国" }],
+    subjects.map(([type]) => ({ sid: 7, fee_type_name: type, fee: -1 })),
+    [{ sid: 7, name: "Store-US", country: "美国" }],
+  );
+
+  assert.deepEqual(result.unmapped, []);
+  const mapped = buildStoreOperatingReportRows({ records: result.records, currencyCode: "CNY" });
+  for (const [, key] of subjects) assert.equal(mapped.rows.find((row) => row.key === key).actual, 1);
+});
+
+test("custom fees with a valid sid never fall back to another store with the same name", () => {
+  const result = mergeStoreOperatingCustomFeeRecords(
+    [{ sid: 1, storeName: "Shared Store", country: "美国" }],
+    [{ sid: 2, storeName: "Shared Store", other_fee_type: "软件费用", fee: -12 }],
+    [{ sid: 2, name: "Shared Store", country: "加拿大" }],
+  );
+
+  assert.equal(result.records.find((record) => record.sid === 1).softwareFee, undefined);
+  assert.deepEqual(result.records.find((record) => record.sid === 2), {
+    sid: 2,
+    storeName: "Shared Store",
+    country: "加拿大",
+    currencyCode: "",
+    softwareFee: -12,
+  });
+  assert.deepEqual(result.unmapped, []);
+});
+
 test("seller profit custom order fee principal and commission are combined as offsite promotion expense", () => {
   const result = buildStoreOperatingReportRows({
     records: [{ totalSalesAmount: 100, customOrderFeePrincipal: -8, customOrderFeeCommission: -2 }],

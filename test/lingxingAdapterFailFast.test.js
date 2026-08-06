@@ -111,7 +111,7 @@ test("shared order profit cache returns a normalized hit without calling Lingxin
     let calls = 0;
     adapter.fetchMskuOrderProfit = async () => {
       calls += 1;
-      return { data: { records: [{ sid: 8708, amount: 12, net_amount: 10 }] } };
+      return { data: { records: [{ sid: 8708, amount: 12, net_amount: 10, profit: 3 }] } };
     };
     const first = await adapter.fetchMskuOrderProfitCached({
       startDate: "2026-08-01",
@@ -133,6 +133,7 @@ test("shared order profit cache returns a normalized hit without calling Lingxin
     assert.equal(first.cacheState, "miss");
     assert.equal(second.cacheState, "hit");
     assert.equal(second.records[0].storeName, "JOI MEW-US");
+    assert.equal(second.records[0].salesProfit, 3);
   } finally {
     process.chdir(projectRoot);
     await rm(tempRoot, { recursive: true, force: true });

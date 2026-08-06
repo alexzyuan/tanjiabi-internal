@@ -83,7 +83,7 @@ Rules for this path:
 
 月报表头直接展示店铺/国家筛选范围，不渲染“基础信息”小计；平台收入小计使用原销售额，其他一级小计按已返回的可用明细汇总。缺失明细仍标记为不可用，不得静默补零。
 
-月报实际值统一以领星 `OrderProfit` 接口 `POST /basicOpen/finance/mreport/OrderProfit` 为主来源；官方文档明确其 `startDate`/`endDate` 为双闭区间，每个自然月传入月初和月末日期，适配器不得追加一天。自定义费用明细来自 `POST /bd/fee/management/open/feeManagement/otherFee/list` 的店铺维度（`dimensions=3`）；已识别类型映射到月报自定义费用科目，未识别类型必须在日志和 `meta` 中保留，不得静默丢弃。OrderProfit 字段映射固定为：`volume`→销量、`amount`→销售额、`net_amount`→净销售额、`gross_profit`→毛利润。
+月报实际值统一以领星 `OrderProfit` 接口 `POST /basicOpen/finance/mreport/OrderProfit` 为主来源；官方文档明确其 `startDate`/`endDate` 为双闭区间，每个自然月传入月初和月末日期，适配器不得追加一天。自定义费用明细来自店铺利润报表 `POST /bd/profit/report/open/report/seller/list` 的 `otherFeeStr[]`，每项读取 `otherFeeName`、`otherFeeTypeId` 和 `feeAllocation` 并按店铺归属合并；`/bd/fee/management/open/feeManagement/otherFee/list` 在该月报口径下返回不完整数据，不得再参与月报汇总。已识别类型映射到月报自定义费用科目，未识别类型必须在日志和 `meta` 中保留，不得静默丢弃。OrderProfit 字段映射固定为：`volume`→销量、`amount`→销售额、`net_amount`→净销售额、`gross_profit`→毛利润。
 
 ## Lingxing Date Ranges
 

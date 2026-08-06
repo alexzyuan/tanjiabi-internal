@@ -150,6 +150,27 @@ function metricForOtherFeeType(value) {
   return OTHER_FEE_TYPE_METRICS.find(([label]) => type.includes(label))?.[1] || "";
 }
 
+function readOtherFeeType(record) {
+  const value = readValue(record, [
+    "other_fee_type_name",
+    "otherFeeTypeName",
+    "fee_type_name",
+    "feeTypeName",
+    "fee_name",
+    "feeName",
+    "type_name",
+    "typeName",
+    "other_fee_type",
+    "otherFeeType",
+    "fee_type",
+    "feeType",
+  ]);
+  if (value && typeof value === "object") {
+    return readText(value, ["name", "label", "value", "title", "name_cn", "nameCn"]);
+  }
+  return isPresent(value) ? String(value).trim() : "";
+}
+
 function feeAmount(record) {
   const direct = readValue(record, ["fee", "amount", "other_fee", "otherFee"]);
   if (isPresent(direct)) return toFiniteNumber(direct, "费用明细 fee");
@@ -207,16 +228,17 @@ export function mergeStoreOperatingCustomFeeRecords(records = [], feeRecords = [
   const applied = [];
   expandStoreOperatingOtherFeeRecords(feeRecords).forEach((feeRecord) => {
     const sid = Number(readValue(feeRecord, ["sid", "seller_id", "sellerId", "store_id", "storeId"]));
+    const hasValidSid = Number.isFinite(sid) && sid > 0;
     const storeName = readText(feeRecord, ["storeName", "store_name", "sellerName", "seller_name"]);
-    const type = readText(feeRecord, ["other_fee_type", "otherFeeType", "fee_type", "feeType", "other_fee_type_name", "otherFeeTypeName"]);
+    const type = readOtherFeeType(feeRecord);
     const metricKey = metricForOtherFeeType(type);
     const amount = feeAmount(feeRecord);
     if (!metricKey || amount === null) {
       unmapped.push({ sid: Number.isFinite(sid) ? sid : null, storeName, type, reason: !metricKey ? "未识别费用类型" : "费用金额缺失" });
       return;
     }
-    let target = recordBySid.get(sid);
-    if (!target && storeName) target = merged.find((record) => readText(record, ["storeName", "store_name", "sellerName", "seller_name"]) === storeName);
+    let target = hasValidSid ? recordBySid.get(sid) : null;
+    if (!target && !hasValidSid && storeName) target = merged.find((record) => readText(record, ["storeName", "store_name", "sellerName", "seller_name"]) === storeName);
     if (!target) {
       const seller = sellerBySid.get(sid) || {};
       if (!seller.name && !Number.isFinite(sid) && !storeName) {
@@ -521,7 +543,9 @@ export function buildStoreOperatingReportRows({ records, budgetByMetric = {}, cu
           name: row.name,
           category: metric.category,
           reason: metric.category === "custom-expense"
-            ? "订单利润 API 未返回对应字段；当前未配置自定义费用独立数据源"
+            ? (metric.key === "offsite-ad-spend"
+              ? "订单利润 API 未返回对应字段"
+              : "店铺利润报表未返回对应费用科目")
             : "订单利润 API 未返回对应字段",
           fields: metric.fields,
         };
