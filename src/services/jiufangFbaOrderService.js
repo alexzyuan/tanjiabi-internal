@@ -35,6 +35,11 @@ function selectedSet(values = []) {
   return new Set((values || []).map((value) => firstText(value)).filter(Boolean));
 }
 
+function jiufangShipmentFilters(filters = {}, shipmentIds = new Set()) {
+  if (shipmentIds.size !== 1) return filters;
+  return { ...filters, shipmentId: [...shipmentIds][0] };
+}
+
 function shipmentRowId(row = {}) {
   return firstText(row.shipmentId, row.staShipmentId, row.id);
 }
@@ -530,12 +535,18 @@ async function prepareRows(input = {}, deps = {}) {
   const selected = selectedSet(input.shipmentIds);
   if (!selected.size) throw new Error("请选择要提交九方的 FBA 货件。");
   const resolved = resolveDependencies(deps);
-  const allRows = await resolved.getShipments(input.filters || {}, {
+  const filters = jiufangShipmentFilters(input.filters || {}, selected);
+  const allRows = await resolved.getShipments(filters, {
     adapter: resolved.lingxingAdapter,
     sellers: resolved.sellers,
   });
   const rows = allRows.filter((row) => selected.has(shipmentRowId(row)));
   if (!rows.length) throw new Error("当前筛选结果中没有找到选中的 FBA 货件。");
+  console.info("[jiufang-fba-order] prepared selected shipments", {
+    selectedCount: selected.size,
+    scopedShipmentId: filters.shipmentId || "",
+    resolvedShipmentCount: rows.length,
+  });
   const boxPayloadsByShipmentId = await resolved.fetchBoxPayloadsByShipmentId(rows, {
     adapter: resolved.lingxingAdapter,
   });

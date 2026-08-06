@@ -377,6 +377,33 @@ test("dryRunJiufangFbaOrders does not call Jiufang and reports duplicate stored 
   assert.equal(result.results[0].jiufangOrderNumber, "JF-EXISTS");
 });
 
+test("dryRunJiufangFbaOrders narrows a single shipment precheck to its FBA ID", async () => {
+  let receivedFilters;
+  await dryRunJiufangFbaOrders({
+    filters: { startDate: "2026-07-08", endDate: "2026-08-06", length: 500 },
+    shipmentIds: ["FBA18QJFDCWJ"],
+    channelCode: "SEA-US-07",
+  }, {
+    getShipments: async (filters) => {
+      receivedFilters = filters;
+      return [shipment];
+    },
+    fetchBoxPayloadsByShipmentId: async () => boxPayloadsByShipmentId,
+    orderStore: {
+      async listByShipmentIds() {
+        return new Map([['FBA18QJFDCWJ', { jiufangOrderNumber: "JF-EXISTS" }]]);
+      },
+    },
+  });
+
+  assert.deepEqual(receivedFilters, {
+    startDate: "2026-07-08",
+    endDate: "2026-08-06",
+    length: 500,
+    shipmentId: "FBA18QJFDCWJ",
+  });
+});
+
 test("dryRunJiufangFbaOrders uses the ordinary FBA box endpoint when STA identifiers are absent", async () => {
   const calls = [];
   const ordinaryShipment = {
