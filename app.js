@@ -758,6 +758,7 @@ async function refreshDashboardFromFilters() {
 } = createStoreOperatingMonthlyReportFeature({
   root: document,
   bind,
+  bindBackdropClose,
   clickVisibleNavItem,
   downloadBlob,
   escapeHtml,
@@ -772,6 +773,7 @@ async function refreshDashboardFromFilters() {
   refreshTable,
   selectedFilterValues,
   setButtonBusy,
+  setModalOpenState,
   setSelectOptions,
   setText,
   syncAllOptionSelection,

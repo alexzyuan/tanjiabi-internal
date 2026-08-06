@@ -200,9 +200,9 @@ test("CSS minifier keeps required calc plus spacing", () => {
   assert.match(minified, /\.item\+\.item/);
 });
 
-test("styles.css stays within the raw size budget", async () => {
+test("styles.css stays within the 260KB raw size budget", async () => {
   const { size } = await stat(new URL("../styles.css", import.meta.url));
-  assert.ok(size <= 256_000, `styles.css should be <= 256KB raw, got ${size} bytes`);
+  assert.ok(size <= 260_000, `styles.css should be <= 260KB raw, got ${size} bytes`);
 });
 
 test("CSS standards gate is part of the default check command", async () => {

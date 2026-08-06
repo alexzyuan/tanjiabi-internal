@@ -19,6 +19,9 @@ test("store operating monthly report is a finance-owned feature with shared cont
   assert.match(indexSource, /id="store-operating-report-store" multiple/);
   assert.match(indexSource, /id="store-operating-report-country" multiple/);
   assert.match(indexSource, /id="store-operating-report-currency"[^>]*>\s*<option value="CNY" selected>人民币/);
+  assert.match(indexSource, /id="store-operating-report-row-visibility"/);
+  assert.match(indexSource, /class="modal-backdrop" id="store-operating-report-row-visibility-modal"/);
+  assert.match(indexSource, /id="store-operating-report-row-visibility-groups"/);
   assert.match(indexSource, /id="store-operating-report-table"[^>]*data-table-key="store-operating-monthly-report"/);
   assert.match(indexSource, /class="table-wrap data-table-wrap--detail store-operating-report-table-wrap"/);
   assert.match(indexSource, /class="data-table data-table--detail"[^>]*id="store-operating-report-table"/);
@@ -61,6 +64,8 @@ test("monthly report delegates widths to shared tooling and sorts hierarchy bloc
   assert.ok((indexSource.match(/data-column-sortable="false"/g) || []).length >= 6);
   assert.match(indexSource, /data-table-key="store-operating-monthly-report"/);
   assert.match(css, /tr\[data-report-row-level="1"\]/);
+  assert.match(css, /\.store-operating-row-visibility-groups/);
+  assert.match(css, /@media \(max-width: 720px\)/);
   assert.doesNotMatch(css, /module-hero/);
   assert.match(shellCss, /\/\* Nested module hero and breadcrumb specificity fix v1\. \*\/[\s\S]*@media \(max-width: 900px\) \{[\s\S]*\.view > \.module-hero,[\s\S]*\.view \.module-hero \{[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
   assert.match(shellCss, /body:not\(\.login-body\) \.topbar \.world-clock \{\n  display: flex;\n\}/);

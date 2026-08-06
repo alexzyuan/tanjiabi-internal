@@ -828,6 +828,7 @@
               <p id="store-operating-report-meta">等待读取经营数据。</p>
             </div>
             <div class="hero-actions">
+              <button class="ghost-button" id="store-operating-report-row-visibility" type="button" aria-haspopup="dialog" aria-expanded="false">列配置</button>
               <button class="ghost-button" id="store-operating-report-export" type="button" disabled>导出 Excel</button>
               <button class="primary-button" id="store-operating-report-budget" type="button">查看预算目标</button>
             </div>
@@ -866,6 +867,30 @@
               </table>
             </div>
           </article>
+          <div class="modal-backdrop" id="store-operating-report-row-visibility-modal" hidden>
+            <article class="store-operating-row-visibility-modal" role="dialog" aria-modal="true" aria-labelledby="store-operating-report-row-visibility-title">
+              <div class="modal-head">
+                <h2 id="store-operating-report-row-visibility-title">项目行配置</h2>
+                <button class="modal-close-button" id="store-operating-report-row-visibility-close" type="button" aria-label="关闭项目行配置">×</button>
+              </div>
+              <div class="modal-body">
+                <label class="store-operating-row-visibility-search" for="store-operating-report-row-visibility-search">搜索项目
+                  <input id="store-operating-report-row-visibility-search" type="search" autocomplete="off" placeholder="例如广告费、采购成本、软件费用" />
+                </label>
+                <div class="store-operating-row-visibility-actions" aria-label="项目行批量操作">
+                  <button class="text-button" type="button" data-row-visibility-action="select-all">全选全部</button>
+                  <button class="text-button" type="button" data-row-visibility-action="clear-all">清空全部</button>
+                  <button class="text-button" type="button" data-row-visibility-action="restore-default">恢复默认</button>
+                </div>
+                <div class="store-operating-row-visibility-groups" id="store-operating-report-row-visibility-groups"></div>
+                <p class="store-operating-row-visibility-status" id="store-operating-report-row-visibility-status" role="status" aria-live="polite"></p>
+              </div>
+              <div class="modal-foot">
+                <button class="secondary-button" id="store-operating-report-row-visibility-cancel" type="button">取消</button>
+                <button class="primary-button" id="store-operating-report-row-visibility-apply" type="button">应用</button>
+              </div>
+            </article>
+          </div>
         </section>
 
         <section class="view" id="view-payables">

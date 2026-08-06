@@ -7,6 +7,7 @@ const REPORT_FIXED_COLUMN_WIDTHS = Object.freeze({
   budget: 160,
   achievement: 112,
 });
+const ROW_VISIBILITY_ENDPOINT = "/api/finance/store-operating-monthly-report/row-visibility";
 
 function defaultCurrentMonth() {
   const now = new Date();
@@ -74,6 +75,7 @@ function compareReportSortValues(left, right) {
 export function createStoreOperatingMonthlyReportFeature({
   root = globalThis.document,
   bind,
+  bindBackdropClose,
   clickVisibleNavItem,
   downloadBlob,
   escapeHtml,
@@ -89,6 +91,7 @@ export function createStoreOperatingMonthlyReportFeature({
   refreshTable,
   selectedFilterValues,
   setButtonBusy,
+  setModalOpenState,
   setSelectOptions,
   setText,
   syncAllOptionSelection,
@@ -103,9 +106,11 @@ export function createStoreOperatingMonthlyReportFeature({
   if (typeof pickSellerCountry !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires pickSellerCountry.");
   if (typeof pickSellerName !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires pickSellerName.");
   if (typeof refreshTable !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires refreshTable.");
+  if (typeof bindBackdropClose !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires bindBackdropClose.");
   if (typeof selectedFilterValues !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires selectedFilterValues.");
   if (typeof setSelectOptions !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires setSelectOptions.");
   if (typeof setText !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires setText.");
+  if (typeof setModalOpenState !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires setModalOpenState.");
   if (typeof syncAllOptionSelection !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires syncAllOptionSelection.");
 
   let storeOptions = [];
@@ -120,6 +125,8 @@ export function createStoreOperatingMonthlyReportFeature({
   const expandedReportCategories = new Set();
   let currentReportData = null;
   let currentReportFilters = null;
+  let rowVisibility = { hiddenMetricIds: new Set(), metrics: [], loaded: false };
+  let rowVisibilityDraft = null;
   const reportSortState = { key: "", direction: "asc" };
 
   function query(selector) {
@@ -352,6 +359,158 @@ export function createStoreOperatingMonthlyReportFeature({
     return data.groups;
   }
 
+  function normalizeRowVisibility(payload = {}) {
+    if (!Array.isArray(payload.metrics)) throw new Error("项目行配置响应缺少 metrics 数组");
+    const metrics = payload.metrics.map((metric) => ({
+      key: String(metric?.key || "").trim(),
+      name: String(metric?.name || "").trim(),
+      category: String(metric?.category || "").trim(),
+      categoryName: String(metric?.categoryName || "").trim(),
+    })).filter((metric) => metric.key && metric.name && metric.category && metric.categoryName);
+    const allowed = new Set(metrics.map((metric) => metric.key));
+    const hiddenMetricIds = Array.isArray(payload.hiddenMetricIds)
+      ? new Set(payload.hiddenMetricIds.map((key) => String(key || "").trim()).filter((key) => allowed.has(key)))
+      : new Set();
+    return { hiddenMetricIds, metrics, loaded: true };
+  }
+
+  function isVisibleReportDetail(row) {
+    return Number(row?.level) !== 2 || !rowVisibility.hiddenMetricIds.has(String(row?.key || ""));
+  }
+
+  async function loadStoreOperatingMonthlyReportRowVisibility() {
+    try {
+      const response = await fetchImpl(ROW_VISIBILITY_ENDPOINT, { cache: "no-store" });
+      rowVisibility = normalizeRowVisibility(await readApiResponse(response));
+      if (currentReportData && currentReportFilters) {
+        renderRows(currentReportData, currentReportFilters);
+        refreshTable(query("#store-operating-report-table"));
+      }
+      return rowVisibility;
+    } catch (error) {
+      rowVisibility = { hiddenMetricIds: new Set(), metrics: [], loaded: false };
+      setText("#store-operating-report-status", `项目行配置读取失败：${error?.message || String(error)}`, root);
+      console.error("[store-operating-monthly-report] row visibility load failed", error);
+      return null;
+    }
+  }
+
+  async function saveStoreOperatingMonthlyReportRowVisibility(hiddenMetricIds) {
+    const response = await fetchImpl(ROW_VISIBILITY_ENDPOINT, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ hiddenMetricIds }),
+    });
+    rowVisibility = normalizeRowVisibility(await readApiResponse(response));
+    if (currentReportData && currentReportFilters) {
+      renderRows(currentReportData, currentReportFilters);
+      refreshTable(query("#store-operating-report-table"));
+    }
+    return rowVisibility;
+  }
+
+  function rowVisibilityDraftIds() {
+    return rowVisibilityDraft instanceof Set ? rowVisibilityDraft : new Set(rowVisibility.hiddenMetricIds);
+  }
+
+  function filteredRowVisibilityMetrics() {
+    const keyword = String(query("#store-operating-report-row-visibility-search")?.value || "").trim().toLocaleLowerCase("zh-CN");
+    return rowVisibility.metrics.filter((metric) => !keyword || `${metric.name} ${metric.key}`.toLocaleLowerCase("zh-CN").includes(keyword));
+  }
+
+  function renderRowVisibilityGroups() {
+    const container = query("#store-operating-report-row-visibility-groups");
+    if (!container) return;
+    const groups = new Map();
+    filteredRowVisibilityMetrics().forEach((metric) => {
+      if (!groups.has(metric.category)) groups.set(metric.category, { name: metric.categoryName, metrics: [] });
+      groups.get(metric.category).metrics.push(metric);
+    });
+    const draft = rowVisibilityDraftIds();
+    container.innerHTML = [...groups.entries()].map(([category, group]) => `
+      <fieldset class="store-operating-row-visibility-group">
+        <div class="store-operating-row-visibility-group-head">
+          <legend>${escapeHtml(group.name)}</legend>
+          <span class="store-operating-row-visibility-group-actions">
+            <button class="text-button" type="button" data-row-visibility-action="select-category" data-row-visibility-category="${escapeHtml(category)}">全选</button>
+            <button class="text-button" type="button" data-row-visibility-action="clear-category" data-row-visibility-category="${escapeHtml(category)}">取消</button>
+          </span>
+        </div>
+        <div class="store-operating-row-visibility-items">
+          ${group.metrics.map((metric) => `<label class="store-operating-row-visibility-item"><input type="checkbox" data-row-visibility-metric="${escapeHtml(metric.key)}" ${draft.has(metric.key) ? "" : "checked"} />${escapeHtml(metric.name)}</label>`).join("")}
+        </div>
+      </fieldset>
+    `).join("") || "<p class=\"store-operating-row-visibility-empty\">未找到匹配项目。</p>";
+  }
+
+  function setRowVisibilityModalOpen(open) {
+    setModalOpenState("#store-operating-report-row-visibility-modal", open, root);
+    query("#store-operating-report-row-visibility")?.setAttribute?.("aria-expanded", String(Boolean(open)));
+  }
+
+  async function openStoreOperatingMonthlyReportRowVisibility() {
+    if (!rowVisibility.loaded) await loadStoreOperatingMonthlyReportRowVisibility();
+    if (!rowVisibility.loaded) return;
+    rowVisibilityDraft = new Set(rowVisibility.hiddenMetricIds);
+    const search = query("#store-operating-report-row-visibility-search");
+    if (search) search.value = "";
+    setText("#store-operating-report-row-visibility-status", "", root);
+    renderRowVisibilityGroups();
+    setRowVisibilityModalOpen(true);
+    search?.focus?.();
+  }
+
+  function closeStoreOperatingMonthlyReportRowVisibility() {
+    rowVisibilityDraft = null;
+    setRowVisibilityModalOpen(false);
+  }
+
+  function updateRowVisibilityDraft(category, visible) {
+    const draft = rowVisibilityDraftIds();
+    rowVisibility.metrics.filter((metric) => !category || metric.category === category).forEach((metric) => {
+      if (visible) draft.delete(metric.key);
+      else draft.add(metric.key);
+    });
+    rowVisibilityDraft = draft;
+    renderRowVisibilityGroups();
+  }
+
+  function handleRowVisibilityGroupChange(event) {
+    const input = event?.target?.closest?.("[data-row-visibility-metric]");
+    if (!input) return;
+    const draft = rowVisibilityDraftIds();
+    const key = String(input.dataset.rowVisibilityMetric || "");
+    if (input.checked) draft.delete(key);
+    else draft.add(key);
+    rowVisibilityDraft = draft;
+  }
+
+  function handleRowVisibilityActions(event) {
+    const action = event?.target?.closest?.("[data-row-visibility-action]");
+    if (!action) return;
+    const type = action.dataset.rowVisibilityAction;
+    if (type === "select-all" || type === "restore-default") updateRowVisibilityDraft("", true);
+    if (type === "clear-all") updateRowVisibilityDraft("", false);
+    if (type === "select-category") updateRowVisibilityDraft(action.dataset.rowVisibilityCategory || "", true);
+    if (type === "clear-category") updateRowVisibilityDraft(action.dataset.rowVisibilityCategory || "", false);
+  }
+
+  async function applyRowVisibilityDraft() {
+    if (!(rowVisibilityDraft instanceof Set)) return;
+    const button = query("#store-operating-report-row-visibility-apply");
+    const restoreButton = typeof setButtonBusy === "function" ? setButtonBusy(button, "保存中…", "应用") : () => {};
+    try {
+      await saveStoreOperatingMonthlyReportRowVisibility([...rowVisibilityDraft]);
+      setText("#store-operating-report-status", "项目行配置已应用。", root);
+      closeStoreOperatingMonthlyReportRowVisibility();
+    } catch (error) {
+      setText("#store-operating-report-row-visibility-status", `项目行配置保存失败：${error?.message || String(error)}`, root);
+      console.error("[store-operating-monthly-report] row visibility save failed", error);
+    } finally {
+      restoreButton();
+    }
+  }
+
   function renderRows(data, filters = readFilters()) {
     const body = query("#store-operating-report-body");
     if (!body) return;
@@ -375,8 +534,13 @@ export function createStoreOperatingMonthlyReportFeature({
       });
       const visibleRows = rows.filter((row) => (
         Number(row.level) !== 2
-        || !categoryByDetail.has(String(row.key || ""))
-        || expandedReportCategories.has(categoryByDetail.get(String(row.key || "")))
+        || (
+          isVisibleReportDetail(row)
+          && (
+            !categoryByDetail.has(String(row.key || ""))
+            || expandedReportCategories.has(categoryByDetail.get(String(row.key || "")))
+          )
+        )
       ));
       const parentRowSpan = Math.max(1, visibleRows.length);
       return visibleRows.map((row, rowIndex) => {
@@ -562,6 +726,9 @@ export function createStoreOperatingMonthlyReportFeature({
 
   async function loadStoreOperatingMonthlyReport() {
     initializeStoreOperatingMonthlyReportDefaults();
+    if (!rowVisibility.loaded && query("#store-operating-report-row-visibility")) {
+      void loadStoreOperatingMonthlyReportRowVisibility();
+    }
     const filters = readFilters();
     const validation = validateMonthRange(filters.startMonth, filters.endMonth);
     if (!validation.ok) {
@@ -720,6 +887,17 @@ export function createStoreOperatingMonthlyReportFeature({
     bind(root, "#store-operating-report-export", "click", exportStoreOperatingMonthlyReport);
     bind(root, "#store-operating-report-budget", "click", openBudgetTargets);
     bind(root, "#store-operating-report-body", "click", toggleReportCategory);
+    bind(root, "#store-operating-report-row-visibility", "click", openStoreOperatingMonthlyReportRowVisibility);
+    bind(root, "#store-operating-report-row-visibility-close", "click", closeStoreOperatingMonthlyReportRowVisibility);
+    bind(root, "#store-operating-report-row-visibility-cancel", "click", closeStoreOperatingMonthlyReportRowVisibility);
+    bind(root, "#store-operating-report-row-visibility-apply", "click", applyRowVisibilityDraft);
+    bind(root, "#store-operating-report-row-visibility-search", "input", renderRowVisibilityGroups);
+    bind(root, "#store-operating-report-row-visibility-groups", "change", handleRowVisibilityGroupChange);
+    bind(root, "#store-operating-report-row-visibility-modal", "click", handleRowVisibilityActions);
+    bind(root, "#store-operating-report-row-visibility-modal", "keydown", (event) => {
+      if (event.key === "Escape") closeStoreOperatingMonthlyReportRowVisibility();
+    });
+    bindBackdropClose(root, "#store-operating-report-row-visibility-modal", closeStoreOperatingMonthlyReportRowVisibility);
   }
 
   return {
@@ -730,6 +908,10 @@ export function createStoreOperatingMonthlyReportFeature({
     handleStoreChange,
     initializeStoreOperatingMonthlyReportDefaults,
     loadStoreOperatingMonthlyReport,
+    loadStoreOperatingMonthlyReportRowVisibility,
+    openStoreOperatingMonthlyReportRowVisibility,
+    closeStoreOperatingMonthlyReportRowVisibility,
+    saveStoreOperatingMonthlyReportRowVisibility,
     openBudgetTargets,
     readFilters,
     resetStoreOperatingMonthlyReport,

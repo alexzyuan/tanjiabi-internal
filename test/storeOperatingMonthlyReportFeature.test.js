@@ -113,6 +113,7 @@ function makeFeatureHarness({
   const feature = createStoreOperatingMonthlyReportFeature({
     root,
     bind() {},
+    bindBackdropClose() {},
     clickVisibleNavItem(target) {
       navTargets.push(target);
     },
@@ -144,6 +145,7 @@ function makeFeatureHarness({
     pickSellerName,
     selectedFilterValues: (element) => element?.selectedValues?.slice() || [],
     setButtonBusy: () => () => {},
+    setModalOpenState() {},
     setSelectOptions: (element, options, label, config) => {
       optionUpdates.push({ element, options, label, config });
     },
@@ -325,6 +327,123 @@ test("monthly report uses an 上级 column and collapses subtotal details by def
   assert.match(elements["#store-operating-report-body"].innerHTML, /销售收入小计/);
   assert.doesNotMatch(elements["#store-operating-report-body"].innerHTML, /基础信息小计/);
   assert.doesNotMatch(elements["#store-operating-report-body"].innerHTML, /data-report-row-key="sales-income"/);
+});
+
+test("account row visibility hides configured detail rows while retaining expanded category subtotals", async () => {
+  const requests = [];
+  const groups = [{
+    currencyCode: "CNY",
+    currencyAvailable: true,
+    rows: [
+      { key: "store-a", category: "店铺", name: "A", level: 0, children: ["platform-expense"] },
+      { key: "platform-expense", category: "平台支出", name: "平台支出", level: 1, actual: 30, share: 1, budget: null, achievement: null, children: ["platform-fee", "ad-fee"] },
+      { key: "platform-fee", category: "平台支出", name: "平台费", level: 2, actual: 10, share: 1 / 3, budget: null, achievement: null },
+      { key: "ad-fee", category: "平台支出", name: "广告费", level: 2, actual: 20, share: 2 / 3, budget: null, achievement: null },
+    ],
+  }];
+  const { feature, elements } = makeFeatureHarness({
+    groups,
+    fetchImpl: async (url) => {
+      requests.push(String(url));
+      if (String(url) === "/api/finance/store-operating-monthly-report/row-visibility") {
+        return {
+          ok: true,
+          async json() {
+            return {
+              ok: true,
+              hiddenMetricIds: ["ad-fee"],
+              metrics: [{ key: "ad-fee", name: "广告费", category: "platform-expense", categoryName: "平台支出" }],
+            };
+          },
+        };
+      }
+      const response = makeReportResponse();
+      return {
+        ...response,
+        async json() {
+          const data = await response.json();
+          data.groups = groups;
+          return data;
+        },
+      };
+    },
+  });
+
+  await feature.loadStoreOperatingMonthlyReportRowVisibility();
+  await feature.loadStoreOperatingMonthlyReport();
+  feature.toggleReportCategory({
+    target: {
+      closest(selector) {
+        return selector === "[data-report-category-toggle]"
+          ? { dataset: { reportCategoryToggle: "platform-expense" }, setAttribute() {}, querySelector() { return null; } }
+          : null;
+      },
+    },
+  });
+
+  assert.ok(requests.includes("/api/finance/store-operating-monthly-report/row-visibility"));
+  assert.match(elements["#store-operating-report-body"].innerHTML, /平台支出小计/);
+  assert.match(elements["#store-operating-report-body"].innerHTML, /平台费/);
+  assert.doesNotMatch(elements["#store-operating-report-body"].innerHTML, /广告费/);
+});
+
+test("saving account row visibility sends only hidden metric ids and applies the returned setting", async () => {
+  const requests = [];
+  const groups = [{
+    currencyCode: "CNY",
+    currencyAvailable: true,
+    rows: [
+      { key: "store-a", category: "店铺", name: "A", level: 0, children: ["platform-expense"] },
+      { key: "platform-expense", category: "平台支出", name: "平台支出", level: 1, actual: 30, share: 1, budget: null, achievement: null, children: ["ad-fee"] },
+      { key: "ad-fee", category: "平台支出", name: "广告费", level: 2, actual: 30, share: 1, budget: null, achievement: null },
+    ],
+  }];
+  const { feature, elements } = makeFeatureHarness({
+    groups,
+    fetchImpl: async (url, options = {}) => {
+      requests.push({ url: String(url), options });
+      if (String(url) === "/api/finance/store-operating-monthly-report/row-visibility") {
+        return {
+          ok: true,
+          async json() {
+            return {
+              ok: true,
+              hiddenMetricIds: options.method === "PUT" ? ["ad-fee"] : [],
+              metrics: [{ key: "ad-fee", name: "广告费", category: "platform-expense", categoryName: "平台支出" }],
+            };
+          },
+        };
+      }
+      const response = makeReportResponse();
+      return {
+        ...response,
+        async json() {
+          const data = await response.json();
+          data.groups = groups;
+          return data;
+        },
+      };
+    },
+  });
+
+  await feature.loadStoreOperatingMonthlyReportRowVisibility();
+  await feature.loadStoreOperatingMonthlyReport();
+  await feature.saveStoreOperatingMonthlyReportRowVisibility(["ad-fee"]);
+  feature.toggleReportCategory({
+    target: {
+      closest(selector) {
+        return selector === "[data-report-category-toggle]"
+          ? { dataset: { reportCategoryToggle: "platform-expense" }, setAttribute() {}, querySelector() { return null; } }
+          : null;
+      },
+    },
+  });
+
+  const saveRequest = requests.find((request) => request.options.method === "PUT");
+  assert.equal(saveRequest.url, "/api/finance/store-operating-monthly-report/row-visibility");
+  assert.equal(saveRequest.options.headers["content-type"], "application/json");
+  assert.deepEqual(JSON.parse(saveRequest.options.body), { hiddenMetricIds: ["ad-fee"] });
+  assert.doesNotMatch(elements["#store-operating-report-body"].innerHTML, /广告费/);
 });
 
 test("monthly report does not render the removed basic-info block", async () => {
