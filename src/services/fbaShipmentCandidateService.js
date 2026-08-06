@@ -211,7 +211,8 @@ export async function getFbaShipmentCandidates(filters = {}, {
   const cached = candidateCache.get(cacheKey);
   const needsSellerMappings = autoLoadSellerMappings || (Array.isArray(sellers) && sellers.length > 0);
   const cachedCanSatisfy = !needsSellerMappings || rowsHaveSellerMappings(cached?.result?.rows || []);
-  if (!normalizedFilters.forceRefresh && cached && now - cached.fetchedAtMs < ttlMs && cachedCanSatisfy) {
+  const requiresRefresh = normalizedFilters.forceRefresh || forceProductCatalogRefresh;
+  if (!requiresRefresh && cached && now - cached.fetchedAtMs < ttlMs && cachedCanSatisfy) {
     return {
       ...cached.result,
       cache: { hit: true, key: cacheKey, fetchedAt: cached.result.fetchedAt },
@@ -220,12 +221,21 @@ export async function getFbaShipmentCandidates(filters = {}, {
   if (!normalizedFilters.forceRefresh && cached && !cachedCanSatisfy) {
     console.info("[fba-shipment-candidates] bypassed cache without seller mappings", { cacheKey });
   }
+  if (forceProductCatalogRefresh && cached) {
+    console.info("[fba-shipment-candidates] bypassed cache for forced product catalog refresh", { cacheKey });
+  }
 
-  const inflight = candidateInflightRequests.get(cacheKey);
+  const inflightKey = JSON.stringify({
+    cacheKey,
+    forceRefresh: normalizedFilters.forceRefresh,
+    forceProductCatalogRefresh,
+  });
+  const inflight = candidateInflightRequests.get(inflightKey);
   if (inflight) {
     console.info("[fba-shipment-candidates] joined in-flight request", {
       cacheKey,
       forceRefresh: normalizedFilters.forceRefresh,
+      forceProductCatalogRefresh,
     });
     return inflight;
   }
@@ -238,8 +248,8 @@ export async function getFbaShipmentCandidates(filters = {}, {
     productCatalogRequired,
     forceProductCatalogRefresh,
   }).finally(() => {
-    candidateInflightRequests.delete(cacheKey);
+    candidateInflightRequests.delete(inflightKey);
   });
-  candidateInflightRequests.set(cacheKey, request);
+  candidateInflightRequests.set(inflightKey, request);
   return request;
 }

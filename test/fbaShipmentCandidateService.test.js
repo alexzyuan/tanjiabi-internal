@@ -102,6 +102,24 @@ test("getFbaShipmentCandidates forceRefresh bypasses cache", async () => {
   assert.equal(adapter.calls.length, 2);
 });
 
+test("getFbaShipmentCandidates refreshes cached rows when the product catalog is forced", async () => {
+  clearFbaShipmentCandidateCache();
+  const adapter = makeAdapter();
+  const sellers = [{ sid: 8708, seller_id: "A1SELLERUS", marketplace_id: "ATVPDKIKX0DER" }];
+  const filters = { startDate: "2026-07-01", endDate: "2026-07-11", sid: "8708" };
+
+  await getFbaShipmentCandidates(filters, { adapter, sellers });
+  const refreshed = await getFbaShipmentCandidates(filters, {
+    adapter,
+    sellers,
+    productCatalogRequired: true,
+    forceProductCatalogRefresh: true,
+  });
+
+  assert.equal(adapter.calls.length, 2);
+  assert.equal(refreshed.cache.hit, false);
+});
+
 test("getFbaShipmentCandidates joins concurrent refreshes for the same key", async () => {
   clearFbaShipmentCandidateCache();
   let releaseShipments;
