@@ -65,6 +65,7 @@ import {
   exportStoreOperatingMonthlyReportXlsx,
   getStoreOperatingMonthlyReport,
 } from "./src/services/storeOperatingMonthlyReportService.js";
+import { createStoreOperatingMonthlyReportRowVisibilityService } from "./src/services/storeOperatingMonthlyReportRowVisibilityService.js";
 import {
   deleteSupplierDetail,
   importSupplierDetails,
@@ -157,6 +158,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const config = getConfig();
 const slowMovingRiskSnapshotStore = createSlowMovingRiskSnapshotStore();
+const storeOperatingMonthlyReportRowVisibilityService = createStoreOperatingMonthlyReportRowVisibilityService();
 const sessionCookieName = "tanjia_session";
 const oauthStateCookieName = "tanjia_oauth_state";
 const sessionTtlMs = 12 * 60 * 60 * 1000;
@@ -829,6 +831,8 @@ const apiRoutes = createApiRoutes(buildApiRoutes({
   getSupplierBoardDashboard,
   getStoreOperatingMonthlyReport,
   exportStoreOperatingMonthlyReportXlsx,
+  readStoreOperatingMonthlyReportRowVisibility: storeOperatingMonthlyReportRowVisibilityService.read,
+  saveStoreOperatingMonthlyReportRowVisibility: storeOperatingMonthlyReportRowVisibilityService.save,
   runPlatformCashflowCapture,
   listSupplierDetails,
   saveSupplierDetail,

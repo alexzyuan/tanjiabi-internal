@@ -4,6 +4,7 @@ import { createFinancePurchaseRoutes } from "../routes/finance-purchase.js";
 
 const monthlyReportPath = "/api/finance/store-operating-monthly-report";
 const monthlyReportExportPath = `${monthlyReportPath}/export`;
+const monthlyReportRowVisibilityPath = `${monthlyReportPath}/row-visibility`;
 
 test("monthly report route is finance-protected and forwards repeated filter values", async () => {
   let payload;
@@ -63,4 +64,48 @@ test("monthly report export is finance-protected and writes only the same-source
     "cache-control": "no-store",
   });
   assert.deepEqual(bytes, Buffer.from("xlsx"));
+});
+
+test("monthly report row visibility routes use the authenticated account and ignore a forged body username", async () => {
+  const user = { username: "finance-a", source: "managed" };
+  const savedCalls = [];
+  const responses = [];
+  const routes = createFinancePurchaseRoutes({
+    sendJson: (_res, statusCode, payload) => responses.push({ statusCode, payload }),
+    readJsonBody: async () => ({ username: "finance-b", hiddenMetricIds: ["ad-fee"] }),
+    readStoreOperatingMonthlyReportRowVisibility: async (receivedUser) => ({
+      hiddenMetricIds: ["software-fee"],
+      updatedAt: "2026-08-06T10:00:00.000Z",
+      metrics: [],
+      receivedUser,
+    }),
+    saveStoreOperatingMonthlyReportRowVisibility: async (receivedUser, payload) => {
+      savedCalls.push({ receivedUser, payload });
+      return { hiddenMetricIds: payload.hiddenMetricIds, updatedAt: "2026-08-06T10:00:00.000Z", metrics: [] };
+    },
+  });
+  const getRoute = routes.find((route) => route.method === "GET" && route.path === monthlyReportRowVisibilityPath);
+  const putRoute = routes.find((route) => route.method === "PUT" && route.path === monthlyReportRowVisibilityPath);
+
+  assert.equal(getRoute?.auth, "finance");
+  assert.equal(putRoute?.auth, "finance");
+
+  await getRoute.handler({
+    req: { user },
+    res: {},
+    url: new URL(`http://localhost${monthlyReportRowVisibilityPath}`),
+  });
+  await putRoute.handler({
+    req: { user },
+    res: {},
+    url: new URL(`http://localhost${monthlyReportRowVisibilityPath}`),
+  });
+
+  assert.equal(responses[0].statusCode, 200);
+  assert.deepEqual(responses[0].payload.receivedUser, user);
+  assert.deepEqual(savedCalls, [{
+    receivedUser: user,
+    payload: { hiddenMetricIds: ["ad-fee"] },
+  }]);
+  assert.deepEqual(responses[1].payload.hiddenMetricIds, ["ad-fee"]);
 });

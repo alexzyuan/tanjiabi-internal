@@ -8,6 +8,8 @@ export function createFinancePurchaseRoutes(deps = {}) {
     getSupplierBoardDashboard,
     getStoreOperatingMonthlyReport,
     exportStoreOperatingMonthlyReportXlsx,
+    readStoreOperatingMonthlyReportRowVisibility,
+    saveStoreOperatingMonthlyReportRowVisibility,
     runPlatformCashflowCapture,
     listSupplierDetails,
     saveSupplierDetail,
@@ -97,6 +99,30 @@ export function createFinancePurchaseRoutes(deps = {}) {
           "cache-control": "no-store",
         });
         res.end(result.buffer);
+      },
+    },
+    {
+      method: "GET",
+      path: "/api/finance/store-operating-monthly-report/row-visibility",
+      auth: "finance",
+      handler: async ({ req, res }) => {
+        sendJson(res, 200, {
+          ok: true,
+          ...(await readStoreOperatingMonthlyReportRowVisibility(req.user)),
+        });
+      },
+    },
+    {
+      method: "PUT",
+      path: "/api/finance/store-operating-monthly-report/row-visibility",
+      auth: "finance",
+      errorStatusCode: 400,
+      handler: async ({ req, res }) => {
+        const { hiddenMetricIds } = await readJsonBody(req);
+        sendJson(res, 200, {
+          ok: true,
+          ...(await saveStoreOperatingMonthlyReportRowVisibility(req.user, { hiddenMetricIds })),
+        });
       },
     },
     {
