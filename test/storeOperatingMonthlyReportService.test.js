@@ -80,6 +80,36 @@ test("monthly report uses OrderProfit instead of seller-dimension profit", async
   assert.equal(value.meta.source, "/basicOpen/finance/mreport/OrderProfit");
 });
 
+test("monthly report applies nested store-level custom fee details to the matching subject row", async () => {
+  const adapter = fakeAdapter({
+    sellers: [{ sid: 7, name: "Store-US", country: "美国" }],
+    recordsForCall: () => [],
+    feeRecordsForCall: () => [{
+      fee: -125.9,
+      other_fee_type: "店铺保险费",
+      currency_code: "CNY",
+      details: [{
+        fee: -125.9,
+        dimension_value: "7",
+        store_infos: [{ id: 7, name: "Store-US" }],
+      }],
+    }],
+  });
+  adapter.fetchMskuOrderProfitCached = async () => ({
+    records: [{ sid: 7, totalSalesAmount: 100, currencyCode: "CNY" }],
+  });
+
+  const value = await getStoreOperatingMonthlyReport(
+    { startMonth: "2026-07", endMonth: "2026-07" },
+    { adapter, getBudgetTargetContext: async () => ({ rows: [], totals: {}, matched: false }) },
+  );
+
+  const insuranceRow = value.rows.find((row) => row.key === "store-insurance-fee");
+  assert.equal(insuranceRow.actual, 125.9);
+  assert.equal(value.meta.customFeeRecordCount, 1);
+  assert.equal(value.meta.unmappedCustomFeeCount, 0);
+});
+
 test("service rejects a 13-month range without changing either boundary", () => {
   const input = { startMonth: "2025-01", endMonth: "2026-01" };
 
