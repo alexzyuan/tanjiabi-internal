@@ -1,6 +1,22 @@
 /* Store operating monthly report page. */
+#view-store-operating-monthly-report,
+#view-store-operating-monthly-report .detail-panel,
+#view-store-operating-monthly-report .store-operating-report-table-wrap {
+  min-width: 0;
+}
+
+#view-store-operating-monthly-report .panel-head {
+  min-width: 0;
+  align-items: flex-start;
+}
+
+#view-store-operating-monthly-report .panel-head > :is(h2, p) {
+  min-width: 0;
+}
+
 #view-store-operating-monthly-report .store-operating-report-table-wrap {
   max-width: 100%;
+  width: 100%;
   overflow-x: auto;
 }
 
@@ -38,9 +54,13 @@
 }
 
 #view-store-operating-monthly-report #store-operating-report-status {
+  max-width: 100%;
+  margin: 0;
+  overflow-wrap: anywhere;
   color: var(--tj-text-muted);
   font-size: 12px;
   line-height: 1.45;
+  white-space: normal;
 }
 
 .store-operating-row-visibility-modal {

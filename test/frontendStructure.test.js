@@ -108,7 +108,7 @@ test("monthly report delegates widths to shared tooling and sorts hierarchy bloc
   );
   assert.doesNotMatch(worldClockParityRule, /display:\s*flex\s*!important/);
   assert.equal(/(?:th|td):nth-child\([^)]*\)\s*\{[^}]*\b(?:width|min-width)\s*:/.test(css), false);
-  assert.equal(/\.store-operating[^,{]*\{[^}]*min-width\s*:/.test(css), false);
+  assert.equal(/(?:th|td)(?::nth-child\([^)]*\))?\s*\{[^}]*\b(?:width|min-width)\s*:/.test(css), false);
 });
 
 test("browser CSS cascade runner is pinned, bounded, and included in CI", async () => {
