@@ -47,6 +47,33 @@ test("getPayablesDashboard returns the documented empty payload in mock mode", a
   });
 });
 
+test("payable request params use the documented closed-range field names", async () => {
+  await withTempService(async ({ buildRequestParams }) => {
+    const common = { startDate: "2026-07-01", endDate: "2026-07-31", keyword: "PO-001" };
+    const purchase = buildRequestParams(common, 0, 200, "purchase");
+    const logistics = buildRequestParams(common, 0, 200, "logistics");
+    const customFee = buildRequestParams(common, 0, 200, "customFee");
+
+    assert.equal(purchase.start_time, "2026-07-01");
+    assert.equal(purchase.end_time, "2026-07-31");
+    assert.equal(purchase.time_field, "create_time");
+    assert.equal(logistics.start_time, "2026-07-01");
+    assert.equal(logistics.end_time, "2026-07-31");
+    assert.equal(logistics.search_field_time, "create_time");
+    assert.equal(customFee.start_time, "2026-07-01");
+    assert.equal(customFee.end_time, "2026-07-31");
+    assert.equal(customFee.search_field_time, "create_time");
+
+    for (const params of [purchase, logistics, customFee]) {
+      assert.equal(params.created_start_time, undefined);
+      assert.equal(params.created_end_time, undefined);
+      assert.equal(params.start_date, undefined);
+      assert.equal(params.end_date, undefined);
+      assert.equal(params.keyword, "PO-001");
+    }
+  });
+});
+
 test("getPayablesDashboard normalizes reversed and slash-separated date filters", async () => {
   await withTempService(async ({ getPayablesDashboard }) => {
     const data = await getPayablesDashboard({

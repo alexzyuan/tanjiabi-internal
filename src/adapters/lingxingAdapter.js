@@ -1,6 +1,6 @@
 import { getConfig } from "../config/index.js";
 import { getDefaultWeekRange, listDateRange } from "../utils/dateRange.js";
-import { withLingxingExclusiveEndDate } from "../utils/lingxingDateRange.js";
+import { withLingxingDateContract } from "../utils/lingxingDateRange.js";
 import {
   readOrderProfitCache,
   readProfitReportCache,
@@ -88,8 +88,8 @@ function sleep(ms) {
   });
 }
 
-function lingxingDateRangeParams(params = {}, options = {}) {
-  return withLingxingExclusiveEndDate(params, options);
+function lingxingDateRangeParams(endpoint, params = {}) {
+  return withLingxingDateContract(endpoint, params);
 }
 
 function orderProfitTotal(payload) {
@@ -225,7 +225,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 1000,
-        ...lingxingDateRangeParams(params),
+        ...lingxingDateRangeParams("/erp/sc/data/mws/listing", params),
       },
     });
   }
@@ -257,7 +257,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 1000,
-        ...params,
+        ...lingxingDateRangeParams(targetEndpoint, params),
       },
     });
   }
@@ -285,7 +285,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 200,
-        ...lingxingDateRangeParams(params),
+        ...lingxingDateRangeParams("/pb/openapi/newad/portfolios", params),
       },
     });
   }
@@ -299,7 +299,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 1000,
-        ...params,
+        ...lingxingDateRangeParams(endpoint, params),
       },
     });
   }
@@ -315,7 +315,7 @@ export class LingxingAdapter {
         length: 1000,
         show_detail: 1,
         target_type: "keyword",
-        ...params,
+        ...lingxingDateRangeParams(endpoint, params),
       },
     });
   }
@@ -329,7 +329,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 1000,
-        ...params,
+        ...lingxingDateRangeParams("/pb/openapi/newad/spKeywords", params),
       },
     });
   }
@@ -344,7 +344,7 @@ export class LingxingAdapter {
         offset: 0,
         length: 1000,
         show_detail: 1,
-        ...params,
+        ...lingxingDateRangeParams("/pb/openapi/newad/spKeywordReports", params),
       },
     });
   }
@@ -359,7 +359,7 @@ export class LingxingAdapter {
         offset: 0,
         length: 1000,
         show_detail: 1,
-        ...params,
+        ...lingxingDateRangeParams("/pb/openapi/newad/queryWordReports", params),
       },
     });
   }
@@ -371,7 +371,7 @@ export class LingxingAdapter {
         offset: 0,
         length: 1000,
         date_type: 1,
-        ...lingxingDateRangeParams(params),
+        ...lingxingDateRangeParams("/erp/sc/data/mws/orders", params),
       },
     });
   }
@@ -381,7 +381,7 @@ export class LingxingAdapter {
     const requestParams = {
       offset: 0,
       length: 1000,
-      ...lingxingDateRangeParams(restParams),
+      ...lingxingDateRangeParams("/bd/profit/statistics/open/seller/list", restParams),
     };
     if (currencyCode && currencyCode !== "ORIGINAL") {
       requestParams.currencyCode = currencyCode;
@@ -418,9 +418,10 @@ export class LingxingAdapter {
       ...restParams,
     };
     if (currencyCode && currencyCode !== "ORIGINAL") requestParams.currencyCode = currencyCode;
+    const apiParams = lingxingDateRangeParams("/bd/profit/report/open/report/seller/list", requestParams);
     return this.signedRequest("/bd/profit/report/open/report/seller/list", {
       method: "POST",
-      params: requestParams,
+      params: apiParams,
     });
   }
 
@@ -445,7 +446,7 @@ export class LingxingAdapter {
           length: pageSize,
           date_type: "date",
           dimensions: [3],
-          ...params,
+          ...lingxingDateRangeParams("/bd/fee/management/open/feeManagement/otherFee/list", params),
           offset,
           length: pageSize,
         },
@@ -466,7 +467,7 @@ export class LingxingAdapter {
         offset: 0,
         length: 10000,
         search_date_field: "posted_date_locale",
-        ...lingxingDateRangeParams(params),
+        ...lingxingDateRangeParams("/bd/profit/report/open/report/order/list", params),
       },
     });
   }
@@ -478,9 +479,7 @@ export class LingxingAdapter {
     if (!Number.isInteger(maxRows) || maxRows < pageSize) {
       throw new Error("orderProfitMaxRows 必须是不小于 5000 的整数");
     }
-    // OrderProfit treats endDate as an exclusive boundary already. Keep the
-    // visible month end unchanged so July 1–31 does not include August 1.
-    const requestParams = { ...restParams };
+    const requestParams = lingxingDateRangeParams("/basicOpen/finance/mreport/OrderProfit", restParams);
     if (currencyCode && currencyCode !== "ORIGINAL") {
       requestParams.currencyCode = currencyCode;
     }
@@ -535,7 +534,7 @@ export class LingxingAdapter {
         offset: 0,
         length: 50,
         data_type: 2,
-        ...params,
+        ...lingxingDateRangeParams(targetEndpoint, params),
       },
     });
   }
@@ -550,7 +549,7 @@ export class LingxingAdapter {
       summary_field: "msku",
       is_recently_enum: true,
       purchase_status: 0,
-      ...lingxingDateRangeParams(restParams),
+      ...lingxingDateRangeParams("/bd/productPerformance/openApi/asinList", restParams),
     };
     if (currencyCode && currencyCode !== "ORIGINAL") {
       requestParams.currency_code = currencyCode;
@@ -572,7 +571,7 @@ export class LingxingAdapter {
         dateType: 0,
         sortField: "curReturnGoodsCount",
         sortType: "DESC",
-        ...lingxingDateRangeParams(params),
+        ...lingxingDateRangeParams("/basicOpen/salesAnalysis/returnOrder/analysisLists", params),
       },
     });
   }
@@ -586,7 +585,7 @@ export class LingxingAdapter {
         date_field: "review_time",
         sort_field: "review_date",
         sort_type: "desc",
-        ...lingxingDateRangeParams(params),
+        ...lingxingDateRangeParams("/basicOpen/openapi/service/v3/data/mws/reviews", params),
       },
     });
   }
@@ -597,7 +596,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 200,
-        ...params,
+        ...lingxingDateRangeParams("/basicOpen/customerService/voiceOfBuyer/list", params),
       },
     });
   }
@@ -611,7 +610,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 200,
-        ...params,
+        ...lingxingDateRangeParams(endpoint, params),
       },
     });
   }
@@ -626,7 +625,7 @@ export class LingxingAdapter {
         is_hide_zero_stock: "1",
         fulfillment_channel_type: "FBA",
         query_fba_storage_quantity_list: true,
-        ...params,
+        ...lingxingDateRangeParams(endpoint, params),
       },
     });
   }
@@ -637,7 +636,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 100,
-        ...lingxingDateRangeParams(params),
+        ...lingxingDateRangeParams("/erp/sc/data/fba_report/shipmentList", params),
       },
     });
   }
@@ -676,7 +675,7 @@ export class LingxingAdapter {
         offset: 0,
         length: 20,
         is_delete: 0,
-        ...params,
+        ...lingxingDateRangeParams("/erp/sc/routing/storage/shipment/getInboundShipmentList", params),
       },
     });
   }
@@ -713,7 +712,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 2100,
-        ...params,
+        ...lingxingDateRangeParams("/cost/center/openApi/fba/detail/query", params),
       },
     });
   }
@@ -724,7 +723,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 1000,
-        ...params,
+        ...lingxingDateRangeParams("/erp/sc/data/fba_report/storageFeeMonth", params),
       },
     });
   }
@@ -768,7 +767,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 200,
-        ...lingxingDateRangeParams(params),
+        ...lingxingDateRangeParams("/bd/sp/api/open/settlement/summary/list", params),
       },
     });
   }
@@ -782,7 +781,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 200,
-        ...lingxingDateRangeParams(params, { endKeys: ["end_date", "endDate", "created_end_time"] }),
+        ...lingxingDateRangeParams(endpoint, params),
       },
     });
   }
@@ -796,7 +795,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 200,
-        ...lingxingDateRangeParams(params, { endKeys: ["end_date", "endDate", "created_end_time"] }),
+        ...lingxingDateRangeParams(endpoint, params),
       },
     });
   }
@@ -812,7 +811,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 200,
-        ...lingxingDateRangeParams(params, { endKeys: ["end_date", "endDate", "created_end_time"] }),
+        ...lingxingDateRangeParams(this.config.payableOtherEndpoint, params),
       },
     });
   }
@@ -826,7 +825,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 500,
-        ...lingxingDateRangeParams(params),
+        ...lingxingDateRangeParams(endpoint, params),
       },
     });
   }
@@ -841,7 +840,7 @@ export class LingxingAdapter {
         disposition: "01",
         offset: 0,
         length: 1000,
-        ...lingxingDateRangeParams(params),
+        ...lingxingDateRangeParams("/cost/center/ods/summary/query", params),
       },
     });
   }

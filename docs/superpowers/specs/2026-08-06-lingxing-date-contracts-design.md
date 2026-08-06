@@ -22,7 +22,7 @@
 - `/bd/productPerformance/openApi/asinList`：产品表现，`start_date`/`end_date` 双闭区间。
 - `/erp/sc/routing/data/local_inventory/purchaseOrderList`：采购单，`start_date`/`end_date` 双闭区间。
 - `/cost/center/ods/summary/query`：库存分类账，日/月查询的 `startDate`/`endDate` 为闭区间。
-- `/basicOpen/finance/requestFundsPool/purchase/list`：货款预付款，请使用 `start_time`/`end_time`，闭区间。
+- `/basicOpen/finance/requestFundsPool/purchase/list`：请款池货款现结，请使用 `start_time`/`end_time`，闭区间。
 - `/basicOpen/finance/requestFundsPool/logistics/list`：物流请款，请使用 `start_time`/`end_time`，闭区间。
 - `/basicOpen/finance/requestFundsPool/customFee/list`：其他应付款，请使用 `start_time`/`end_time`，闭区间。
 - `/basicOpen/finance/mreport/OrderProfit`：订单利润-MSKU，官方文档明确 `startDate`/`endDate` 双闭区间；这是当前店铺经营月报的主数据源。

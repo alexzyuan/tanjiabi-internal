@@ -83,13 +83,17 @@ Rules for this path:
 
 月报表头直接展示店铺/国家筛选范围，不渲染“基础信息”小计；平台收入小计使用原销售额，其他一级小计按已返回的可用明细汇总。缺失明细仍标记为不可用，不得静默补零。
 
-月报实际值统一以领星 `OrderProfit` 接口 `POST /basicOpen/finance/mreport/OrderProfit` 为主来源；每个自然月传入月初和月末日期，`OrderProfit` 的 `endDate` 已由上游按右开边界处理，适配器不得再追加一天。自定义费用明细来自 `POST /bd/fee/management/open/feeManagement/otherFee/list` 的店铺维度（`dimensions=3`）；已识别类型映射到月报自定义费用科目，未识别类型必须在日志和 `meta` 中保留，不得静默丢弃。OrderProfit 字段映射固定为：`volume`→销量、`amount`→销售额、`net_amount`→净销售额、`gross_profit`→毛利润。
+月报实际值统一以领星 `OrderProfit` 接口 `POST /basicOpen/finance/mreport/OrderProfit` 为主来源；官方文档明确其 `startDate`/`endDate` 为双闭区间，每个自然月传入月初和月末日期，适配器不得追加一天。自定义费用明细来自 `POST /bd/fee/management/open/feeManagement/otherFee/list` 的店铺维度（`dimensions=3`）；已识别类型映射到月报自定义费用科目，未识别类型必须在日志和 `meta` 中保留，不得静默丢弃。OrderProfit 字段映射固定为：`volume`→销量、`amount`→销售额、`net_amount`→净销售额、`gross_profit`→毛利润。
 
 ## Lingxing Date Ranges
 
-Lingxing date-range APIs that document `start_date`/`end_date` as `左闭右开` must treat the user-facing end date as inclusive and the API `end_date` as exclusive. Frontend controls, dashboard filters, cache keys, logs, and visible metadata keep the real date selected by the user. Only backend request parameters sent to Lingxing add one day to the end boundary. For example, a visible range ending `2026-07-14` is sent to Lingxing as `end_date=2026-07-15`.
+The complete endpoint contract matrix lives in [docs/lingxing-date-rules.md](docs/lingxing-date-rules.md) and the executable registry lives in `src/utils/lingxingDateRange.js`.
 
-Use `src/utils/lingxingDateRange.js` to build or normalize Lingxing request params. Do not hand-roll date `+1` logic in feature services, adapters, routes, or frontend code.
+- Only endpoints whose official documentation explicitly says `左闭右开` convert the user-facing inclusive end date to the next API day. Current examples are `/erp/sc/data/mws/orders` and `/erp/sc/data/fba_report/shipmentList`.
+- Endpoints documented as `闭区间`/`双闭区间`, and endpoints whose documentation does not state the boundary, send the selected end date unchanged. Unknown endpoints use the same no-conversion default.
+- Frontend controls, dashboard filters, cache keys, logs, and visible metadata keep the real date selected by the user. For a visible range ending `2026-07-14`, only a registered exclusive endpoint may receive `2026-07-15`.
+- Every date-bearing adapter method must call the endpoint-aware shared helper. Do not hand-roll date `+1` logic in feature services, adapters, routes, or frontend code.
+- Payable-pool requests must use the documented `start_time`/`end_time` plus `time_field` or `search_field_time` fields; do not reintroduce `created_start_time`/`created_end_time` aliases.
 
 If a change would add a large new feature, prefer adding a focused module under `src/` for backend code and a focused feature module under `assets/js/features/` for frontend code instead of adding an unbounded block to `app.js`.
 
