@@ -72,6 +72,16 @@ const CATEGORIES = [
   ["profit", "利润"],
 ];
 
+export function listStoreOperatingMonthlyReportMetricDefinitions() {
+  const categoryNames = new Map(CATEGORIES);
+  return METRIC_DEFINITIONS.map(({ key, name, category }) => Object.freeze({
+    key,
+    name,
+    category,
+    categoryName: categoryNames.get(category) || category,
+  }));
+}
+
 const OTHER_FEE_TYPE_METRICS = [
   ["办公费用-租金", "office-rent"],
   ["租金", "office-rent"],
