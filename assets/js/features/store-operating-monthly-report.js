@@ -1,6 +1,5 @@
 const MONTH_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])$/;
 const REPORT_FIXED_COLUMN_WIDTHS = Object.freeze({
-  category: 148,
   name: 176,
   actual: 160,
   share: 104,
@@ -338,12 +337,11 @@ export function createStoreOperatingMonthlyReportFeature({
     const groups = reportColumnGroups(data, filters);
     head.innerHTML = `
       <tr>
-        <th colspan="2" data-column-sortable="false">店铺信息</th>
+        <th colspan="1" data-column-sortable="false">店铺信息</th>
         ${groups.map((group) => `<th colspan="4" data-column-sortable="false" data-report-group-index="${group.index}">${escapeHtml(group.label)}</th>`).join("")}
       </tr>
       <tr>
-        <th data-column-key="category" data-column-width="${REPORT_FIXED_COLUMN_WIDTHS.category}" data-column-sortable="false" data-column-profile="name">上级</th>
-        <th data-column-key="name" data-column-width="${REPORT_FIXED_COLUMN_WIDTHS.name}" data-column-sortable="false" data-column-profile="name">名称</th>
+        <th data-column-key="name" data-column-width="${REPORT_FIXED_COLUMN_WIDTHS.name}" data-column-sortable="false" data-column-profile="name">科目</th>
         ${groups.flatMap((group) => [
           ["actual", "实际完成值"],
           ["share", "占比"],
@@ -515,7 +513,7 @@ export function createStoreOperatingMonthlyReportFeature({
     const body = query("#store-operating-report-body");
     if (!body) return;
     const groups = reportColumnGroups(data, filters);
-    const columnCount = 2 + groups.length * 4;
+    const columnCount = 1 + groups.length * 4;
     if (!groups.length) {
       body.innerHTML = `<tr><td colspan="${columnCount}">当前筛选范围暂无经营数据。</td></tr>`;
       return;
@@ -525,28 +523,38 @@ export function createStoreOperatingMonthlyReportFeature({
     });
     const rowMaps = groups.map(rowMapByKey);
     const baseRows = groups[0].rows;
-    body.innerHTML = reportBlocks(baseRows).flatMap(({ parent, rows, rowsByKey }) => {
+    body.innerHTML = reportBlocks(baseRows).flatMap(({ rows, rowsByKey }) => {
       const categoryByDetail = new Map();
       rows.filter((row) => Number(row.level) === 1).forEach((category) => {
         (Array.isArray(category.children) ? category.children : []).forEach((detailKey) => {
           categoryByDetail.set(String(detailKey), String(category.key || ""));
         });
       });
-      const visibleRows = rows.filter((row) => (
-        Number(row.level) !== 2
-        || (
-          isVisibleReportDetail(row)
-          && (
-            !categoryByDetail.has(String(row.key || ""))
-            || expandedReportCategories.has(categoryByDetail.get(String(row.key || "")))
-          )
-        )
-      ));
-      const parentRowSpan = Math.max(1, visibleRows.length);
-      return visibleRows.map((row, rowIndex) => {
+      const displayRows = rows.flatMap((row) => {
+        const key = String(row.key || "");
+        if (key === "profit") {
+          const grossProfit = rowsByKey.get("gross-profit");
+          return grossProfit ? [grossProfit] : [];
+        }
+        if (["gross-profit", "gross-rate", "net-gross-rate"].includes(key)) return [];
+        return [row];
+      });
+      const visibleRows = displayRows.filter((row) => {
+        const key = String(row.key || "");
+        if (key === "gross-profit") return isVisibleReportDetail(row);
+        return Number(row.level) !== 2
+          || (
+            isVisibleReportDetail(row)
+            && (
+              !categoryByDetail.has(key)
+              || expandedReportCategories.has(categoryByDetail.get(key))
+            )
+          );
+      });
+      return visibleRows.map((row) => {
         const rowIdentity = reportRowIdentity(row, baseRows.indexOf(row));
         const categoryKey = Number(row.level) === 2 ? categoryByDetail.get(String(row.key || "")) || "" : "";
-        const isExpandableCategory = reportCategoryHasDetails(row, rowsByKey);
+        const isExpandableCategory = String(row.key || "") !== "gross-profit" && reportCategoryHasDetails(row, rowsByKey);
         const isExpanded = expandedReportCategories.has(String(row.key || ""));
         const rowName = Number(row.level) === 1 && !String(row.name || "").endsWith("小计")
           ? `${row.name || "—"}小计`
@@ -570,12 +578,8 @@ export function createStoreOperatingMonthlyReportFeature({
             ["achievement", groupRow?.achievement],
           ].map(([metric, value]) => `<td data-report-group-index="${group.index}" data-report-metric="${metric}">${escapeHtml(formatReportCell(metric, value, groupRow))}</td>`);
         }).join("");
-        const parentCell = rowIndex === 0
-          ? `<td class="store-operating-report-parent" rowspan="${parentRowSpan}">${escapeHtml(parent.category || parent.name || "—")}</td>`
-          : "";
         return `
           <tr class="${resultRow ? "store-operating-report-result-row" : ""}" data-report-row-key="${escapeHtml(row.key || "")}" data-report-row-level="${Number(row.level || 0)}" data-report-parent-category="${escapeHtml(categoryKey)}">
-            ${parentCell}
             <td class="${Number(row.level) === 2 ? "store-operating-report-detail" : "store-operating-report-subtotal"}">${nameCell}</td>
             ${metricCells}
           </tr>
@@ -614,8 +618,8 @@ export function createStoreOperatingMonthlyReportFeature({
     reportSortState.key = key;
     const dynamicMatch = String(key).match(/^group-(\d+)-(actual|share|budget|achievement)$/);
     const columnIndex = dynamicMatch
-      ? 2 + Number(dynamicMatch[1]) * 4 + ["actual", "share", "budget", "achievement"].indexOf(dynamicMatch[2])
-      : { category: 0, name: 1, actual: 2, share: 3, budget: 4, achievement: 5 }[key];
+      ? 1 + Number(dynamicMatch[1]) * 4 + ["actual", "share", "budget", "achievement"].indexOf(dynamicMatch[2])
+      : { name: 0, actual: 1, share: 2, budget: 3, achievement: 4 }[key];
     if (columnIndex === undefined) return;
     const rows = Array.from(body.rows);
     const categoryRows = rows.filter((row) => row.dataset.reportRowLevel === "1");

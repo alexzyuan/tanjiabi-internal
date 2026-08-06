@@ -17,7 +17,9 @@
 #view-store-operating-monthly-report .store-operating-report-table-wrap {
   max-width: 100%;
   width: 100%;
-  overflow-x: auto;
+  position: relative;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 #view-store-operating-monthly-report #store-operating-report-table th {
@@ -25,6 +27,18 @@
   white-space: nowrap;
   background: var(--tj-action-blue);
   color: var(--tj-text-inverse);
+}
+
+#view-store-operating-monthly-report #store-operating-report-table thead tr:first-child th {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+}
+
+#view-store-operating-monthly-report #store-operating-report-table thead tr:nth-child(2) th {
+  position: sticky;
+  top: 38px;
+  z-index: 3;
 }
 
 .store-operating-report-result-row > td { background: var(--tj-tone-caution-row-bg); }

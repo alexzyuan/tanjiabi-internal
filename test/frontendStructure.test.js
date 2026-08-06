@@ -26,9 +26,9 @@ test("store operating monthly report is a finance-owned feature with shared cont
   assert.match(indexSource, /class="table-wrap data-table-wrap--detail store-operating-report-table-wrap"/);
   assert.match(indexSource, /class="data-table data-table--detail"[^>]*id="store-operating-report-table"/);
   assert.match(indexSource, /data-table-fixed-width="true"/);
-  assert.match(indexSource, /<th colspan="2" data-column-sortable="false">店铺信息<\/th>/);
-  assert.match(indexSource, /<th data-column-key="category" data-column-width="148" data-column-sortable="false"[^>]*>上级<\/th>/);
-  assert.match(indexSource, /<th data-column-key="name" data-column-width="176" data-column-sortable="false"[^>]*>名称<\/th>/);
+  assert.match(indexSource, /<th colspan="1" data-column-sortable="false">店铺信息<\/th>/);
+  assert.doesNotMatch(indexSource, /data-column-key="category"[^>]*>上级<\/th>/);
+  assert.match(indexSource, /<th data-column-key="name" data-column-width="176" data-column-sortable="false"[^>]*>科目<\/th>/);
   assert.match(indexSource, /<th data-column-key="group-0-actual" data-column-width="160" data-column-sortable="false" data-column-kind="number" data-column-profile="money-rate">实际完成值<\/th>/);
   assert.match(indexSource, /<th data-column-key="group-0-budget" data-column-width="160" data-column-sortable="false" data-column-kind="number" data-column-profile="money-rate">预算值<\/th>/);
 

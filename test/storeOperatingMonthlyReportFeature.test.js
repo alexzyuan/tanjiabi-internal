@@ -301,7 +301,7 @@ test("successful rendering attributes absent custom expense subjects to the sell
   assert.doesNotMatch(elements["#store-operating-report-status"].textContent, /未配置独立数据源/);
 });
 
-test("monthly report uses an 上级 column and collapses subtotal details by default", async () => {
+test("monthly report uses a single 科目 column and collapses non-profit subtotal details by default", async () => {
   const subtotal = {
     key: "revenue",
     category: "销售收入",
@@ -321,8 +321,8 @@ test("monthly report uses an 上级 column and collapses subtotal details by def
 
   await feature.loadStoreOperatingMonthlyReport();
 
-  assert.match(elements["#store-operating-report-head"].innerHTML, /data-column-key="category"[^>]*>上级<\/th>/);
-  assert.match(elements["#store-operating-report-head"].innerHTML, /data-column-key="name"[^>]*>名称<\/th>/);
+  assert.doesNotMatch(elements["#store-operating-report-head"].innerHTML, />上级<\/th>/);
+  assert.match(elements["#store-operating-report-head"].innerHTML, /data-column-key="name"[^>]*>科目<\/th>/);
   assert.match(elements["#store-operating-report-body"].innerHTML, /data-report-category-toggle="revenue"[^>]*aria-expanded="false"/);
   assert.match(elements["#store-operating-report-body"].innerHTML, /销售收入小计/);
   assert.doesNotMatch(elements["#store-operating-report-body"].innerHTML, /基础信息小计/);
@@ -484,7 +484,7 @@ test("hierarchy renders collapsed subtotals and expands their detail rows", asyn
   assert.match(elements["#store-operating-report-body"].innerHTML, /data-report-category-toggle="sales-profit-category"[^>]*aria-expanded="true"/);
 });
 
-test("monthly report renders the approved profit rows as highlighted results and formats rate actuals", async () => {
+test("monthly report renders毛利润 directly for the profit section", async () => {
   const rows = [
     { key: "overview", category: "总概", name: "总概", level: 0, children: ["platform-income", "profit"] },
     { key: "platform-income", category: "平台收入", name: "平台收入", level: 1, actual: 100, children: ["net-sales"], available: true },
@@ -500,17 +500,13 @@ test("monthly report renders the approved profit rows as highlighted results and
   const body = elements["#store-operating-report-body"].innerHTML;
 
   assert.match(body, /平台收入小计/);
-  assert.match(body, /利润小计/);
-  assert.doesNotMatch(body, /净销售额/);
-  assert.doesNotMatch(body, /毛利润/);
+  assert.doesNotMatch(body, /利润小计/);
+  assert.match(body, /class="store-operating-report-result-row"[^>]*data-report-row-key="gross-profit"/);
+  assert.match(body, /毛利润/);
+  assert.match(body, /data-report-row-key="gross-profit"[\s\S]*?data-report-metric="share">/);
+  assert.doesNotMatch(body, /data-report-category-toggle="profit"/);
   assert.doesNotMatch(body, /毛利率/);
-
-  feature.toggleReportCategory({ target: { closest: () => ({ dataset: { reportCategoryToggle: "profit" } }) } });
-  const expandedBody = elements["#store-operating-report-body"].innerHTML;
-  assert.match(expandedBody, /class="store-operating-report-result-row"[^>]*data-report-row-key="gross-profit"/);
-  assert.match(expandedBody, /class="store-operating-report-result-row"[^>]*data-report-row-key="gross-rate"/);
-  assert.match(expandedBody, /毛利率/);
-  assert.match(expandedBody, /data-report-row-key="gross-rate"[\s\S]*?data-report-metric="actual">80\.00%/);
+  assert.doesNotMatch(body, /净毛利率/);
 });
 
 test("export surfaces structured server diagnostics", async () => {
@@ -628,7 +624,7 @@ test("failed rendering refreshes the managed table after replacing the header", 
   await feature.loadStoreOperatingMonthlyReport();
 
   assert.deepEqual(refreshes, [elements["#store-operating-report-table"]]);
-  assert.match(elements["#store-operating-report-head"].innerHTML, /data-column-key="category"/);
+  assert.match(elements["#store-operating-report-head"].innerHTML, /data-column-key="name"[^>]*>科目<\/th>/);
   assert.match(elements["#store-operating-report-body"].innerHTML, /加载失败：报告服务不可用/);
 });
 
