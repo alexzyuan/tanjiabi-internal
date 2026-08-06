@@ -356,6 +356,43 @@ test("custom fee records populate mapped store-level custom expense rows and exp
   assert.deepEqual(result.unmapped, [{ sid: 7, storeName: "", type: "未配置科目", reason: "未识别费用类型" }]);
 });
 
+test("custom fee detail rows map each allocated store amount instead of the top-level total", () => {
+  const result = mergeStoreOperatingCustomFeeRecords(
+    [
+      { sid: 17305, storeName: "tanjia-eu-UK", country: "英国" },
+      { sid: 17307, storeName: "tanjia-eu-DE", country: "德国" },
+    ],
+    [{
+      fee: -1684.23,
+      other_fee_type: "信用卡广告费",
+      currency_code: "CNY",
+      details: [
+        {
+          fee: -115.46,
+          dimension_value: "17305",
+          store_infos: [{ id: 17305, name: "tanjia-eu-UK" }],
+        },
+        {
+          fee: -1568.77,
+          store_infos: [{ id: 17307, name: "tanjia-eu-DE" }],
+        },
+      ],
+    }],
+    [
+      { sid: 17305, name: "tanjia-eu-UK", country: "英国" },
+      { sid: 17307, name: "tanjia-eu-DE", country: "德国" },
+    ],
+  );
+
+  assert.equal(result.records.find((record) => record.sid === 17305).creditCardAdFee, -115.46);
+  assert.equal(result.records.find((record) => record.sid === 17307).creditCardAdFee, -1568.77);
+  assert.deepEqual(result.applied.map(({ sid, amount }) => ({ sid, amount })), [
+    { sid: 17305, amount: -115.46 },
+    { sid: 17307, amount: -1568.77 },
+  ]);
+  assert.deepEqual(result.unmapped, []);
+});
+
 test("seller profit custom order fee principal and commission are combined as offsite promotion expense", () => {
   const result = buildStoreOperatingReportRows({
     records: [{ totalSalesAmount: 100, customOrderFeePrincipal: -8, customOrderFeeCommission: -2 }],

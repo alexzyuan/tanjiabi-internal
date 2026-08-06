@@ -159,6 +159,42 @@ function feeAmount(record) {
   return values.reduce((sum, value) => sum + toFiniteNumber(value, "费用明细 details.fee"), 0);
 }
 
+function expandStoreOperatingOtherFeeRecords(feeRecords) {
+  return feeRecords.flatMap((feeRecord) => {
+    if (!Array.isArray(feeRecord?.details) || feeRecord.details.length === 0) return [feeRecord];
+    const { details, ...baseRecord } = feeRecord;
+    return details.map((detail) => {
+      const storeInfo = Array.isArray(detail?.store_infos) ? detail.store_infos[0] : null;
+      const detailSid = readValue(detail, [
+        "sid",
+        "seller_id",
+        "sellerId",
+        "store_id",
+        "storeId",
+        "dimension_value",
+      ]);
+      const sid = isPresent(detailSid)
+        ? detailSid
+        : readValue(storeInfo, ["id", "sid", "seller_id", "sellerId"]);
+      const storeName = readText(detail, [
+        "storeName",
+        "store_name",
+        "sellerName",
+        "seller_name",
+      ]) || readText(storeInfo, ["name", "storeName", "store_name", "sellerName", "seller_name"]);
+      const amount = readValue(detail, ["fee", "amount", "other_fee", "otherFee"]);
+      return {
+        ...baseRecord,
+        ...detail,
+        details: undefined,
+        sid,
+        storeName,
+        fee: amount,
+      };
+    });
+  });
+}
+
 export function mergeStoreOperatingCustomFeeRecords(records = [], feeRecords = [], sellers = []) {
   if (!Array.isArray(records)) throw new Error("店铺利润 records 必须是数组");
   if (!Array.isArray(feeRecords)) throw new Error("自定义费用 records 必须是数组");
@@ -169,7 +205,7 @@ export function mergeStoreOperatingCustomFeeRecords(records = [], feeRecords = [
     .filter(([sid]) => Number.isFinite(sid) && sid > 0));
   const unmapped = [];
   const applied = [];
-  feeRecords.forEach((feeRecord) => {
+  expandStoreOperatingOtherFeeRecords(feeRecords).forEach((feeRecord) => {
     const sid = Number(readValue(feeRecord, ["sid", "seller_id", "sellerId", "store_id", "storeId"]));
     const storeName = readText(feeRecord, ["storeName", "store_name", "sellerName", "seller_name"]);
     const type = readText(feeRecord, ["other_fee_type", "otherFeeType", "fee_type", "feeType", "other_fee_type_name", "otherFeeTypeName"]);
