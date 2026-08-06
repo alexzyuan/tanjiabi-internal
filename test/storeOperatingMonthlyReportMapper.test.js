@@ -401,6 +401,19 @@ test("seller profit custom order fee principal and commission are combined as of
   assert.equal(result.rows.find((row) => row.key === "offsite-ad-spend").actual, 10);
 });
 
+test("sparse store-level custom fee fields are summed across order-profit rows", () => {
+  const result = buildStoreOperatingReportRows({
+    records: [
+      { sid: 1, totalSalesAmount: 100 },
+      { sid: 2, totalSalesAmount: 100, creditCardAdFee: -10 },
+    ],
+    currencyCode: "CNY",
+  });
+
+  assert.equal(result.rows.find((row) => row.key === "credit-card-ad-fee").actual, 10);
+  assert.equal(result.rows.find((row) => row.key === "custom-expense").actual, 10);
+});
+
 test("gross profit is unavailable when a required hierarchy dependency is unavailable", () => {
   const result = buildStoreOperatingReportRows({
     records: [{ netSalesAmount: 85 }],
