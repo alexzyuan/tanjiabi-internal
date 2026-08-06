@@ -305,6 +305,24 @@ function sumCompositeFields(records, fieldGroups, magnitude = false, label = "�
   }, 0), 0);
 }
 
+function weightedRate(records, rateFields, weightFields, label) {
+  if (records.length === 0) return null;
+  const values = records.map((record) => ({
+    rate: readValue(record, rateFields),
+    weight: readValue(record, weightFields),
+  }));
+  if (values.some(({ rate, weight }) => !isPresent(rate) || !isPresent(weight))) return null;
+  const { weightedTotal, weightTotal } = values.reduce((totals, { rate, weight }) => {
+    const numericRate = toFiniteNumber(rate, `订单利润字段 ${label}`);
+    const numericWeight = toFiniteNumber(weight, `订单利润字段 ${weightFields[0]}`);
+    return {
+      weightedTotal: totals.weightedTotal + numericRate * numericWeight,
+      weightTotal: totals.weightTotal + numericWeight,
+    };
+  }, { weightedTotal: 0, weightTotal: 0 });
+  return weightTotal === 0 ? null : weightedTotal / weightTotal;
+}
+
 function sumReturnCosts(records) {
   if (records.length === 0) return null;
   const values = records.map((record) => {
@@ -478,7 +496,13 @@ export function buildStoreOperatingReportRows({ records, budgetByMetric = {}, cu
   actualByKey.set("return-rate", ratioFromKeys(actualByKey, "return-volume", "sales-volume"));
   actualByKey.set("refund-rate", ratioFromKeys(actualByKey, "refund-volume", "sales-volume"));
   actualByKey.set("gross-rate", ratioFromKeys(actualByKey, "gross-profit", "sales-income"));
-  actualByKey.set("net-gross-rate", ratioFromKeys(actualByKey, "sales-profit", "sales-income"));
+  const directNetGrossRate = weightedRate(
+    records,
+    ["netGrossMargin", "net_gross_margin"],
+    ["totalSalesAmount", "salesAmount", "sales_amount", "amount"],
+    "netGrossMargin",
+  );
+  actualByKey.set("net-gross-rate", directNetGrossRate ?? ratioFromKeys(actualByKey, "sales-profit", "sales-income"));
 
   const metricsByCategory = new Map(CATEGORIES.map(([key]) => [key, []]));
   const categoryNames = new Map(CATEGORIES);

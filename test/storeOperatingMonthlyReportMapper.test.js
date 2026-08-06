@@ -222,6 +222,18 @@ test("direct OrderProfit profit fields populate profit subtotals", () => {
   assert.equal(row("profit").actual, 25);
 });
 
+test("OrderProfit net gross margin is aggregated by sales amount", () => {
+  const result = buildStoreOperatingReportRows({
+    records: [
+      { totalSalesAmount: 100, net_gross_margin: 0.1 },
+      { totalSalesAmount: 900, net_gross_margin: 0.2 },
+    ],
+    currencyCode: "CNY",
+  });
+
+  assert.equal(result.rows.find((row) => row.key === "net-gross-rate").actual, 0.19);
+});
+
 test("monthly report uses the exact Lingxing subject and detail order from the approved field list", () => {
   const result = buildStoreOperatingReportRows({
     records: [{
