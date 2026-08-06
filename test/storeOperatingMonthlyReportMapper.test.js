@@ -180,7 +180,7 @@ test("monthly report exposes the five Lingxing-aligned top-level projects", () =
     "利润",
   ]);
   const childrenByName = Object.fromEntries(levelOne.map((row) => [row.name, row.children]));
-  assert.deepEqual(childrenByName["平台收入"], ["sales-volume", "average-daily-sales", "multi-channel-sales-volume", "ads-sales-amount", "ads-volume", "sales-income", "net-sales", "buyer-shipping-fee", "sales-discount", "refunds", "return-volume", "refund-volume", "return-rate", "refund-rate", "fba-inventory-compensation", "other-income"]);
+  assert.deepEqual(childrenByName["平台收入"], ["sales-volume", "average-daily-sales", "multi-channel-sales-volume", "ads-sales-amount", "ads-volume", "sales-income", "net-sales", "buyer-shipping-fee", "sales-discount", "refunds", "return-volume", "refund-volume", "fba-inventory-compensation", "other-income"]);
   assert.deepEqual(childrenByName["平台支出"], ["platform-fee", "fba-delivery-fee", "other-order-fee", "storage-fee", "ad-fee", "ad-spend", "fba-international-shipping-fee", "inbound-placement-fee", "adjustment-fee", "other-platform-fee"]);
   assert.deepEqual(childrenByName["商品成本支出"], ["purchase-cost", "first-leg-cost", "other-product-cost"]);
   assert.deepEqual(childrenByName["自定义费用"], ["offsite-ad-spend", "office-expense", "office-rent", "certification-testing-fee", "office-supplies", "store-insurance-fee", "software-fee", "product-appearance-design-fee", "product-graphic-design-fee", "service-provider-fee", "office-courier-fee", "office-utility-fee", "credit-card-ad-fee", "office-telecom-fee", "sample-fee", "test-order-commission", "travel-expense", "employee-welfare-fee"]);
@@ -265,8 +265,6 @@ test("monthly report uses the exact Lingxing subject and detail order from the a
     "退款金额",
     "退货量",
     "退款量",
-    "退货率",
-    "退款率",
     "FBA库存赔偿",
     "其它收入",
     "平台支出",
@@ -309,6 +307,26 @@ test("monthly report uses the exact Lingxing subject and detail order from the a
     "净毛利率",
   ]);
   assert.equal(result.rows.some((row) => row.key === "store-country"), false);
+});
+
+test("monthly report maps the OrderProfit income fields returned by Lingxing", () => {
+  const result = buildStoreOperatingReportRows({
+    records: [{
+      amount: 100,
+      shipping_cost: "12.5",
+      inventory_credit: "7.25",
+      total_other_granted: "3.75",
+    }],
+    currencyCode: "CNY",
+  });
+  const row = (key) => result.rows.find((item) => item.key === key);
+
+  assert.equal(row("buyer-shipping-fee").actual, 12.5);
+  assert.equal(row("fba-inventory-compensation").actual, 7.25);
+  assert.equal(row("other-income").actual, 3.75);
+  assert.equal(row("buyer-shipping-fee").available, true);
+  assert.equal(row("fba-inventory-compensation").available, true);
+  assert.equal(row("other-income").available, true);
 });
 
 test("unavailable metrics expose their missing OrderProfit source fields", () => {

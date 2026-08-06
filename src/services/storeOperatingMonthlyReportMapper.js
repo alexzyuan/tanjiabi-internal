@@ -6,15 +6,13 @@ const METRIC_DEFINITIONS = [
   { key: "ads-volume", name: "广告销量", fields: ["totalAdsSalesQuantity", "adsSalesQuantity", "ad_volume", "adVolume", "ad_qty"], category: "platform-income", magnitude: true },
   { key: "sales-income", name: "销售额", fields: ["totalSalesAmount", "salesAmount", "sales_amount", "amount"], category: "platform-income" },
   { key: "net-sales", name: "净销售额", fields: ["netSalesAmount", "net_sales_amount", "net_amount"], category: "platform-income", derived: true },
-  { key: "buyer-shipping-fee", name: "买家运费", fields: ["buyerShippingFee", "buyer_shipping_fee", "shippingFee", "shipping_fee", "buyerShipping"], category: "platform-income", magnitude: true },
+  { key: "buyer-shipping-fee", name: "买家运费", fields: ["buyerShippingFee", "buyer_shipping_fee", "shippingFee", "shipping_fee", "buyerShipping", "shipping_cost"], category: "platform-income", magnitude: true },
   { key: "sales-discount", name: "促销折扣", fields: ["promotionDiscount", "promotion_discount", "discount_amount"], category: "platform-income", magnitude: true },
   { key: "refunds", name: "退款金额", fields: ["totalSalesRefunds", "refunds", "refund_amount", "refundAmount"], category: "platform-income", magnitude: true },
   { key: "return-volume", name: "退货量", fields: ["returnQuantity", "return_quantity", "return_qty", "returnQty"], category: "platform-income", magnitude: true },
   { key: "refund-volume", name: "退款量", fields: ["refundsQuantity", "refund_quantity", "refund_qty", "refundQty"], category: "platform-income", magnitude: true },
-  { key: "return-rate", name: "退货率", fields: ["returnRate", "return_rate"], category: "platform-income", derived: true, valueType: "rate" },
-  { key: "refund-rate", name: "退款率", fields: ["refundRate", "refund_rate"], category: "platform-income", derived: true, valueType: "rate" },
-  { key: "fba-inventory-compensation", name: "FBA库存赔偿", fields: ["fbaInventoryCompensation", "fba_inventory_compensation", "inventoryCompensation", "inventory_compensation"], category: "platform-income", magnitude: true },
-  { key: "other-income", name: "其它收入", fields: ["otherIncome", "other_income", "otherIncomeAmount", "other_income_amount"], category: "platform-income" },
+  { key: "fba-inventory-compensation", name: "FBA库存赔偿", fields: ["fbaInventoryCompensation", "fba_inventory_compensation", "inventoryCompensation", "inventory_compensation", "inventory_credit"], category: "platform-income", magnitude: true },
+  { key: "other-income", name: "其它收入", fields: ["otherIncome", "other_income", "otherIncomeAmount", "other_income_amount", "total_other_granted"], category: "platform-income" },
 
   { key: "platform-fee", name: "平台费", fields: ["platformFee", "platform_fee", "selling_fee"], category: "platform-expense", magnitude: true },
   { key: "fba-delivery-fee", name: "FBA发货费", fields: ["fbaDeliveryFee", "fulfillment_fee", "fba_fulfillment_fee"], category: "platform-expense", magnitude: true },
@@ -28,7 +26,7 @@ const METRIC_DEFINITIONS = [
   { key: "other-platform-fee", name: "平台其它费", fields: ["totalPlatformOtherFee", "total_platform_other_fee", "sellingOtherFee", "selling_other_fee"], category: "platform-expense", magnitude: true },
 
   { key: "purchase-cost", name: "采购成本", fields: ["purchaseCost", "purchase_costs", "purchase_cost", "goods_cost"], category: "product-cost-expense", magnitude: true },
-  { key: "first-leg-cost", name: "头程成本", fields: ["firstLegCost", "logistics_costs", "shipping_cost"], category: "product-cost-expense", magnitude: true },
+  { key: "first-leg-cost", name: "头程成本", fields: ["firstLegCost", "logistics_costs"], category: "product-cost-expense", magnitude: true },
   { key: "other-product-cost", name: "其它成本", fields: ["otherProductCost", "other_product_cost", "otherCost", "other_cost"], category: "product-cost-expense", magnitude: true },
 
   { key: "offsite-ad-spend", name: "站外推广费", fields: ["offsiteAdSpend", "offsite_ad_spend", "offsiteAdvertisingFee", "offsite_advertising_fee", "customOrderFeePrincipal", "customOrderFeeCommission", "custom_order_fee_principal", "custom_order_fee_commission"], category: "custom-expense", magnitude: true },
@@ -123,8 +121,6 @@ const DIRECT_SALES_PROFIT_FIELDS = ["profit", "profitAmount", "profit_amount", "
 const DERIVED_METRIC_DEPENDENCIES = new Map([
   ["average-daily-sales", ["sales-volume"]],
   ["net-sales", ["sales-income", "sales-discount", "refunds"]],
-  ["return-rate", ["return-volume", "sales-volume"]],
-  ["refund-rate", ["refund-volume", "sales-volume"]],
   ["gross-profit", ["net-sales", "net-sales-cost"]],
   ["gross-rate", ["gross-profit", "sales-income"]],
   ["net-gross-rate", ["sales-profit", "sales-income"]],
@@ -503,8 +499,6 @@ export function buildStoreOperatingReportRows({ records, budgetByMetric = {}, cu
   );
   const directSalesProfit = sumPresent(records, DIRECT_SALES_PROFIT_FIELDS, false, "profit");
   actualByKey.set("sales-profit", directSalesProfit ?? legacySalesProfit ?? newSalesProfit);
-  actualByKey.set("return-rate", ratioFromKeys(actualByKey, "return-volume", "sales-volume"));
-  actualByKey.set("refund-rate", ratioFromKeys(actualByKey, "refund-volume", "sales-volume"));
   actualByKey.set("gross-rate", ratioFromKeys(actualByKey, "gross-profit", "sales-income"));
   const directNetGrossRate = weightedRate(
     records,
