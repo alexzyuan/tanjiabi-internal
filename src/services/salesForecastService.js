@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readFile, readdir, rename, unlink, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readdir, unlink } from "node:fs/promises";
 import path from "node:path";
 import { filterCoreSellers, getLingxingAdapter } from "../adapters/lingxingAdapter.js";
 import { getInventoryProvisionDashboard } from "./inventoryProvisionService.js";
@@ -6,6 +6,7 @@ import { getSalesStatMonthlyQuantityRows } from "./supplierBoardService.js";
 import { getSharedSellers } from "./sharedDataService.js";
 import { getSyncState } from "./syncService.js";
 import { listFilterValues, matchesAnyFilter } from "../utils/filterUtils.js";
+import { readJson, writeJsonAtomic } from "../utils/jsonStore.js";
 
 const COUNTRY_OPTIONS = ["美国", "加拿大", "澳洲"];
 const MONTH_DAYS_2026 = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
@@ -62,20 +63,11 @@ function nowText() {
 }
 
 async function readJsonFile(file, fallback) {
-  try {
-    const content = await readFile(file, "utf8");
-    return JSON.parse(content);
-  } catch {
-    return fallback;
-  }
+  return readJson(file, fallback);
 }
 
 async function writeJsonFile(file, payload) {
-  await mkdir(path.dirname(file), { recursive: true });
-  const tempFile = `${file}.${process.pid}.${Date.now()}.tmp`;
-  await writeFile(tempFile, JSON.stringify(payload, null, 2), "utf8");
-  await rename(tempFile, file);
-  return payload;
+  return writeJsonAtomic(file, payload);
 }
 
 function normalizeManualDailyValues(values) {
@@ -525,6 +517,10 @@ function recalculateSalesForecastRowFromManual(row, manualRows = {}, now = new D
   const totalStock = toNumber(row.fbaAvailable) + toNumber(row.fbaTransfer) + toNumber(row.fbaReserved) + toNumber(row.awd);
   const salesForecast = Math.round(monthSalesForecast(monthlySales, now));
   const peakSeasonForecast = peakSeasonSalesForecast(monthlySales, now);
+  const availableDays = fbaAvailableDays(totalStock, monthlyDailySales, now);
+  const outOfStockDate = availableDays >= 999 ? "不缺货" : formatDateValue(addDays(now, availableDays));
+  const shippingDate = outOfStockDate === "不缺货" ? "无需发货" : formatDateValue(addDays(new Date(`${outOfStockDate}T00:00:00`), -45));
+  const purchaseDate = shippingDate === "无需发货" ? "无需采购" : formatDateValue(addDays(new Date(`${shippingDate}T00:00:00`), -30));
   return {
     ...row,
     manualKey: rowKey,
@@ -533,7 +529,12 @@ function recalculateSalesForecastRowFromManual(row, manualRows = {}, now = new D
     totalStock,
     salesForecast,
     peakSeasonForecast,
+    fbaAvailableDays: Number(availableDays.toFixed(1)),
+    outOfStockDate,
+    shippingDate,
+    purchaseDate,
     replenishmentSuggestion: Math.round(salesForecast - totalStock - toNumber(row.fbaInbound)),
+    daysRemainingInMonth: daysInMonthOffset(now, 0) - now.getDate(),
   };
 }
 
@@ -597,12 +598,7 @@ function buildSalesForecastExportRows(rows = [], { manualRows = {}, costLookup =
     const replenishmentEstimate = Math.round(toNumber(row.peakSeasonForecast) - toNumber(row.totalStock) - toNumber(row.fbaInbound));
     const cost = salesForecastCostForRow(row, costLookup);
     return {
-      storeName: row.storeName || "",
-      country: row.country || "",
-      productName: row.productName || "",
-      msku: row.msku || "",
-      totalStock: toNumber(row.totalStock),
-      peakSeasonForecast: toNumber(row.peakSeasonForecast),
+      ...row,
       replenishmentEstimate,
       goodsValue: Math.round(replenishmentEstimate * toNumber(cost.landedUnitCost) * 100) / 100,
     };
@@ -1317,24 +1313,13 @@ async function refreshSalesForecastDashboardCache() {
     .sort((a, b) => a.storeName.localeCompare(b.storeName, "zh-CN") || a.country.localeCompare(b.country, "zh-CN") || productOrderIndex(a) - productOrderIndex(b) || a.msku.localeCompare(b.msku, "zh-CN"));
   const { rows: listingRows } = await enrichRowsFromListingCache(normalizedRows);
   let rows = listingRows;
-  let fbaInventorySyncStatus = "";
-  try {
-    const fbaInventoryResult = await enrichRowsWithFbaInventory(adapter, rows, selectedSids);
-    rows = fbaInventoryResult.rows;
-    fbaInventorySyncStatus = `FBA库存精确匹配 ${fbaInventoryResult.matchedCount}/${fbaInventoryResult.inventoryCount} 条`;
-  } catch (error) {
-    fbaInventorySyncStatus = `FBA库存明细读取失败，保留补货建议库存：${error.message}`;
-  }
-  let previousYearSyncStatus = "";
-  let previousYearEndpoint = "";
-  try {
-    const previousYearResult = await enrichRowsWithPreviousYearSales(adapter, rows, sellerBySid, selectedSids);
-    rows = previousYearResult.rows;
-    previousYearSyncStatus = previousYearResult.syncStatus || "";
-    previousYearEndpoint = previousYearResult.endpoint || "";
-  } catch (error) {
-    previousYearSyncStatus = `2025同期销量读取失败：${error.message}`;
-  }
+  const fbaInventoryResult = await enrichRowsWithFbaInventory(adapter, rows, selectedSids);
+  rows = fbaInventoryResult.rows;
+  const fbaInventorySyncStatus = `FBA库存精确匹配 ${fbaInventoryResult.matchedCount}/${fbaInventoryResult.inventoryCount} 条`;
+  const previousYearResult = await enrichRowsWithPreviousYearSales(adapter, rows, sellerBySid, selectedSids);
+  rows = previousYearResult.rows;
+  const previousYearSyncStatus = previousYearResult.syncStatus || "";
+  const previousYearEndpoint = previousYearResult.endpoint || "";
   const cachedAt = Date.now();
   const cache = {
     version: SALES_FORECAST_CACHE_VERSION,
@@ -1388,21 +1373,22 @@ async function ensureCachedPreviousYearSales(cache) {
     await writeSalesForecastDashboardCache(nextCache);
     return nextCache;
   } catch (error) {
-    return {
-      ...cache,
-      previousYearSalesEndpoint: previousYearEndpoint,
-      previousYearSyncStatus: `2025同期销量读取失败：${error.message}`,
-    };
+    console.error("[sales-forecast] previous year sales hydration failed", {
+      cacheUpdatedAt: cache.updatedAt || "",
+      cacheAgeMs: cache.cachedAt ? Date.now() - Number(cache.cachedAt) : null,
+      error: error.message,
+    });
+    throw new Error(`销售预估同期销量补齐失败：${error.message}`);
   }
 }
 
-function buildSalesForecastDashboardResponse(cache, filters, manualDaily, hiddenRows, { cacheHit = true, stale = false } = {}) {
+function buildSalesForecastDashboardResponse(cache, filters, manualDaily, hiddenRows, { cacheHit = true } = {}) {
   const countries = listFilterValues(filters.country);
   const rows = filterRows(cache.rows || [], filters);
   const availableStores = storeOptions((cache.rows || []).filter((row) => !countries.length || countries.includes(row.country)));
   const cacheExpiresAt = new Date(Number(cache.cachedAt || Date.now()) + SALES_FORECAST_CACHE_TTL_MS)
     .toLocaleString("zh-CN", { hour12: false });
-  const cacheLabel = stale ? "缓存数据（实时刷新失败）" : cacheHit ? "12小时缓存" : "实时更新";
+  const cacheLabel = cacheHit ? "12小时缓存" : "实时更新";
   const enrichmentLabel = cache.enrichmentPending ? "；品名和图片后台补齐中" : "";
   const previousYearLabel = cache.previousYearSyncStatus ? `；${cache.previousYearSyncStatus}` : "";
   const fbaInventoryLabel = cache.fbaInventorySyncStatus ? `；${cache.fbaInventorySyncStatus}` : "";
@@ -1414,7 +1400,6 @@ function buildSalesForecastDashboardResponse(cache, filters, manualDaily, hidden
       syncStatus: `${cacheLabel}；补货建议 ${cache.adviceCount || cache.rows?.length || 0} 条；店铺 ${cache.sellerCount || 0} 个${fbaInventoryLabel}${enrichmentLabel}${previousYearLabel}`,
       updatedAt: cache.updatedAt || nowText(),
       cacheHit,
-      stale,
       cacheExpiresAt,
       enrichmentPending: Boolean(cache.enrichmentPending),
       countries: COUNTRY_OPTIONS,
@@ -1466,11 +1451,13 @@ export async function getSalesForecastDashboard(filters = {}) {
     const refreshed = await runSalesForecastDashboardRefresh();
     return buildSalesForecastDashboardResponse(refreshed, filters, manualDaily, hiddenRows, { cacheHit: false });
   } catch (error) {
-    if (cached) {
-      const hydrated = await ensureCachedPreviousYearSales(cached);
-      return buildSalesForecastDashboardResponse(hydrated, filters, manualDaily, hiddenRows, { cacheHit: true, stale: true });
-    }
-    throw error;
+    console.error("[sales-forecast] refresh failed", {
+      force: Boolean(filters.force),
+      cacheUpdatedAt: cached?.updatedAt || "",
+      cacheAgeMs: cached?.cachedAt ? Date.now() - Number(cached.cachedAt) : null,
+      error: error.message,
+    });
+    throw new Error(`销售预估刷新失败，未使用过期缓存：${error.message}`);
   }
 }
 
@@ -1481,49 +1468,108 @@ function salesForecastExportFileName() {
     String(date.getMonth() + 1).padStart(2, "0"),
     String(date.getDate()).padStart(2, "0"),
   ].join("-");
-  return `销售预估旺季补货-${stamp}.xlsx`;
+  return `销售预估全量-${stamp}.xlsx`;
 }
 
 function setSheetWidths(sheet, widths) {
   sheet["!cols"] = widths.map((wch) => ({ wch }));
 }
 
-export async function exportSalesForecastEstimateXlsx(filters = {}) {
-  const [data, provisionData] = await Promise.all([
-    getSalesForecastDashboard(filters),
-    getInventoryProvisionDashboard({
+function buildSalesForecastExportColumns(now = new Date()) {
+  const monthIndex = now.getMonth();
+  return [
+    { key: "imageUrl", label: "图片", width: 44 },
+    { key: "storeName", label: "店铺", width: 18 },
+    { key: "country", label: "国家", width: 10 },
+    { key: "productName", label: "产品名称", width: 36 },
+    { key: "msku", label: "msku", width: 26 },
+    { key: "fbaAvailable", label: "FBA可售", width: 12 },
+    { key: "fbaTransfer", label: "FBA转库", width: 12 },
+    { key: "fbaReserved", label: "FBA预留", width: 12 },
+    { key: "awd", label: "AWD", width: 10 },
+    { key: "fbaInbound", label: "FBA在途", width: 12 },
+    { key: "totalStock", label: "总库存", width: 12 },
+    { key: "salesForecast", label: "销量预测", width: 12 },
+    { key: "peakSeasonForecast", label: "旺季预测", width: 12 },
+    { key: "fbaAvailableDays", label: "FBA可售天数", width: 14 },
+    { key: "inboundArrivalDate", label: "在途送达时间", width: 16 },
+    { key: "outOfStockDate", label: "断货日期", width: 14 },
+    { key: "shippingDate", label: "发货日期", width: 14 },
+    { key: "purchaseDate", label: "采购日期", width: 14 },
+    { key: "recommendedDaily", label: "日销建议", width: 12 },
+    { key: "replenishmentSuggestion", label: "补货建议", width: 12 },
+    ...Array.from({ length: 12 - monthIndex }, (_, offset) => {
+      const index = monthIndex + offset;
+      return [
+        { key: `monthDaily${index}`, label: `${index + 1}月日销`, type: "monthDaily", monthIndex: index, width: 12 },
+        { key: `monthSales${index}`, label: `${index + 1}月销量`, type: "monthSales", monthIndex: index, width: 12 },
+      ];
+    }).flat(),
+    { key: "daysRemainingInMonth", label: "本月剩余天数", width: 14 },
+    { key: "days3", label: "3天日均", type: "recentDaily", width: 12 },
+    { key: "days7", label: "7天日均", type: "recentDaily", width: 12 },
+    { key: "days14", label: "14天日均", type: "recentDaily", width: 12 },
+    { key: "days30", label: "30天日均", type: "recentDaily", width: 12 },
+    { key: "replenishmentEstimate", label: "补货预计", width: 12 },
+    { key: "goodsValue", label: "货值统计", width: 14 },
+  ];
+}
+
+function salesForecastExportValue(row = {}, column = {}) {
+  if (column.type === "monthDaily") return row.monthlyDailySales?.[column.monthIndex] ?? 0;
+  if (column.type === "monthSales") return row.monthlySales?.[column.monthIndex] ?? 0;
+  if (column.type === "recentDaily") return row.recentDaily?.[column.key] ?? 0;
+  return row[column.key] ?? "";
+}
+
+function buildSalesForecastExportScope(filters = {}) {
+  const force = filters.force === true || filters.force === "1";
+  return {
+    dashboardFilters: force ? { force: true } : {},
+    provisionFilters: { costMode: "landed" },
+    ignoredFilters: {
       country: filters.country || "",
-      storeName: filters.store || "",
+      store: filters.store || "",
       keyword: filters.keyword || "",
-      costMode: "landed",
-    }),
+    },
+  };
+}
+
+export async function exportSalesForecastEstimateXlsx(filters = {}) {
+  const exportScope = buildSalesForecastExportScope(filters);
+  const exportNow = new Date();
+  const [data, provisionData] = await Promise.all([
+    getSalesForecastDashboard(exportScope.dashboardFilters),
+    getInventoryProvisionDashboard(exportScope.provisionFilters),
   ]);
   const costLookup = buildSalesForecastCostLookup(provisionData.detailRows || []);
   const exportRows = buildSalesForecastExportRows(data.rows || [], {
     manualRows: data.manualDaily || {},
     costLookup,
+    now: exportNow,
+  });
+  const columns = buildSalesForecastExportColumns(exportNow);
+  console.info("[sales-forecast-export] full export", {
+    rowCount: exportRows.length,
+    columnCount: columns.length,
+    ignoredFilters: exportScope.ignoredFilters,
+    force: Boolean(exportScope.dashboardFilters.force),
   });
 
   const module = await import("xlsx");
   const XLSX = module.default || module;
   const workbook = XLSX.utils.book_new();
-  const headers = ["店铺", "国家", "产品名称", "msku", "总库存", "旺季预测", "补货预计", "货值统计"];
-  const rows = exportRows.map((row) => [
-    row.storeName,
-    row.country,
-    row.productName,
-    row.msku,
-    row.totalStock,
-    row.peakSeasonForecast,
-    row.replenishmentEstimate,
-    row.goodsValue,
-  ]);
+  const headers = columns.map((column) => column.label);
+  const rows = exportRows.map((row) => columns.map((column) => salesForecastExportValue(row, column)));
   const sheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-  sheet["!autofilter"] = { ref: `A1:H${Math.max(1, rows.length + 1)}` };
-  setSheetWidths(sheet, [18, 10, 36, 26, 12, 12, 12, 14]);
-  XLSX.utils.book_append_sheet(workbook, sheet, "旺季补货");
+  const lastColumn = XLSX.utils.encode_col(Math.max(0, headers.length - 1));
+  sheet["!autofilter"] = { ref: `A1:${lastColumn}${Math.max(1, rows.length + 1)}` };
+  setSheetWidths(sheet, columns.map((column) => column.width || 12));
+  XLSX.utils.book_append_sheet(workbook, sheet, "销售预估全量");
 
   const metaRows = [
+    ["导出范围", "销售预估数据表全量行、全量数据列导出，不受页面国家、店铺、关键词筛选影响"],
+    ["导出列数", String(columns.length)],
     ["销售预估数据源", data.meta?.source || ""],
     ["销售预估同步状态", data.meta?.syncStatus || ""],
     ["成本取值", provisionData.meta?.costModeLabel || "采购成本 + 单位头程费用"],
@@ -1547,5 +1593,7 @@ export const salesForecastTestUtils = {
   applyPreviousYearMonthlySales,
   applyFbaInventoryDetails,
   buildSalesForecastCostLookup,
+  buildSalesForecastExportColumns,
   buildSalesForecastExportRows,
+  buildSalesForecastExportScope,
 };

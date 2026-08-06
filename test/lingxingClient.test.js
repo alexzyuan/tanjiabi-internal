@@ -7,23 +7,13 @@ import {
   normalizeLingxingError,
   redactSensitive,
 } from "../src/adapters/lingxing/index.js";
+import { jsonResponse } from "./helpers/http.js";
 
 const testConfig = {
   baseUrl: "https://openapi.test/",
   appKey: "1234567890abcdef",
   appSecret: "app-secret-value",
 };
-
-function jsonResponse(payload, { ok = true, status = 200, statusText = "OK" } = {}) {
-  return {
-    ok,
-    status,
-    statusText,
-    async json() {
-      return payload;
-    },
-  };
-}
 
 test("Lingxing error redaction removes app secrets and tokens from nested details", () => {
   const redacted = redactSensitive({

@@ -1,0 +1,91 @@
+.fba-shipment-order-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.fba-shipment-order-panel .panel-head {
+  gap: 12px;
+}
+
+#fba-shipment-order-status {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fba-shipment-order-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: start;
+}
+
+.fba-shipment-order-toolbar label {
+  flex: 0 1 150px;
+  min-width: 0;
+}
+
+.fba-shipment-order-toolbar label:nth-of-type(4) {
+  flex-basis: 190px;
+}
+
+.fba-shipment-order-toolbar label:nth-of-type(6) {
+  flex-basis: 180px;
+}
+
+.fba-shipment-order-toolbar select,
+.fba-shipment-order-toolbar input {
+  min-width: 0;
+}
+
+.fba-shipment-order-toolbar button {
+  width: auto;
+  min-width: 96px;
+  height: var(--tj-control-height);
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+#fba-shipment-order-create {
+  min-width: 156px;
+}
+
+.fba-shipment-order-summary {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.fba-shipment-order-table-shell {
+  overflow-x: auto;
+}
+
+.fba-shipment-order-table {
+  min-width: 980px;
+}
+
+.fba-shipment-order-table th:first-child,
+.fba-shipment-order-table td:first-child {
+  width: 44px;
+  text-align: center;
+}
+
+.fba-shipment-order-table td[data-fba-shipment-order-result] {
+  min-width: 180px;
+  white-space: normal;
+}
+
+@media (max-width: 760px) {
+  .fba-shipment-order-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .fba-shipment-order-toolbar label {
+    flex-basis: 100%;
+    min-width: 100%;
+  }
+
+  .fba-shipment-order-toolbar button,
+  #fba-shipment-order-create {
+    width: 100%;
+  }
+}

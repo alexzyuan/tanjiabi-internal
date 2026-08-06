@@ -1,6 +1,6 @@
 # 探嘉 BI 唯一设计规范
 
-更新时间：2026-07-05
+更新时间：2026-07-30
 
 本文档是探嘉 BI 的唯一主规范，合并了原 `DESIGN_SYSTEM.md` 与 `UI_DESIGN_README.md` 的有效内容。后续产品设计、UI 调整、前后端实现、权限、部署和验收都以本文档为准。
 
@@ -94,14 +94,15 @@ light dashboard / compact SaaS / calm operations console / white content on gray
 
 CSS 只有一个最终标准：`styles.css` 由 `assets/css/*` 分层源生成。
 
-当前生成式 CSS 还没有完整复现已批准的 sidebar/topbar 视觉，所以 `styles.css` 暂时锁定为线上可接受的视觉基准，防止再次因为自动构建把 sidebar 图标和 topbar 观感改坏。这个锁是迁移保护，不是第二条长期标准。
+当前分层源已经通过截图验收复现 sidebar、topbar 与核心页面基线；`styles.css` 是可由 `assets/css/*` 重新生成的视觉基线，不再作为手工锁定文件维护。
 
-短期规则：
+规则：
 
-- 不要为了通过现代 CSS 门禁而直接重建或覆盖 `styles.css`。
-- 不要在无视觉验收的情况下移除旧基线里的浅蓝渐变、sidebar 图标尺寸或 topbar/sidebar 关系。
-- CSS 结构治理可以继续，但必须以当前视觉截图为回归基准，做到“拆结构，不改观感”。
-- 只有在分层源已经通过截图确认与当前视觉等价时，才允许用 `ALLOW_CSS_REBUILD=1 npm run build:css` 生成新的 `styles.css`。
+- 不要手工编辑 `styles.css`。
+- CSS 改动先编辑 `assets/css/*`，再运行 `npm run build:css`。
+- 不要在无视觉验收的情况下改变 sidebar 图标尺寸、topbar/sidebar 关系、筛选栏密度、表格行高或弹窗结构。
+- CSS 结构治理可以继续，但必须以 `docs/visual-baseline/` 截图为回归基准，做到“拆结构，不改观感”。
+- 共享控件、表格、面板和弹窗使用 `--tj-control-height`、`--tj-control-height-compact`、`--tj-control-radius`、`--tj-panel-radius`、`--tj-modal-radius`、`--tj-table-row-hover-bg` 和 `--tj-focus-ring` 作为视觉基线；页面级 CSS 不应重新定义这些基础尺寸。
 
 长期目标仍然是下方的现代 light dashboard 基线：单一蓝色强调、语义 token、减少渐变和硬编码色。迁移时先保证视觉等价，再逐步收敛这些现代化指标。
 
@@ -179,6 +180,40 @@ font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
 | 正文说明 | 13px - 14px | 400 - 500 | 行高 1.45 - 1.65 |
 | 表格单元格 | 12px - 13px | 400 - 520 | 数字使用 tabular-nums |
 | 按钮文字 | 13px - 14px | 600 - 700 | 保持一行 |
+
+表格列类型契约：
+
+- 新增数据表的数字、金额、百分比列优先在表头声明 `data-column-kind="number"`，或用 `data-column-type="money"` / `data-column-type="percent"` 等语义类型；表格管理器会先尊重显式声明，再使用表头文案推断作为旧表格兼容兜底。
+- 表格基线样式分两层：`assets/css/components/45-table-controls.css` 提供共享表格组件规则，`assets/css/final/90-table-invariants.css` 位于 page/legacy 之后，只放产品级不变量，例如数字列右对齐、`tabular-nums`、状态行对齐和列宽调整手柄基础交互。
+- 所有页面视图内的 BI 表格默认由 `assets/js/data-table-manager.js` 管理，并必须使用共享智能列宽。管理器按列语义和前 30 行业务数据的 90 分位计算列宽，并优先保留当前浏览器中用户手动调整的宽度。
+- 所有由 `assets/js/data-table-manager.js` 管理的 BI 表格叶子表头默认都有共享排序 icon。普通表头由管理器自动生成 `.sort-button` 并走通用表格排序；MSKU 明细、供应商看板、工厂库存等业务专用排序按钮继续声明自己的 `data-*-sort` 并复用同一 `.sort-button` 视觉规则。icon 右侧必须贴近列分割线，默认 `right: 1px`，选中排序状态不得额外扩大表头 padding。
+- 宽度来源优先级固定为：用户保存宽度、经过审查的 `data-column-width`、共享智能计算、通用文本兜底。用户可通过表格内的“恢复智能列宽”只重置当前表。
+- 页面 CSS 可以保留矩阵表的 sticky、分组表头、图片框、tooltip、行密度和容器布局等页面专属视觉，但不得给普通业务列设置固定 `width` / `min-width`，不得用 `nth-child` 给列设宽，也不得重新定义普通 `th` / `td` 的左右对齐。文本列默认左对齐，数字列由 `.table-cell--number` 统一右对齐。
+- 选择、图片、数字、金额/费率、短名称、标识符、单号、长名称、说明和操作列必须使用共享语义 profile。语义无法由列名稳定推断时，在表头补充 `data-column-profile`，不在页面 CSS 中增加像素补丁。
+- 窄视口不得因表格给 `body`、`.app-shell`、`.dashboard` 或页面视图设置全局固定 `min-width`。页面本身必须保持视口宽度，横向浏览仅由对应 `.table-wrap` 容器承担。
+- 需要整表垂直居中的表格使用 `.data-table--middle`；需要可滚动明细表的统一 sticky 表头、分隔和排序按钮样式时，使用 `.data-table-wrap--detail` 与 `.data-table--detail`。这些属于共享组件能力，不在 page CSS 或 legacy CSS 重复实现。
+- 完整的 profile 范围、采样算法、持久化迁移、诊断和验收标准以 `docs/superpowers/specs/2026-07-21-shared-smart-table-width-design.md` 为准；`design.md` 只保留所有页面必须遵守的设计约束。
+
+筛选栏契约：
+
+- 普通筛选栏统一使用 `.filters`，紧凑工具筛选栏统一使用 `.filter-toolbar`；新增筛选区必须复用这两个共享类，不新增页面私有筛选栏基线。
+- 筛选栏容器使用白底、无外层实线框、`column-gap: 8px`、`row-gap: 8px`、`min-height: 48px`、`padding: 8px 10px`。输入框、下拉、日期按钮自身保留浅边框。
+- 控件高度统一用 `--tj-control-height-compact`，圆角用 `--tj-control-radius`，字号 13px，focus 使用 `--tj-focus-ring`。
+- `.filters` 默认字段宽度为 116px，日期字段 240px，搜索字段 220px；`.filter-toolbar` 默认字段宽度为 150px，日期字段 240px，直接 search 输入 180px，按钮宽度按内容自适应。
+- 当 .filters 或 .filter-toolbar 紧跟 .module-hero 后面时，筛选栏必须使用共享 sticky 规则固定在 topbar 下方；页面 CSS 不得为单个板块重复写 sticky 筛选栏规则。
+- 所有当前站点的读取型 `/api/*` 请求都由 `assets/js/dashboard-loader.js` 的全局页面加载器统一呈现。请求超过 300ms 时，只在当前活动页面的数据区显示遮罩、状态文案与进度条；侧边栏、顶部栏和筛选栏保持可操作。加载器优先使用 `.dashboard-loading-scope`，否则从当前页面首个筛选栏下方开始覆盖；已使用 `loadDashboardSection()` 的模块不得另行产生第二层遮罩。
+- checkbox 型筛选使用 `.checkbox-label`，由共享筛选栏规则统一控制字号、间距和 checkbox 尺寸。
+- 页面级 CSS 不允许重新定义 `.filters` / `.filter-toolbar` / `*-filters` / `*-toolbar` 的 `display`、`grid-template-*`、`gap`、`padding`、`border`、控件高度、控件边框、focus 样式或日期控件宽度。页面可以控制筛选栏是否显示，也可以调整所在业务面板、KPI、表格和图表布局。
+- 结构测试会扫描 page CSS，防止新页面继续用页面私有规则覆盖共享筛选栏基线。
+
+日期控件契约：
+
+- 新增日期范围筛选优先使用 `assets/js/date-range-picker.js` 和 `assets/css/components/36-date-range-picker.css` 的共享双月日期控件。
+- 默认展开视图是前 30 天到今天；开始日期选中后，结束日期只能在开始日期起 30 天内，并且不能超过今天。
+- 日期范围在结束日期确认或使用快捷日期后，组件统一派发 `tanjia:date-range-change`；筛选板块需要自动读取时，在本板块既有刷新按钮声明 `data-date-range-auto-refresh`。全局监听器只触发当前板块已声明的按钮，销售复盘等已有专用回调的页面不得重复声明该标记。
+- 日期弹层宽度为 `min(760px, 96vw)`，左侧快捷项宽度 112px；快捷项 hover/focus 使用淡蓝底。
+- 选中开始/结束日期使用蓝色圆形填充，今天使用蓝色细圆边框，范围预览使用淡蓝底。
+- 日期按钮不使用额外伪元素图标；弹层必须显式设置字体大小，不能继承外层 label 的隐藏文字规则。
 
 禁止：
 
@@ -298,6 +333,34 @@ sidebar：
 | 表格容器 | 白底，表头可用浅灰或浅蓝灰强调 |
 | 浮层子菜单 | 允许更明显阴影，与内容区分 |
 | 弹窗 | 可使用边框和阴影，确保层级明确 |
+
+### 指标卡统一规格
+
+指标卡不是普通内容卡。它只用于展示少量核心数字，例如销售额、库存 SKU、应付金额、广告花费和同步计数。
+
+统一参数：
+
+| 参数 | 标准 |
+| --- | --- |
+| 卡片宽度 | 188px |
+| 最小宽度 | 168px |
+| 最大宽度 | 220px |
+| 标准高度 | 84px |
+| 内边距 | 8px 12px |
+| 圆角 | 10px |
+| 标题字号 | 12px |
+| 数字字号 | 22px |
+| 说明字号 | 11px |
+| 卡片间距 | 10px |
+
+使用规则：
+
+- 指标卡默认左对齐自动换行，不再用 `repeat(4, 1fr)` 或 `repeat(5, 1fr)` 平均铺满整行。
+- 大屏下指标卡宽度不随内容区无限拉伸。
+- 页面可以控制指标卡数量和分组，但不能单独改高度、padding、字号和数字放大规则。
+- KPI 数字不使用 viewport `clamp()` 放大。
+- 非数字指标、筛选栏、表格外壳、页面说明和面包屑不使用指标卡样式。
+- 首页核心指标可使用更强的内容块，但不要复用普通业务 KPI 的大卡片尺寸。
 
 ## 9. 图片使用方式
 
@@ -780,8 +843,7 @@ DNS 应配置：
 风险：
 
 - 前端为原生 JS 单文件，`app.js` 长期维护成本会上升。
-- 当前 `styles.css` 处于临时视觉锁定状态，生成式分层源尚未完整复现 sidebar/topbar 视觉。
-- `styles.css` 已超过万行，若继续追加一次性覆盖，视觉规则会失控。
+- `styles.css` 已解除临时视觉锁，但如果继续追加一次性覆盖，视觉规则仍会失控。
 - 缓存和上传文件主要在本地文件系统，缺少数据库事务和审计能力。
 - HTTPS 尚未配置。
 - 域名使用中国内地服务器时需要关注 ICP 备案。

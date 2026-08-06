@@ -2,9 +2,12 @@ export function createFinancePurchaseRoutes(deps = {}) {
   const {
     readJsonBody,
     sendJson,
+    contentDispositionAttachment,
     getPlatformCashflowDashboard,
     getPayablesDashboard,
     getSupplierBoardDashboard,
+    getStoreOperatingMonthlyReport,
+    exportStoreOperatingMonthlyReportXlsx,
     runPlatformCashflowCapture,
     listSupplierDetails,
     saveSupplierDetail,
@@ -20,6 +23,14 @@ export function createFinancePurchaseRoutes(deps = {}) {
     country: url.searchParams.get("country") || "",
     storeName: url.searchParams.get("storeName") || "",
     status: url.searchParams.get("status") || "Open",
+  });
+
+  const monthlyReportFilters = (url) => ({
+    startMonth: url.searchParams.get("startMonth") || "",
+    endMonth: url.searchParams.get("endMonth") || "",
+    stores: url.searchParams.getAll("stores").filter(Boolean),
+    countries: url.searchParams.getAll("countries").filter(Boolean),
+    currencyCode: url.searchParams.get("currencyCode") || "CNY",
   });
 
   return [
@@ -62,6 +73,30 @@ export function createFinancePurchaseRoutes(deps = {}) {
           country: url.searchParams.get("country") || "",
           forceRefresh: url.searchParams.get("forceRefresh") === "1",
         }));
+      },
+    },
+    {
+      method: "GET",
+      path: "/api/finance/store-operating-monthly-report",
+      auth: "finance",
+      errorStatusCode: 502,
+      handler: async ({ res, url }) => {
+        sendJson(res, 200, await getStoreOperatingMonthlyReport(monthlyReportFilters(url)));
+      },
+    },
+    {
+      method: "GET",
+      path: "/api/finance/store-operating-monthly-report/export",
+      auth: "finance",
+      errorStatusCode: 502,
+      handler: async ({ res, url }) => {
+        const result = await exportStoreOperatingMonthlyReportXlsx(monthlyReportFilters(url));
+        res.writeHead(200, {
+          "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "content-disposition": contentDispositionAttachment(result.filename),
+          "cache-control": "no-store",
+        });
+        res.end(result.buffer);
       },
     },
     {

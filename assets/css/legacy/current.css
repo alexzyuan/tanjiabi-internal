@@ -4,54 +4,6 @@ select {
   font: inherit;
 }
 
-table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  min-width: 980px;
-  font-size: 14px;
-}
-
-th {
-  background: #eef7ff;
-  color: var(--text);
-  font-weight: 800;
-  white-space: nowrap;
-  position: sticky;
-  top: 0;
-  z-index: 1;
-}
-
-th,
-td {
-  border: 1px solid #e3edf7;
-  padding: 11px 10px;
-  text-align: right;
-}
-
-td {
-  background: white;
-}
-
-th:first-child,
-td:first-child,
-td:nth-child(2),
-td:nth-child(3) {
-  text-align: left;
-}
-
-tbody tr:nth-child(even) {
-  background: #f8fbff;
-}
-
-tbody tr:nth-child(even) td {
-  background: #f8fbff;
-}
-
-tbody tr:hover td {
-  background: #f2f9ff;
-}
-
 .total-row {
   font-weight: 700;
 }
@@ -112,42 +64,6 @@ tbody tr:hover td {
   color: var(--tj-tone-danger-text);
   background: var(--tj-tone-danger-bg) !important;
   font-weight: 850;
-}
-
-body:not(.login-body) .sales-review-detail-table-wrap {
-  max-height: calc(100vh - 320px);
-  min-height: 320px;
-  position: relative;
-  isolation: isolate;
-}
-
-body:not(.login-body) .sales-review-detail-table-wrap th {
-  position: sticky;
-  top: 0;
-  z-index: 6;
-  text-align: left !important;
-  background: linear-gradient(180deg, #ecf7ff 0%, #dff0ff 100%) !important;
-  box-shadow: 0 1px 0 #d8e8f6;
-}
-
-body:not(.login-body) .sales-review-detail-table-wrap td {
-  text-align: left !important;
-}
-
-body:not(.login-body) .sales-review-detail-table-wrap th:not(:last-child)::after {
-  content: "";
-  position: absolute;
-  top: 9px;
-  right: 0;
-  bottom: 9px;
-  width: 1px;
-  background: #b9d2e7;
-}
-
-body:not(.login-body) .sales-review-detail-table-wrap :where(.sort-button) {
-  justify-content: flex-start;
-  text-align: left;
-  white-space: nowrap;
 }
 
 .tabs {

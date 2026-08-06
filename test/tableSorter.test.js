@@ -25,9 +25,10 @@ test("table sorter compares dates, numbers, and text consistently", () => {
 
 test("table sorter owns the document click bridge for header sorting", () => {
   const root = {};
+  let generatedButton = null;
   const targetHeader = {
     closest: () => null,
-    querySelector: () => null,
+    querySelector: (selector) => (selector === ".sort-button" ? generatedButton : null),
   };
   const bindCalls = [];
   const closestCalls = [];
@@ -53,6 +54,92 @@ test("table sorter owns the document click bridge for header sorting", () => {
 
   assert.deepEqual(bindCalls.map(([target, eventName]) => [target, eventName]), [[root, "click"]]);
   assert.deepEqual(closestCalls, [".sort-button", "th"]);
+});
+
+test("table sorter routes generated sort buttons through generic table sorting", () => {
+  const appendedRows = [];
+  const rowHigh = { cells: [{ textContent: "2" }], querySelector: () => null };
+  const rowLow = { cells: [{ textContent: "1" }], querySelector: () => null };
+  const tbody = {
+    rows: [rowHigh, rowLow],
+    appendChild(row) {
+      appendedRows.push(row);
+    },
+  };
+  const table = {
+    dataset: {},
+    id: "generic-table",
+    tBodies: [tbody],
+  };
+  const headerRow = { children: [] };
+  let generatedButton = null;
+  const targetHeader = {
+    colSpan: 1,
+    dataset: {},
+    parentElement: headerRow,
+    closest(selector) {
+      if (selector === ".login-body") return null;
+      if (selector === "table") return table;
+      return null;
+    },
+    querySelector: (selector) => (selector === ".sort-button" ? generatedButton : null),
+  };
+  headerRow.children = [targetHeader];
+  generatedButton = {
+    dataset: { tableSort: "amount" },
+    closest: (selector) => (selector === "th" ? targetHeader : null),
+  };
+  const bindCalls = [];
+  const stateCalls = [];
+  const sorter = createTableSorter({
+    root: {},
+    bindEventTarget: (...args) => {
+      bindCalls.push(args);
+      return args[0];
+    },
+    closestTarget: (event, selector) => (selector === ".sort-button" ? generatedButton : targetHeader),
+    setTableSortState: (...args) => stateCalls.push(args),
+  });
+
+  sorter.setupTableSortBridge();
+  bindCalls[0][2]({ target: generatedButton });
+
+  assert.deepEqual(appendedRows, [rowLow, rowHigh]);
+  assert.equal(table.dataset.sortColumn, "0");
+  assert.equal(table.dataset.sortDirection, "asc");
+  assert.equal(stateCalls.at(-1)[0], targetHeader);
+  assert.equal(stateCalls.at(-1)[1], true);
+  assert.equal(stateCalls.at(-1)[2], "asc");
+  assert.equal(stateCalls.at(-1)[3], generatedButton);
+});
+
+test("table sorter ignores headers explicitly marked non-sortable", () => {
+  const bindCalls = [];
+  let sortCalls = 0;
+  const header = {
+    dataset: { columnSortable: "false" },
+    closest(selector) {
+      if (selector === ".login-body") return null;
+      if (selector === "table") return { id: "store-operating-report-table" };
+      return null;
+    },
+    querySelector: () => null,
+  };
+  const sorter = createTableSorter({
+    root: {},
+    bindEventTarget: (...args) => {
+      bindCalls.push(args);
+      return args[0];
+    },
+    closestTarget: (_event, selector) => (selector === "th" ? header : null),
+    getApplyStoreOperatingMonthlyReportSort: () => () => { sortCalls += 1; },
+    setTableSortState: () => {},
+  });
+
+  sorter.setupTableSortBridge();
+  bindCalls[0][2]({ target: header });
+
+  assert.equal(sortCalls, 0);
 });
 
 test("table sorter click bridge ignores feature-owned sort buttons", () => {

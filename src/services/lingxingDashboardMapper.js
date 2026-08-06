@@ -460,9 +460,6 @@ function getStoreTargetKeys(value) {
   ].filter(Boolean).filter((key, index, values) => values.indexOf(key) === index);
 }
 
-const forcedActualMskuDetailStores = ["坦蛋伯澳洲", "探嘉澳洲"];
-const forcedActualMskuDetailStoreKeys = new Set(forcedActualMskuDetailStores.flatMap((store) => getStoreTargetKeys(store)));
-
 function displayStoreName(value, sid = "") {
   const rawKey = normalizeRawKey(value);
   const normalizedSid = String(sid || "").trim();
@@ -473,9 +470,23 @@ function displayStoreName(value, sid = "") {
   return shop?.displayName || value || "-";
 }
 
-function isForcedActualMskuStore(actual = {}) {
-  return getStoreTargetKeys(actual.storeName).some((key) => forcedActualMskuDetailStoreKeys.has(key))
-    || forcedActualMskuDetailStores.includes(displayStoreName(actual.storeName, actual.sid));
+function findShopByStore(value, sid = "") {
+  const rawKey = normalizeRawKey(value);
+  const normalizedSid = String(sid || "").trim();
+  return lingxingShopMap.find((item) => {
+    return String(item.sid) === normalizedSid
+      || [item.name, item.displayName].some((candidate) => normalizeRawKey(candidate) === rawKey);
+  }) || null;
+}
+
+function resolveBudgetRowSid(row = {}) {
+  const rowSid = toNumber(row.sid || row.sellerId || row.seller_id);
+  if (rowSid) return rowSid;
+  return toNumber(findShopByStore(row.storeName)?.sid);
+}
+
+function resolveBudgetRowCountry(row = {}) {
+  return row.country || findShopByStore(row.storeName)?.country || row.site || "";
 }
 
 function addBudgetRow(map, key, row) {
@@ -834,8 +845,8 @@ export function buildBudgetMskuDetailRows(records = [], budgetTargets = {}, inve
       ? toNumber(actual.fbaInventory)
       : findFbaInventory(inventoryMap, row);
     const listingOwner = findListingOwner(ownerMap, {
-      sid: actual.sid || row.sid || row.sellerId || "",
-      country: row.country || "",
+      sid: actual.sid || resolveBudgetRowSid(row),
+      country: actual.country || resolveBudgetRowCountry(row),
       countryCode: row.countryCode || "",
       msku: row.msku,
     });
@@ -850,6 +861,7 @@ export function buildBudgetMskuDetailRows(records = [], budgetTargets = {}, inve
       fbaInventory: Number(fbaInventory.toFixed(2)),
       quantityAchievement: budgetQuantity ? Number(((actualQuantity / budgetQuantity) * 100).toFixed(2)) : 0,
       orderProfit: Number(orderProfit.toFixed(2)),
+      averageProfit: actualQuantity ? Number((orderProfit / actualQuantity).toFixed(2)) : 0,
       grossRate: getRatioPercent(orderProfit, sales),
       refundRate: getRatioPercent(toNumber(actual.refund), sales),
       adFeeRate: getRatioPercent(adsCost, sales),
@@ -870,10 +882,10 @@ export function buildBudgetMskuDetailRows(records = [], budgetTargets = {}, inve
     }),
   );
   const seenActualRows = new Set();
-  const forcedActualRows = Array.from(actualMap.values())
+  const uncoveredActualRows = Array.from(actualMap.values())
     .filter((actual) => {
       const msku = mskuKey(actual.msku);
-      if (!msku || !isForcedActualMskuStore(actual)) return false;
+      if (!msku) return false;
       if (getStoreTargetKeys(actual.storeName).some((storeKey) => budgetRowKeys.has(`${storeKey}|${msku}`))) return false;
       const key = `${actual.sid || normalizeRawKey(actual.storeName)}|${msku}`;
       if (seenActualRows.has(key)) return false;
@@ -890,7 +902,7 @@ export function buildBudgetMskuDetailRows(records = [], budgetTargets = {}, inve
       salesQty: 0,
     }, actual));
 
-  return [...budgetDetailRows, ...forcedActualRows]
+  return [...budgetDetailRows, ...uncoveredActualRows]
     .filter((row) => !listingOwnerFilter || row.listingOwner === listingOwnerFilter);
 }
 

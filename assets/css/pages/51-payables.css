@@ -16,10 +16,6 @@
   line-height: 1.45;
 }
 
-.payable-filters {
-  grid-template-columns: repeat(4, minmax(150px, 1fr));
-}
-
 .payable-summary-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -28,7 +24,8 @@
 }
 
 .payable-kpi-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(var(--tj-kpi-card-min-width), var(--tj-kpi-card-width)));
+  justify-content: start;
 }
 
 .payable-pressure-card.danger strong {
@@ -116,7 +113,7 @@
   align-items: center;
   padding: 12px;
   border: 1px solid var(--tj-border-subtle);
-  border-radius: var(--spectrum-control-radius);
+  border-radius: var(--tj-panel-radius);
   background: linear-gradient(180deg, var(--tj-content-bg), var(--tj-surface-muted));
 }
 
@@ -142,7 +139,7 @@
   height: 28px;
   display: flex;
   overflow: hidden;
-  border-radius: 7px;
+  border-radius: var(--tj-control-radius);
   background: var(--tj-surface-muted);
   box-shadow: var(--tj-shadow-inset-control);
 }
@@ -204,7 +201,7 @@
 .payable-comparison-line div {
   height: 12px;
   overflow: hidden;
-  border-radius: 999px;
+  border-radius: var(--tj-control-radius);
   background: var(--tj-surface-muted);
   box-shadow: var(--tj-shadow-inset-control-soft);
 }
@@ -246,7 +243,7 @@
   min-height: 64px;
   padding: 10px 12px;
   border: 1px solid var(--tj-border-subtle);
-  border-radius: var(--spectrum-control-radius);
+  border-radius: var(--tj-panel-radius);
   background: var(--tj-surface-muted);
 }
 
@@ -280,7 +277,7 @@
   width: 8px;
   border: 2px solid var(--tj-border-accent-muted);
   border-right: 0;
-  border-radius: var(--spectrum-control-radius) 0 0 8px;
+  border-radius: var(--tj-panel-radius) 0 0 var(--tj-panel-radius);
 }
 
 .payable-flow-branch.danger strong {
@@ -309,9 +306,9 @@
 
 .payable-tabs button {
   min-width: auto;
-  height: 34px;
+  height: var(--tj-control-height-compact);
   padding: 0 14px;
-  border-radius: 7px;
+  border-radius: var(--tj-control-radius);
   font-size: 13px;
   white-space: nowrap;
 }
@@ -320,25 +317,13 @@
   margin-top: 0;
 }
 
-.payable-table-wrap table {
-  min-width: 940px;
-}
-
-#payables-detail-table th:first-child,
-#payables-detail-table td:first-child,
-#payables-detail-table td:nth-child(2),
-#payables-detail-table td:nth-child(3),
-#payables-detail-table td:nth-child(4) {
-  text-align: left;
-}
-
 #view-payables .section-title {
   margin-top: 14px;
 }
 
 @media (max-width:1180px) {
   .payable-kpi-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(var(--tj-kpi-card-min-width), var(--tj-kpi-card-width)));
   }
 
   .payable-visual-grid {
@@ -349,9 +334,6 @@
     grid-column: 1 / -1;
   }
 
-  .payable-filters {
-    grid-template-columns: repeat(2, minmax(160px, 1fr));
-  }
 }
 
 @media (max-width:720px) {
@@ -361,10 +343,8 @@
     text-align: left;
   }
 
-  .payable-filters,
   .payable-flow-card,
   .payable-flow-branch.compact,
-  .payable-kpi-grid,
   .payable-visual-grid,
   .payable-status-row {
     grid-template-columns: 1fr;
@@ -392,8 +372,11 @@
     grid-column: auto;
   }
 
-  #view-payables .payable-kpi-grid,
   #view-payables .payable-visual-grid {
+    grid-template-columns: 1fr;
+  }
+
+  #view-payables .payable-kpi-grid {
     grid-template-columns: 1fr;
   }
 }

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 import { buildApiRoutes } from "../routes/index.js";
+import { createInventoryRoutes } from "../routes/inventory.js";
 
 const routeFiles = [
   "auth.js",
@@ -13,6 +14,7 @@ const routeFiles = [
   "finance-purchase.js",
   "fba.js",
   "admin.js",
+  "webhook-assistant.js",
   "sync-store-inspection.js",
   "debug-knowledge.js",
 ];
@@ -43,9 +45,20 @@ test("route table requires every API route to declare auth", () => {
 
   assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/dashboard/payables")?.auth, "finance");
   assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/dashboard/supplier-board")?.auth, "finance");
+  assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/finance/store-operating-monthly-report")?.auth, "finance");
+  assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/finance/store-operating-monthly-report/export")?.auth, "finance");
   assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/purchase/supplier-details")?.auth, "session");
   assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/admin/budget/uploads")?.auth, "session");
   assert.equal(routes.find((route) => route.method === "POST" && route.path === "/api/admin/budget/upload")?.auth, "session");
+  assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/fba/jiufang/channels")?.auth, "session");
+  assert.equal(routes.find((route) => route.method === "POST" && route.path === "/api/fba/jiufang/orders/dry-run")?.auth, "session");
+  assert.equal(routes.find((route) => route.method === "POST" && route.path === "/api/fba/jiufang/orders/create")?.auth, "session");
+  assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/webhook-assistant/tasks")?.auth, "admin");
+  assert.equal(routes.find((route) => route.method === "POST" && route.path === "/api/webhook-assistant/tasks")?.auth, "admin");
+  assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/dashboard/clearance-inventory"), undefined);
+  assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/dashboard/slow-moving-risk/live")?.auth, "session");
+  assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/dashboard/slow-moving-risk/reports")?.auth, "session");
+  assert.ok(routes.some((route) => route.method === "GET" && route.pattern?.toString().includes("slow-moving-risk")));
 });
 
 test("server router no longer contains legacy API if-else branches", async () => {
@@ -61,4 +74,23 @@ test("server router no longer contains legacy API if-else branches", async () =>
   assert.equal(routerBody.includes("url.pathname.match(/^\\/api"), false);
   assert.equal(routerBody.includes("requireFinance(req, res)"), false);
   assert.equal(routerBody.includes("requireAdmin(req, res)"), false);
+});
+
+test("slow-moving-risk live route forwards the confirmed filter fields", async () => {
+  let received = null;
+  let payload = null;
+  const route = createInventoryRoutes({
+    sendJson: (_res, _status, value) => { payload = value; },
+    getSlowMovingRiskDashboard: async (value) => { received = value; return { rows: [] }; },
+    listSlowMovingRiskReports: async () => [],
+    readSlowMovingRiskReport: async () => null,
+  }).find((item) => item.path === "/api/dashboard/slow-moving-risk/live");
+
+  await route.handler({
+    res: {},
+    url: new URL("http://localhost/api/dashboard/slow-moving-risk/live?country=US&storeName=tandanbo-US&listingOwner=Max&riskLevel=%E9%AB%98%E9%A3%8E%E9%99%A9&currencyCode=USD"),
+  });
+
+  assert.deepEqual(received, { filters: { country: "US", storeName: "tandanbo-US", listingOwner: "Max", riskLevel: "高风险", currencyCode: "USD" } });
+  assert.deepEqual(payload, { rows: [] });
 });

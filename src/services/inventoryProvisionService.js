@@ -1,5 +1,6 @@
 import { getConfig } from "../config/index.js";
 import { getLingxingAdapter, filterCoreSellers } from "../adapters/lingxingAdapter.js";
+import { findLingxingShop } from "../data/lingxingShopMap.js";
 import { getPacificTodayText } from "../utils/pacificDate.js";
 import {
   listInventoryProvisionSnapshots,
@@ -12,6 +13,7 @@ import {
 } from "../utils/cacheStore.js";
 import { listFilterValues, matchesAnyFilter } from "../utils/filterUtils.js";
 import { getSharedSellers } from "./sharedDataService.js";
+import { fetchLingxingListingsBySidMskus } from "./lingxingCatalogLookupService.js";
 
 const ageBuckets = [
   { key: "0_30", label: "0-30天", min: 0, max: 30, rate: 0, color: "#ffbe55" },
@@ -22,7 +24,7 @@ const ageBuckets = [
   { key: "271_plus", label: "271天及以上", min: 271, max: Infinity, rate: 1, color: "#ef6f73" },
 ];
 
-const historicalOwnerSyncVersion = 3;
+const historicalOwnerSyncVersion = 4;
 const provisionMovementBaselineMonth = "2026-03";
 const provisionMovementStartMonth = "2026-04";
 const emptyListingOwnerFilterValue = "__EMPTY_LISTING_OWNER__";
@@ -55,12 +57,12 @@ const mockInventoryRows = [
 }));
 
 const ageQuantityAliases = [
-  { key: "0_30", ageDays: 15, keys: ["age0To30Qty", "age_0_30_qty", "age_0_30_quantity", "qty_0_30", "quantity_0_30", "stock_age_0_30", "inv_age_0_to_30_days"] },
-  { key: "31_60", ageDays: 45, keys: ["age31To60Qty", "age_31_60_qty", "age_31_60_quantity", "qty_31_60", "quantity_31_60", "stock_age_31_60", "inv_age_31_to_60_days"] },
-  { key: "61_90", ageDays: 75, keys: ["age61To90Qty", "age_61_90_qty", "age_61_90_quantity", "qty_61_90", "quantity_61_90", "stock_age_61_90", "inv_age_61_to_90_days"] },
-  { key: "91_180", ageDays: 120, keys: ["age91To180Qty", "age_91_180_qty", "age_91_180_quantity", "qty_91_180", "quantity_91_180", "stock_age_91_180", "inv_age_91_to_180_days"] },
-  { key: "181_270", ageDays: 210, keys: ["age181To270Qty", "age_181_270_qty", "age_181_270_quantity", "qty_181_270", "quantity_181_270", "stock_age_181_270", "inv_age_181_to_270_days"] },
-  { key: "271_plus", ageDays: 300, keys: ["age271PlusQty", "age_271_plus_qty", "age_271_plus_quantity", "qty_271_plus", "quantity_271_plus", "stock_age_271_plus", "age_271_365_qty", "qty_271_365", "age_365_plus_qty", "qty_365_plus", "inv_age_271_to_365_days", "inv_age_365_plus_days"] },
+  { key: "0_30", ageDays: 15, keys: ["age0To30Qty", "age_0_30_qty", "age_0_30_quantity", "qty_0_30", "quantity_0_30", "stock_age_0_30", "inv_age_0_to_30_days"], amountKeys: ["inv_age_0_to_30_days_price", "age_0_30_amount"] },
+  { key: "31_60", ageDays: 45, keys: ["age31To60Qty", "age_31_60_qty", "age_31_60_quantity", "qty_31_60", "quantity_31_60", "stock_age_31_60", "inv_age_31_to_60_days"], amountKeys: ["inv_age_31_to_60_days_price", "age_31_60_amount"] },
+  { key: "61_90", ageDays: 75, keys: ["age61To90Qty", "age_61_90_qty", "age_61_90_quantity", "qty_61_90", "quantity_61_90", "stock_age_61_90", "inv_age_61_to_90_days"], amountKeys: ["inv_age_61_to_90_days_price", "age_61_90_amount"] },
+  { key: "91_180", ageDays: 120, keys: ["age91To180Qty", "age_91_180_qty", "age_91_180_quantity", "qty_91_180", "quantity_91_180", "stock_age_91_180", "inv_age_91_to_180_days"], amountKeys: ["inv_age_91_to_180_days_price", "age_91_180_amount"] },
+  { key: "181_270", ageDays: 210, keys: ["age181To270Qty", "age_181_270_qty", "age_181_270_quantity", "qty_181_270", "quantity_181_270", "stock_age_181_270", "inv_age_181_to_270_days"], amountKeys: ["inv_age_181_to_270_days_price", "age_181_270_amount"] },
+  { key: "271_plus", ageDays: 300, keys: ["age271PlusQty", "age_271_plus_qty", "age_271_plus_quantity", "qty_271_plus", "quantity_271_plus", "stock_age_271_plus", "age_271_365_qty", "qty_271_365", "age_365_plus_qty", "qty_365_plus", "inv_age_271_to_365_days", "inv_age_365_plus_days"], amountKeys: ["inv_age_271_to_365_days_price", "inv_age_365_plus_days_price", "age_271_plus_amount"] },
 ];
 
 function todayText() {
@@ -107,14 +109,6 @@ function uniqueNumbers(values) {
 
 function uniqueText(values) {
   return [...new Set(values.map((value) => String(value || "").trim()).filter(Boolean))];
-}
-
-function chunkArray(items, size) {
-  const chunks = [];
-  for (let index = 0; index < items.length; index += size) {
-    chunks.push(items.slice(index, index + size));
-  }
-  return chunks;
 }
 
 function sleep(ms) {
@@ -208,6 +202,83 @@ function sellerCountryCode(seller) {
   return readFirst(seller, ["countryCode", "country_code", "region", "marketplaceCode"]) || "";
 }
 
+const marketplaceCurrencyCodes = Object.freeze({
+  AE: "AED",
+  AU: "AUD",
+  BR: "BRL",
+  CA: "CAD",
+  DE: "EUR",
+  ES: "EUR",
+  FR: "EUR",
+  GB: "GBP",
+  IN: "INR",
+  IT: "EUR",
+  JP: "JPY",
+  MX: "MXN",
+  NL: "EUR",
+  PL: "PLN",
+  SA: "SAR",
+  SE: "SEK",
+  SG: "SGD",
+  UK: "GBP",
+  US: "USD",
+});
+
+const marketplaceCountryNames = Object.freeze({
+  AE: "阿联酋",
+  AU: "澳洲",
+  BR: "巴西",
+  CA: "加拿大",
+  DE: "德国",
+  ES: "西班牙",
+  FR: "法国",
+  GB: "英国",
+  IN: "印度",
+  IT: "意大利",
+  JP: "日本",
+  MX: "墨西哥",
+  NL: "荷兰",
+  PL: "波兰",
+  SA: "沙特阿拉伯",
+  SE: "瑞典",
+  SG: "新加坡",
+  UK: "英国",
+  US: "美国",
+});
+
+function inventoryStoreName(seller = {}, record = {}) {
+  return sellerName(seller)
+    || readFirst(record, ["seller_group_name", "sellerGroupName", "store_name", "storeName", "seller_name", "sellerName", "name"])
+    || "";
+}
+
+function marketplaceCodeFromStoreName(value) {
+  const match = String(value || "").trim().toUpperCase().match(/-([A-Z]{2})$/u);
+  return match && marketplaceCurrencyCodes[match[1]] ? match[1] : "";
+}
+
+function sellerMarketplaceCode(seller = {}, record = {}) {
+  const directMarketplace = String(sellerCountryCode(seller)
+    || readFirst(record, ["country_code", "countryCode", "region", "marketplace"])
+    || "").trim().toUpperCase();
+  if (marketplaceCurrencyCodes[directMarketplace]) return directMarketplace;
+  const storeName = inventoryStoreName(seller, record);
+  const storeMarketplace = marketplaceCodeFromStoreName(storeName);
+  if (storeMarketplace) return storeMarketplace;
+  const shop = findLingxingShop(storeName
+    || readFirst(seller, ["sid", "seller_id", "sellerId"])
+    || readFirst(record, ["sid", "seller_id", "sellerId"]));
+  return marketplaceCodeFromStoreName(shop?.name);
+}
+
+function sellerCurrencyCode(seller = {}, record = {}) {
+  const explicitCurrencyCode = String(readFirst(record, ["currency_code", "currencyCode", "currency"])
+    || readFirst(seller, ["currency_code", "currencyCode", "currency"])
+    || "").trim().toUpperCase();
+  if (explicitCurrencyCode) return explicitCurrencyCode;
+  return marketplaceCurrencyCodes[sellerMarketplaceCode(seller, record)] || "";
+}
+
 function listingOwner(record) {
   const list = readFirst(record, ["asin_principal_list", "listing_principal_list", "principal_list", "principal_info", "principalInfo"]);
   const listText = readNameList(list);
@@ -269,21 +340,6 @@ function findListingOwner(ownerMap, row) {
     || "-";
 }
 
-async function fetchListingRecords(adapter, baseParams) {
-  const records = [];
-  let offset = 0;
-  const length = 1000;
-  while (offset < 5000) {
-    const payload = await adapter.fetchListings({ ...baseParams, offset, length });
-    const pageRows = adapter.normalizeRecordList(payload);
-    records.push(...pageRows);
-    const total = Number(payload?.data?.total || payload?.total || 0);
-    if (!pageRows.length || pageRows.length < length || (total && records.length >= total)) break;
-    offset += length;
-  }
-  return records;
-}
-
 function listingOwnerRow(record, fallback = {}) {
   const msku = readNameList(readFirst(record, ["msku", "m_sku", "seller_sku", "sellerSku", "sellerSkuStr", "local_sku", "item_sku", "fnsku"])).trim();
   const owner = listingOwner(record);
@@ -311,46 +367,14 @@ async function fetchListingOwnerRows(adapter, rows = []) {
   for (const [sid, sidRows] of rowsBySid.entries()) {
     const sellerMskus = uniqueText(sidRows.map((row) => row.msku));
     const fallback = { sid, country: sidRows[0]?.country || "", countryCode: sidRows[0]?.countryCode || "" };
-    for (const batch of chunkArray(sellerMskus, 50)) {
-      const baseParams = {
-        is_pair: 1,
-        is_delete: 0,
-        search_field: "seller_sku",
-        search_value: batch,
-        exact_search: 1,
-      };
-      const variants = [{ sid }, { sids: [sid] }, { seller_id: sid }, { sellerId: sid }];
-      let records = [];
-      for (const variant of variants) {
-        try {
-          records = await fetchListingRecords(adapter, { ...baseParams, ...variant });
-          if (!records.length) records = await fetchListingRecords(adapter, { ...baseParams, exact_search: 0, ...variant });
-          if (records.length) break;
-        } catch {
-          records = [];
-        }
-      }
-      if (!records.length && batch.length > 1) {
-        for (const msku of batch) {
-          const singleParams = { ...baseParams, search_value: [msku], exact_search: 1 };
-          for (const variant of variants) {
-            try {
-              const singleRecords = await fetchListingRecords(adapter, { ...singleParams, ...variant });
-              if (singleRecords.length) {
-                records.push(...singleRecords);
-                break;
-              }
-            } catch {
-              // Try the next supported Listing parameter shape.
-            }
-          }
-        }
-      }
-      records
-        .map((record) => listingOwnerRow(record, fallback))
-        .filter(Boolean)
-        .forEach((row) => ownerRows.push(row));
-    }
+    const records = await fetchLingxingListingsBySidMskus(adapter, sid, sellerMskus, {
+      batchSize: 50,
+      normalize: (payload) => adapter.normalizeRecordList(payload),
+    });
+    records
+      .map((record) => listingOwnerRow(record, fallback))
+      .filter(Boolean)
+      .forEach((row) => ownerRows.push(row));
   }
   return ownerRows;
 }
@@ -361,6 +385,16 @@ function buildSellerMap(sellers = []) {
       .map((seller) => [Number(seller.sid || seller.seller_id || seller.sellerId), seller])
       .filter(([sid]) => Number.isFinite(sid) && sid > 0),
   );
+}
+
+function normalizedStoreKey(value) {
+  return String(value || "").trim().replace(/\s+/g, "").toLowerCase();
+}
+
+function findSellerForInventoryRecord(record, sellersBySid) {
+  const storeKey = normalizedStoreKey(inventoryStoreName({}, record));
+  if (!storeKey) return null;
+  return [...sellersBySid.values()].find((seller) => normalizedStoreKey(sellerName(seller)) === storeKey) || null;
 }
 
 function fbaTotalInventory(record) {
@@ -419,8 +453,15 @@ function fbaTotalInventory(record) {
 }
 
 function baseLingxingInventoryRow(record, sellersBySid) {
-  const sid = toNumber(readFirst(record, ["sid", "seller_id", "sellerId", "store_id", "storeId"]));
-  const seller = sellersBySid.get(sid) || {};
+  const recordSid = toNumber(readFirst(record, ["sid", "seller_id", "sellerId", "store_id", "storeId"]));
+  const seller = sellersBySid.get(recordSid) || findSellerForInventoryRecord(record, sellersBySid) || {};
+  const sid = recordSid || toNumber(readFirst(seller, ["sid", "seller_id", "sellerId"]));
+  const countryCode = sellerMarketplaceCode(seller, record);
+  const storeName = inventoryStoreName(seller, record);
+  const country = sellerCountry(seller)
+    || readFirst(record, ["country", "country_name", "countryName", "marketplace"])
+    || marketplaceCountryNames[countryCode]
+    || "";
   const purchaseCost = toNumber(readFirst(record, [
     "unit_purchase_cost",
     "purchase_cost",
@@ -445,6 +486,19 @@ function baseLingxingInventoryRow(record, sellersBySid) {
     "unit_cg_transport_costs",
   ]));
   const totalInventory = fbaTotalInventory(record);
+  const inventoryAmount = toNumber(readFirst(record, [
+    "total_amount",
+    "totalAmount",
+    "inventory_amount",
+    "inventoryAmount",
+    "total_inventory_amount",
+  ]));
+  const historicalDaysOfSupply = toNumber(readFirst(record, [
+    "historical_days_of_supply",
+    "historicalDaysOfSupply",
+    "days_of_supply",
+    "daysOfSupply",
+  ]));
   const estimatedStorageCostNextMonth = toNumber(readFirst(record, [
     "estimated_storage_cost_next_month",
     "estimatedStorageCostNextMonth",
@@ -459,9 +513,10 @@ function baseLingxingInventoryRow(record, sellersBySid) {
   return {
     sid,
     sellerId: readFirst(seller, ["seller_id", "sellerId"]) || readFirst(record, ["seller_id", "sellerId"]) || "",
-    countryCode: readFirst(record, ["country_code", "countryCode", "region", "marketplace"]) || "",
-    storeName: sellerName(seller) || readFirst(record, ["store_name", "storeName", "seller_name", "sellerName"]) || `${sid || "-"}`,
-    country: sellerCountry(seller) || readFirst(record, ["country", "country_name", "countryName", "marketplace"]) || "",
+    countryCode,
+    currencyCode: sellerCurrencyCode(seller, record),
+    storeName: storeName || `${sid || "-"}`,
+    country,
     msku: readFirst(record, ["msku", "seller_sku", "sellerSku", "fnsku", "sku"]) || "",
     fnsku: readFirst(record, ["fnsku", "FNSKU"]) || "",
     listingOwner: listingOwner(record) || "-",
@@ -469,6 +524,8 @@ function baseLingxingInventoryRow(record, sellersBySid) {
     purchaseCost,
     firstLegCost,
     totalInventory,
+    inventoryAmount,
+    historicalDaysOfSupply,
     estimatedStorageCostNextMonth,
   };
 }
@@ -492,7 +549,7 @@ function normalizeLingxingInventoryRows(records = [], sellers = []) {
   records.forEach((record) => {
     const base = baseLingxingInventoryRow(record, sellersBySid);
     const bucketQuantities = ageQuantityAliases
-      .map((alias) => ({ ...alias, quantity: readAgeBucketQuantity(record, alias) }))
+      .map((alias) => ({ ...alias, quantity: readAgeBucketQuantity(record, alias), amount: toNumber(readFirst(record, alias.amountKeys || [])) }))
       .filter((item) => item.quantity > 0);
 
     if (bucketQuantities.length) {
@@ -504,6 +561,7 @@ function normalizeLingxingInventoryRows(records = [], sellers = []) {
           ...base,
           ageDays: item.ageDays,
           quantity: item.quantity,
+          ageBucketAmount: item.amount,
           estimatedStorageCostAllocation: round(Number(base.estimatedStorageCostNextMonth || 0) * storageShare),
           storageFeeAllocationRate: round(storageShare * 100, 4),
         });
@@ -533,6 +591,7 @@ function normalizeLingxingInventoryRows(records = [], sellers = []) {
         "qty",
         "stock_quantity",
       ])),
+      ageBucketAmount: base.inventoryAmount,
       estimatedStorageCostAllocation: Number(base.estimatedStorageCostNextMonth || 0),
       storageFeeAllocationRate: 100,
     });
@@ -673,6 +732,70 @@ function groupProvisionRows(rows) {
   return groups;
 }
 
+function groupRowsByValue(rows, valueGetter) {
+  const groups = new Map();
+  rows.forEach((row) => {
+    const key = valueGetter(row);
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        rows: [],
+        quantity: 0,
+        provisionAmount: 0,
+      });
+    }
+    const group = groups.get(key);
+    group.rows.push(row);
+    group.quantity = round(group.quantity + Number(row.quantity || 0));
+    group.provisionAmount = round(group.provisionAmount + Number(row.provisionAmount || 0));
+  });
+  return groups;
+}
+
+function hasCompleteCohortMonths(rows) {
+  return rows.every((row) => String(row.cohortMonth || "").trim());
+}
+
+function canUseCohortProvisionMovements(currentRows, previousRows) {
+  const rows = currentRows.concat(previousRows);
+  return rows.length > 0 && hasCompleteCohortMonths(rows);
+}
+
+function addBucketMovementRow(bucketMovementRows, movement) {
+  if (movement.monthlyProvisionAmount > 0) {
+    bucketMovementRows.push({
+      monthlyProvisionAmount: movement.monthlyProvisionAmount,
+      monthlyProvisionBucketKey: movement.monthlyProvisionBucketKey || "",
+    });
+  }
+  if (movement.reversalAmount > 0) {
+    bucketMovementRows.push({
+      reversalAmount: movement.reversalAmount,
+      reversalBucketKey: movement.reversalBucketKey || "",
+    });
+  }
+}
+
+function distributeMovementToRows(rows, amount, field, bucketField, bucketKey) {
+  if (!rows.length || amount <= 0) return;
+  const positiveRows = rows.filter((row) => Number(row.provisionAmount || 0) > 0);
+  const targetRows = positiveRows.length ? positiveRows : rows;
+  const totalWeight = sumBy(targetRows, positiveRows.length ? "provisionAmount" : "quantity");
+  let remaining = amount;
+  targetRows.forEach((row, index) => {
+    const weight = positiveRows.length ? Number(row.provisionAmount || 0) : Number(row.quantity || 0);
+    const movementAmount = index === targetRows.length - 1
+      ? remaining
+      : totalWeight
+        ? round(amount * weight / totalWeight)
+        : 0;
+    if (movementAmount <= 0) return;
+    remaining = round(remaining - movementAmount);
+    row[field] = round(Number(row[field] || 0) + movementAmount);
+    row[bucketField] = row[bucketField] || bucketKey || "";
+  });
+}
+
 function addReversalToBucketRows(targetRows, previousRows, reversalAmount) {
   const positiveRows = previousRows.filter((row) => row.provisionAmount > 0);
   const previousProvisionAmount = sumBy(positiveRows, "provisionAmount");
@@ -737,7 +860,106 @@ function buildReversalOnlyRow(previousRows, reversalAmount) {
   };
 }
 
-function applyProvisionMovements(currentRows, previousRows) {
+function applyAggregateProvisionMovementForGroup({
+  currentGroup,
+  previousGroup,
+  bucketMovementRows,
+  reversalOnlyRows,
+}) {
+  let monthlyProvisionAmount = 0;
+  let reversalAmount = 0;
+  const currentProvisionAmount = currentGroup?.provisionAmount || 0;
+  const previousProvisionAmount = previousGroup?.provisionAmount || 0;
+
+  const groupMonthlyProvisionAmount = round(currentProvisionAmount - previousProvisionAmount);
+  if (groupMonthlyProvisionAmount > 0 && currentGroup?.rows?.length) {
+    monthlyProvisionAmount = groupMonthlyProvisionAmount;
+    bucketMovementRows.push(...addMonthlyProvisionToRows(currentGroup.rows, groupMonthlyProvisionAmount));
+  }
+
+  const groupReversalAmount = round(previousProvisionAmount - currentProvisionAmount);
+  if (groupReversalAmount > 0 && previousGroup?.rows?.length) {
+    reversalAmount = groupReversalAmount;
+    addReversalToBucketRows(bucketMovementRows, previousGroup.rows, groupReversalAmount);
+
+    if (currentGroup?.rows?.length) {
+      const [target] = currentGroup.rows
+        .slice()
+        .sort((left, right) => Number(right.provisionAmount || 0) - Number(left.provisionAmount || 0));
+      target.reversalAmount = round(Number(target.reversalAmount || 0) + groupReversalAmount);
+      target.reversalBucketKey = target.reversalBucketKey || previousGroup.rows.find((row) => row.provisionAmount > 0)?.bucketKey || "";
+    } else {
+      const releasedRow = buildReversalOnlyRow(previousGroup.rows, groupReversalAmount);
+      if (releasedRow) reversalOnlyRows.push(releasedRow);
+    }
+  }
+
+  return { monthlyProvisionAmount, reversalAmount };
+}
+
+function applyCohortProvisionMovementForGroup({
+  currentGroup,
+  previousGroup,
+  bucketMovementRows,
+  reversalOnlyRows,
+}) {
+  const currentCohorts = groupRowsByValue(currentGroup?.rows || [], (row) => String(row.cohortMonth || "").trim());
+  const previousCohorts = groupRowsByValue(previousGroup?.rows || [], (row) => String(row.cohortMonth || "").trim());
+  const cohortKeys = new Set([...currentCohorts.keys(), ...previousCohorts.keys()]);
+  let monthlyProvisionAmount = 0;
+  let reversalAmount = 0;
+
+  cohortKeys.forEach((cohortKey) => {
+    const currentCohort = currentCohorts.get(cohortKey);
+    const previousCohort = previousCohorts.get(cohortKey);
+    const currentQuantity = currentCohort?.quantity || 0;
+    const previousQuantity = previousCohort?.quantity || 0;
+    const currentProvisionAmount = currentCohort?.provisionAmount || 0;
+    const previousProvisionAmount = previousCohort?.provisionAmount || 0;
+    const currentProvisionPerUnit = currentQuantity ? currentProvisionAmount / currentQuantity : 0;
+    const previousProvisionPerUnit = previousQuantity ? previousProvisionAmount / previousQuantity : 0;
+    const matchedQuantity = Math.min(currentQuantity, previousQuantity);
+    const consumedQuantity = Math.max(0, previousQuantity - currentQuantity);
+    const newQuantity = Math.max(0, currentQuantity - previousQuantity);
+    const retainedIncrease = round(matchedQuantity * Math.max(0, currentProvisionPerUnit - previousProvisionPerUnit));
+    const retainedDecrease = round(matchedQuantity * Math.max(0, previousProvisionPerUnit - currentProvisionPerUnit));
+    const newProvision = round(newQuantity * currentProvisionPerUnit);
+    const consumedReversal = round(consumedQuantity * previousProvisionPerUnit);
+    const cohortMonthlyProvisionAmount = round(retainedIncrease + newProvision);
+    const cohortReversalAmount = round(retainedDecrease + consumedReversal);
+    const monthlyBucketKey = currentCohort?.rows?.find((row) => row.provisionAmount > 0)?.bucketKey || "";
+    const reversalBucketKey = previousCohort?.rows?.find((row) => row.provisionAmount > 0)?.bucketKey || "";
+
+    if (cohortMonthlyProvisionAmount > 0 && currentCohort?.rows?.length) {
+      monthlyProvisionAmount = round(monthlyProvisionAmount + cohortMonthlyProvisionAmount);
+      distributeMovementToRows(currentCohort.rows, cohortMonthlyProvisionAmount, "monthlyProvisionAmount", "monthlyProvisionBucketKey", monthlyBucketKey);
+      addBucketMovementRow(bucketMovementRows, {
+        monthlyProvisionAmount: cohortMonthlyProvisionAmount,
+        monthlyProvisionBucketKey: monthlyBucketKey,
+      });
+    }
+
+    if (cohortReversalAmount <= 0) return;
+
+    reversalAmount = round(reversalAmount + cohortReversalAmount);
+    addBucketMovementRow(bucketMovementRows, {
+      reversalAmount: cohortReversalAmount,
+      reversalBucketKey,
+    });
+
+    if (currentCohort?.rows?.length) {
+      distributeMovementToRows(currentCohort.rows, cohortReversalAmount, "reversalAmount", "reversalBucketKey", reversalBucketKey);
+      return;
+    }
+
+    const releasedRow = buildReversalOnlyRow(previousCohort?.rows || [], cohortReversalAmount);
+    if (releasedRow) reversalOnlyRows.push(releasedRow);
+  });
+
+  return { monthlyProvisionAmount, reversalAmount };
+}
+
+export function applyProvisionMovements(currentRows, previousRows) {
   const rows = currentRows.map((row) => ({
     ...row,
     monthlyProvisionAmount: 0,
@@ -753,38 +975,25 @@ function applyProvisionMovements(currentRows, previousRows) {
   let monthlyProvisionAmount = 0;
   let reversalAmount = 0;
 
-  currentGroups.forEach((currentGroup, key) => {
-    if (!currentGroup.provisionAmount) return;
-    const previousGroup = previousGroups.get(key);
-    const previousProvisionAmount = previousGroup?.provisionAmount || 0;
-    const groupMonthlyProvisionAmount = round(currentGroup.provisionAmount - previousProvisionAmount);
-    if (groupMonthlyProvisionAmount <= 0) return;
-
-    monthlyProvisionAmount = round(monthlyProvisionAmount + groupMonthlyProvisionAmount);
-    bucketMovementRows.push(...addMonthlyProvisionToRows(currentGroup.rows, groupMonthlyProvisionAmount));
-  });
-
-  previousGroups.forEach((previousGroup, key) => {
-    if (!previousGroup.provisionAmount) return;
+  const groupKeys = new Set([...currentGroups.keys(), ...previousGroups.keys()]);
+  groupKeys.forEach((key) => {
     const currentGroup = currentGroups.get(key);
-    const currentProvisionAmount = currentGroup?.provisionAmount || 0;
-    const groupReversalAmount = round(previousGroup.provisionAmount - currentProvisionAmount);
-    if (groupReversalAmount <= 0) return;
-
-    reversalAmount = round(reversalAmount + groupReversalAmount);
-    addReversalToBucketRows(bucketMovementRows, previousGroup.rows, groupReversalAmount);
-
-    if (currentGroup?.rows?.length) {
-      const [target] = currentGroup.rows
-        .slice()
-        .sort((left, right) => Number(right.provisionAmount || 0) - Number(left.provisionAmount || 0));
-      target.reversalAmount = round(Number(target.reversalAmount || 0) + groupReversalAmount);
-      target.reversalBucketKey = target.reversalBucketKey || previousGroup.rows.find((row) => row.provisionAmount > 0)?.bucketKey || "";
-      return;
-    }
-
-    const releasedRow = buildReversalOnlyRow(previousGroup.rows, groupReversalAmount);
-    if (releasedRow) reversalOnlyRows.push(releasedRow);
+    const previousGroup = previousGroups.get(key);
+    const movement = canUseCohortProvisionMovements(currentGroup?.rows || [], previousGroup?.rows || [])
+      ? applyCohortProvisionMovementForGroup({
+        currentGroup,
+        previousGroup,
+        bucketMovementRows,
+        reversalOnlyRows,
+      })
+      : applyAggregateProvisionMovementForGroup({
+        currentGroup,
+        previousGroup,
+        bucketMovementRows,
+        reversalOnlyRows,
+      });
+    monthlyProvisionAmount = round(monthlyProvisionAmount + movement.monthlyProvisionAmount);
+    reversalAmount = round(reversalAmount + movement.reversalAmount);
   });
 
   rows.forEach((row) => {
@@ -817,6 +1026,61 @@ function buildInitialProvisionMovements(currentRows) {
   };
 }
 
+function inventoryProvisionSummaryKey(row) {
+  return [
+    String(row.storeName || "").trim(),
+    String(row.country || "").trim(),
+    String(row.msku || "").trim(),
+    String(row.listingOwner || "").trim(),
+  ].join("|").toLowerCase();
+}
+
+function buildInventoryProvisionSummaryRows(batchRows = []) {
+  const groups = new Map();
+  batchRows.forEach((row) => {
+    const key = inventoryProvisionSummaryKey(row);
+    if (!groups.has(key)) {
+      groups.set(key, {
+        rowKey: key,
+        storeName: row.storeName || "",
+        country: row.country || "",
+        msku: row.msku || "",
+        skuName: row.skuName || "",
+        listingOwner: row.listingOwner || "",
+        quantity: 0,
+        amount: 0,
+        provisionAmount: 0,
+        monthlyProvisionAmount: 0,
+        reversalAmount: 0,
+        netProvisionAmount: 0,
+        batchRows: [],
+      });
+    }
+    const group = groups.get(key);
+    if (!group.skuName && row.skuName) group.skuName = row.skuName;
+    group.quantity = round(group.quantity + Number(row.quantity || 0));
+    group.amount = round(group.amount + Number(row.amount || 0));
+    group.provisionAmount = round(group.provisionAmount + Number(row.provisionAmount || 0));
+    group.monthlyProvisionAmount = round(group.monthlyProvisionAmount + Number(row.monthlyProvisionAmount || 0));
+    group.reversalAmount = round(group.reversalAmount + Number(row.reversalAmount || 0));
+    group.netProvisionAmount = round(group.netProvisionAmount + Number(row.netProvisionAmount || 0));
+    group.batchRows.push(row);
+  });
+
+  return [...groups.values()]
+    .map((group) => ({
+      ...group,
+      batchRows: group.batchRows.slice().sort((left, right) => (
+        Math.max(Math.abs(Number(right.netProvisionAmount || 0)), Number(right.provisionAmount || 0))
+        - Math.max(Math.abs(Number(left.netProvisionAmount || 0)), Number(left.provisionAmount || 0))
+      )),
+    }))
+    .sort((left, right) => (
+      Math.max(Math.abs(Number(right.netProvisionAmount || 0)), Number(right.provisionAmount || 0))
+      - Math.max(Math.abs(Number(left.netProvisionAmount || 0)), Number(left.provisionAmount || 0))
+    ));
+}
+
 function buildSnapshotTrendRow(date, sourceRows, filters, costMode) {
   const rows = filterSourceRows(sourceRows, filters).map((row) => toProvisionRow(row, costMode));
   return {
@@ -844,11 +1108,14 @@ async function buildMonthTrend(snapshotDates, filters, costMode) {
     .filter(Boolean);
 }
 
-async function loadInventoryRowsFromLingxing(sellersOverride = null) {
-  const adapter = getLingxingAdapter();
+export async function loadFbaInventoryDetailRows({
+  sellersOverride = null,
+  adapter = getLingxingAdapter(),
+  getSellers = getSharedSellers,
+} = {}) {
   const sellers = sellersOverride?.length
     ? filterCoreSellers(sellersOverride)
-    : filterCoreSellers((await getSharedSellers({ adapter })).sellers || []);
+    : filterCoreSellers((await getSellers({ adapter })).sellers || []);
   const sids = uniqueNumbers(sellers.map((seller) => seller.sid));
   const records = await adapter.fetchAllFbaInventoryDetails(sids);
   return {
@@ -856,6 +1123,10 @@ async function loadInventoryRowsFromLingxing(sellersOverride = null) {
     sellers,
     rawCount: records.length,
   };
+}
+
+async function loadInventoryRowsFromLingxing(sellersOverride = null) {
+  return loadFbaInventoryDetailRows({ sellersOverride });
 }
 
 function clearanceSalesKey(row) {
@@ -1306,6 +1577,7 @@ async function loadHistoricalInventoryRowsFromLingxing(selectedMonth) {
         msku: row.msku || "",
       }),
       ageDays: ageDaysForHistoricalMonth(selectedMonth, cohort.month),
+      cohortMonth: cohort.month,
       quantity: cohort.quantity,
       purchaseCost,
       firstLegCost,
@@ -1402,7 +1674,6 @@ export async function getInventoryProvisionDashboard(filters = {}) {
   let syncStatus = config.dataProvider === "lingxing" ? "等待领星 FBA 库存明细返回" : "本地模拟库龄数据";
   let snapshotAvailable = true;
   let snapshotUpdatedAt = "";
-  let liveFallback = false;
   let availableDates = [];
   let previousPeriod = "";
   let previousSourceRows = [];
@@ -1419,16 +1690,12 @@ export async function getInventoryProvisionDashboard(filters = {}) {
           ? `实时读取并保存今日快照：明细 ${result.rows.length} 条，原始记录 ${result.rawCount} 条`
           : `今日实时库存暂无可计提数据，原始记录 ${result.rawCount} 条`;
       } catch (error) {
-        const cached = await readInventoryProvisionSnapshot(currentDate);
-        if (cached?.data?.rows) {
-          sourceRows = cached.data.rows;
-          snapshotUpdatedAt = cached.updatedAt || "";
-          liveFallback = true;
-          syncStatus = `实时读取失败，显示今日最近快照 ${snapshotUpdatedAt}`;
-        } else {
-          snapshotAvailable = false;
-          syncStatus = `今日实时库存读取失败，且无可用快照：${error.message}`;
-        }
+        console.error("[inventory-provision] live inventory read failed", {
+          date: currentDate,
+          requestedMonth: date,
+          error: error.message,
+        });
+        throw new Error(`库存减值实时库存读取失败，未使用今日快照：${error.message}`);
       }
     } else {
       source = "领星 ERP · FBA历史库存月报";
@@ -1478,6 +1745,11 @@ export async function getInventoryProvisionDashboard(filters = {}) {
     }));
     movementResult.netProvisionAmount = provisionAmount;
   }
+  const batchDetailRows = movementResult.rows.sort((left, right) => (
+    Math.max(Math.abs(Number(right.netProvisionAmount || 0)), Number(right.provisionAmount || 0))
+    - Math.max(Math.abs(Number(left.netProvisionAmount || 0)), Number(left.provisionAmount || 0))
+  ));
+  const detailRows = buildInventoryProvisionSummaryRows(batchDetailRows);
   const monthlyProvisionAmount = movementResult.monthlyProvisionAmount;
   const reversalAmount = movementResult.reversalAmount;
   const netProvisionAmount = movementResult.netProvisionAmount;
@@ -1518,7 +1790,6 @@ export async function getInventoryProvisionDashboard(filters = {}) {
       costModeDescription: costMode.description,
       snapshotAvailable,
       snapshotUpdatedAt,
-      liveFallback,
       availableDates,
       reversalStatus,
       ruleText: `计提资产减值规则：91-180天*40%、181-270天*80%、271天及以上*100%；当前成本计算=${costMode.label}`,
@@ -1537,7 +1808,7 @@ export async function getInventoryProvisionDashboard(filters = {}) {
       netProvisionAmount,
       provisionRate,
       over180Amount,
-      skuCount: rows.length,
+      skuCount: detailRows.length,
     },
     bucketSummary: groupBucketAmounts(rows, movementResult.bucketMovementRows, { useEndingProvisionAsNet: useOpeningBalanceInNet }),
     storeDistribution: groupStoreAmounts(rows),
@@ -1546,10 +1817,8 @@ export async function getInventoryProvisionDashboard(filters = {}) {
         ? await buildMonthTrend(availableDates, activeFilters, costMode)
         : [buildSnapshotTrendRow(date, sourceRows, activeFilters, costMode)]
       : [buildSnapshotTrendRow(date, sourceRows, activeFilters, costMode)],
-    detailRows: movementResult.rows.sort((left, right) => (
-      Math.max(Math.abs(Number(right.netProvisionAmount || 0)), Number(right.provisionAmount || 0))
-      - Math.max(Math.abs(Number(left.netProvisionAmount || 0)), Number(left.provisionAmount || 0))
-    )),
+    detailRows,
+    batchDetailRows,
   };
 }
 
@@ -1854,16 +2123,11 @@ export async function exportInventoryProvisionDetailXlsx(filters = {}) {
     "MSKU",
     "商品名",
     "Listing负责人",
-    "库龄",
     "数量",
-    "单位采购成本",
-    "单位头程费用",
-    "成本计算单价",
-    "库存金额",
-    "计提比例",
+    "到库金额（库存金额）",
     "期末计提余额",
-    "本月增加计提（当月）",
-    "已计提冲回",
+    "本月新增计提",
+    "本月计提冲回",
     "本月计提金额",
   ];
   const detailRows = (data.detailRows || []).map((row) => [
@@ -1873,6 +2137,46 @@ export async function exportInventoryProvisionDetailXlsx(filters = {}) {
     row.msku || "",
     row.skuName || "",
     row.listingOwner && row.listingOwner !== "-" ? row.listingOwner : "负责人留空",
+    Number(row.quantity || 0),
+    Number(row.amount || 0),
+    Number(row.provisionAmount || 0),
+    Number(row.monthlyProvisionAmount || 0),
+    Number(row.reversalAmount || 0),
+    Number(row.netProvisionAmount || 0),
+  ]);
+  const detailSheet = XLSX.utils.aoa_to_sheet([detailHeaders, ...detailRows]);
+  detailSheet["!autofilter"] = { ref: `A1:L${Math.max(1, detailRows.length + 1)}` };
+  setSheetWidths(detailSheet, [10, 18, 10, 26, 34, 14, 12, 18, 14, 14, 14, 14]);
+  XLSX.utils.book_append_sheet(workbook, detailSheet, "库存减值明细");
+
+  const batchHeaders = [
+    "月份",
+    "店铺",
+    "国家",
+    "MSKU",
+    "商品名",
+    "Listing负责人",
+    "库存批次月份",
+    "库龄",
+    "数量",
+    "单位采购成本",
+    "单位头程费用",
+    "成本计算单价",
+    "库存金额",
+    "计提比例",
+    "期末计提余额",
+    "本月新增计提",
+    "本月计提冲回",
+    "本月计提金额",
+  ];
+  const batchRows = (data.batchDetailRows || []).map((row) => [
+    exportMonth,
+    row.storeName || "",
+    row.country || "",
+    row.msku || "",
+    row.skuName || "",
+    row.listingOwner && row.listingOwner !== "-" ? row.listingOwner : "负责人留空",
+    row.cohortMonth || "",
     `${row.ageDays || 0}天 · ${row.bucketLabel || ""}`,
     Number(row.quantity || 0),
     Number(row.purchaseCost || 0),
@@ -1885,10 +2189,10 @@ export async function exportInventoryProvisionDetailXlsx(filters = {}) {
     Number(row.reversalAmount || 0),
     Number(row.netProvisionAmount || 0),
   ]);
-  const detailSheet = XLSX.utils.aoa_to_sheet([detailHeaders, ...detailRows]);
-  detailSheet["!autofilter"] = { ref: `A1:Q${Math.max(1, detailRows.length + 1)}` };
-  setSheetWidths(detailSheet, [10, 18, 10, 26, 34, 14, 18, 12, 14, 14, 14, 14, 10, 14, 14, 14, 14]);
-  XLSX.utils.book_append_sheet(workbook, detailSheet, "库存减值明细");
+  const batchSheet = XLSX.utils.aoa_to_sheet([batchHeaders, ...batchRows]);
+  batchSheet["!autofilter"] = { ref: `A1:R${Math.max(1, batchRows.length + 1)}` };
+  setSheetWidths(batchSheet, [10, 18, 10, 26, 34, 14, 14, 18, 12, 14, 14, 14, 14, 10, 14, 14, 14, 14]);
+  XLSX.utils.book_append_sheet(workbook, batchSheet, "批次追溯明细");
 
   const summaryHeaders = ["月份", "库龄", "计提比例", "库存金额", "占比", "期末计提余额", "本月增加计提（当月）", "已计提冲回", "本月计提金额"];
   const summaryRows = (data.bucketSummary || []).map((row) => [
@@ -1927,3 +2231,10 @@ export async function exportInventoryProvisionDetailXlsx(filters = {}) {
     rowCount: detailRows.length,
   };
 }
+
+export const inventoryProvisionTestUtils = {
+  buildInventoryProvisionSummaryRows,
+  costModes,
+  normalizeLingxingInventoryRows,
+  toProvisionRow,
+};

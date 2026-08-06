@@ -54,6 +54,35 @@ test("sendDingTalkMarkdown can override mentions per call", async () => {
   }
 });
 
+test("sendDingTalkMarkdown can disable configured mentions for an inspection report", async () => {
+  const originalFetch = globalThis.fetch;
+  process.env.DINGTALK_WEBHOOK = "https://oapi.dingtalk.com/robot/send?access_token=test";
+  process.env.DINGTALK_SECRET = "";
+  process.env.DINGTALK_AT_MOBILES = "13800138000";
+  process.env.DINGTALK_AT_USER_IDS = "manager01";
+  let body = null;
+  globalThis.fetch = async (_url, options) => {
+    body = JSON.parse(options.body);
+    return { ok: true, status: 200, json: async () => ({ errcode: 0 }) };
+  };
+  try {
+    const result = await sendDingTalkMarkdown({
+      title: "店铺巡检",
+      text: "本周低库存费 MSKU：FEE-1。",
+      inheritConfiguredMentions: false,
+    });
+    assert.equal(result.ok, true);
+    assert.deepEqual(body.at, { isAtAll: false, atMobiles: [], atUserIds: [] });
+    assert.doesNotMatch(body.markdown.text, /@13800138000|@manager01/);
+  } finally {
+    globalThis.fetch = originalFetch;
+    delete process.env.DINGTALK_WEBHOOK;
+    delete process.env.DINGTALK_SECRET;
+    delete process.env.DINGTALK_AT_MOBILES;
+    delete process.env.DINGTALK_AT_USER_IDS;
+  }
+});
+
 test("sendDingTalkMarkdown does not append mentions already placed in markdown", async () => {
   const originalFetch = globalThis.fetch;
   process.env.DINGTALK_WEBHOOK = "https://oapi.dingtalk.com/robot/send?access_token=test";

@@ -53,3 +53,30 @@ test("payables dashboard owns its DOM event bindings and debounced search", () =
   );
   assert.deepEqual(bindAllCalls.map(([, selector, eventName]) => [selector, eventName]), [[".payable-tabs", "click"]]);
 });
+
+test("payables detail renders stable semantic keys for business columns", () => {
+  const thead = { innerHTML: "" };
+  const tbody = { innerHTML: "" };
+  const table = {
+    querySelector(selector) {
+      if (selector === "thead") return thead;
+      if (selector === "tbody") return tbody;
+      return null;
+    },
+  };
+  const { feature } = createFeature({
+    root: {
+      querySelector(selector) {
+        if (selector === '[data-payable-tabs="detail"] button.active') return { dataset: { detail: "supplierSummary" } };
+        if (selector === "#payables-detail-table") return table;
+        return null;
+      },
+    },
+  });
+
+  feature.renderPayableDetail();
+
+  assert.match(thead.innerHTML, /data-column-key="category"/);
+  assert.match(thead.innerHTML, /data-column-key="payable" data-column-kind="money"/);
+  assert.match(thead.innerHTML, /data-column-key="unpaid" data-column-kind="money"/);
+});

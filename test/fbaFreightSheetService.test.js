@@ -8,6 +8,7 @@ import {
   buildFbaFreightWorkbookBuffer,
   buildFbaForwarderWorkbookBuffer,
   convertFbaFreightShipmentsToForwarderTemplate,
+  fbaFreightSheetTestUtils,
   listFbaForwarderTemplates,
   normalizeFbaFreightShipments,
 } from "../src/services/fbaFreightSheetService.js";
@@ -97,6 +98,46 @@ test("normalizeFbaFreightShipments maps Lingxing fba shipment rows into freight 
   assert.equal(rows[0].items[0].msku, "JM-DGC-BLUE");
 });
 
+test("normalizeFbaFreightShipments preserves Lingxing close time for downstream logistics views", () => {
+  const rows = normalizeFbaFreightShipments({
+    data: {
+      list: [{
+        sid: 8708,
+        shipment_id: "FBA-CLOSED-1",
+        closed_time: "2026-08-01 12:00:00",
+        item_list: [],
+      }],
+    },
+  });
+
+  assert.equal(rows[0].closedAt, "2026-08-01 12:00:00");
+});
+
+test("buildLingxingShipmentParams keeps the visible UI end date for the adapter boundary", () => {
+  const params = fbaFreightSheetTestUtils.buildLingxingShipmentParams({
+    sids: [8708],
+    startDate: "2026-07-01",
+    endDate: "2026-07-14",
+    offset: 0,
+    length: 500,
+  });
+
+  assert.equal(params.start_date, "2026-07-01");
+  assert.equal(params.end_date, "2026-07-14");
+});
+
+test("buildLingxingShipmentParams keeps invalid end_date visible for normalized filter tests", () => {
+  const params = fbaFreightSheetTestUtils.buildLingxingShipmentParams({
+    sids: [8708],
+    startDate: "2026-07-01",
+    endDate: "bad-date",
+    offset: 0,
+    length: 500,
+  });
+
+  assert.equal(params.end_date, "bad-date");
+});
+
 test("buildFbaFreightWorkbookBuffer exports the requested freight sheet columns", () => {
   const rows = normalizeFbaFreightShipments(shipmentPayload, {
     sellersBySid: new Map([[8708, { sid: 8708, name: "xiamentanjia-US", country: "美国" }]]),
@@ -143,14 +184,16 @@ test("applyProductCatalogToFbaFreightShipments fills product images by sid and m
     },
   });
   const catalogMap = new Map([
-    ["sid:8708:msku:jm-dgc-blue", { sid: 8708, msku: "JM-DGC-BLUE", imageUrl: "https://img.example.com/catalog-blue.jpg", productName: "Catalog Blue" }],
+    ["sid:8708:msku:jm-dgc-blue", { sid: 8708, msku: "JM-DGC-BLUE", internalSku: "TJ001", imageUrl: "https://img.example.com/catalog-blue.jpg", productName: "Catalog Blue", model: "SB-2" }],
   ]);
 
   const enriched = applyProductCatalogToFbaFreightShipments(rows, catalogMap);
 
   assert.equal(enriched[0].productImageUrl, "https://img.example.com/catalog-blue.jpg");
   assert.equal(enriched[0].items[0].imageUrl, "https://img.example.com/catalog-blue.jpg");
+  assert.equal(enriched[0].items[0].internalSku, "TJ001");
   assert.equal(enriched[0].items[0].productName, "Catalog Blue");
+  assert.equal(enriched[0].items[0].model, "SB-2");
 });
 
 test("convertFbaFreightShipmentsToForwarderTemplate fills Jiufang header and product declaration fields from ERP product management", async () => {
@@ -315,4 +358,65 @@ test("buildFbaForwarderWorkbookBuffer preserves the source template package part
 
     assert.deepEqual(outputNames, sourceNames, templateId);
   }
+});
+
+test("getFbaFreightShipments uses shared candidate cache for identical filters", async () => {
+  const { clearFbaShipmentCandidateCache } = await import("../src/services/fbaShipmentCandidateService.js");
+  const { getFbaFreightShipments } = await import("../src/services/fbaFreightSheetService.js");
+  clearFbaShipmentCandidateCache();
+  let shipmentCalls = 0;
+  const adapter = {
+    async fetchFbaCargoShipments() {
+      shipmentCalls += 1;
+      return shipmentPayload;
+    },
+    async fetchListings() {
+      return { data: { list: [] } };
+    },
+    async fetchLocalProductInfos() {
+      return { data: [] };
+    },
+  };
+
+  await getFbaFreightShipments({ startDate: "2026-07-01", endDate: "2026-07-10", sid: "8708" }, {
+    adapter,
+    sellers: [{ sid: 8708, name: "xiamentanjia-US", country: "美国", seller_id: "A1SELLERUS", marketplace_id: "ATVPDKIKX0DER" }],
+  });
+  await getFbaFreightShipments({ startDate: "2026-07-01", endDate: "2026-07-10", sid: "8708" }, {
+    adapter,
+    sellers: [{ sid: 8708, name: "xiamentanjia-US", country: "美国", seller_id: "A1SELLERUS", marketplace_id: "ATVPDKIKX0DER" }],
+  });
+
+  assert.equal(shipmentCalls, 1);
+});
+
+test("getFbaFreightShipments annotates rows with persisted Jiufang order numbers", async () => {
+  const { clearFbaShipmentCandidateCache } = await import("../src/services/fbaShipmentCandidateService.js");
+  const { getFbaFreightShipments } = await import("../src/services/fbaFreightSheetService.js");
+  clearFbaShipmentCandidateCache();
+  const adapter = {
+    async fetchFbaCargoShipments() {
+      return shipmentPayload;
+    },
+    async fetchListings() {
+      return { data: { list: [] } };
+    },
+    async fetchLocalProductInfos() {
+      return { data: [] };
+    },
+  };
+
+  const result = await getFbaFreightShipments({ startDate: "2026-07-01", endDate: "2026-07-10", sid: "8708" }, {
+    adapter,
+    sellers: [{ sid: 8708, name: "xiamentanjia-US", country: "美国", seller_id: "A1SELLERUS", marketplace_id: "ATVPDKIKX0DER" }],
+    jiufangOrderStore: {
+      async listByShipmentIds(ids) {
+        assert.deepEqual(ids, ["FBA18QJFDCWJ"]);
+        return new Map([["FBA18QJFDCWJ", { jiufangOrderNumber: "LCL2607ZZ01", channelCode: "SEA-OA-03" }]]);
+      },
+    },
+  });
+
+  assert.equal(result.rows[0].jiufangOrderNumber, "LCL2607ZZ01");
+  assert.equal(result.rows[0].jiufangChannelCode, "SEA-OA-03");
 });

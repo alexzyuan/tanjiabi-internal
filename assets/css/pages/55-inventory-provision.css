@@ -9,14 +9,6 @@
   overflow-x: auto;
 }
 
-#view-provision .inventory-table-stack table {
-  min-width: 1080px;
-}
-
-#view-provision .inventory-table-stack article:first-child table {
-  min-width: 720px;
-}
-
 #view-provision .inventory-chart-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.9fr) minmax(0, 1fr);

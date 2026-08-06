@@ -2,6 +2,11 @@ import { filterCoreSellers, getLingxingAdapter } from "../adapters/lingxingAdapt
 import { lingxingShopMap } from "../data/lingxingShopMap.js";
 import { getFbaAddressProfile } from "../data/fbaAddressBook.js";
 import { getFbaBoxTemplate, hasCompleteBoxSpec } from "./fbaBoxTemplateService.js";
+import {
+  fetchLingxingListingRecords,
+  fetchLingxingProductRecords,
+  lingxingSidVariants,
+} from "./lingxingCatalogLookupService.js";
 
 const mskuCache = new Map();
 const CACHE_TTL_MS = 30 * 60 * 1000;
@@ -163,12 +168,7 @@ function mergeProductRecords(target, records) {
 }
 
 async function safeFetchProductInfo(adapter, params, fallbackParams = null) {
-  try {
-    return normalizeRecordList(await adapter.fetchLocalProductInfos(params));
-  } catch (error) {
-    if (!fallbackParams) throw error;
-    return normalizeRecordList(await adapter.fetchLocalProducts(fallbackParams));
-  }
+  return fetchLingxingProductRecords(adapter, params, fallbackParams, { strict: true });
 }
 
 async function fetchProductInfoMap(adapter, items) {
@@ -255,6 +255,64 @@ function filterMskus(items, keyword, matchMode) {
   });
 }
 
+function emptyDiagnostics() {
+  return {
+    message: "",
+    unpairedListings: [],
+    errors: [],
+  };
+}
+
+function diagnosticMessage(unpairedListings = []) {
+  if (!unpairedListings.length) return "";
+  const samples = unpairedListings
+    .slice(0, 3)
+    .map((item) => `${item.msku}（${item.displayName || item.shopName}）`)
+    .join("、");
+  return `领星 Listing 中存在 ${samples}，但未配对 ERP 产品资料。请先在领星把 Listing 关联到产品管理，并维护装箱数量、外箱规格和外箱重量后再刷新 MSKU。`;
+}
+
+async function diagnoseUnpairedListings(adapter, shops, keyword, matchMode) {
+  const diagnostics = emptyDiagnostics();
+  const value = normalizeText(keyword);
+  if (!value) return diagnostics;
+
+  for (const shop of shops) {
+    const baseParams = {
+      is_delete: 0,
+      search_field: "seller_sku",
+      search_value: [value],
+      exact_search: matchMode === "exact" ? 1 : 0,
+      sid: shop.sid,
+    };
+    try {
+      const records = await fetchLingxingListingRecords(adapter, baseParams);
+      const matches = filterMskus(
+        uniqueMskus(records.map((record) => normalizeMskuRecord(record, shop)).filter(Boolean)),
+        value,
+        matchMode,
+      );
+      diagnostics.unpairedListings.push(...matches.map((item) => ({
+        sid: item.sid,
+        shopName: item.shopName,
+        displayName: item.displayName,
+        country: item.country,
+        msku: item.msku,
+        asin: item.asin,
+        sku: item.sku,
+        title: item.title,
+        reason: "listing_not_paired_to_erp_product",
+      })));
+    } catch (error) {
+      diagnostics.errors.push(`${shop.name}: ${error.message}`);
+    }
+  }
+
+  diagnostics.unpairedListings = uniqueMskus(diagnostics.unpairedListings);
+  diagnostics.message = diagnosticMessage(diagnostics.unpairedListings);
+  return diagnostics;
+}
+
 function uniqueMskus(items) {
   const seen = new Set();
   return items.filter((item) => {
@@ -263,21 +321,6 @@ function uniqueMskus(items) {
     seen.add(key);
     return true;
   });
-}
-
-async function fetchListingRecords(adapter, baseParams) {
-  const records = [];
-  let offset = 0;
-  let total = null;
-  while (offset < 5000) {
-    const payload = await adapter.fetchListings({ ...baseParams, offset, length: 1000 });
-    const pageRows = normalizeRecordList(payload);
-    records.push(...pageRows);
-    total = Number(payload.total ?? total);
-    if (!pageRows.length || pageRows.length < 1000 || (Number.isFinite(total) && records.length >= total)) break;
-    offset += 1000;
-  }
-  return records;
 }
 
 async function fetchMskusForShop(adapter, shop, { force = false, exactMsku = "" } = {}) {
@@ -294,19 +337,14 @@ async function fetchMskusForShop(adapter, shop, { force = false, exactMsku = "" 
     baseParams.search_value = [exactMsku];
     baseParams.exact_search = 1;
   }
-  const variants = [
-    { sid: shop.sid },
-    { sids: [shop.sid] },
-    { seller_id: shop.sid },
-    { sellerId: shop.sid },
-  ];
+  const variants = lingxingSidVariants(shop.sid);
 
   let lastPayload = null;
   let lastError = null;
   let items = [];
   for (const variant of variants) {
     try {
-      const records = await fetchListingRecords(adapter, { ...baseParams, ...variant });
+      const records = await fetchLingxingListingRecords(adapter, { ...baseParams, ...variant });
       lastPayload = { code: 0, data: records };
       items = uniqueMskus(records.map((record) => normalizeMskuRecord(record, shop)).filter(Boolean));
       if (items.length || lastPayload?.code === 0 || lastPayload?.code === "0") break;
@@ -331,21 +369,25 @@ export function getFbaShopOptions() {
   }));
 }
 
-export async function searchFbaMskus({ sids = [], q = "", matchMode = "fuzzy" } = {}) {
+export async function searchFbaMskus({ sids = [], q = "", matchMode = "fuzzy", adapter = getLingxingAdapter() } = {}) {
   const coreShops = filterCoreSellers(lingxingShopMap);
   const selectedSids = Array.isArray(sids) && sids.length ? sids.map(Number).filter(Boolean) : coreShops.map((shop) => shop.sid);
   const shops = coreShops.filter((shop) => selectedSids.includes(Number(shop.sid)));
-  const adapter = getLingxingAdapter();
   const settled = await Promise.allSettled(shops.map((shop) => fetchMskusForShop(adapter, shop)));
   const errors = settled
     .map((result, index) => (result.status === "rejected" ? `${shops[index].name}: ${result.reason.message}` : ""))
     .filter(Boolean);
   const items = uniqueMskus(settled.flatMap((result) => (result.status === "fulfilled" ? result.value : [])));
+  const filteredItems = filterMskus(items, q, matchMode).slice(0, 200);
+  const diagnostics = filteredItems.length || !normalizeText(q)
+    ? emptyDiagnostics()
+    : await diagnoseUnpairedListings(adapter, shops, q, matchMode);
   return {
     ok: errors.length === 0,
     errors,
     count: items.length,
-    items: filterMskus(items, q, matchMode).slice(0, 200),
+    items: filteredItems,
+    diagnostics,
   };
 }
 

@@ -1,9 +1,19 @@
 import { getConfig } from "../config/index.js";
 import { filterCoreSellers, getLingxingAdapter } from "../adapters/lingxingAdapter.js";
 import { mapLingxingToSalesDashboard } from "./lingxingDashboardMapper.js";
-import { readLingxingSellersCache, saveLingxingSellersCache, saveSalesDashboardCache } from "../utils/cacheStore.js";
+import {
+  readLingxingSellersCache,
+  saveLingxingSellersCache,
+  saveSalesDashboardCache,
+  saveSalesWeeklySourceCache,
+} from "../utils/cacheStore.js";
 import { getBudgetTargetContext } from "./budgetTargetService.js";
-import { fetchListingOwnerRows, ownerLookupRowsFromRecords } from "./listingOwnerService.js";
+import {
+  fetchListingOwnerRows,
+  listingOwnerRowsFromRecords,
+  ownerLookupRowsFromBudgetTargets,
+  ownerLookupRowsFromRecords,
+} from "./listingOwnerService.js";
 import { captureInventoryProvisionSnapshot } from "./inventoryProvisionService.js";
 import { acquireJobLock, releaseJobLock } from "../jobs/jobLock.js";
 import {
@@ -45,13 +55,41 @@ async function syncFromLingxing() {
   const adapter = getLingxingAdapter();
   const data = await adapter.fetchSalesWeeklyData();
   const budgetTargets = await getBudgetTargetContext(data.range);
+  const sourceRecords = data.orderProfitRecords || data.sellerProfitRecords || [];
+  const directOwnerRows = listingOwnerRowsFromRecords(sourceRecords);
   let listingOwnerRows = [];
   try {
-    listingOwnerRows = await fetchListingOwnerRows(adapter, ownerLookupRowsFromRecords(data.orderProfitRecords || data.sellerProfitRecords || []));
+    const fetchedOwnerRows = await fetchListingOwnerRows(adapter, [
+      ...ownerLookupRowsFromRecords(sourceRecords),
+      ...ownerLookupRowsFromBudgetTargets(budgetTargets, data.sellers || []),
+    ]);
+    listingOwnerRows = [...directOwnerRows, ...fetchedOwnerRows];
   } catch {
-    listingOwnerRows = [];
+    listingOwnerRows = directOwnerRows;
   }
-  const dashboard = mapLingxingToSalesDashboard({ ...data, budgetTargets, listingOwnerRows });
+  const source = {
+    cacheScope: {
+      version: "sales-weekly-source-v1",
+      startDate: data.range?.startDate || "",
+      endDate: data.range?.endDate || "",
+      currencyCode: data.currencyCode || "CNY",
+      sids: [],
+    },
+    sellers: data.sellers || [],
+    sellerProfitRecords: data.sellerProfitRecords || [],
+    orderProfitRecords: data.orderProfitRecords || [],
+    dailyProfitRecords: data.dailyProfitRecords || [],
+    inventoryRecords: data.inventoryRecords || [],
+    listingOwnerRows,
+    budgetTargets,
+    range: data.range,
+    currencyCode: data.currencyCode || "CNY",
+    raw: data.raw || {},
+    updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
+  };
+  const dashboard = mapLingxingToSalesDashboard({ ...source, filters: {} });
+  const sourceCacheKey = JSON.stringify(source.cacheScope);
+  await saveSalesWeeklySourceCache(sourceCacheKey, source);
   await saveSalesDashboardCache(dashboard);
   await saveLingxingSellersCache(data.sellers);
   let inventorySnapshotMessage = "";

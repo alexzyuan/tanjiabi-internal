@@ -77,7 +77,8 @@
 | `src/utils/lingxingSign.js` | 已实现 MD5 + AES/ECB 签名 |
 | `src/services/syncService.js` | 负责每 12 小时调用一次同步 |
 | `src/services/lingxingDashboardMapper.js` | 把领星利润统计字段映射成探嘉销售看板数据 |
-| `data-cache/sales-weekly-dashboard.json` | 领星同步后生成的本地看板缓存 |
+| `data-cache/sales-weekly-source/*.json` | 领星同步后生成的销售复盘基础数据缓存，按日期/店铺/币种分组，负责人筛选在重算层处理 |
+| `data-cache/sales-weekly-dashboard.json` | 兼容旧版的默认销售看板快照缓存 |
 
 ## 当前字段映射
 

@@ -9,6 +9,9 @@ import {
   applySharedProductCatalogToRows,
   getSharedProductCatalogMap,
 } from "./sharedDataService.js";
+import { getFbaShipmentCandidates } from "./fbaShipmentCandidateService.js";
+import { fbaLogisticsChannelNamesForCountry } from "./fbaLogisticsRules.js";
+import { listJiufangOrdersByShipmentIds } from "./jiufangOrderStore.js";
 import { readZipEntries, writeZipEntries } from "../utils/zipArchive.js";
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -167,11 +170,14 @@ export function normalizeFbaFreightShipments(payload, { sellersBySid = null, sel
       shipmentId,
       staShipmentId,
       inboundPlanId,
+      isSta: firstText(row.is_sta, row.isSta),
       shippedQuantity: shippedQuantityForRow(items, row),
       shipmentStatus: firstText(row.shipment_status, row.status, row.shipmentStatus),
       fulfillmentCenterCode: firstText(row.destination_fulfillment_center_id, row.warehouseId, row.wareHouseId),
       createdAt: firstText(row.gmt_create, row.createdAt, row.working_time),
       updatedAt: firstText(row.gmt_modified, row.updatedAt),
+      receivingAt: firstText(row.receiving_time, row.receivingAt),
+      closedAt: firstText(row.closed_time, row.closedAt),
       shippingMode: firstText(row.shipping_mode, row.shippingMode),
       shippingSolution: firstText(row.shipping_solution, row.shippingSolution),
       alphaCode: firstText(row.alpha_code, row.alphaCode),
@@ -189,6 +195,8 @@ export function applyProductCatalogToFbaFreightShipments(shipments = [], catalog
   return shipments.map((shipment) => {
     const itemRows = (shipment.items || []).map((item) => ({
       sid: shipment.sid,
+      storeName: shipment.storeName,
+      country: shipment.country,
       msku: item.msku,
       sku: item.sku,
       productName: item.productName || item.title,
@@ -200,14 +208,17 @@ export function applyProductCatalogToFbaFreightShipments(shipments = [], catalog
       return {
         ...item,
         imageUrl: item.imageUrl || enriched.imageUrl || "",
+        internalSku: item.internalSku || enriched.internalSku || "",
         productName: item.productName || enriched.productName || "",
         title: item.title || enriched.productName || "",
         brand: item.brand || enriched.brand || "",
+        model: item.model || enriched.model || "",
         material: item.material || enriched.material || "",
         purpose: item.purpose || enriched.purpose || "",
         customsCode: item.customsCode || enriched.customsCode || "",
         isBattery: item.isBattery || enriched.isBattery || "",
         unit: item.unit || enriched.unit || "",
+        declaredValue: item.declaredValue || enriched.declaredValue || "",
         asin: item.asin || enriched.asin || "",
       };
     });
@@ -355,6 +366,7 @@ function normalizeForwarderLines(shipments = [], boxPayloadsByShipmentId = new M
           item,
           boxes: [],
           sku: item.sku || item.msku,
+          internalSku: item.internalSku || "",
           msku: item.msku,
           asin: item.asin || "",
           productName: item.productName || item.title || item.msku,
@@ -366,6 +378,7 @@ function normalizeForwarderLines(shipments = [], boxPayloadsByShipmentId = new M
           customsCode: item.customsCode || "",
           isBattery: item.isBattery || "",
           unit: item.unit || "",
+          declaredValue: item.declaredValue || "",
           quantity: item.shippedQuantity || shipment.shippedQuantity || 0,
           quantityInBox: item.quantityInCase || 0,
           boxCount: 0,
@@ -378,11 +391,17 @@ function normalizeForwarderLines(shipments = [], boxPayloadsByShipmentId = new M
     for (const box of boxes) {
       for (const product of box.productList || []) {
         const key = firstText(product.msku, product.sku, product.asin, "unknown");
+        const item = (shipment.items || []).find((candidate) =>
+          candidate.msku === product.msku
+          || candidate.sku === product.sku
+          || candidate.internalSku === product.sku
+        ) || {};
         const existing = grouped.get(key) || {
           shipment,
-          item: (shipment.items || []).find((candidate) => candidate.msku === product.msku || candidate.sku === product.sku) || {},
+          item,
           boxes: [],
           sku: firstText(product.sku, product.msku),
+          internalSku: firstText(item.internalSku),
           msku: firstText(product.msku),
           asin: firstText(product.asin),
           productName: firstText(product.productName, product.title),
@@ -423,10 +442,12 @@ function normalizeForwarderLines(shipments = [], boxPayloadsByShipmentId = new M
       volumeCbm: roundNumber(boxCount * lengthCm * widthCm * heightCm / 1000000, 4),
       boxRange: boxRangeText(line.boxes),
       imageUrl: line.imageUrl || line.item?.imageUrl || line.shipment?.productImageUrl || "",
+      internalSku: line.internalSku || line.item?.internalSku || "",
       productName: line.productName || line.item?.productName || line.item?.title || line.sku,
       title: line.title || line.productName || line.item?.title || line.sku,
       asin: line.asin || line.item?.asin || "",
       brand: line.brand || line.item?.brand || "",
+      model: line.model || line.item?.model || "",
       material: line.material || line.item?.material || "",
       purpose: line.purpose || line.item?.purpose || "",
       customsCode: line.customsCode || line.item?.customsCode || "",
@@ -535,11 +556,7 @@ function setRowValuesXml(row, rowNumber, values) {
 }
 
 function jiufangChannelForCountry(country = "") {
-  const normalized = normalizedCountryName(country);
-  if (normalized === "美国") return "美国海派(包税)";
-  if (normalized === "加拿大") return "加拿大卡派(包税)";
-  if (normalized === "澳洲") return "宁波澳洲卡派(包税)";
-  return "";
+  return fbaLogisticsChannelNamesForCountry(normalizedCountryName(country))[0] || "";
 }
 
 function uniqueNonEmpty(values = []) {
@@ -808,50 +825,36 @@ export async function getFbaFreightShipments(filters = {}, {
   sellers = [],
   productCatalogRequired = false,
   forceProductCatalogRefresh = false,
+  jiufangOrderStore = {
+    listByShipmentIds: (shipmentIds) => listJiufangOrdersByShipmentIds(shipmentIds),
+  },
 } = {}) {
-  const normalizedFilters = normalizeFbaFreightFilters(filters);
-  const payload = await adapter.fetchFbaCargoShipments(buildLingxingShipmentParams(normalizedFilters));
-  const normalizedShipments = normalizeFbaFreightShipments(payload, { sellers });
-  const catalogSeedRows = normalizedShipments.flatMap((shipment) =>
-    (shipment.items || []).map((item) => ({
-      sid: shipment.sid,
-      msku: item.msku,
-      sku: item.sku,
-      productName: item.productName || item.title,
-      imageUrl: item.imageUrl,
-    })),
-  );
-  let catalogResult = { map: new Map(), status: "" };
-  if (catalogSeedRows.length) {
-    try {
-      catalogResult = await getSharedProductCatalogMap(adapter, catalogSeedRows, {
-        forceRefresh: forceProductCatalogRefresh,
-        strict: productCatalogRequired,
-      });
-    } catch (error) {
-      console.error("[fba-freight] product catalog lookup failed", {
-        shipmentCount: normalizedShipments.length,
-        itemCount: catalogSeedRows.length,
-        required: productCatalogRequired,
-        error: error.message,
-      });
-      if (productCatalogRequired) throw error;
-    }
-  }
-  const shipments = applyProductCatalogToFbaFreightShipments(normalizedShipments, catalogResult.map);
-  console.info("[fba-freight] normalized shipments", {
-    shipmentCount: shipments.length,
-    itemCount: shipments.reduce((total, shipment) => total + (shipment.items || []).length, 0),
-    imageCatalogStatus: catalogResult.status || "",
+  const result = await getFbaShipmentCandidates(filters, {
+    adapter,
+    sellers,
+    productCatalogRequired,
+    forceProductCatalogRefresh,
   });
-  return {
-    ok: true,
-    filters: normalizedFilters,
-    total: Number(payload?.total || payload?.data?.total || shipments.length || 0),
-    rows: shipments,
-    imageCatalogStatus: catalogResult.status || "",
-    raw: payload,
-  };
+  const shipmentIds = result.rows.map((row) => row.shipmentId).filter(Boolean);
+  const jiufangOrdersByShipmentId = await jiufangOrderStore.listByShipmentIds(shipmentIds);
+  const rows = result.rows.map((row) => {
+    const jiufangOrder = jiufangOrdersByShipmentId.get(row.shipmentId);
+    if (!jiufangOrder) return row;
+    return {
+      ...row,
+      jiufangOrderNumber: jiufangOrder.jiufangOrderNumber,
+      jiufangChannelCode: jiufangOrder.channelCode || "",
+      jiufangCreatedAt: jiufangOrder.createdAt || "",
+    };
+  });
+  console.info("[fba-freight] normalized shipments", {
+    shipmentCount: rows.length,
+    itemCount: rows.reduce((total, shipment) => total + (shipment.items || []).length, 0),
+    jiufangOrderCount: rows.filter((row) => row.jiufangOrderNumber).length,
+    imageCatalogStatus: result.imageCatalogStatus || "",
+    cacheHit: Boolean(result.cache?.hit),
+  });
+  return { ...result, rows };
 }
 
 export async function exportFbaFreightShipments(filters = {}, options = {}) {

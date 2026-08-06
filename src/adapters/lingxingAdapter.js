@@ -1,12 +1,20 @@
 import { getConfig } from "../config/index.js";
 import { getDefaultWeekRange, listDateRange } from "../utils/dateRange.js";
-import { readOrderProfitCache, readStaleOrderProfitCache, saveOrderProfitCache } from "../utils/cacheStore.js";
+import { withLingxingDateContract } from "../utils/lingxingDateRange.js";
+import {
+  readOrderProfitCache,
+  readProfitReportCache,
+  saveOrderProfitCache,
+  saveProfitReportCache,
+} from "../utils/cacheStore.js";
 import { createLingxingAuth, createLingxingClient, createTokenState, tokenConfigKey } from "./lingxing/index.js";
 
 const CORE_COUNTRY_NAMES = new Set(["美国", "加拿大", "澳洲", "澳大利亚", "德国", "US", "CA", "AU", "DE", "USA", "Canada", "Australia", "Germany", "Deutschland"]);
 const CORE_COUNTRY_CODES = new Set(["US", "CA", "AU", "DE"]);
 const tokenStates = new Map();
 const adapterInstances = new Map();
+const orderProfitInflight = new Map();
+const profitReportInflight = new Map();
 let defaultLingxingAdapter = null;
 let defaultLingxingAdapterKey = "";
 
@@ -16,6 +24,13 @@ function readFirst(item, keys) {
     if (value !== undefined && value !== null && String(value).trim() !== "") return String(value).trim();
   }
   return "";
+}
+
+function readFirstNumber(item, keys) {
+  const value = readFirst(item, keys);
+  if (!value) return "";
+  const number = Number(value);
+  return Number.isFinite(number) ? number : value;
 }
 
 function isCoreSeller(seller) {
@@ -30,13 +45,36 @@ export function filterCoreSellers(sellers = []) {
   return sellers.filter(isCoreSeller);
 }
 
-function stableOrderProfitCacheKey({ startDate, endDate, sids = [], currencyCode = "ORIGINAL" }) {
+function stableOrderProfitCacheKey({ startDate, endDate, sids = [], currencyCode = "CNY" }) {
   return JSON.stringify({
     source: "basicOpen/finance/mreport/OrderProfit",
     startDate,
     endDate,
     currencyCode,
     sids: uniqueNumbers(sids).sort((a, b) => a - b),
+  });
+}
+
+function stableProfitReportCacheValue(value, key = "") {
+  if (Array.isArray(value)) {
+    const normalized = value.map((item) => stableProfitReportCacheValue(item));
+    return ["sids", "seller_ids", "sellerIds", "store_ids", "storeIds"].includes(key)
+      ? normalized.slice().sort((left, right) => String(left).localeCompare(String(right)))
+      : normalized;
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.keys(value)
+      .filter((itemKey) => value[itemKey] !== undefined)
+      .sort()
+      .map((itemKey) => [itemKey, stableProfitReportCacheValue(value[itemKey], itemKey)]));
+  }
+  return value;
+}
+
+function stableProfitReportCacheKey(endpoint, params = {}) {
+  return JSON.stringify({
+    source: endpoint,
+    params: stableProfitReportCacheValue(params),
   });
 }
 
@@ -48,6 +86,27 @@ function sleep(ms) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+function lingxingDateRangeParams(endpoint, params = {}) {
+  return withLingxingDateContract(endpoint, params);
+}
+
+function orderProfitTotal(payload) {
+  const candidates = [payload?.data?.total, payload?.data?.totalCount, payload?.total, payload?.totalCount];
+  const value = candidates.find((candidate) => candidate !== undefined && candidate !== null && candidate !== "");
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : null;
+}
+
+function mergeOrderProfitPayload(firstPayload, records) {
+  if (Array.isArray(firstPayload?.data)) return { ...firstPayload, data: records };
+  const data = firstPayload?.data && typeof firstPayload.data === "object" ? firstPayload.data : {};
+  if (Array.isArray(data.records)) return { ...firstPayload, data: { ...data, records, total: records.length } };
+  if (Array.isArray(data.list)) return { ...firstPayload, data: { ...data, list: records, total: records.length } };
+  if (Array.isArray(data.rows)) return { ...firstPayload, data: { ...data, rows: records, total: records.length } };
+  if (Array.isArray(data.data)) return { ...firstPayload, data: { ...data, data: records, total: records.length } };
+  return { ...firstPayload, data: { ...data, records, total: records.length } };
 }
 
 function adapterConfigKey(config = {}) {
@@ -84,6 +143,8 @@ export function getLingxingAdapter(config = getConfig().lingxing) {
 export function resetLingxingAdapterForTest() {
   tokenStates.clear();
   adapterInstances.clear();
+  orderProfitInflight.clear();
+  profitReportInflight.clear();
   defaultLingxingAdapter = null;
   defaultLingxingAdapterKey = "";
 }
@@ -164,7 +225,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 1000,
-        ...params,
+        ...lingxingDateRangeParams("/erp/sc/data/mws/listing", params),
       },
     });
   }
@@ -196,7 +257,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 1000,
-        ...params,
+        ...lingxingDateRangeParams(targetEndpoint, params),
       },
     });
   }
@@ -224,7 +285,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 200,
-        ...params,
+        ...lingxingDateRangeParams("/pb/openapi/newad/portfolios", params),
       },
     });
   }
@@ -238,7 +299,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 1000,
-        ...params,
+        ...lingxingDateRangeParams(endpoint, params),
       },
     });
   }
@@ -254,7 +315,7 @@ export class LingxingAdapter {
         length: 1000,
         show_detail: 1,
         target_type: "keyword",
-        ...params,
+        ...lingxingDateRangeParams(endpoint, params),
       },
     });
   }
@@ -268,7 +329,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 1000,
-        ...params,
+        ...lingxingDateRangeParams("/pb/openapi/newad/spKeywords", params),
       },
     });
   }
@@ -283,7 +344,7 @@ export class LingxingAdapter {
         offset: 0,
         length: 1000,
         show_detail: 1,
-        ...params,
+        ...lingxingDateRangeParams("/pb/openapi/newad/spKeywordReports", params),
       },
     });
   }
@@ -298,7 +359,7 @@ export class LingxingAdapter {
         offset: 0,
         length: 1000,
         show_detail: 1,
-        ...params,
+        ...lingxingDateRangeParams("/pb/openapi/newad/queryWordReports", params),
       },
     });
   }
@@ -310,7 +371,7 @@ export class LingxingAdapter {
         offset: 0,
         length: 1000,
         date_type: 1,
-        ...params,
+        ...lingxingDateRangeParams("/erp/sc/data/mws/orders", params),
       },
     });
   }
@@ -320,7 +381,7 @@ export class LingxingAdapter {
     const requestParams = {
       offset: 0,
       length: 1000,
-      ...restParams,
+      ...lingxingDateRangeParams("/bd/profit/statistics/open/seller/list", restParams),
     };
     if (currencyCode && currencyCode !== "ORIGINAL") {
       requestParams.currencyCode = currencyCode;
@@ -333,14 +394,70 @@ export class LingxingAdapter {
   }
 
   fetchSellerProfitReport(params) {
+    const {
+      startDate: explicitStartDate,
+      endDate: explicitEndDate,
+      start_date,
+      end_date,
+      currencyCode,
+      sids = [],
+      monthlyQuery = true,
+      summaryEnabled = true,
+      ...restParams
+    } = params || {};
+    const startDate = explicitStartDate || start_date;
+    const endDate = explicitEndDate || end_date;
+    const requestParams = {
+      offset: 0,
+      length: 1000,
+      monthlyQuery,
+      summaryEnabled,
+      startDate,
+      endDate,
+      sids,
+      ...restParams,
+    };
+    if (currencyCode && currencyCode !== "ORIGINAL") requestParams.currencyCode = currencyCode;
+    const apiParams = lingxingDateRangeParams("/bd/profit/report/open/report/seller/list", requestParams);
     return this.signedRequest("/bd/profit/report/open/report/seller/list", {
       method: "POST",
-      params: {
-        offset: 0,
-        length: 1000,
-        ...params,
-      },
+      params: apiParams,
     });
+  }
+
+  async fetchOtherFeeList(params = {}) {
+    const pageSize = Number(params.length || 1000);
+    const maxRows = Number(this.config.otherFeeMaxRows || 10000);
+    if (!Number.isInteger(pageSize) || pageSize <= 0) throw new Error("otherFee length 必须是正整数");
+    if (!Number.isInteger(maxRows) || maxRows < pageSize) throw new Error("otherFeeMaxRows 必须是不小于 length 的整数");
+    const rows = [];
+    let firstPayload;
+    for (let offset = Number(params.offset || 0); ; offset += pageSize) {
+      if (offset >= maxRows) {
+        const error = new Error(`自定义费用分页达到安全上限 ${maxRows} 条，拒绝返回截断结果`);
+        error.endpoint = "/bd/fee/management/open/feeManagement/otherFee/list";
+        error.details = { maxRows, pageSize, fetchedRows: rows.length };
+        throw error;
+      }
+      const payload = await this.signedRequest("/bd/fee/management/open/feeManagement/otherFee/list", {
+        method: "POST",
+        params: {
+          offset,
+          length: pageSize,
+          date_type: "date",
+          dimensions: [3],
+          ...lingxingDateRangeParams("/bd/fee/management/open/feeManagement/otherFee/list", params),
+          offset,
+          length: pageSize,
+        },
+      });
+      if (!firstPayload) firstPayload = payload;
+      const page = this.normalizeRecordList(payload);
+      rows.push(...page);
+      const total = Number(payload?.data?.total || payload?.total || 0);
+      if (!page.length || page.length < pageSize || (total && rows.length >= total)) break;
+    }
+    return mergeOrderProfitPayload(firstPayload || { code: 0 }, rows);
   }
 
   fetchOrderProfitReport(params) {
@@ -350,26 +467,61 @@ export class LingxingAdapter {
         offset: 0,
         length: 10000,
         search_date_field: "posted_date_locale",
-        ...params,
+        ...lingxingDateRangeParams("/bd/profit/report/open/report/order/list", params),
       },
     });
   }
 
-  fetchMskuOrderProfit(params) {
+  async fetchMskuOrderProfit(params) {
     const { currencyCode, ...restParams } = params || {};
-    const requestParams = {
-      offset: 0,
-      length: 5000,
-      ...restParams,
-    };
+    const pageSize = 5000;
+    const maxRows = Number(this.config.orderProfitMaxRows || 100000);
+    if (!Number.isInteger(maxRows) || maxRows < pageSize) {
+      throw new Error("orderProfitMaxRows 必须是不小于 5000 的整数");
+    }
+    const requestParams = lingxingDateRangeParams("/basicOpen/finance/mreport/OrderProfit", restParams);
     if (currencyCode && currencyCode !== "ORIGINAL") {
       requestParams.currencyCode = currencyCode;
     }
-
-    return this.signedRequest("/basicOpen/finance/mreport/OrderProfit", {
-      method: "POST",
-      params: requestParams,
-    });
+    const records = [];
+    let firstPayload;
+    let pageCount = 0;
+    for (let offset = 0; ; ) {
+      if (offset >= maxRows) {
+        const error = new Error(`订单利润分页达到安全上限 ${maxRows} 条，拒绝返回截断结果`);
+        error.endpoint = "/basicOpen/finance/mreport/OrderProfit";
+        error.details = { maxRows, pageSize, fetchedRows: records.length };
+        throw error;
+      }
+      const payload = await this.signedRequest("/basicOpen/finance/mreport/OrderProfit", {
+        method: "POST",
+        params: { ...requestParams, offset, length: pageSize },
+      });
+      if (!firstPayload) firstPayload = payload;
+      const pageRecords = this.normalizeRecordList(payload);
+      records.push(...pageRecords);
+      pageCount += 1;
+      const total = orderProfitTotal(payload);
+      const hasNext = payload?.data?.hasNext ?? payload?.hasNext;
+      const totalExhausted = total !== null && records.length >= total;
+      const upstreamHasMore = hasNext === true || (total !== null && records.length < total);
+      if (!pageRecords.length && upstreamHasMore) {
+        const error = new Error("订单利润分页返回空页但上游仍声明存在后续数据，拒绝返回不完整结果");
+        error.endpoint = "/basicOpen/finance/mreport/OrderProfit";
+        error.details = { offset, total, hasNext, fetchedRows: records.length };
+        throw error;
+      }
+      if (!upstreamHasMore && (totalExhausted || hasNext === false || pageRecords.length < pageSize || !pageRecords.length)) break;
+      offset += pageRecords.length;
+    }
+    if (pageCount > 1) {
+      console.info("[lingxing-adapter] order profit pagination complete", {
+        endpoint: "/basicOpen/finance/mreport/OrderProfit",
+        pageCount,
+        recordCount: records.length,
+      });
+    }
+    return mergeOrderProfitPayload(firstPayload || { data: [] }, records);
   }
 
   fetchReplenishmentAdvice(params = {}, endpoint = "") {
@@ -382,7 +534,7 @@ export class LingxingAdapter {
         offset: 0,
         length: 50,
         data_type: 2,
-        ...params,
+        ...lingxingDateRangeParams(targetEndpoint, params),
       },
     });
   }
@@ -397,7 +549,7 @@ export class LingxingAdapter {
       summary_field: "msku",
       is_recently_enum: true,
       purchase_status: 0,
-      ...restParams,
+      ...lingxingDateRangeParams("/bd/productPerformance/openApi/asinList", restParams),
     };
     if (currencyCode && currencyCode !== "ORIGINAL") {
       requestParams.currency_code = currencyCode;
@@ -419,7 +571,7 @@ export class LingxingAdapter {
         dateType: 0,
         sortField: "curReturnGoodsCount",
         sortType: "DESC",
-        ...params,
+        ...lingxingDateRangeParams("/basicOpen/salesAnalysis/returnOrder/analysisLists", params),
       },
     });
   }
@@ -433,7 +585,7 @@ export class LingxingAdapter {
         date_field: "review_time",
         sort_field: "review_date",
         sort_type: "desc",
-        ...params,
+        ...lingxingDateRangeParams("/basicOpen/openapi/service/v3/data/mws/reviews", params),
       },
     });
   }
@@ -444,7 +596,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 200,
-        ...params,
+        ...lingxingDateRangeParams("/basicOpen/customerService/voiceOfBuyer/list", params),
       },
     });
   }
@@ -458,7 +610,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 200,
-        ...params,
+        ...lingxingDateRangeParams(endpoint, params),
       },
     });
   }
@@ -473,7 +625,7 @@ export class LingxingAdapter {
         is_hide_zero_stock: "1",
         fulfillment_channel_type: "FBA",
         query_fba_storage_quantity_list: true,
-        ...params,
+        ...lingxingDateRangeParams(endpoint, params),
       },
     });
   }
@@ -484,13 +636,52 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 100,
-        ...params,
+        ...lingxingDateRangeParams("/erp/sc/data/fba_report/shipmentList", params),
       },
     });
   }
 
   fetchFbaCargoShipmentBoxes(params = {}) {
     return this.signedRequest("/amzStaServer/openapi/inbound-shipment/listShipmentBoxes", {
+      method: "POST",
+      params,
+    });
+  }
+
+  fetchFbaShipmentBoxInfo(params = {}) {
+    return this.signedRequest("/erp/sc/routing/fba/shipment/boxInfo", {
+      method: "POST",
+      params,
+    });
+  }
+
+  fetchLocalWarehouses(params = {}) {
+    return this.signedRequest("/erp/sc/data/local_inventory/warehouse", {
+      method: "POST",
+      params: {
+        type: 1,
+        is_delete: 0,
+        offset: 0,
+        length: 1000,
+        ...params,
+      },
+    });
+  }
+
+  fetchFbaInboundShipmentOrders(params = {}) {
+    return this.signedRequest("/erp/sc/routing/storage/shipment/getInboundShipmentList", {
+      method: "POST",
+      params: {
+        offset: 0,
+        length: 20,
+        is_delete: 0,
+        ...lingxingDateRangeParams("/erp/sc/routing/storage/shipment/getInboundShipmentList", params),
+      },
+    });
+  }
+
+  createReadySendFbaShipmentOrder(params = {}) {
+    return this.signedRequest("/erp/sc/routing/storage/shipment/createReadySendOrder", {
       method: "POST",
       params,
     });
@@ -521,7 +712,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 2100,
-        ...params,
+        ...lingxingDateRangeParams("/cost/center/openApi/fba/detail/query", params),
       },
     });
   }
@@ -532,7 +723,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 1000,
-        ...params,
+        ...lingxingDateRangeParams("/erp/sc/data/fba_report/storageFeeMonth", params),
       },
     });
   }
@@ -576,7 +767,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 200,
-        ...params,
+        ...lingxingDateRangeParams("/bd/sp/api/open/settlement/summary/list", params),
       },
     });
   }
@@ -590,7 +781,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 200,
-        ...params,
+        ...lingxingDateRangeParams(endpoint, params),
       },
     });
   }
@@ -604,7 +795,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 200,
-        ...params,
+        ...lingxingDateRangeParams(endpoint, params),
       },
     });
   }
@@ -620,7 +811,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 200,
-        ...params,
+        ...lingxingDateRangeParams(this.config.payableOtherEndpoint, params),
       },
     });
   }
@@ -634,7 +825,7 @@ export class LingxingAdapter {
       params: {
         offset: 0,
         length: 500,
-        ...params,
+        ...lingxingDateRangeParams(endpoint, params),
       },
     });
   }
@@ -649,7 +840,7 @@ export class LingxingAdapter {
         disposition: "01",
         offset: 0,
         length: 1000,
-        ...params,
+        ...lingxingDateRangeParams("/cost/center/ods/summary/query", params),
       },
     });
   }
@@ -920,6 +1111,9 @@ export class LingxingAdapter {
         storeName,
         country,
         countryCode: seller.country_code || seller.countryCode || record.country_code || record.countryCode || "",
+        currencyCode: readFirst(record, ["currency_code", "currencyCode", "currency"]),
+        cnyAmount: readFirstNumber(record, ["amount_cny", "cny_amount", "total_amount_cny"]),
+        exchangeRate: readFirstNumber(record, ["exchange_rate", "exchangeRate", "rate_to_cny"]),
         totalSalesAmount: record.amount,
         netSalesAmount: record.net_amount,
         grossProfit: record.gross_profit,
@@ -931,6 +1125,14 @@ export class LingxingAdapter {
         ]),
         grossRate: record.gross_margin,
         totalSalesQuantity: record.volume,
+        returnQuantity: readFirstNumber(record, ["return_quantity", "returnQuantity", "return_qty", "returnQty"]),
+        unsaleableReturnQuantity: readFirstNumber(record, [
+          "fbaReturnsUnsaleableQuantity",
+          "fba_returns_unsaleable_quantity",
+          "unsaleable_return_quantity",
+        ]),
+        purchaseUnitCost: readFirstNumber(record, ["cgUnitPrice", "cg_unit_price"]),
+        firstLegUnitCost: readFirstNumber(record, ["cgTransportUnitCosts", "cg_transport_unit_costs"]),
         totalAdsSales: record.ad_sales_amount,
         totalAdsSalesQuantity: record.ad_volume,
         totalAdsCost: record.spend,
@@ -1062,6 +1264,186 @@ export class LingxingAdapter {
         countryCode: record.countryCode || record.country_code || seller.country_code || seller.countryCode || "",
         currencyCode: record.currencyCode || record.currency_code || "",
       };
+    });
+  }
+
+  async fetchMskuOrderProfitCached({
+    startDate,
+    endDate,
+    sids = [],
+    currencyCode = "CNY",
+    sellerList = [],
+    reportDate = endDate,
+  } = {}) {
+    const selectedSids = uniqueNumbers(sids);
+    const selectedSidSet = new Set(selectedSids);
+    const cacheKey = stableOrderProfitCacheKey({ startDate, endDate, sids: selectedSids, currencyCode });
+    const cached = await readOrderProfitCache(cacheKey);
+    if (cached?.data?.orderProfitRecords) {
+      console.info("[lingxing-adapter] order profit cache hit", {
+        cacheKey,
+        startDate,
+        endDate,
+        currencyCode,
+        sidCount: selectedSids.length,
+        recordCount: cached.data.orderProfitRecords.length,
+      });
+      return {
+        records: cached.data.orderProfitRecords,
+        cacheKey,
+        cacheState: "hit",
+        cacheUpdatedAt: cached.updatedAt || "",
+      };
+    }
+
+    const existing = orderProfitInflight.get(cacheKey);
+    if (existing) {
+      console.info("[lingxing-adapter] order profit cache joined in-flight request", {
+        cacheKey,
+        startDate,
+        endDate,
+        currencyCode,
+        sidCount: selectedSids.length,
+      });
+      const result = await existing;
+      return { ...result, cacheState: "inflight" };
+    }
+
+    const loadPromise = (async () => {
+      const startedAt = Date.now();
+      try {
+        const payload = await this.fetchMskuOrderProfit({ startDate, endDate, sids: selectedSids, currencyCode });
+        const rawRecords = this.normalizeRecordList(payload);
+        const records = this.normalizeMskuOrderProfitRecords(rawRecords, sellerList, reportDate).filter((record) => {
+          if (!selectedSids.length) return true;
+          const recordSid = Number(record.sid || record.seller_id || record.sellerId || record.store_id || record.storeId);
+          return recordSid ? selectedSidSet.has(recordSid) : true;
+        });
+        await saveOrderProfitCache(cacheKey, { orderProfitRecords: records });
+        console.info("[lingxing-adapter] order profit cache miss loaded", {
+          cacheKey,
+          startDate,
+          endDate,
+          currencyCode,
+          sidCount: selectedSids.length,
+          recordCount: records.length,
+          elapsedMs: Date.now() - startedAt,
+        });
+        return { records, cacheKey, cacheState: "miss", cacheUpdatedAt: "" };
+      } catch (error) {
+        console.error("[lingxing-adapter] cached order profit fetch failed", {
+          cacheKey,
+          startDate,
+          endDate,
+          currencyCode,
+          sidCount: selectedSids.length,
+          elapsedMs: Date.now() - startedAt,
+          error: error.message,
+        });
+        throw error;
+      }
+    })();
+    orderProfitInflight.set(cacheKey, loadPromise);
+    try {
+      return await loadPromise;
+    } finally {
+      if (orderProfitInflight.get(cacheKey) === loadPromise) orderProfitInflight.delete(cacheKey);
+    }
+  }
+
+  async fetchProfitReportCachedInternal({ endpoint, requestParams, sellerList = [], reportDate = "", normalize, label }) {
+    const cacheKey = stableProfitReportCacheKey(endpoint, requestParams);
+    const cached = await readProfitReportCache(cacheKey);
+    if (cached?.data?.profitReportRecords) {
+      console.info("[lingxing-adapter] profit report cache hit", {
+        cacheKey,
+        endpoint,
+        label,
+        recordCount: cached.data.profitReportRecords.length,
+      });
+      return {
+        records: cached.data.profitReportRecords,
+        cacheKey,
+        cacheState: "hit",
+        cacheUpdatedAt: cached.updatedAt || "",
+      };
+    }
+
+    const existing = profitReportInflight.get(cacheKey);
+    if (existing) {
+      console.info("[lingxing-adapter] profit report cache joined in-flight request", {
+        cacheKey,
+        endpoint,
+        label,
+      });
+      const result = await existing;
+      return { ...result, cacheState: "inflight" };
+    }
+
+    const loadPromise = (async () => {
+      const startedAt = Date.now();
+      try {
+        const payload = await this.fetchProfitReportPayload(endpoint, requestParams);
+        const rawRecords = this.normalizeRecordList(payload);
+        const records = normalize
+          ? normalize.call(this, rawRecords, sellerList, reportDate)
+          : rawRecords;
+        await saveProfitReportCache(cacheKey, { profitReportRecords: records });
+        console.info("[lingxing-adapter] profit report cache miss loaded", {
+          cacheKey,
+          endpoint,
+          label,
+          recordCount: records.length,
+          elapsedMs: Date.now() - startedAt,
+        });
+        return { records, cacheKey, cacheState: "miss", cacheUpdatedAt: "" };
+      } catch (error) {
+        console.error("[lingxing-adapter] cached profit report fetch failed", {
+          cacheKey,
+          endpoint,
+          label,
+          elapsedMs: Date.now() - startedAt,
+          error: error.message,
+        });
+        throw error;
+      }
+    })();
+    profitReportInflight.set(cacheKey, loadPromise);
+    try {
+      return await loadPromise;
+    } finally {
+      if (profitReportInflight.get(cacheKey) === loadPromise) profitReportInflight.delete(cacheKey);
+    }
+  }
+
+  async fetchProfitReportPayload(endpoint, requestParams) {
+    if (endpoint === "/bd/profit/report/open/report/order/list") {
+      return this.fetchOrderProfitReport(requestParams);
+    }
+    if (endpoint === "/bd/profit/report/open/report/seller/list") {
+      return this.fetchSellerProfitReport(requestParams);
+    }
+    throw new Error(`不支持的利润报表缓存接口：${endpoint}`);
+  }
+
+  async fetchOrderProfitReportCached({ sellerList = [], reportDate = "", ...params } = {}) {
+    return this.fetchProfitReportCachedInternal({
+      endpoint: "/bd/profit/report/open/report/order/list",
+      requestParams: params,
+      sellerList,
+      reportDate,
+      label: "订单维度",
+    });
+  }
+
+  async fetchSellerProfitReportCached({ sellerList = [], reportDate = "", ...params } = {}) {
+    return this.fetchProfitReportCachedInternal({
+      endpoint: "/bd/profit/report/open/report/seller/list",
+      requestParams: params,
+      sellerList,
+      reportDate,
+      label: "店铺维度",
+      normalize: this.normalizeSellerProfitRecords,
     });
   }
 
@@ -1211,7 +1593,7 @@ export class LingxingAdapter {
       startDate: filters.startDate || defaultRange.startDate,
       endDate: filters.endDate || defaultRange.endDate,
     };
-    const currencyCode = filters.currencyCode || "ORIGINAL";
+    const currencyCode = filters.currencyCode || "CNY";
     const activeSids = sellerList
       .filter((seller) => !seller.status || seller.status === 1)
       .map((seller) => seller.sid);
@@ -1220,13 +1602,6 @@ export class LingxingAdapter {
     const selectedSids = Array.isArray(filters.sids) && filters.sids.length
       ? filters.sids.map(Number).filter((sid) => allowedSidSet.has(sid))
       : uniqueActiveSids;
-    const selectedSidSet = new Set(selectedSids);
-    const cacheKey = stableOrderProfitCacheKey({
-      startDate: range.startDate,
-      endDate: range.endDate,
-      sids: selectedSids,
-      currencyCode,
-    });
     let orderProfitRecords = [];
     let inventoryRecords = [];
     let cacheState = "miss";
@@ -1234,36 +1609,17 @@ export class LingxingAdapter {
     let sourceWarning = "";
     let inventoryWarning = "";
 
-    const cached = await readOrderProfitCache(cacheKey);
-    if (cached?.data?.orderProfitRecords) {
-      orderProfitRecords = cached.data.orderProfitRecords;
-      cacheState = "hit";
-      cacheUpdatedAt = cached.updatedAt || "";
-    } else {
-      try {
-        const orderProfit = await this.fetchMskuOrderProfit({
-          startDate: range.startDate,
-          endDate: range.endDate,
-          sids: selectedSids,
-          currencyCode,
-        });
-        const rawRecords = this.normalizeRecordList(orderProfit);
-        const reportDate = range.startDate === range.endDate ? range.startDate : range.endDate;
-        orderProfitRecords = this.normalizeMskuOrderProfitRecords(rawRecords, sellerList, reportDate).filter((record) => {
-          if (!selectedSids.length) return true;
-          const recordSid = Number(record.sid || record.seller_id || record.sellerId || record.store_id || record.storeId);
-          return recordSid ? selectedSidSet.has(recordSid) : true;
-        });
-        await saveOrderProfitCache(cacheKey, { orderProfitRecords });
-      } catch (error) {
-        const stale = await readStaleOrderProfitCache(cacheKey);
-        if (!stale?.data?.orderProfitRecords) throw error;
-        orderProfitRecords = stale.data.orderProfitRecords;
-        cacheState = "stale";
-        cacheUpdatedAt = stale.updatedAt || "";
-        sourceWarning = error.message;
-      }
-    }
+    const orderProfitResult = await this.fetchMskuOrderProfitCached({
+      startDate: range.startDate,
+      endDate: range.endDate,
+      sids: selectedSids,
+      currencyCode,
+      sellerList,
+      reportDate: range.startDate === range.endDate ? range.startDate : range.endDate,
+    });
+    orderProfitRecords = orderProfitResult.records;
+    cacheState = orderProfitResult.cacheState;
+    cacheUpdatedAt = orderProfitResult.cacheUpdatedAt;
 
     try {
       inventoryRecords = await this.fetchAllFbaInventoryDetails(selectedSids);

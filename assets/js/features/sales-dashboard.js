@@ -1,4 +1,6 @@
 import { renderKpiProgress } from "../ui-components.js?v=20260707-ui-components-v1";
+import { FRONT_OWNER_QUICK_FILTERS } from "../front-shop-filters.js?v=20260724-sales-owner-detail-jump-v1";
+import { markDashboardLoadingRequest, startDashboardLoadingOverlay } from "../dashboard-loader.js?v=20260803-global-page-loading-v1";
 
 export function createSalesDashboardFeature({
   root = globalThis.document,
@@ -193,10 +195,22 @@ export function createSalesDashboardFeature({
     return String(leftValue || "").localeCompare(String(rightValue || ""), "zh-Hans-CN");
   }
 
+  function currentListingOwnerFilter() {
+    const select = root?.querySelector?.("#front-owner-filter");
+    return String(select?.value || "").trim();
+  }
+
+  function ownerFilteredMskuDetailRows(rows = mskuDetailRows) {
+    const owner = currentListingOwnerFilter();
+    if (!owner) return rows;
+    return rows.filter((row) => String(row?.listingOwner || "").trim() === owner);
+  }
+
   function filteredMskuDetailRows() {
+    const ownerRows = ownerFilteredMskuDetailRows();
     const rows = mskuDetailStoreFilter
-      ? mskuDetailRows.filter((row) => row.budgetStoreName === mskuDetailStoreFilter)
-      : mskuDetailRows;
+      ? ownerRows.filter((row) => row.budgetStoreName === mskuDetailStoreFilter)
+      : ownerRows;
     const multiplier = mskuDetailSort.direction === "asc" ? 1 : -1;
     return [...rows].sort((left, right) => compareMskuDetailRows(left, right, mskuDetailSort.key) * multiplier);
   }
@@ -263,6 +277,7 @@ export function createSalesDashboardFeature({
           <td>${formatActualMoney(row.fbaInventory || 0)}</td>
           <td>${formatActualMoney(row.quantityAchievement || 0)}%</td>
           <td>${formatActualMoney(row.orderProfit || 0)}</td>
+          <td>${formatActualMoney(row.averageProfit || 0)}</td>
           ${mskuRateCell("grossRate", row.grossRate)}
           ${mskuRateCell("refundRate", row.refundRate)}
           ${mskuRateCell("adFeeRate", row.adFeeRate)}
@@ -274,7 +289,7 @@ export function createSalesDashboardFeature({
           ${mskuRateCell("firstLegCostRate", row.firstLegCostRate)}
         </tr>
       `).join("")
-      : `<tr><td colspan="17">当前筛选周期暂无 MSKU 明细。</td></tr>`;
+      : `<tr><td colspan="18">当前筛选周期暂无 MSKU 明细。</td></tr>`;
   }
 
   function normalizeSiteCells(cells) {
@@ -325,10 +340,11 @@ export function createSalesDashboardFeature({
     const detailRows = (data.detailRows || []).filter((row) => row && !Array.isArray(row) && typeof row === "object");
     if (detailTable) {
       mskuDetailRows = detailRows;
-      renderMskuStoreTabs(mskuDetailRows);
+      const visibleDetailRows = ownerFilteredMskuDetailRows(mskuDetailRows);
+      renderMskuStoreTabs(visibleDetailRows);
       renderMskuDetailTable();
       const status = root?.querySelector?.("#msku-detail-status");
-      if (status) status.textContent = `随销售看板同步加载 · ${mskuDetailRows.length} 条预算 MSKU`;
+      if (status) status.textContent = `随销售看板同步加载 · ${visibleDetailRows.length} 条预算 MSKU`;
     }
 
     const dailyTable = root?.querySelector?.("#daily-table");
@@ -396,7 +412,16 @@ export function createSalesDashboardFeature({
     const select = root?.querySelector?.("#front-owner-filter");
     if (!select) return;
     const selected = select.value;
-    select.innerHTML = `<option value="">全部负责人</option>${options
+    const mergedOptions = [
+      ...FRONT_OWNER_QUICK_FILTERS.map((name) => ({ value: name, name })),
+      ...options,
+    ].reduce((items, item) => {
+      const value = item.value || item.name;
+      if (!value || items.some((existing) => existing.value === value)) return items;
+      items.push({ value, name: item.name || value });
+      return items;
+    }, []);
+    select.innerHTML = `<option value="">全部负责人</option>${mergedOptions
       .map((item) => `<option value="${escapeHtml(item.value || item.name)}">${escapeHtml(item.name || item.value)}</option>`)
       .join("")}`;
     if ([...select.options].some((option) => option.value === selected)) select.value = selected;
@@ -425,14 +450,26 @@ export function createSalesDashboardFeature({
     runSafely("销售看板表格渲染", () => fillTables(dashboard));
   }
 
-  async function loadDashboard() {
+  function revealMskuDetailPanel() {
+    const detailTable = root?.querySelector?.("#detail-table");
+    const detailPanel = detailTable?.closest?.(".detail-panel") || root?.querySelector?.(".detail-panel");
+    detailPanel?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }
+
+  async function loadDashboard({ loadingOverlay = {} } = {}) {
+    const hideLoadingOverlay = loadingOverlay === false ? () => {} : startDashboardLoadingOverlay({
+      root,
+      targetSelector: "#sales-dashboard-content",
+      message: typeof loadingOverlay === "object" ? loadingOverlay.message || "正在加载销售复盘数据..." : "正在加载销售复盘数据...",
+      delayMs: typeof loadingOverlay === "object" ? loadingOverlay.delayMs : undefined,
+    });
     try {
       const params = new URLSearchParams(buildDashboardQuery());
       params.set("_", String(Date.now()));
-      const response = await fetchImpl(`/api/dashboard/sales-weekly?${params.toString()}`, {
+      const response = await fetchImpl(`/api/dashboard/sales-weekly?${params.toString()}`, markDashboardLoadingRequest({
         cache: "no-store",
         credentials: "same-origin",
-      });
+      }));
       if (response.status === 401) {
         redirectToLogin?.();
         throw new Error("登录状态已失效");
@@ -445,6 +482,8 @@ export function createSalesDashboardFeature({
     } catch (error) {
       console.info("销售看板接口未返回真实数据。", error);
       return makeUnavailableDashboard(`销售看板接口失败：${error.message}`);
+    } finally {
+      hideLoadingOverlay();
     }
   }
 
@@ -465,6 +504,7 @@ export function createSalesDashboardFeature({
     applyMskuDetailSort,
     loadDashboard,
     makeUnavailableDashboard,
+    revealMskuDetailPanel,
     renderDashboard,
     setupSalesDashboard,
   };

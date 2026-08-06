@@ -3,7 +3,10 @@ import { filterCoreSellers, getLingxingAdapter } from "../adapters/lingxingAdapt
 import { supplierTaxRates } from "../data/supplierTaxRates.js";
 import { getSharedProductCatalogMap, getSharedSellers } from "./sharedDataService.js";
 import {
-  readStaleSupplierBoardCache,
+  fetchLingxingListingsBySidMskus,
+  fetchLingxingProductRecords,
+} from "./lingxingCatalogLookupService.js";
+import {
   readSupplierBoardCache,
   readSupplierBoardProductMapCache,
   saveSupplierBoardCache,
@@ -446,21 +449,6 @@ function normalizeListingRecord(record) {
   };
 }
 
-async function fetchListingRecords(adapter, baseParams) {
-  const records = [];
-  let offset = 0;
-  let total = null;
-  while (offset < 5000) {
-    const payload = await adapter.fetchListings({ ...baseParams, offset, length: 1000 });
-    const pageRows = normalizeRecordList(payload);
-    records.push(...pageRows);
-    total = totalCountOf(payload, records.length);
-    if (!pageRows.length || pageRows.length < 1000 || records.length >= total) break;
-    offset += 1000;
-  }
-  return records;
-}
-
 async function fetchListingItems(adapter, rows) {
   const rowsBySid = new Map();
   rows.forEach((row) => {
@@ -473,54 +461,14 @@ async function fetchListingItems(adapter, rows) {
 
   const items = [];
   for (const [sid, mskus] of rowsBySid.entries()) {
-    for (const batch of chunkArray(uniqueText(mskus), LISTING_BATCH_SIZE)) {
-      const baseParams = {
-        is_pair: 1,
-        is_delete: 0,
-        search_field: "seller_sku",
-        search_value: batch,
-        exact_search: 1,
-      };
-      const variants = [{ sid }, { sids: [sid] }, { seller_id: sid }, { sellerId: sid }];
-      let records = [];
-      for (const variant of variants) {
-        try {
-          records = await fetchListingRecords(adapter, { ...baseParams, ...variant });
-          if (!records.length) records = await fetchListingRecords(adapter, { ...baseParams, exact_search: 0, ...variant });
-          if (records.length) break;
-        } catch {
-          records = [];
-        }
-      }
-      if (!records.length && batch.length > 1) {
-        for (const msku of batch) {
-          const singleParams = { ...baseParams, search_value: [msku], exact_search: 1 };
-          for (const variant of variants) {
-            try {
-              const singleRecords = await fetchListingRecords(adapter, { ...singleParams, ...variant });
-              if (singleRecords.length) {
-                records.push(...singleRecords);
-                break;
-              }
-            } catch {
-              // Try the next Listing parameter variant for this MSKU.
-            }
-          }
-        }
-      }
-      records.map(normalizeListingRecord).filter(Boolean).forEach((item) => items.push({ ...item, sid: item.sid || sid }));
-    }
+    const records = await fetchLingxingListingsBySidMskus(adapter, sid, mskus, { batchSize: LISTING_BATCH_SIZE });
+    records.map(normalizeListingRecord).filter(Boolean).forEach((item) => items.push({ ...item, sid: item.sid || sid }));
   }
   return items;
 }
 
 async function safeFetchProductRecords(adapter, params, fallbackParams = null) {
-  try {
-    return normalizeRecordList(await adapter.fetchLocalProductInfos(params));
-  } catch (error) {
-    if (!fallbackParams) throw error;
-    return normalizeRecordList(await adapter.fetchLocalProducts(fallbackParams));
-  }
+  return fetchLingxingProductRecords(adapter, params, fallbackParams, { strict: true });
 }
 
 async function fetchProductMap(adapter, rows) {
@@ -852,10 +800,6 @@ export async function getSupplierBoardDashboard(filters = {}) {
   const cacheKey = stableSupplierBoardCacheKey(normalizedFilters);
   const cached = await readSupplierBoardCache(cacheKey, supplierBoardCacheTtl(normalizedFilters));
   if (cached?.data) return withCacheMeta(cached.data, cached);
-  if (!normalizedFilters.forceRefresh) {
-    const stale = await readStaleSupplierBoardCache(cacheKey);
-    if (stale?.data) return withCacheMeta(stale.data, stale, "已快速读取服务器历史缓存");
-  }
 
   try {
 	    const adapter = getLingxingAdapter();
@@ -886,10 +830,11 @@ export async function getSupplierBoardDashboard(filters = {}) {
     await saveSupplierBoardCache(cacheKey, data);
     return data;
   } catch (error) {
-    const stale = await readStaleSupplierBoardCache(cacheKey);
-    if (stale?.data) {
-      return withCacheMeta(stale.data, stale, `实时读取失败，使用服务器缓存：${error.message}；缓存时间`);
-    }
+    console.error("[supplier-board] refresh failed", {
+      filters: normalizedFilters,
+      cacheKey,
+      error: error.message,
+    });
     const data = emptyPayload(normalizedFilters, `供应商看板读取失败：${error.message}`);
     data.error = error.message;
     data.details = error.details || null;

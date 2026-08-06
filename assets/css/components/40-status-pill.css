@@ -7,7 +7,7 @@
   align-items: center;
   justify-content: center;
   padding: 0 10px;
-  border-radius: 999px;
+  border-radius: var(--tj-control-radius);
   color: var(--tj-tone-neutral-text);
   background: var(--tj-tone-neutral-bg);
   font-size: 12px;
@@ -51,7 +51,7 @@
   min-width: 44px;
   justify-content: center;
   padding: 4px 10px;
-  border-radius: 999px;
+  border-radius: var(--tj-control-radius);
   color: var(--tj-tone-neutral-text);
   background: var(--tj-tone-neutral-bg);
   font-size: 12px;

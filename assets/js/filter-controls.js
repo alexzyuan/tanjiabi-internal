@@ -1,3 +1,36 @@
+function getSelectedFilterLabels(select) {
+  return [...(select?.selectedOptions || [])]
+    .filter((option) => option?.value)
+    .map((option) => String(option.textContent ?? "").replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+}
+
+export function getFilterDropdownSummary(select) {
+  const labels = getSelectedFilterLabels(select);
+  const allText = select?.options?.[0]?.textContent?.trim() || "全部";
+  if (!labels.length) {
+    return { text: allText, accessibleText: allText, title: allText };
+  }
+  const title = labels.join("、");
+  const countText = `已选 ${labels.length} 项`;
+  return {
+    text: labels.length === 1 ? labels[0] : countText,
+    accessibleText: `${countText}：${title}`,
+    title,
+  };
+}
+
+export function getFilterDropdownMenuAlignment(menuRect, viewportWidth, gutter = 16) {
+  return menuRect.right > viewportWidth - gutter ? "end" : "start";
+}
+
+export function updateFilterDropdownMenuAlignment(menu, viewportWidth) {
+  menu.classList.remove("filter-dropdown-menu--align-end");
+  const alignment = getFilterDropdownMenuAlignment(menu.getBoundingClientRect(), viewportWidth);
+  menu.classList.toggle("filter-dropdown-menu--align-end", alignment === "end");
+  return alignment;
+}
+
 export function createFilterControls({
   root = document,
   globalObject = root?.defaultView || window,
@@ -20,8 +53,7 @@ export function createFilterControls({
   }
 
   function selectedFilterLabels(select) {
-    const selected = [...(select?.selectedOptions || [])].filter((option) => option.value);
-    return selected.map((option) => option.textContent.trim()).filter(Boolean);
+    return getSelectedFilterLabels(select);
   }
 
   function updateFilterDropdownButton(select) {
@@ -29,15 +61,12 @@ export function createFilterControls({
       ? select.nextElementSibling.querySelector(".filter-dropdown-button")
       : null;
     if (!button) return;
-    const labels = selectedFilterLabels(select);
-    const allText = select.options?.[0]?.textContent?.trim() || "全部";
-    if (!labels.length) {
-      button.textContent = allText;
-    } else if (labels.length <= 2) {
-      button.textContent = labels.join("、");
-    } else {
-      button.textContent = `已选 ${labels.length} 项`;
-    }
+    const label = button.querySelector(".filter-dropdown-button-label");
+    if (!label) throw new Error("Filter dropdown button is missing its label span");
+    const summary = getFilterDropdownSummary(select);
+    label.textContent = summary.text;
+    button.setAttribute("aria-label", summary.accessibleText);
+    button.setAttribute("title", summary.title);
   }
 
   function handleFilterDropdownOptionChange(select, input) {
@@ -63,7 +92,7 @@ export function createFilterControls({
     const dropdown = root.createElement("div");
     dropdown.className = "filter-dropdown";
     dropdown.innerHTML = `
-      <button class="filter-dropdown-button multi-select-button" type="button" aria-haspopup="listbox" aria-expanded="false"></button>
+      <button class="filter-dropdown-button multi-select-button" type="button" aria-haspopup="listbox" aria-expanded="false"><span class="filter-dropdown-button-label"></span></button>
       <div class="filter-dropdown-menu multi-select-menu" hidden>
         <div class="filter-dropdown-options multi-select-options" role="listbox" aria-multiselectable="true"></div>
       </div>
@@ -79,6 +108,16 @@ export function createFilterControls({
         toggleForPanel: (panel) => panel.closest(".filter-dropdown")?.querySelector(".filter-dropdown-button"),
       });
       setDisclosureState(menu, event.currentTarget, opening);
+      if (opening) {
+        updateFilterDropdownMenuAlignment(menu, globalObject.innerWidth);
+      }
+    });
+    bind(dropdown, ".filter-dropdown-button", "keydown", (event) => {
+      const menu = dropdown.querySelector(".filter-dropdown-menu");
+      if (event.key !== "Escape" || !menu || menu.hidden) return;
+      event.preventDefault();
+      setDisclosureState(menu, event.currentTarget, false);
+      event.currentTarget.focus?.();
     });
     bind(dropdown, ".filter-dropdown-options", "change", (event) => {
       const input = closestTarget(event, "input[type='checkbox']");

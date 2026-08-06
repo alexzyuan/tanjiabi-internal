@@ -270,11 +270,16 @@ AUTH_ALLOWED_OPEN_IDS=钉钉openId1,钉钉openId2
 
 ## 11. 推荐发布习惯
 
-每次发版后做这 4 个检查：
+`deploy.sh` 会在重启后自动执行两层检查：
+
+- `/api/health` 健康检查。
+- `scripts/deploy-integrity.js verify-deployed` 完整性检查，逐项核对部署包 manifest 中的全部侧边栏板块、对应 `view-*` 页面容器、部署文件哈希和线上 `/app.js` 哈希。
+
+需要人工排障时再看这些信息：
 
 ```bash
 curl "http://127.0.0.1:4173/api/health"
-curl "http://127.0.0.1:4173/" | grep "app.js?v="
+APP_DIR=/opt/tanjia-bi DEPLOY_VERIFY_BASE_URL=http://127.0.0.1:4173 node scripts/deploy-integrity.js verify-deployed
 pm2 status
 pm2 logs tanjia-bi --lines 30
 ```

@@ -1,0 +1,84 @@
+/* Slow-moving risk page. */
+#view-clearance .slow-moving-risk-tabs {
+display:flex;
+gap:var(--spectrum-spacing-75);
+margin-top:var(--spectrum-spacing-150);
+border-bottom:1px solid var(--tj-border-strong);
+}
+#view-clearance .slow-moving-risk-tabs button {
+padding:var(--spectrum-spacing-100) var(--spectrum-spacing-150);
+border:0;
+border-bottom:2px solid transparent;
+background:transparent;
+color:var(--tj-text-muted);
+font:inherit;
+font-weight:700;
+cursor:pointer;
+}
+#view-clearance .slow-moving-risk-tabs button.is-active {
+border-bottom-color:var(--tj-action-blue);
+color:var(--tj-text-strong);
+}
+#view-clearance .slow-moving-risk-tabs button:focus-visible {
+outline:0;
+box-shadow:var(--tj-focus-ring);
+}
+#view-clearance .slow-moving-risk-panel {
+padding:var(--spectrum-spacing-125) 0;
+color:var(--tj-text-muted);
+}
+#view-clearance .slow-moving-risk-history-label {
+display:grid;
+gap:var(--spectrum-spacing-50);
+max-width:260px;
+font-weight:700;
+}
+#view-clearance .slow-moving-risk-kpis {
+grid-template-columns:repeat(auto-fit, minmax(var(--tj-kpi-card-min-width), var(--tj-kpi-card-width)));
+justify-content:start;
+margin-top:var(--spectrum-spacing-100);
+}
+#view-clearance .slow-moving-risk-result-panel {
+margin-top:var(--spectrum-spacing-150);
+}
+#view-clearance .slow-moving-risk-table-wrap {
+max-width:100%;
+}
+#view-clearance .slow-moving-risk-row--强制处置 {
+background:color-mix(in srgb, var(--tj-warning) 12%, var(--tj-content-bg));
+}
+#view-clearance .slow-moving-risk-row--高风险 {
+background:color-mix(in srgb, var(--spectrum-negative) 8%, var(--tj-content-bg));
+}
+#view-clearance .slow-moving-risk-row--关注 {
+background:color-mix(in srgb, var(--tj-surface-muted) 70%, var(--tj-content-bg));
+}
+#view-clearance .slow-moving-risk-row strong {
+font-weight:700;
+}
+#view-clearance .slow-moving-risk-row small {
+color:var(--tj-text-muted);
+}
+@media (max-width:720px) {
+#view-clearance > .module-hero {
+grid-template-columns:1fr;
+align-items:start;
+}
+#view-clearance > .module-hero .hero-actions {
+min-width:0;
+justify-content:flex-start;
+}
+#view-clearance > .module-hero .hero-actions small {
+flex:1 1 100%;
+overflow-wrap:anywhere;
+}
+#view-clearance .slow-moving-risk-tabs {
+overflow-x:auto;
+}
+#view-clearance .slow-moving-risk-tabs button {
+flex:0 0 auto;
+}
+#view-clearance .slow-moving-risk-kpis {
+grid-template-columns:1fr;
+}
+}

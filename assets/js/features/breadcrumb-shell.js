@@ -25,7 +25,9 @@ export function createBreadcrumbShellFeature({
     "review-rating": ["首页", "工具", "review计算"],
     clearance: ["首页", "销售", "动销预警"],
     "ai-image-workflow": ["首页", "工具", "AI图片工作流"],
-    "fba-freight": ["首页", "工具", "货代表格"],
+    "fba-freight": ["首页", "物流", "FBA货件处理"],
+    "fba-shipment-variance": ["首页", "物流", "货件收发差异"],
+    "freight-rates": ["首页", "物流", "运费看板"],
     fba: ["首页", "工具", "FBA刷仓"],
     "product-progress": ["首页", "产品", "产品进度"],
     aftersales: ["首页", "产品", "售后数据"],
@@ -39,12 +41,13 @@ export function createBreadcrumbShellFeature({
     "supplier-detail": ["首页", "采购", "供应商明细"],
     payables: ["首页", "采购", "应付账款"],
     cashflow: ["首页", "财务", "平台回款"],
+    "store-operating-monthly-report": ["首页", "财务", "店铺经营月报"],
     guide: ["首页", "知识库"],
     admin: ["首页", "设置", "后台管理"],
     sync: ["首页", "设置", "同步中心"],
   };
 
-  const breadcrumbGroups = new Set(["销售", "工具", "产品", "库存", "采购", "财务", "知识库", "设置"]);
+  const breadcrumbGroups = new Set(["销售", "工具", "物流", "产品", "库存", "采购", "财务", "知识库", "设置"]);
 
   function renderBreadcrumbMarkup(parts = []) {
     return `<ol>${parts

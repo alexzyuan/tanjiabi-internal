@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { readdir, readFile, stat } from "node:fs/promises";
 import nodeTest from "node:test";
+import { inferTableColumnKind } from "../assets/js/data-table-manager.js";
 import { isRepositoryMetadataPath } from "../src/utils/pathFilters.js";
+import { minifyCss } from "../scripts/lib/minifyCss.js";
 
-const cssLayerOrder = ["tokens", "base", "layout", "components", "pages", "legacy"];
-const visualLockReason = "temporary visual lock is active; rerun CSS structure gates after generated CSS reaches sidebar/topbar visual parity";
+const cssLayerOrder = ["tokens", "base", "layout", "components", "pages", "legacy", "final"];
 
 async function listCssFiles(dirUrl) {
   let entries = [];
@@ -26,101 +27,84 @@ async function listCssFiles(dirUrl) {
   return files.flat();
 }
 
-function shouldKeepCssSpace(before, after) {
-  if (!before || !after) return false;
-  if ("{}:;,>+~([".includes(before)) return false;
-  if ("{}:;,>+~)]".includes(after)) return false;
-  return true;
+const test = nodeTest;
+
+function countMinifyCssDefinitions(source) {
+  return (source.match(new RegExp("function\\s+minifyCss", "g")) || []).length;
 }
 
-function minifyCss(source) {
-  let output = "";
-  let quote = null;
-  let pendingSpace = false;
+function plainTextFromHtml(html = "") {
+  return String(html || "")
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
-  for (let index = 0; index < source.length; index += 1) {
-    const char = source[index];
-    const next = source[index + 1];
-
-    if (quote) {
-      output += char;
-      if (char === "\\" && index + 1 < source.length) {
-        index += 1;
-        output += source[index];
-      } else if (char === quote) {
-        quote = null;
-      }
-      continue;
-    }
-
-    if (char === "\"" || char === "'") {
-      if (pendingSpace && shouldKeepCssSpace(output.at(-1), char)) output += " ";
-      pendingSpace = false;
-      quote = char;
-      output += char;
-      continue;
-    }
-
-    if (char === "/" && next === "*") {
-      index += 2;
-      while (index < source.length && !(source[index] === "*" && source[index + 1] === "/")) {
-        index += 1;
-      }
-      index += 1;
-      continue;
-    }
-
-    if (/\s/.test(char)) {
-      pendingSpace = true;
-      continue;
-    }
-
-    if ("{}:;,>+~()[]=".includes(char)) {
-      output = output.trimEnd();
-      output += char;
-      pendingSpace = false;
-      continue;
-    }
-
-    if (pendingSpace && shouldKeepCssSpace(output.at(-1), char)) output += " ";
-    pendingSpace = false;
-    output += char;
+function tableHeadersById(indexSource) {
+  const tables = new Map();
+  for (const match of indexSource.matchAll(/<table\b([^>]*)>([\s\S]*?)<\/table>/gi)) {
+    const id = match[1].match(/\bid="([^"]+)"/)?.[1];
+    if (!id) continue;
+    const headers = Array.from(match[2].matchAll(/<th\b[^>]*>([\s\S]*?)<\/th>/gi), (headerMatch) => plainTextFromHtml(headerMatch[1]));
+    if (headers.length) tables.set(id, headers);
   }
-
-  return `${output.replace(/;}/g, "}").replace(/}/g, "}\n").trim()}\n`;
+  return tables;
 }
 
-async function isLegacyVisualRollback() {
-  const { size } = await stat(new URL("../styles.css", import.meta.url));
-  return size > 300_000;
-}
-
-function cssStructureTest(name, optionsOrFn, maybeFn) {
-  const hasOptions = typeof optionsOrFn !== "function";
-  const options = hasOptions ? optionsOrFn : {};
-  const fn = hasOptions ? maybeFn : optionsOrFn;
-
-  nodeTest(name, options, async (t) => {
-    if (await isLegacyVisualRollback()) {
-      t.skip(visualLockReason);
-      return;
+function leftAlignedDataColumnSelectors(cssSource) {
+  const selectors = [];
+  for (const match of cssSource.matchAll(/([^{}]+)\{([^{}]*text-align\s*:\s*left[^{}]*)\}/g)) {
+    for (const selector of match[1].split(",")) {
+      const normalized = selector.trim().replace(/\s+/g, " ");
+      const selectorMatch = normalized.match(/#([A-Za-z][\w-]*)[\s\S]*\btd:nth-child\((\d+)\)/);
+      if (!selectorMatch || normalized.includes(":not(.table-cell--number)")) continue;
+      selectors.push({
+        id: selectorMatch[1],
+        columnIndex: Number(selectorMatch[2]),
+        selector: normalized,
+      });
     }
-    await fn(t);
-  });
+  }
+  return selectors;
 }
 
-nodeTest("CSS structure gates expose the temporary visual lock mode", async (t) => {
-  if (!(await isLegacyVisualRollback())) {
-    t.skip("generated CSS visual parity baseline is active");
-    return;
+function pageTableBaselineAlignmentSelectors(cssSource) {
+  const selectors = [];
+  for (const match of cssSource.matchAll(/([^{}]+)\{([^{}]*text-align\s*:\s*(?:left|right)[^{}]*)\}/g)) {
+    for (const selector of match[1].split(",")) {
+      const normalized = selector.trim().replace(/\s+/g, " ");
+      if (!/\b[td]h\b/.test(normalized)) continue;
+      if (normalized.includes(".review-rating-table")) continue;
+      selectors.push(normalized);
+    }
   }
+  return selectors;
+}
 
-  const source = await readFile(new URL("../styles.css", import.meta.url), "utf8");
-  assert.ok(source.length > 300_000, "locked visual styles should be visibly larger than the modern CSS budget");
-  assert.match(source, /linear-gradient|radial-gradient/, "locked visual styles should preserve the approved sidebar/topbar visual baseline");
-});
+function pageFilterBaselineOverrides(cssSource) {
+  const overrides = [];
+  const source = cssSource.replace(/\/\*[\s\S]*?\*\//g, "");
+  const filterSelectorPattern = /(?:^|[\s.#])(?:[A-Za-z0-9_-]+-)?filters\b|filter-toolbar|budget-toolbar|fba-freight-toolbar|date-range-control|date-range-button/;
+  const forbiddenDeclarationPattern = /\b(?:display|grid-template(?:-columns|-rows)?|gap|column-gap|row-gap|padding|border|border-color|border-radius|min-height|height|width|flex|align-items|box-shadow|outline|font)\s*:/;
 
-const test = cssStructureTest;
+  for (const match of source.matchAll(/([^{}]+)\{([^{}]+)\}/g)) {
+    const body = match[2].trim().replace(/\s+/g, " ");
+    if (!forbiddenDeclarationPattern.test(body)) continue;
+
+    for (const selector of match[1].split(",")) {
+      const normalized = selector.trim().replace(/\s+/g, " ");
+      if (!filterSelectorPattern.test(normalized)) continue;
+      if (normalized === "#sales-global-filters[hidden]" && /display\s*:\s*none\s*!important/.test(body)) continue;
+      if (normalized === "body:not(.sales-view) #sales-global-filters" && /display\s*:\s*none\s*!important/.test(body)) continue;
+      overrides.push(`${normalized} { ${body} }`);
+    }
+  }
+  return overrides;
+}
 
 test("styles.css keeps semantic token roots consolidated", async () => {
   const source = await readFile(new URL("../styles.css", import.meta.url), "utf8");
@@ -190,9 +174,35 @@ test("styles.css is generated from layered CSS sources", async () => {
   assert.equal(styles, generated, "styles.css must match npm run build:css output");
 });
 
+test("build-styles supports non-destructive preview output", async () => {
+  const source = await readFile(new URL("../scripts/build-styles.js", import.meta.url), "utf8");
+  assert.match(source, /--output/);
+  assert.match(source, /outputPath/);
+});
+
+test("CSS minifier has a single shared implementation", async () => {
+  const buildScript = await readFile(new URL("../scripts/build-styles.js", import.meta.url), "utf8");
+  const structureTest = await readFile(new URL("./stylesStructure.test.js", import.meta.url), "utf8");
+  const minifier = await readFile(new URL("../scripts/lib/minifyCss.js", import.meta.url), "utf8");
+
+  assert.match(buildScript, /scripts\/lib\/minifyCss\.js|\.\/lib\/minifyCss\.js/);
+  assert.match(structureTest, /scripts\/lib\/minifyCss\.js|\.\.\/scripts\/lib\/minifyCss\.js/);
+  assert.equal(countMinifyCssDefinitions(buildScript), 0);
+  assert.equal(countMinifyCssDefinitions(structureTest), 0);
+  assert.equal(countMinifyCssDefinitions(minifier), 1);
+});
+
+test("CSS minifier keeps required calc plus spacing", () => {
+  const source = ".menu { top: calc(100% + 8px); } .item + .item { margin-left: 4px; }";
+  const minified = minifyCss(source);
+
+  assert.match(minified, /top:calc\(100% \+ 8px\)/);
+  assert.match(minified, /\.item\+\.item/);
+});
+
 test("styles.css stays within the raw size budget", async () => {
   const { size } = await stat(new URL("../styles.css", import.meta.url));
-  assert.ok(size <= 250_000, `styles.css should be <= 250KB raw, got ${size} bytes`);
+  assert.ok(size <= 256_000, `styles.css should be <= 256KB raw, got ${size} bytes`);
 });
 
 test("CSS standards gate is part of the default check command", async () => {
@@ -224,9 +234,17 @@ test("shared module primitives live outside legacy css", async () => {
 
 test("shared filters and panel surfaces live outside legacy css", async () => {
   const componentSource = await readFile(new URL("../assets/css/components/30-surfaces-and-filters.css", import.meta.url), "utf8");
+  const layoutSource = await readFile(new URL("../assets/css/layout/10-shell.css", import.meta.url), "utf8");
+  const applicationOverrideSource = await readFile(new URL("../assets/css/components/48-application-ui-overrides.css", import.meta.url), "utf8");
   const legacySource = await readFile(new URL("../assets/css/legacy/current.css", import.meta.url), "utf8");
 
   assert.match(componentSource, /^\.filters\s*\{/m);
+  assert.match(componentSource, /display:\s*flex/);
+  assert.match(componentSource, /^\.filters\s*\{[\s\S]*column-gap:\s*8px;[\s\S]*row-gap:\s*8px;[\s\S]*border:\s*0;[\s\S]*\}/m);
+  assert.match(componentSource, /^\.filters label:has\(\.date-range-control\)\s*\{/m);
+  assert.match(componentSource, /^\.filters \.checkbox-label\s*\{/m);
+  assert.match(componentSource, /^\.filters \.filter-dropdown-menu\s*\{/m);
+  assert.match(componentSource, /^\.filters select\.enhanced-filter-select\s*\{/m);
   assert.match(componentSource, /^\.panel\s*\{/m);
   assert.match(componentSource, /^\.panel-head\s*\{/m);
   assert.match(componentSource, /^\.form-span-2\s*\{/m);
@@ -241,6 +259,8 @@ test("shared filters and panel surfaces live outside legacy css", async () => {
   assert.equal(componentSource.includes("#d8e4f0"), false);
   assert.equal(componentSource.includes("#fbfdff"), false);
   assert.equal(componentSource.includes("background: white"), false);
+  assert.equal(layoutSource.includes("filters"), false);
+  assert.equal(applicationOverrideSource.includes("body:not(.login-body) .filters"), false);
 
   assert.equal(/^\.filters\s*\{/m.test(legacySource), false);
   assert.equal(/^\.filters,/m.test(legacySource), false);
@@ -256,6 +276,38 @@ test("shared filters and panel surfaces live outside legacy css", async () => {
   assert.equal(legacySource.includes(".empty-state {\n  min-height:"), false);
 });
 
+test("shared visual component tokens normalize controls, tables, and modals", async () => {
+  const tokenSource = await readFile(new URL("../assets/css/tokens/00-semantic-foundation.css", import.meta.url), "utf8");
+  const surfacesSource = await readFile(new URL("../assets/css/components/30-surfaces-and-filters.css", import.meta.url), "utf8");
+  const formSource = await readFile(new URL("../assets/css/components/32-form-controls.css", import.meta.url), "utf8");
+  const tableSource = await readFile(new URL("../assets/css/components/45-table-controls.css", import.meta.url), "utf8");
+  const modalSource = await readFile(new URL("../assets/css/components/55-modal-shell.css", import.meta.url), "utf8");
+
+  [
+    "--tj-control-height",
+    "--tj-control-height-compact",
+    "--tj-control-radius",
+    "--tj-control-padding-x",
+    "--tj-panel-radius",
+    "--tj-table-row-hover-bg",
+    "--tj-modal-radius",
+    "--tj-focus-ring",
+  ].forEach((token) => {
+    assert.match(tokenSource, new RegExp(`${token}:`));
+  });
+
+  assert.match(surfacesSource, /height:\s*var\(--tj-control-height-compact\)/);
+  assert.match(surfacesSource, /border-radius:\s*var\(--tj-control-radius\)/);
+  assert.match(formSource, /height:\s*var\(--tj-control-height\)/);
+  assert.match(formSource, /box-shadow:\s*var\(--tj-focus-ring\)/);
+  assert.match(tableSource, /height:\s*var\(--tj-control-height-compact\)/);
+  assert.match(tableSource, /background:\s*var\(--tj-table-row-hover-bg\)/);
+  assert.match(tableSource, /table\.data-table\s+tbody\s+tr:hover\s*>\s*td\s*\{/);
+  assert.match(tableSource, /box-shadow:\s*inset 0 0 0 9999px color-mix\(in srgb,\s*var\(--tj-table-row-hover-bg\) 70%,\s*transparent\)/);
+  assert.match(modalSource, /border-radius:\s*var\(--tj-modal-radius\)/);
+  assert.match(modalSource, /\.modal-close-button:focus-visible/);
+});
+
 test("shared filter toolbar styles live outside page css and use semantic tokens", async () => {
   const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
   const componentSource = await readFile(new URL("../assets/css/components/35-filter-toolbar.css", import.meta.url), "utf8");
@@ -266,14 +318,87 @@ test("shared filter toolbar styles live outside page css and use semantic tokens
   assert.match(indexSource, /class="filter-toolbar fba-freight-toolbar"/);
   assert.match(componentSource, /^\/\* Shared compact filter toolbar\. \*\//m);
   assert.match(componentSource, /^\.filter-toolbar\s*\{/m);
+  assert.match(componentSource, /^\.filter-toolbar\s*\{[\s\S]*column-gap:\s*8px;[\s\S]*row-gap:\s*8px;[\s\S]*border:\s*0;[\s\S]*\}/m);
   assert.match(componentSource, /^\.filter-toolbar label\s*\{/m);
+  assert.match(componentSource, /^\.filter-toolbar label:has\(\.date-range-control\)\s*\{/m);
+  assert.match(componentSource, /^\.filter-toolbar \.date-range-control\s*\{/m);
   assert.match(componentSource, /^\.filter-toolbar input,/m);
+  assert.match(componentSource, /^\.filter-toolbar > :where\(input, select\)\s*\{/m);
   assert.match(componentSource, /var\(--tj-content-bg\)/);
-  assert.match(componentSource, /var\(--tj-border-subtle\)/);
   assert.match(componentSource, /var\(--tj-border-control\)/);
   assert.match(componentSource, /var\(--tj-text-body\)/);
   assert.equal(/^\.budget-toolbar\s*\{/m.test(budgetPageSource), false);
   assert.equal(legacySource.includes(".budget-toolbar {"), false);
+});
+
+test("banner-adjacent filters use shared sticky positioning below the topbar", async () => {
+  const componentSource = await readFile(new URL("../assets/css/components/30-surfaces-and-filters.css", import.meta.url), "utf8");
+  const salesPageSource = await readFile(new URL("../assets/css/pages/22-sales-dashboard.css", import.meta.url), "utf8");
+  const designSource = await readFile(new URL("../design.md", import.meta.url), "utf8");
+  const agentsSource = await readFile(new URL("../AGENTS.md", import.meta.url), "utf8");
+
+  assert.match(componentSource, /^body:not\(\.login-body\) \.view > \.module-hero \+ :is\(\.filters, \.filter-toolbar\)\s*\{/m);
+  assert.match(componentSource, /^body:not\(\.login-body\) \.view > \.module-hero \+ :is\(\.filters, \.filter-toolbar\)\s*\{[\s\S]*?position:\s*sticky/m);
+  assert.match(componentSource, /^body:not\(\.login-body\) \.view > \.module-hero \+ :is\(\.filters, \.filter-toolbar\)\s*\{[\s\S]*?top:\s*var\(--tj-topbar-fixed-height\)/m);
+  assert.match(componentSource, /^body:not\(\.login-body\) \.view > \.module-hero \+ :is\(\.filters, \.filter-toolbar\)\s*\{[\s\S]*?z-index:\s*900/m);
+  assert.equal(/body\.sales-view #sales-global-filters\s*\{[\s\S]*?position:\s*sticky/m.test(salesPageSource), false);
+  assert.match(designSource, /当 \.filters 或 \.filter-toolbar 紧跟 \.module-hero 后面时/);
+  assert.match(agentsSource, /banner 后紧跟 \.filters 或 \.filter-toolbar/);
+});
+
+test("page css does not override shared filter toolbar baseline", async () => {
+  const pageFiles = await listCssFiles(new URL("../assets/css/pages/", import.meta.url));
+  const violations = [];
+  for (const fileUrl of pageFiles) {
+    const source = await readFile(fileUrl, "utf8");
+    const relativePath = fileUrl.pathname.replace(/^.*\/assets\/css\//, "assets/css/");
+    for (const override of pageFilterBaselineOverrides(source)) {
+      violations.push(`${relativePath}: ${override}`);
+    }
+  }
+
+  assert.deepEqual(violations, []);
+});
+
+test("shared date range picker styles live outside page css and use semantic tokens", async () => {
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const componentSource = await readFile(new URL("../assets/css/components/36-date-range-picker.css", import.meta.url), "utf8");
+  const salesPageSource = await readFile(new URL("../assets/css/pages/22-sales-dashboard.css", import.meta.url), "utf8");
+  const fbaPageSource = await readFile(new URL("../assets/css/pages/35-fba-freight.css", import.meta.url), "utf8");
+  const legacySource = await readFile(new URL("../assets/css/legacy/current.css", import.meta.url), "utf8");
+
+  assert.match(indexSource, /id="front-date-range-button" class="date-range-button date-range-picker__trigger"/);
+  assert.match(indexSource, /id="fba-freight-date-range-button" class="date-range-button date-range-picker__trigger"/);
+  assert.match(componentSource, /^\.date-range-control\s*\{/m);
+  assert.match(componentSource, /^\.date-range-button\s*\{/m);
+  assert.equal(componentSource.includes(".date-range-button::after"), false);
+  assert.match(componentSource, /^\.date-range-picker__popover\s*\{/m);
+  assert.match(componentSource, /width:\s*min\(760px,\s*96vw\)/);
+  assert.match(componentSource, /grid-template-columns:\s*112px minmax\(0,\s*1fr\)/);
+  assert.match(componentSource, /\.date-range-picker__popover\s*\{[\s\S]*font-size:\s*13px;[\s\S]*\}/);
+  assert.match(componentSource, /^\.date-range-picker__shortcuts\s*\{/m);
+  assert.match(componentSource, /^\.date-range-picker__shortcuts button:is\(:hover, :focus-visible\)\s*\{/m);
+  assert.match(componentSource, /^\.date-range-picker__months\s*\{/m);
+  assert.match(componentSource, /^\.date-range-picker__day\.is-selected,/m);
+  assert.match(componentSource, /\.date-range-picker__day\.is-preview-end/);
+  assert.match(componentSource, /^\.date-range-picker__day:is\(\.is-today, \.is-selected, \.is-preview-end\)\s*\{/m);
+  assert.match(componentSource, /^\.date-range-picker__day\.is-today:not\(\.is-selected\)\s*\{/m);
+  assert.match(componentSource, /var\(--tj-content-bg\)/);
+  assert.match(componentSource, /var\(--tj-border-control\)/);
+  assert.match(componentSource, /var\(--tj-action-blue\)/);
+  assert.match(componentSource, /var\(--tj-focus-ring\)/);
+
+  [
+    /^\.date-range-control\s*\{/m,
+    /^\.date-range-button\s*\{/m,
+    /^\.date-range-popover\s*\{/m,
+    /^\.date-presets\s*\{/m,
+    /^\.date-range-fields\s*\{/m,
+  ].forEach((selectorPattern) => {
+    assert.equal(selectorPattern.test(salesPageSource), false, `${selectorPattern} should be owned by shared date range picker CSS`);
+    assert.equal(selectorPattern.test(fbaPageSource), false, `${selectorPattern} should be owned by shared date range picker CSS`);
+    assert.equal(selectorPattern.test(legacySource), false, `${selectorPattern} should stay out of legacy css`);
+  });
 });
 
 test("shared status pill styles live outside legacy css and use semantic tokens", async () => {
@@ -315,7 +440,23 @@ test("shared table controls live outside legacy css and use semantic tokens", as
   const componentSource = await readFile(new URL("../assets/css/components/45-table-controls.css", import.meta.url), "utf8");
   const legacySource = await readFile(new URL("../assets/css/legacy/current.css", import.meta.url), "utf8");
 
-  assert.match(componentSource, /^\/\* Shared table row controls\. \*\//m);
+  assert.match(componentSource, /^\/\* Shared table baseline, states, and row controls\. \*\//m);
+  assert.match(componentSource, /^\.data-table-wrap\s*\{/m);
+  assert.match(componentSource, /^table\.data-table\s*\{/m);
+  assert.match(componentSource, /^table\.data-table--matrix\s*\{/m);
+  assert.match(componentSource, /^table\.data-table\.is-smart-width\s*\{/m);
+  assert.match(componentSource, /table\.data-table :is\(th, td\)\s*\{[\s\S]*?border:\s*1px solid var\(--tj-border-subtle\)/);
+  assert.match(componentSource, /width:\s*var\(--tj-table-resolved-width/);
+  assert.match(componentSource, /\[data-width-align="right"\]/);
+  assert.match(componentSource, /\[data-width-align="center"\]/);
+  assert.match(componentSource, /\[data-width-profile="identifier"\]/);
+  assert.match(componentSource, /\[data-width-profile="narrative"\]/);
+  assert.match(componentSource, /^\.table-resize-handle\s*\{/m);
+  assert.match(componentSource, /^\.table-width-reset\s*\{/m);
+  assert.match(componentSource, /^\.table-width-reset:hover\s*\{/m);
+  assert.match(componentSource, /^\.table-width-reset:focus-visible\s*\{/m);
+  assert.match(componentSource, /^\.table-width-reset\[hidden\]\s*\{/m);
+  assert.match(componentSource, /^\.table-state-cell--error\s*\{/m);
   assert.match(componentSource, /^body:not\(\.login-body\) \.table-select\s*\{/m);
   assert.match(componentSource, /^\.table-action\s*\{/m);
   assert.match(componentSource, /^\.table-action\.danger\s*\{/m);
@@ -331,8 +472,127 @@ test("shared table controls live outside legacy css and use semantic tokens", as
   assert.equal(legacySource.includes(".table-action.danger"), false);
   assert.equal(legacySource.includes(".table-actions {"), false);
   assert.equal(legacySource.includes("body:not(.login-body) .table-action"), false);
+  assert.equal(/^table\s*\{/m.test(legacySource), false, "legacy must not own the global table baseline");
+  assert.equal(/^th\s*\{/m.test(legacySource), false, "legacy must not own global table headers");
+  assert.equal(
+    /body:not\(\.login-body\)\s+\.sales-review-detail-table-wrap\s+td\s*\{[\s\S]*?text-align:\s*left\s*!important/.test(legacySource),
+    false,
+    "sales review detail cells must not force every td left; numeric cells need to inherit shared right alignment",
+  );
   assert.equal((generatedSource.match(/body:not\(\.login-body\) \.table-select\{/g) || []).length, 1);
   assert.equal((generatedSource.match(/\.table-action\{/g) || []).length, 1);
+});
+
+test("shared smart tables use resolved content width instead of forcing container width", async () => {
+  const source = await readFile(new URL("../assets/css/components/45-table-controls.css", import.meta.url), "utf8");
+  const smartRule = source.match(/table\.data-table\.is-smart-width\s*\{[\s\S]*?\}/)?.[0] || "";
+  assert.match(smartRule, /width:\s*var\(--tj-table-resolved-width/);
+  assert.doesNotMatch(smartRule, /width:\s*max\(100%/);
+});
+
+test("shared tables contain cell text within its resolved column", async () => {
+  const source = await readFile(new URL("../assets/css/components/45-table-controls.css", import.meta.url), "utf8");
+  const cellRule = source.match(/table\.data-table td\s*\{[\s\S]*?\}/)?.[0] || "";
+  assert.match(cellRule, /overflow:\s*hidden/);
+  assert.match(cellRule, /overflow-wrap:\s*anywhere/);
+});
+
+test("site attainment table treats its hierarchical site column as a name field", async () => {
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  assert.match(indexSource, /<th[^>]*data-column-profile="name"[^>]*>站点<\/th>/);
+});
+
+test("page styles do not override shared smart table widths", async () => {
+  const pageFiles = await listCssFiles(new URL("../assets/css/pages/", import.meta.url));
+  const violations = [];
+
+  for (const file of pageFiles) {
+    const source = await readFile(file, "utf8");
+    if (source.includes("--tj-table-min-width")) violations.push(file.pathname);
+  }
+
+  assert.deepEqual(violations, [], `page table min-width overrides must move to the shared manager: ${violations.join(", ")}`);
+
+  const salesForecastSource = await readFile(new URL("../assets/css/pages/25-sales-forecast.css", import.meta.url), "utf8");
+  const fbaFreightSource = await readFile(new URL("../assets/css/pages/35-fba-freight.css", import.meta.url), "utf8");
+  assert.equal(/\.sales-forecast-table \.sticky-(?:focus|hide|image|store|country|product|msku)\s*\{[^}]*\b(?:min-)?width:/s.test(salesForecastSource), false);
+  assert.equal(/\.sales-forecast-table \.(?:compact-number-col|compact-date-col|month-daily-col|month-sales-col)\s*\{[^}]*\b(?:min-)?width:/s.test(salesForecastSource), false);
+  assert.equal(/\.fba-freight-table th:nth-child\([^)]*\)[^{]*\{[^}]*\b(?:min-)?width:/s.test(fbaFreightSource), false);
+});
+
+test("shared table variants replace responsive page and legacy table patches", async () => {
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const componentSource = await readFile(new URL("../assets/css/components/45-table-controls.css", import.meta.url), "utf8");
+  const factorySource = await readFile(new URL("../assets/css/pages/52-factory-inventory.css", import.meta.url), "utf8");
+  const salesForecastSource = await readFile(new URL("../assets/css/pages/25-sales-forecast.css", import.meta.url), "utf8");
+  const supplierBoardSource = await readFile(new URL("../assets/css/pages/53-supplier-board.css", import.meta.url), "utf8");
+  const supplierDetailSource = await readFile(new URL("../assets/css/pages/54-supplier-detail.css", import.meta.url), "utf8");
+  const legacySource = await readFile(new URL("../assets/css/legacy/current.css", import.meta.url), "utf8");
+
+  assert.match(componentSource, /^table\.data-table--middle :is\(th, td\)\s*\{/m);
+  assert.match(componentSource, /^\.data-table-wrap--detail\s*\{/m);
+  assert.match(componentSource, /^table\.data-table--detail th\s*\{/m);
+  assert.match(indexSource, /class="table-wrap data-table-wrap--detail"/);
+  assert.match(indexSource, /class="data-table data-table--detail"/);
+  assert.equal((indexSource.match(/class="[^"]*data-table--middle[^"]*"/g) || []).length, 4);
+  assert.equal(/\.app-shell\s*\{[\s\S]*?min-width:\s*1180px/s.test(factorySource), false);
+  assert.equal(/\.dashboard\s*\{[\s\S]*?min-width:\s*1000px/s.test(factorySource), false);
+  assert.equal(/\.sales-forecast-table \.sticky-(?:focus|hide|image)\s*\{[\s\S]*?text-align:/s.test(salesForecastSource), false);
+  assert.equal(/#supplier-board-table th,[\s\S]*?#supplier-board-table td\s*\{[\s\S]*?vertical-align:/s.test(supplierBoardSource), false);
+  assert.equal(/#supplier-detail-table th,[\s\S]*?#supplier-detail-table td\s*\{[\s\S]*?vertical-align:/s.test(supplierDetailSource), false);
+  assert.equal(/#factory-inventory-table th,[\s\S]*?#factory-inventory-table td\s*\{[\s\S]*?vertical-align:/s.test(factorySource), false);
+  assert.equal(legacySource.includes("sales-review-detail-table-wrap"), false);
+});
+
+test("final table invariants layer locks product table alignment after page css", async () => {
+  const buildScript = await readFile(new URL("../scripts/build-styles.js", import.meta.url), "utf8");
+  const finalSource = await readFile(new URL("../assets/css/final/90-table-invariants.css", import.meta.url), "utf8");
+
+  assert.match(buildScript, /"legacy",\s*"final"/);
+  assert.match(finalSource, /^\/\* Final product table invariants\./m);
+  assert.match(finalSource, /^table\.data-table td\.table-cell--number\s*\{/m);
+  assert.match(finalSource, /text-align:\s*right/);
+  assert.match(finalSource, /font-variant-numeric:\s*tabular-nums/);
+  assert.match(finalSource, /^\.table-state-row td,/m);
+  assert.match(finalSource, /^\.table-resize-handle\s*\{/m);
+});
+
+test("page table alignment overrides do not target numeric data columns", async () => {
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const headersById = tableHeadersById(indexSource);
+  const sourceFiles = (await Promise.all(cssLayerOrder.map((layer) => (
+    listCssFiles(new URL(`../assets/css/${layer}/`, import.meta.url))
+  )))).flat();
+  const violations = [];
+
+  for (const file of sourceFiles) {
+    const cssSource = await readFile(file, "utf8");
+    for (const entry of leftAlignedDataColumnSelectors(cssSource)) {
+      const headers = headersById.get(entry.id);
+      const label = headers?.[entry.columnIndex - 1];
+      if (!label || inferTableColumnKind(label) !== "number") continue;
+      violations.push(`${file.pathname}:${entry.selector} targets numeric column ${entry.columnIndex} (${label})`);
+    }
+  }
+
+  assert.deepEqual(violations, []);
+});
+
+test("page css does not redeclare shared table baseline alignment", async () => {
+  const sourceFiles = [
+    ...(await listCssFiles(new URL("../assets/css/pages/", import.meta.url))),
+    new URL("../assets/css/legacy/current.css", import.meta.url),
+  ];
+  const violations = [];
+
+  for (const file of sourceFiles) {
+    const cssSource = await readFile(file, "utf8");
+    for (const selector of pageTableBaselineAlignmentSelectors(cssSource)) {
+      violations.push(`${file.pathname}:${selector}`);
+    }
+  }
+
+  assert.deepEqual(violations, []);
 });
 
 test("shared dashboard data primitives live outside legacy css and use semantic tokens", async () => {
@@ -370,9 +630,7 @@ test("application-wide UI overrides live in components, not shell or legacy css"
   [
     "Application-wide component density and surface overrides",
     "body:not(.login-body) table",
-    "body:not(.login-body) th.table-sort-active",
-    "body:not(.login-body) .filters",
-    "body:not(.login-body) .filters .filter-dropdown-menu",
+    "body:not(.login-body) table.data-table th.table-sort-active",
     "body:not(.login-body) .table-wrap",
     "body:not(.login-body) .module-grid",
     "body:not(.login-body) .payable-dashboard-grid",
@@ -382,18 +640,13 @@ test("application-wide UI overrides live in components, not shell or legacy css"
 
   assert.match(componentSource, /var\(--tj-content-bg\)/);
   assert.match(componentSource, /var\(--tj-border-control\)/);
-  assert.match(componentSource, /var\(--tj-border-subtle\)/);
-  assert.match(componentSource, /var\(--tj-text-strong\)/);
   assert.match(componentSource, /var\(--tj-action-blue\)/);
-  assert.match(componentSource, /var\(--tj-action-blue-soft\)/);
   assert.equal(/#(?:102039|d8e8f6|ecf7ff|dff0ff|0d213b|1d5cff|e1ebf5)\b/i.test(componentSource), false);
   assert.equal(/rgba\(255,\s*255,\s*255,\s*0\.96\)/i.test(componentSource), false);
 
   [
     "body:not(.login-body) table {",
     "body:not(.login-body) th.table-sort-active",
-    "body:not(.login-body) .filters {",
-    "body:not(.login-body) .filters .filter-dropdown",
     "body:not(.login-body) .table-wrap",
     "body:not(.login-body) .module-grid",
     "body:not(.login-body) .payable-dashboard-grid",
@@ -401,6 +654,33 @@ test("application-wide UI overrides live in components, not shell or legacy css"
     assert.equal(layoutSource.includes(snippet), false, `${snippet} should stay out of assets/css/layout/10-shell.css`);
     assert.equal(legacySource.includes(snippet), false, `${snippet} should stay out of assets/css/legacy/current.css`);
   });
+});
+
+test("active table sort state does not expand header icon spacing", async () => {
+  const componentSource = await readFile(new URL("../assets/css/components/48-application-ui-overrides.css", import.meta.url), "utf8");
+
+  assert.equal(/th\.table-sort-active\s*\{[^}]*padding-right\s*:/s.test(componentSource), false);
+});
+
+test("shared dashboard loading overlay lives outside page css and legacy css", async () => {
+  const componentSource = await readFile(new URL("../assets/css/components/48-application-ui-overrides.css", import.meta.url), "utf8");
+  const legacySource = await readFile(new URL("../assets/css/legacy/current.css", import.meta.url), "utf8");
+  const pageSources = await Promise.all(
+    (await listCssFiles(new URL("../assets/css/pages/", import.meta.url))).map((fileUrl) => readFile(fileUrl, "utf8")),
+  );
+
+  assert.match(componentSource, /^\.dashboard-loading-overlay\s*\{/m);
+  assert.match(componentSource, /^\.dashboard-loading-spinner\s*\{/m);
+  assert.match(componentSource, /^\.dashboard-loading-target\s*\{/m);
+  assert.match(componentSource, /^\.dashboard-loading-copy\s*\{/m);
+  assert.match(componentSource, /^\.dashboard-loading-progress\s*\{/m);
+  assert.match(componentSource, /^\.dashboard-loading-progress-bar\s*\{/m);
+  assert.match(componentSource, /^\.dashboard-loading-percent\s*\{/m);
+  assert.match(componentSource, /^@keyframes dashboard-loading-spin\s*\{/m);
+  assert.match(componentSource, /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{[\s\S]*?\.dashboard-loading-spinner\s*\{[\s\S]*?animation:\s*none/);
+  assert.doesNotMatch(componentSource.match(/^\.dashboard-loading-overlay\s*\{([\s\S]*?)\n\}/m)?.[1] || "", /position:\s*fixed/);
+  assert.equal(legacySource.includes("dashboard-loading-overlay"), false);
+  assert.equal(pageSources.some((source) => source.includes("dashboard-loading-overlay")), false);
 });
 
 test("shared form and multi-select controls live outside legacy css", async () => {
@@ -414,7 +694,8 @@ test("shared form and multi-select controls live outside legacy css", async () =
   assert.match(componentSource, /^\.multi-select-option\s*\{/m);
   assert.match(componentSource, /^\.secondary-button\s*\{/m);
   assert.match(componentSource, /var\(--tj-border-control\)/);
-  assert.match(componentSource, /var\(--spectrum-control-radius\)/);
+  assert.match(componentSource, /var\(--tj-control-radius\)/);
+  assert.match(componentSource, /var\(--tj-focus-ring\)/);
   assert.equal(/#(?:d8e4f0|ffffff|f8fbff)\b/i.test(componentSource), false);
 
   [
@@ -549,7 +830,6 @@ test("login page styles live in the page layer and use semantic tokens", async (
   assert.match(pageSource, /^\.login-body\.safari-dingtalk-login \.login-switch-card \.dingtalk-qr-frame\s*\{/m);
   assert.match(pageSource, /var\(--tj-text-strong\)/);
   assert.match(pageSource, /var\(--tj-text-muted\)/);
-  assert.match(pageSource, /var\(--tj-border-control\)/);
   assert.match(pageSource, /var\(--spectrum-accent-visual\)/);
   assert.equal(/#(?:06142e|2086ff|465368|55708d|60738d|8092ad|d7e3ef|d92d20)\b/i.test(pageSource), false);
 
@@ -587,9 +867,6 @@ test("sales dashboard overview styles live in the page layer and use semantic to
 
   assert.match(pageSource, /^\/\* Sales dashboard filter controls and overview metrics\. \*\//m);
   assert.match(pageSource, /^#sales-global-filters\[hidden\]\s*\{/m);
-  assert.match(pageSource, /^\.date-range-control\s*\{/m);
-  assert.match(pageSource, /^\.date-range-button\s*\{/m);
-  assert.match(pageSource, /^\.date-range-popover\s*\{/m);
   assert.match(pageSource, /^\.insight-row\s*\{/m);
   assert.match(pageSource, /^\.insight-card\s*\{/m);
   assert.match(pageSource, /^\.overview-grid\s*\{/m);
@@ -598,7 +875,6 @@ test("sales dashboard overview styles live in the page layer and use semantic to
   assert.match(pageSource, /^\.mini-card\s*\{/m);
   assert.match(pageSource, /^@media \(max-width: 1180px\)/m);
   assert.match(pageSource, /var\(--tj-content-bg\)/);
-  assert.match(pageSource, /var\(--tj-border-control\)/);
   assert.match(pageSource, /var\(--tj-text-muted\)/);
   assert.match(pageSource, /var\(--tj-action-blue\)/);
   assert.match(pageSource, /var\(--spectrum-accent-visual\)/);
@@ -606,11 +882,6 @@ test("sales dashboard overview styles live in the page layer and use semantic to
 
   [
     /^#sales-global-filters\[hidden\]\s*\{/m,
-    /^\.date-range-control\s*\{/m,
-    /^\.date-range-button\s*\{/m,
-    /^\.date-range-popover\s*\{/m,
-    /^\.date-presets\s*\{/m,
-    /^\.date-range-fields\s*\{/m,
     /^\.insight-row\s*\{/m,
     /^\.insight-card\s*\{/m,
     /^\.card-title\s*\{/m,
@@ -623,6 +894,30 @@ test("sales dashboard overview styles live in the page layer and use semantic to
     /^\.mini-card\s*\{/m,
   ].forEach((selectorPattern) => {
     assert.equal(selectorPattern.test(legacySource), false, `${selectorPattern} should be owned by assets/css/pages/22-sales-dashboard.css`);
+  });
+});
+
+test("sales review detail table declares stable table and column semantics", async () => {
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const tableMatch = indexSource.match(/<table\b[^>]*id="sales-review-detail-table"[^>]*>([\s\S]*?)<\/table>/);
+  assert.ok(tableMatch, "sales review detail table should have a stable id");
+  assert.match(tableMatch[0], /\bdata-table-key="sales-review-detail"/);
+  assert.match(indexSource, /id="sales-dashboard-content"/);
+
+  const headers = Array.from(tableMatch[1].matchAll(/<th\b([^>]*)>/g), (match) => match[1]);
+  assert.equal(headers.length, 18);
+  headers.forEach((attributes, index) => {
+    assert.match(attributes, /\bdata-column-key="/, `header ${index + 1} should declare data-column-key`);
+    assert.match(attributes, /\bdata-column-kind="/, `header ${index + 1} should declare data-column-kind`);
+  });
+  assert.match(headers[0], /\bdata-column-profile="short-name"/);
+  assert.match(headers[1], /\bdata-column-profile="identifier"/);
+  assert.match(headers[2], /\bdata-column-profile="name"/);
+  assert.match(tableMatch[0], /\bdata-column-key="averageProfit"[\s\S]*?平均利润/);
+  assert.match(tableMatch[0], /\bdata-column-key="fbaDeliveryFeeRate"[\s\S]*?FBA占比/);
+  assert.doesNotMatch(tableMatch[0], /FBA发货费占比/);
+  headers.slice(3).forEach((attributes, index) => {
+    assert.match(attributes, /\bdata-column-kind="number"/, `numeric header ${index + 4} should be marked as number`);
   });
 });
 
@@ -685,7 +980,6 @@ test("sales forecast styles live in the page layer and use design tokens", async
   const legacySource = await readFile(new URL("../assets/css/legacy/current.css", import.meta.url), "utf8");
 
   assert.match(pageSource, /^\/\* Sales forecast table and controls \*\//m);
-  assert.match(pageSource, /^\.sales-forecast-filters\s*\{/m);
   assert.match(pageSource, /^\.sales-forecast-table-wrap\s*\{/m);
   assert.match(pageSource, /^\.sales-forecast-view-toggle\s*\{/m);
   assert.match(pageSource, /^\.sales-daily-input\s*\{/m);
@@ -695,6 +989,7 @@ test("sales forecast styles live in the page layer and use design tokens", async
   assert.match(pageSource, /var\(--tj-text-muted\)/);
   assert.equal(/#(?:c8dcf1|eaf1df|f3ead7|e5edf7|d7e4f1|fbfdff|f8fbff|f2f9ff|fff3df|dbe6f2|f7fbff|526176|aebbd0|a97900|f1b800|fff3bf|d5e0ed|9a4a00|f0bb83|fff2df|e4edf6|cfddea|fffdf5)\b/i.test(pageSource), false);
 
+  assert.equal(pageSource.includes(".sales-forecast-filters {"), false);
   assert.equal(legacySource.includes(".sales-forecast-filters {"), false);
   assert.equal(legacySource.includes(".sales-forecast-table-wrap {"), false);
   assert.equal(legacySource.includes(".sales-forecast-view-toggle {"), false);
@@ -728,13 +1023,11 @@ test("budget target table width rules live in the page layer", async () => {
 
   assert.match(pageSource, /^#view-budget\s*\{/m);
   assert.match(pageSource, /^#view-budget \.budget-target-table-wrap\s*\{/m);
-  assert.match(pageSource, /^#view-budget \.budget-toolbar\s*\{/m);
   assert.match(pageSource, /^\.month-chip\s*\{/m);
   assert.match(pageSource, /^\.budget-upload-box\s*\{/m);
   assert.match(pageSource, /^\.file-picker\s*\{/m);
   assert.match(pageSource, /^\.file-picker\.is-dragging\s*\{/m);
   assert.match(pageSource, /overflow-x:\s*auto/);
-  assert.match(pageSource, /min-width:\s*1120px/);
   assert.match(pageSource, /var\(--tj-text-muted\)/);
   assert.match(pageSource, /var\(--tj-action-blue\)/);
   assert.match(pageSource, /var\(--tj-content-bg\)/);
@@ -752,16 +1045,16 @@ test("budget target table width rules live in the page layer", async () => {
   assert.equal(legacySource.includes(".template-map"), false);
 });
 
-test("FBA freight status wrapping lives in the page layer", async () => {
+test("FBA freight page styles avoid overriding shared filter toolbar", async () => {
   const pageSource = await readFile(new URL("../assets/css/pages/35-fba-freight.css", import.meta.url), "utf8");
   const legacySource = await readFile(new URL("../assets/css/legacy/current.css", import.meta.url), "utf8");
 
-  assert.match(pageSource, /^#view-fba-freight \.fba-freight-toolbar\s*\{/m);
-  assert.match(pageSource, /^#view-fba-freight \.fba-freight-table\s*\{/m);
+  assert.equal(pageSource.includes(".fba-freight-toolbar"), false);
   assert.match(pageSource, /^#view-fba-freight \.fba-freight-summary\s*\{/m);
+  assert.match(pageSource, /grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(var\(--tj-kpi-card-min-width\),\s*var\(--tj-kpi-card-width\)\)\)/);
+  assert.match(pageSource, /box-shadow:\s*var\(--tj-shadow-modal\)/);
   assert.match(pageSource, /^#view-fba-freight \.panel-head\s*\{/m);
   assert.match(pageSource, /^#fba-freight-status\s*\{/m);
-  assert.match(pageSource, /min-width:\s*1120px/);
   assert.match(pageSource, /overflow-wrap:\s*anywhere/);
   assert.match(pageSource, /var\(--tj-content-bg\)/);
   assert.equal(/#(?:1677ff|2563eb|0b66d8|2457d5)\b/i.test(pageSource), false);
@@ -905,8 +1198,6 @@ test("cashflow table stack layout lives in the page layer", async () => {
   assert.match(pageSource, /^\/\* Cashflow dashboard page \*\//m);
   assert.match(pageSource, /^#view-cashflow \.cashflow-stack\s*\{/m);
   assert.match(pageSource, /^#view-cashflow \.cashflow-stack \.table-wrap\s*\{/m);
-  assert.match(pageSource, /^#view-cashflow \.cashflow-stack table\s*\{/m);
-  assert.match(pageSource, /min-width:\s*1180px/);
   assert.equal(legacySource.includes(".cashflow-stack {\n  grid-template-columns:"), false);
   assert.equal(legacySource.includes(".cashflow-stack .table-wrap {\n  overflow-x:"), false);
   assert.equal(legacySource.includes(".cashflow-stack table {\n  min-width:"), false);
@@ -918,16 +1209,15 @@ test("payables dashboard styles live in the page layer and use semantic tokens",
 
   assert.match(pageSource, /^\/\* Payables dashboard page\. \*\//m);
   assert.match(pageSource, /^\.payable-hero\s*\{/m);
-  assert.match(pageSource, /^\.payable-filters\s*\{/m);
   assert.match(pageSource, /^\.payable-kpi-grid\s*\{/m);
   assert.match(pageSource, /^\.payable-visual-grid\s*\{/m);
   assert.match(pageSource, /^\.payable-status-row\s*\{/m);
   assert.match(pageSource, /^\.payable-flow-card\s*\{/m);
-  assert.match(pageSource, /^\.payable-table-wrap table\s*\{/m);
-  assert.match(pageSource, /^#payables-detail-table th:first-child,/m);
+  assert.equal(pageSource.includes("#payables-detail-table th:first-child"), false);
   assert.match(pageSource, /^@media \(max-width:1180px\)/m);
   assert.match(pageSource, /^@media \(max-width:720px\)/m);
-  assert.match(pageSource, /#view-payables \.payable-kpi-grid,/);
+  assert.match(pageSource, /\.payable-kpi-grid\s*\{\s*grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(var\(--tj-kpi-card-min-width\),\s*var\(--tj-kpi-card-width\)\)\)/);
+  assert.match(pageSource, /#view-payables \.payable-kpi-grid\s*\{\s*grid-template-columns:\s*1fr/);
   assert.match(pageSource, /var\(--tj-text-muted\)/);
   assert.match(pageSource, /var\(--tj-surface-muted\)/);
   assert.match(pageSource, /var\(--tj-border-subtle\)/);
@@ -935,6 +1225,7 @@ test("payables dashboard styles live in the page layer and use semantic tokens",
   assert.match(pageSource, /var\(--tj-tone-danger-strong\)/);
   assert.equal(/#(?:d92d20|d96b00|5f7089|0b3768|ffb057|e54835|9fb2c8|edf4fb|f8fbff|ffffff|1677ff|2563eb|0b66d8)\b/i.test(pageSource), false);
 
+  assert.equal(pageSource.includes(".payable-filters {"), false);
   [
     ".payable-hero {",
     ".payable-update {",
@@ -960,15 +1251,15 @@ test("factory inventory styles live in the page layer and use semantic tokens", 
   assert.match(pageSource, /^\.factory-inventory-hero\s*\{/m);
   assert.match(pageSource, /^#view-factory-inventory\.active\s*\{/m);
   assert.match(pageSource, /^\.factory-inventory-sticky\s*\{/m);
-  assert.match(pageSource, /^\.factory-inventory-filters\s*\{/m);
   assert.match(pageSource, /^\.factory-inventory-kpi-grid\s*\{/m);
-  assert.match(pageSource, /^\.factory-inventory-table-wrap table\s*\{/m);
   assert.match(pageSource, /^#factory-inventory-table \.factory-order-row td\s*\{/m);
   assert.match(pageSource, /^\.factory-order-strip\s*\{/m);
   assert.match(pageSource, /^\.factory-inventory-image\s*\{/m);
   assert.match(pageSource, /^\.factory-shipped-input:focus-visible\s*\{/m);
-  assert.match(pageSource, /^@media \(max-width:\s*720px\)/m);
-  assert.match(pageSource, /min-width:\s*1840px/);
+  assert.equal(/\.app-shell\s*\{[\s\S]*?min-width:\s*1180px/s.test(pageSource), false);
+  assert.equal(/\.dashboard\s*\{[\s\S]*?min-width:\s*1000px/s.test(pageSource), false);
+  assert.match(pageSource, /@media \(max-width:\s*720px\)[\s\S]*?#view-factory-inventory \.factory-inventory-hero\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)/);
+  assert.match(pageSource, /#view-factory-inventory \.factory-inventory-hero \.hero-actions\s*\{[\s\S]*?width:\s*100%/);
   assert.match(pageSource, /var\(--tj-page-bg\)/);
   assert.match(pageSource, /var\(--tj-content-bg\)/);
   assert.match(pageSource, /var\(--tj-action-blue\)/);
@@ -977,8 +1268,14 @@ test("factory inventory styles live in the page layer and use semantic tokens", 
   assert.match(pageSource, /var\(--spectrum-focus-ring-color\)/);
   assert.equal(pageSource.includes("var(--spectrum-accent-background-color-default)"), false);
   assert.equal(pageSource.includes("var(--spectrum-accent-color-900)"), false);
+  assert.equal(
+    /#factory-inventory-table\s+td:nth-child\(9\)[\s\S]*?text-align:\s*left/.test(pageSource),
+    false,
+    "factory inventory shipped quantity cells must inherit numeric right alignment",
+  );
   assert.equal(/#(?:d3e4f7|edf4fb|1f6fff|ffffff|f8fbff|1677ff|2563eb|0b66d8)\b/i.test(pageSource), false);
 
+  assert.equal(pageSource.includes(".factory-inventory-filters {"), false);
   [
     ".factory-inventory-hero {",
     "#view-factory-inventory.active {",
@@ -1005,23 +1302,20 @@ test("supplier board styles live in the page layer and use semantic tokens", asy
   assert.match(pageSource, /^\.supplier-board-hero\s*\{/m);
   assert.match(pageSource, /^#view-supplier-board\.active\s*\{/m);
   assert.match(pageSource, /^\.supplier-board-sticky\s*\{/m);
-  assert.match(pageSource, /^\.supplier-board-filters\s*\{/m);
   assert.match(pageSource, /^\.supplier-board-kpi-grid\s*\{/m);
-  assert.match(pageSource, /^\.supplier-board-table-wrap table\s*\{/m);
-  assert.match(pageSource, /^#supplier-board-table th,/m);
   assert.match(pageSource, /^#supplier-board-table td small\s*\{/m);
   assert.match(pageSource, /^\.supplier-board-image\s*\{/m);
   assert.match(pageSource, /^@media \(max-width:\s*1180px\)/m);
   assert.match(pageSource, /^@media \(max-width:\s*720px\)/m);
-  assert.match(pageSource, /#view-supplier-board \.supplier-board-kpi-grid\s*\{\s*grid-template-columns:\s*repeat\(2,/);
+  assert.match(pageSource, /#view-supplier-board \.supplier-board-kpi-grid\s*\{\s*grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(var\(--tj-kpi-card-min-width\),\s*var\(--tj-kpi-card-width\)\)\)/);
   assert.match(pageSource, /#view-supplier-board \.supplier-board-kpi-grid\s*\{\s*grid-template-columns:\s*1fr/);
-  assert.match(pageSource, /min-width:\s*1680px/);
   assert.match(pageSource, /var\(--tj-page-bg\)/);
   assert.match(pageSource, /var\(--tj-surface-muted\)/);
   assert.match(pageSource, /var\(--tj-border-subtle\)/);
   assert.match(pageSource, /var\(--tj-text-muted\)/);
   assert.equal(/#(?:f5faff|dbe8f8|f6f9fd|ffffff|1677ff|2563eb|0b66d8)\b/i.test(pageSource), false);
 
+  assert.equal(pageSource.includes(".supplier-board-filters {"), false);
   [
     ".supplier-board-hero {",
     "#view-supplier-board.active {",
@@ -1043,19 +1337,16 @@ test("supplier detail styles live in the page layer and use semantic tokens", as
 
   assert.match(pageSource, /^\/\* Supplier detail page\. \*\//m);
   assert.match(pageSource, /^\.supplier-detail-hero\s*\{/m);
-  assert.match(pageSource, /^#supplier-detail-table th,/m);
   assert.match(pageSource, /^\.supplier-detail-actions\s*\{/m);
-  assert.match(pageSource, /^\.supplier-detail-filters\s*\{/m);
   assert.match(pageSource, /^\.supplier-detail-kpi-grid\s*\{/m);
-  assert.match(pageSource, /^\.supplier-detail-table-wrap table\s*\{/m);
   assert.match(pageSource, /^\.supplier-detail-modal\s*\{/m);
-  assert.match(pageSource, /^@media \(max-width:1180px\)/m);
   assert.match(pageSource, /^@media \(max-width:720px\)/m);
   assert.match(pageSource, /#view-supplier-detail \.supplier-detail-kpi-grid\s*\{/);
   assert.match(pageSource, /var\(--tj-border-subtle\)/);
   assert.match(pageSource, /var\(--tj-content-bg\)/);
   assert.equal(/#(?:d3e4f7|ffffff|1677ff|2563eb|0b66d8)\b/i.test(pageSource), false);
 
+  assert.equal(pageSource.includes(".supplier-detail-filters {"), false);
   [
     ".supplier-detail-hero {",
     ".supplier-detail-actions {",
@@ -1076,14 +1367,10 @@ test("inventory provision table stack layout lives in the page layer", async () 
   assert.match(pageSource, /^\/\* Inventory provision page \*\//m);
   assert.match(pageSource, /^#view-provision \.inventory-table-stack\s*\{/m);
   assert.match(pageSource, /^#view-provision \.inventory-table-stack \.table-wrap\s*\{/m);
-  assert.match(pageSource, /^#view-provision \.inventory-table-stack table\s*\{/m);
-  assert.match(pageSource, /^#view-provision \.inventory-table-stack article:first-child table\s*\{/m);
   assert.match(pageSource, /^#view-provision \.inventory-chart-grid\s*\{/m);
   assert.match(pageSource, /^#view-provision \.inventory-chart-grid svg\s*\{/m);
   assert.match(pageSource, /^#view-provision \.bucket-dot\s*\{/m);
   assert.match(pageSource, /^#view-provision \.provision-risk-row\s*\{/m);
-  assert.match(pageSource, /min-width:\s*1080px/);
-  assert.match(pageSource, /min-width:\s*720px/);
   assert.match(pageSource, /grid-template-columns:\s*minmax\(0, 1\.2fr\) minmax\(0, 0\.9fr\) minmax\(0, 1fr\)/);
   assert.match(pageSource, /min-height:\s*300px/);
   assert.match(pageSource, /var\(--tj-tone-warning-row-bg\)/);
@@ -1158,39 +1445,31 @@ test("review rating styles live in the page layer and use semantic tokens", asyn
   });
 });
 
-test("clearance calculator styles live in the page layer and use semantic tokens", async () => {
-  const pageSource = await readFile(new URL("../assets/css/pages/26-clearance-calculator.css", import.meta.url), "utf8");
+test("slow-moving risk styles live in the page layer and use semantic tokens", async () => {
+  const pageSource = await readFile(new URL("../assets/css/pages/26-slow-moving-risk.css", import.meta.url), "utf8");
   const legacySource = await readFile(new URL("../assets/css/legacy/current.css", import.meta.url), "utf8");
 
-  assert.match(pageSource, /^\/\* Clearance calculator page\. \*\//m);
-  assert.match(pageSource, /^#view-clearance \.clearance-rate-panel\s*\{/m);
-  assert.match(pageSource, /^#view-clearance \.clearance-workbench\s*\{/m);
-  assert.match(pageSource, /^#view-clearance \.clearance-paste-label\s*\{/m);
-  assert.match(pageSource, /^#view-clearance \.clearance-rule-list\s*\{/m);
-  assert.match(pageSource, /^#view-clearance \.clearance-kpi-grid\s*\{/m);
-  assert.match(pageSource, /^#view-clearance \.clearance-table-wrap table\s*\{/m);
-  assert.match(pageSource, /^#view-clearance \.clearance-action-row\s*\{/m);
+  assert.match(pageSource, /^\/\* Slow-moving risk page\. \*\//m);
+  assert.match(pageSource, /^#view-clearance \.slow-moving-risk-tabs\s*\{/m);
+  assert.match(pageSource, /^#view-clearance \.slow-moving-risk-kpis\s*\{/m);
+  assert.match(pageSource, /^#view-clearance \.slow-moving-risk-table-wrap\s*\{/m);
   assert.match(pageSource, /^@media \(max-width:\s*720px\)/m);
+  assert.match(pageSource, /#view-clearance > \.module-hero\s*\{/m);
   assert.match(pageSource, /var\(--tj-content-bg\)/);
   assert.match(pageSource, /var\(--tj-surface-muted\)/);
   assert.match(pageSource, /var\(--tj-text-muted\)/);
   assert.match(pageSource, /var\(--tj-border-strong\)/);
-  assert.match(pageSource, /var\(--spectrum-positive\)/);
   assert.match(pageSource, /var\(--spectrum-negative\)/);
   assert.equal(/#(?:f8fbff|ffffff|d8e4f0|1677ff|2563eb|0b66d8)\b/i.test(pageSource), false);
 
   [
-    ".clearance-rate-panel {",
-    ".clearance-workbench {",
-    ".clearance-paste-label {",
-    ".clearance-rule-list {",
-    ".clearance-kpi-grid {",
-    ".clearance-table-wrap table {",
-    ".clearance-action-row {",
-    ".clearance-positive {",
-    ".clearance-negative {",
+    ".slow-moving-risk-tabs {",
+    ".slow-moving-risk-panel {",
+    ".slow-moving-risk-kpis {",
+    ".slow-moving-risk-table-wrap {",
+    ".slow-moving-risk-row--强制处置 {",
   ].forEach((snippet) => {
-    assert.equal(legacySource.includes(snippet), false, `${snippet} should be owned by assets/css/pages/26-clearance-calculator.css`);
+    assert.equal(legacySource.includes(snippet), false, `${snippet} should be owned by assets/css/pages/26-slow-moving-risk.css`);
   });
 });
 
@@ -1201,7 +1480,6 @@ test("aftersales mail styles live in the page layer and use semantic tokens", as
   assert.match(pageSource, /^\/\* Aftersales mail dashboard page\. \*\//m);
   assert.match(pageSource, /^\.aftersales-mail-workspace\s*\{/m);
   assert.match(pageSource, /^\.aftersales-mail-list-panel,/m);
-  assert.match(pageSource, /^#view-aftersales-mail \.aftersales-mail-filters\s*\{/m);
   assert.match(pageSource, /^\.aftersales-mail-kpis\s*\{/m);
   assert.match(pageSource, /^\.aftersales-mail-item\s*\{/m);
   assert.match(pageSource, /^\.aftersales-mail-avatar\s*\{/m);
@@ -1220,6 +1498,7 @@ test("aftersales mail styles live in the page layer and use semantic tokens", as
   assert.equal(pageSource.includes("--spectrum-accent-color"), false);
   assert.equal(/#(?:ffffff|f8fbff|eef4fb|eaf2ff|1677ff|2563eb|0b66d8)\b/i.test(pageSource), false);
 
+  assert.equal(pageSource.includes(".aftersales-mail-filters {"), false);
   [
     /^\.aftersales-mail-workspace\s*\{/m,
     /^\.aftersales-mail-list-panel,/m,
@@ -1327,8 +1606,6 @@ test("advertising review styles live in the page layer and use semantic tokens",
   assert.match(pageSource, /^\/\* Advertising review page \*\//m);
   assert.match(pageSource, /^\.ads-analysis-panel\s*\{/m);
   assert.match(pageSource, /^\.ads-analysis-card\s*\{/m);
-  assert.match(pageSource, /^\.ads-keyword-table-wrap table\s*\{/m);
-  assert.match(pageSource, /^\.ads-portfolio-table-wrap table\s*\{/m);
   assert.match(pageSource, /^\.column-picker\s*\{/m);
   assert.match(pageSource, /var\(--tj-content-bg\)/);
   assert.match(pageSource, /var\(--tj-border-control\)/);

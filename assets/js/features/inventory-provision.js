@@ -153,6 +153,50 @@ export function createInventoryProvisionFeature({
     if (!dateInput.value) dateInput.value = today;
   }
 
+  function detailRowKey(item, index) {
+    return item.rowKey || [
+      item.storeName || "",
+      item.country || "",
+      item.msku || "",
+      item.listingOwner || "",
+      index,
+    ].join("|").toLowerCase();
+  }
+
+  function renderBatchDetailTable(item) {
+    const batchRows = item.batchRows || [];
+    if (!batchRows.length) return "暂无批次追溯明细。";
+    return `
+      <table>
+        <thead><tr><th>库存批次月份</th><th>库龄</th><th>数量</th><th>库存金额</th><th>期末计提余额</th><th>本月新增计提</th><th>本月计提冲回</th><th>本月计提金额</th></tr></thead>
+        <tbody>
+          ${batchRows.map((batch) => `
+            <tr class="${Number(batch.provisionAmount || 0) > 0 || Number(batch.reversalAmount || 0) > 0 ? "provision-risk-row" : ""}">
+              <td>${escapeHtml(batch.cohortMonth ? `${batch.cohortMonth} 批次` : "未识别批次")}</td>
+              <td>${formatNumber(batch.ageDays || 0)}天 · ${escapeHtml(batch.bucketLabel || "")}</td>
+              <td>${formatNumber(batch.quantity || 0)}</td>
+              <td>¥${formatActualMoney(batch.amount || 0)}</td>
+              <td>¥${formatActualMoney(batch.provisionAmount || 0)}</td>
+              <td>¥${formatActualMoney(batch.monthlyProvisionAmount || 0)}</td>
+              <td>¥${formatActualMoney(batch.reversalAmount || 0)}</td>
+              <td>¥${formatActualMoney(batch.netProvisionAmount || 0)}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+  }
+
+  function handleInventoryDetailClick(event) {
+    const toggle = event.target?.closest?.("[data-inventory-summary-toggle]");
+    if (!toggle) return;
+    const key = toggle.dataset.inventorySummaryToggle;
+    const batchRow = root?.querySelector?.(`[data-inventory-batch-row="${key}"]`);
+    if (!batchRow) return;
+    batchRow.hidden = !batchRow.hidden;
+    toggle.setAttribute("aria-expanded", String(!batchRow.hidden));
+  }
+
   function renderInventoryProvision(data) {
     const buckets = data.buckets || [];
     const kpis = data.kpis || {};
@@ -215,25 +259,32 @@ export function createInventoryProvisionFeature({
     const detailTable = root?.querySelector?.("#inventory-detail-table");
     if (detailTable) {
       const rows = data.detailRows || [];
-      detailTable.innerHTML = rows.length ? rows.map((item) => `
-        <tr class="${item.provisionRate > 0 ? "provision-risk-row" : ""}">
+      detailTable.innerHTML = rows.length ? rows.map((item, index) => {
+        const key = detailRowKey(item, index);
+        return `
+        <tr class="${Number(item.provisionAmount || 0) > 0 || Number(item.reversalAmount || 0) > 0 ? "provision-risk-row" : ""}">
           <td>${escapeHtml(item.storeName)}</td>
           <td>${escapeHtml(item.country)}</td>
-          <td><strong>${escapeHtml(item.msku)}</strong><br /><small>${escapeHtml(item.skuName || "")}</small></td>
+          <td>
+            <button class="table-action" type="button" data-inventory-summary-toggle="${escapeHtml(key)}" aria-expanded="false">
+              ${escapeHtml(item.msku)}
+            </button>
+            <br /><small>${escapeHtml(item.skuName || "")}</small>
+            <br /><small>${formatNumber(item.batchRows?.length || 0)} 个批次，点击 MSKU 展开</small>
+          </td>
           <td>${escapeHtml(item.listingOwner && item.listingOwner !== "-" ? item.listingOwner : "负责人留空")}</td>
-          <td>${item.ageDays}天 · ${escapeHtml(item.bucketLabel)}</td>
           <td>${formatNumber(item.quantity || 0)}</td>
-          <td>¥${formatActualMoney(item.purchaseCost || 0)}</td>
-          <td>¥${formatActualMoney(item.firstLegCost || 0)}</td>
-          <td>¥${formatActualMoney(item.unitCost || 0)}</td>
           <td>¥${formatActualMoney(item.amount || 0)}</td>
-          <td>${Math.round(Number(item.provisionRate || 0) * 100)}%</td>
           <td>¥${formatActualMoney(item.provisionAmount || 0)}</td>
           <td>¥${formatActualMoney(item.monthlyProvisionAmount || 0)}</td>
           <td>¥${formatActualMoney(item.reversalAmount || 0)}</td>
           <td>¥${formatActualMoney(item.netProvisionAmount || 0)}</td>
         </tr>
-      `).join("") : `<tr><td colspan="15">暂无符合条件的库存计提数据。</td></tr>`;
+        <tr data-inventory-batch-row="${escapeHtml(key)}" hidden>
+          <td colspan="10">${renderBatchDetailTable(item)}</td>
+        </tr>
+      `;
+      }).join("") : `<tr><td colspan="10">暂无符合条件的库存计提数据。</td></tr>`;
     }
   }
 
@@ -272,7 +323,7 @@ export function createInventoryProvisionFeature({
         const bucketTable = root?.querySelector?.("#inventory-bucket-table");
         const detailTable = root?.querySelector?.("#inventory-detail-table");
         renderTableMessage(bucketTable, 8, "加载失败，请稍后重试。");
-        renderTableMessage(detailTable, 15, "加载失败，请稍后重试。");
+        renderTableMessage(detailTable, 10, "加载失败，请稍后重试。");
       },
       root,
     });
@@ -325,6 +376,7 @@ export function createInventoryProvisionFeature({
     bind(root, "#inventory-provision-owner", "change", loadInventoryProvision);
     bind(root, "#inventory-provision-cost-mode", "change", loadInventoryProvision);
     bind(root, "#inventory-provision-keyword", "keydown", handleInventoryProvisionKeywordKeydown);
+    bind(root, "#inventory-detail-table", "click", handleInventoryDetailClick);
   }
 
   return {

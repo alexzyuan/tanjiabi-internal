@@ -1,6 +1,7 @@
 import { getConfig } from "../config/index.js";
 import { getLingxingAdapter } from "../adapters/lingxingAdapter.js";
 import { listDateRange } from "../utils/dateRange.js";
+import { normalizeRecordList, readFirst, toNumber } from "../utils/recordAccess.js";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -17,26 +18,6 @@ const metricKeys = {
   sameOrders: ["same_orders", "sameOrders", "direct_orders", "directOrders"],
   units: ["units", "unit", "sales_quantity", "salesQuantity"],
 };
-
-function readFirst(item, keys) {
-  for (const key of keys) {
-    const value = item?.[key];
-    if (value !== undefined && value !== null && String(value).trim() !== "") return value;
-  }
-  return "";
-}
-
-function normalizeRecordList(payload) {
-  const data = payload?.data || payload || {};
-  const records = data.records || data.list || data.rows || data.data || data.items || data.result || data;
-  return Array.isArray(records) ? records : [];
-}
-
-function toNumber(value) {
-  if (value === null || value === undefined || value === "") return 0;
-  const number = Number(String(value).replace(/,/g, "").replace(/[^\d.-]/g, ""));
-  return Number.isFinite(number) ? number : 0;
-}
 
 function normalizeDateText(value) {
   const text = String(value || "").trim();

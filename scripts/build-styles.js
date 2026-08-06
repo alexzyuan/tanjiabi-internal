@@ -2,15 +2,24 @@ import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { isRepositoryMetadataPath } from "../src/utils/pathFilters.js";
+import { minifyCss } from "./lib/minifyCss.js";
 
 const rootDir = process.cwd();
 const sourceDir = path.join(rootDir, "assets", "css");
 const outputFile = path.join(rootDir, "styles.css");
-const layerOrder = ["tokens", "base", "layout", "components", "pages", "legacy"];
+function argValue(name) {
+  const index = process.argv.indexOf(name);
+  if (index === -1) return "";
+  return process.argv[index + 1] || "";
+}
+
+const previewOutput = argValue("--output");
+const outputPath = previewOutput ? path.resolve(rootDir, previewOutput) : outputFile;
+const layerOrder = ["tokens", "base", "layout", "components", "pages", "legacy", "final"];
 const visualLockMessage = [
-  "styles.css is temporarily locked because assets/css/* does not yet reproduce the approved sidebar/topbar visual baseline.",
-  "The single CSS target remains generated styles.css from assets/css/*.",
-  "Set ALLOW_CSS_REBUILD=1 only after visual parity has been reviewed with screenshots.",
+  "Legacy visual rollback detected: styles.css is oversized and still contains gradient-heavy rollback styles.",
+  "The single CSS target is generated styles.css from assets/css/*.",
+  "Set ALLOW_CSS_REBUILD=1 only for a reviewed recovery after screenshot parity has been confirmed.",
 ].join(" ");
 
 async function listCssFiles(dir) {
@@ -54,70 +63,6 @@ async function isLegacyVisualRollbackActive() {
   }
 }
 
-function shouldKeepSpace(before, after) {
-  if (!before || !after) return false;
-  if ("{}:;,>+~([".includes(before)) return false;
-  if ("{}:;,>+~)]".includes(after)) return false;
-  return true;
-}
-
-function minifyCss(source) {
-  let output = "";
-  let quote = null;
-  let pendingSpace = false;
-
-  for (let index = 0; index < source.length; index += 1) {
-    const char = source[index];
-    const next = source[index + 1];
-
-    if (quote) {
-      output += char;
-      if (char === "\\" && index + 1 < source.length) {
-        index += 1;
-        output += source[index];
-      } else if (char === quote) {
-        quote = null;
-      }
-      continue;
-    }
-
-    if (char === "\"" || char === "'") {
-      if (pendingSpace && shouldKeepSpace(output.at(-1), char)) output += " ";
-      pendingSpace = false;
-      quote = char;
-      output += char;
-      continue;
-    }
-
-    if (char === "/" && next === "*") {
-      index += 2;
-      while (index < source.length && !(source[index] === "*" && source[index + 1] === "/")) {
-        index += 1;
-      }
-      index += 1;
-      continue;
-    }
-
-    if (/\s/.test(char)) {
-      pendingSpace = true;
-      continue;
-    }
-
-    if ("{}:;,>+~()[]=".includes(char)) {
-      output = output.trimEnd();
-      output += char;
-      pendingSpace = false;
-      continue;
-    }
-
-    if (pendingSpace && shouldKeepSpace(output.at(-1), char)) output += " ";
-    pendingSpace = false;
-    output += char;
-  }
-
-  return `${output.replace(/;}/g, "}").replace(/}/g, "}\n").trim()}\n`;
-}
-
 async function writeIfChanged(file, content) {
   await mkdir(path.dirname(file), { recursive: true });
   let current = null;
@@ -137,7 +82,7 @@ async function main() {
 
   if (legacyRollbackActive && process.env.ALLOW_CSS_REBUILD !== "1") {
     if (checkOnly) {
-      console.log(`styles.css visual lock is active; build check skipped. ${visualLockMessage}`);
+      console.log(`styles.css legacy rollback safeguard is active; build check skipped. ${visualLockMessage}`);
       return;
     }
     throw new Error(visualLockMessage);
@@ -146,15 +91,15 @@ async function main() {
   const css = await buildCss();
 
   if (checkOnly) {
-    const current = await readFile(outputFile, "utf8");
+    const current = await readFile(outputPath, "utf8");
     if (current !== css) {
       throw new Error("styles.css is out of date. Run npm run build:css.");
     }
-    await stat(outputFile);
+    await stat(outputPath);
     return;
   }
 
-  const changed = await writeIfChanged(outputFile, css);
+  const changed = await writeIfChanged(outputPath, css);
   console.log(changed ? "styles.css rebuilt" : "styles.css already up to date");
 }
 

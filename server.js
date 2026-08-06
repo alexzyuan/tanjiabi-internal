@@ -45,9 +45,11 @@ import {
 import {
   debugInventoryProvisionSource,
   exportInventoryProvisionDetailXlsx,
-  getClearanceInventoryDashboard,
   getInventoryProvisionDashboard,
 } from "./src/services/inventoryProvisionService.js";
+import { getSlowMovingRiskDashboard } from "./src/services/slowMovingRiskService.js";
+import { createSlowMovingRiskSnapshotStore } from "./src/services/slowMovingRiskSnapshotStore.js";
+import { startSlowMovingRiskWeeklyScheduler } from "./src/jobs/slowMovingRiskWeeklyJob.js";
 import { debugLowInventoryLedgerSource, getLowInventoryFeeDashboard } from "./src/services/lowInventoryFeeService.js";
 import {
   getPlatformCashflowDashboard,
@@ -56,7 +58,13 @@ import {
 } from "./src/services/platformCashflowService.js";
 import { getPayablesDashboard } from "./src/services/payablesService.js";
 import { getFactoryInventoryDashboard, saveFactoryInventoryShippedQuantity } from "./src/services/factoryInventoryService.js";
+import { startFactoryInventoryWarmupScheduler } from "./src/services/factoryInventoryWarmupService.js";
+import { startDefaultDashboardWarmupScheduler } from "./src/services/defaultDashboardWarmupService.js";
 import { getSupplierBoardDashboard } from "./src/services/supplierBoardService.js";
+import {
+  exportStoreOperatingMonthlyReportXlsx,
+  getStoreOperatingMonthlyReport,
+} from "./src/services/storeOperatingMonthlyReportService.js";
 import {
   deleteSupplierDetail,
   importSupplierDetails,
@@ -75,6 +83,28 @@ import {
   listFbaForwarderTemplates,
 } from "./src/services/fbaFreightSheetService.js";
 import {
+  deleteFreightRate,
+  exportFreightRateLogsCsv,
+  listFreightRates,
+  saveFreightRate,
+} from "./src/services/freightRateService.js";
+import { getFbaShipmentCandidates } from "./src/services/fbaShipmentCandidateService.js";
+import { getFbaShipmentVariances } from "./src/services/fbaShipmentVarianceService.js";
+import {
+  clearFbaShipmentVarianceFollowup,
+  markFbaShipmentVarianceFollowup,
+} from "./src/services/fbaShipmentVarianceFollowupStore.js";
+import { startFbaShipmentWarmupScheduler } from "./src/services/fbaShipmentWarmupService.js";
+import {
+  createReadySendFbaShipmentOrders,
+  listFbaShipmentOrderWarehouses,
+} from "./src/services/fbaShipmentOrderService.js";
+import {
+  createJiufangFbaOrders,
+  dryRunJiufangFbaOrders,
+  listJiufangChannels,
+} from "./src/services/jiufangFbaOrderService.js";
+import {
   createFbaStaTasks,
   deleteFbaStaTask,
   getFbaStaAutomationState,
@@ -83,6 +113,14 @@ import {
   updateFbaStaAutomation,
   updateFbaStaTask,
 } from "./src/services/fbaStaTaskService.js";
+import {
+  createWebhookTask,
+  deleteWebhookTask,
+  listWebhookTasks,
+  sendWebhookTaskNow,
+  startWebhookAssistantScheduler,
+  updateWebhookTask,
+} from "./src/services/webhookAssistantService.js";
 import {
   createAuthUser,
   deleteDingtalkAuthUser,
@@ -118,6 +156,7 @@ import { generateAiListingCopy } from "./src/services/aiListingService.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const config = getConfig();
+const slowMovingRiskSnapshotStore = createSlowMovingRiskSnapshotStore();
 const sessionCookieName = "tanjia_session";
 const oauthStateCookieName = "tanjia_oauth_state";
 const sessionTtlMs = 12 * 60 * 60 * 1000;
@@ -598,7 +637,7 @@ async function readJsonBody(req) {
 function readSalesDashboardFilters(url) {
   const startDate = url.searchParams.get("startDate") || "";
   const endDate = url.searchParams.get("endDate") || "";
-  const currencyCode = url.searchParams.get("currencyCode") || "ORIGINAL";
+  const currencyCode = url.searchParams.get("currencyCode") || "CNY";
   const listingOwner = String(url.searchParams.get("listingOwner") || url.searchParams.get("owner") || "").trim();
   const sids = (url.searchParams.get("sids") || "")
     .split(",")
@@ -624,6 +663,14 @@ function readFbaFreightFilters(url) {
     shipmentStatus: url.searchParams.get("shipmentStatus") || url.searchParams.get("shipment_status") || "",
     offset: url.searchParams.get("offset") || "",
     length: url.searchParams.get("length") || "",
+    forceRefresh: ["1", "true"].includes(String(url.searchParams.get("forceRefresh") || "").toLowerCase()),
+  };
+}
+
+function readFbaShipmentVarianceFilters(url) {
+  return {
+    ...readFbaFreightFilters(url),
+    followupStatus: url.searchParams.get("followupStatus") || url.searchParams.get("followup_status") || "",
   };
 }
 
@@ -725,6 +772,7 @@ const apiRoutes = createApiRoutes(buildApiRoutes({
   readSalesDashboardFilters,
   readNumberList,
   readFbaFreightFilters,
+  readFbaShipmentVarianceFilters,
   sendCachedImage,
   contentDispositionAttachment,
   sendRedirect,
@@ -770,13 +818,17 @@ const apiRoutes = createApiRoutes(buildApiRoutes({
   updateAftersalesMailStatus,
   getInventoryProvisionDashboard,
   exportInventoryProvisionDetailXlsx,
-  getClearanceInventoryDashboard,
+  getSlowMovingRiskDashboard,
+  listSlowMovingRiskReports: () => slowMovingRiskSnapshotStore.list(),
+  readSlowMovingRiskReport: (reportKey) => slowMovingRiskSnapshotStore.read(reportKey),
   getLowInventoryFeeDashboard,
   getFactoryInventoryDashboard,
   saveFactoryInventoryShippedQuantity,
   getPlatformCashflowDashboard,
   getPayablesDashboard,
   getSupplierBoardDashboard,
+  getStoreOperatingMonthlyReport,
+  exportStoreOperatingMonthlyReportXlsx,
   runPlatformCashflowCapture,
   listSupplierDetails,
   saveSupplierDetail,
@@ -788,9 +840,22 @@ const apiRoutes = createApiRoutes(buildApiRoutes({
   getFbaShopOptions,
   searchFbaMskus,
   getFbaFreightShipments,
+  getFbaShipmentCandidates,
+  getFbaShipmentVariances,
+  markFbaShipmentVarianceFollowup,
+  clearFbaShipmentVarianceFollowup,
   listFbaForwarderTemplates,
   exportFbaFreightShipments,
   convertFbaFreightShipmentsToForwarderTemplate,
+  listFreightRates,
+  saveFreightRate,
+  deleteFreightRate,
+  exportFreightRateLogsCsv,
+  listFbaShipmentOrderWarehouses,
+  createReadySendFbaShipmentOrders,
+  listJiufangChannels,
+  dryRunJiufangFbaOrders,
+  createJiufangFbaOrders,
   saveFbaBoxTemplate,
   getFbaStaAutomationState,
   updateFbaStaAutomation,
@@ -799,6 +864,11 @@ const apiRoutes = createApiRoutes(buildApiRoutes({
   updateFbaStaTask,
   deleteFbaStaTask,
   runStaWarehouseProbe,
+  listWebhookTasks,
+  createWebhookTask,
+  updateWebhookTask,
+  deleteWebhookTask,
+  sendWebhookTaskNow,
   listAuthUsers,
   listDingtalkAuthUsers,
   updateDingtalkAuthUser,
@@ -876,6 +946,11 @@ startSyncScheduler();
 startPlatformCashflowScheduler();
 startFbaStaScheduler();
 startStoreInspectionScheduler();
+startWebhookAssistantScheduler();
+startFactoryInventoryWarmupScheduler();
+startFbaShipmentWarmupScheduler();
+startDefaultDashboardWarmupScheduler();
+startSlowMovingRiskWeeklyScheduler();
 
 const server = http.createServer((req, res) => {
   router(req, res).catch((error) => {

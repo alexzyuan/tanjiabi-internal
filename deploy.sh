@@ -5,6 +5,7 @@ APP_DIR="${APP_DIR:-/opt/tanjia-bi}"
 APP_NAME="${PM2_APP_NAME:-tanjia-bi}"
 KEEP_RELEASES="${KEEP_RELEASES:-3}"
 ARCHIVE="${1:-$APP_DIR/tanjia-bi-deploy.tar.gz}"
+PRODUCTION_DEPLOY_BRANCH="${PRODUCTION_DEPLOY_BRANCH:-codex/yesterday-plus-webhook}"
 RELEASES_DIR="$APP_DIR/releases"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 BACKUP_DIR="$RELEASES_DIR/$STAMP"
@@ -78,8 +79,50 @@ health_check() {
   fail "健康检查未通过，请执行：pm2 logs $APP_NAME --lines 80"
 }
 
+deploy_integrity_check() {
+  local port_value
+  port_value="$(read_port)"
+  local base_url="http://127.0.0.1:$port_value"
+
+  log "检查线上部署完整性：$base_url"
+  APP_DIR="$APP_DIR" DEPLOY_VERIFY_BASE_URL="$base_url" node scripts/deploy-integrity.js verify-deployed
+}
+
+validate_deploy_manifest() {
+  local manifest_json
+  if ! manifest_json="$(tar -xOzf "$ARCHIVE" .deploy-manifest.json 2>/dev/null)"; then
+    fail "部署包缺少 .deploy-manifest.json，拒绝部署。请用新版 scripts/package-deploy.js 重新打包。"
+  fi
+
+  local metadata
+  if ! metadata="$(printf '%s' "$manifest_json" | node -e 'let input = ""; process.stdin.setEncoding("utf8"); process.stdin.on("data", (chunk) => input += chunk); process.stdin.on("end", () => { const manifest = JSON.parse(input); for (const key of ["app", "branch", "commit", "clean", "confirmedBranch"]) console.log(String(manifest[key] ?? "")); });')"; then
+    fail "部署包 manifest 解析失败。"
+  fi
+
+  mapfile -t deploy_meta <<< "$metadata"
+  local manifest_app="${deploy_meta[0]:-}"
+  local manifest_branch="${deploy_meta[1]:-}"
+  local manifest_commit="${deploy_meta[2]:-}"
+  local manifest_clean="${deploy_meta[3]:-}"
+  local manifest_confirmed_branch="${deploy_meta[4]:-}"
+
+  [ "$manifest_app" = "tanjia-bi" ] || fail "部署包应用标识异常：$manifest_app"
+  [ -n "$manifest_branch" ] || fail "部署包 manifest 缺少分支信息。"
+  [ -n "$manifest_commit" ] || fail "部署包 manifest 缺少提交信息。"
+  [ "$manifest_clean" = "true" ] || fail "部署包不是从干净工作区生成，拒绝部署。"
+  [ "$manifest_confirmed_branch" = "$manifest_branch" ] || fail "部署包缺少分支二次确认：confirmedBranch=$manifest_confirmed_branch branch=$manifest_branch"
+
+  if [ "$manifest_branch" != "$PRODUCTION_DEPLOY_BRANCH" ] && [ "${ALLOW_NON_PRODUCTION_DEPLOY:-0}" != "1" ]; then
+    fail "部署包来自分支 $manifest_branch，当前允许的正式部署分支是 $PRODUCTION_DEPLOY_BRANCH。如确需临时部署其他分支，请显式设置 ALLOW_NON_PRODUCTION_DEPLOY=1。"
+  fi
+
+  log "部署包来源确认：branch=$manifest_branch commit=${manifest_commit:0:12}"
+}
+
 [ -d "$APP_DIR" ] || fail "目录不存在：$APP_DIR"
 [ -f "$ARCHIVE" ] || fail "找不到部署包：$ARCHIVE"
+
+validate_deploy_manifest
 
 if [ "${ALLOW_CSS_DEPLOY:-0}" != "1" ]; then
   if tar -tzf "$ARCHIVE" | grep -Eq '(^|/)(styles\.css|assets/css/)'; then
@@ -134,6 +177,7 @@ fi
 pm2 save
 
 health_check
+deploy_integrity_check
 cleanup_old_releases
 
 log "部署完成。当前保留最近 $KEEP_RELEASES 个备份。"

@@ -25,7 +25,7 @@ const dotEnvPath = path.join(process.cwd(), ".env");
 const dotEnv = loadDotEnv();
 const dotEnvLoaded = existsSync(dotEnvPath);
 
-function readEnv(name, fallback = "") {
+export function readEnv(name, fallback = "") {
   return process.env[name] || dotEnv[name] || fallback;
 }
 
@@ -160,6 +160,14 @@ export function getConfig() {
       supplierSalesStatEndpoint: readEnv("LINGXING_SUPPLIER_SALES_STAT_ENDPOINT", "/basicOpen/platformStatisticsV2/saleStat/pageList"),
       replenishmentAdviceEndpoint: readEnv("LINGXING_REPLENISHMENT_ADVICE_ENDPOINT", "/erp/sc/routing/msupply/replenishmentAdvice"),
     },
+    jiufang: {
+      baseUrl: readEnv("JIUFANG_API_BASE_URL", "https://cgi.jiufanglogistics.cn/api/"),
+      username: readEnv("JIUFANG_USERNAME"),
+      passwordMd5: readEnv("JIUFANG_PASSWORD_MD5"),
+      token: readEnv("JIUFANG_TOKEN"),
+      defaultDepartureCode: readEnv("JIUFANG_DEFAULT_DEPARTURE_CODE", "SZ"),
+      defaultServiceCode: readEnv("JIUFANG_DEFAULT_SERVICE_CODE"),
+    },
     ai: {
       provider: readEnv("AI_PROVIDER", "modelscope"),
       modelscope: {
@@ -215,6 +223,12 @@ export function getConfig() {
       secret: readEnv("DINGTALK_SECRET"),
       atMobiles: readList("DINGTALK_AT_MOBILES"),
       atUserIds: readList("DINGTALK_AT_USER_IDS"),
+      fba: {
+        webhook: readEnv("FBA_DINGTALK_WEBHOOK"),
+        secret: readEnv("FBA_DINGTALK_SECRET"),
+        atMobiles: readList("FBA_DINGTALK_AT_MOBILES"),
+        atUserIds: readList("FBA_DINGTALK_AT_USER_IDS"),
+      },
       login: {
         clientId: dingtalkClientId,
         clientSecret: dingtalkClientSecret,

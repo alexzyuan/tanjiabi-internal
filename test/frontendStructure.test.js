@@ -2,6 +2,129 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+test("store operating monthly report is a finance-owned feature with shared controls and table management", async () => {
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const appSource = await readFile(new URL("../app.js", import.meta.url), "utf8");
+  const featureSource = await readFile(new URL("../assets/js/features/store-operating-monthly-report.js", import.meta.url), "utf8");
+  const breadcrumbSource = await readFile(new URL("../assets/js/features/breadcrumb-shell.js", import.meta.url), "utf8");
+  const budgetSource = await readFile(new URL("../assets/js/features/budget-targets.js", import.meta.url), "utf8");
+
+  const financeGroup = indexSource.slice(
+    indexSource.indexOf('<section class="nav-group" aria-label="财务"'),
+    indexSource.indexOf('<section class="nav-group" aria-label="知识库"'),
+  );
+  assert.match(financeGroup, /data-view="store-operating-monthly-report"/);
+  assert.match(financeGroup, />店铺经营月报</);
+  assert.match(indexSource, /id="view-store-operating-monthly-report"/);
+  assert.match(indexSource, /id="store-operating-report-store" multiple/);
+  assert.match(indexSource, /id="store-operating-report-country" multiple/);
+  assert.match(indexSource, /id="store-operating-report-currency"[^>]*>\s*<option value="CNY" selected>人民币/);
+  assert.match(indexSource, /id="store-operating-report-table"[^>]*data-table-key="store-operating-monthly-report"/);
+  assert.match(indexSource, /class="table-wrap data-table-wrap--detail store-operating-report-table-wrap"/);
+  assert.match(indexSource, /class="data-table data-table--detail"[^>]*id="store-operating-report-table"/);
+  assert.match(indexSource, /data-table-fixed-width="true"/);
+  assert.match(indexSource, /<th colspan="2" data-column-sortable="false">店铺信息<\/th>/);
+  assert.match(indexSource, /<th data-column-key="category" data-column-width="148" data-column-sortable="false"[^>]*>上级<\/th>/);
+  assert.match(indexSource, /<th data-column-key="name" data-column-width="176" data-column-sortable="false"[^>]*>名称<\/th>/);
+  assert.match(indexSource, /<th data-column-key="group-0-actual" data-column-width="160" data-column-sortable="false" data-column-kind="number" data-column-profile="money-rate">实际完成值<\/th>/);
+  assert.match(indexSource, /<th data-column-key="group-0-budget" data-column-width="160" data-column-sortable="false" data-column-kind="number" data-column-profile="money-rate">预算值<\/th>/);
+
+  assert.match(appSource, /import \{ createStoreOperatingMonthlyReportFeature \} from "\.\/assets\/js\/features\/store-operating-monthly-report\.js/);
+  assert.match(appSource, /createStoreOperatingMonthlyReportFeature\(\{/);
+  assert.match(appSource, /normalizeCountryName,\n  pickSellerCountry,\n  pickSellerName,\n  refreshTable,/);
+  assert.match(appSource, /view === "store-operating-monthly-report"/);
+  assert.match(appSource, /loadStoreOperatingMonthlyReport\(\)/);
+  assert.match(appSource, /initializeStoreOperatingMonthlyReportDefaults\(\)/);
+  assert.match(appSource, /setupStoreOperatingMonthlyReport\(\)/);
+  assert.match(appSource, /const params = new URLSearchParams\(location\.search\);[\s\S]*const requestedView = params\.get\("view"\)/);
+  assert.match(appSource, /clickVisibleNavItem\(requestedView\)/);
+  assert.match(appSource, /requestedView === "store-operating-monthly-report"[\s\S]*params\.delete\("view"\)/);
+  assert.match(featureSource, /refreshTable\(query\("#store-operating-report-table"\)\)/);
+  assert.equal(appSource.includes("function renderStoreOperatingMonthlyReport"), false);
+  assert.equal(appSource.includes('bind(document, "#store-operating-report'), false);
+
+  assert.match(breadcrumbSource, /"store-operating-monthly-report": \["首页", "财务", "店铺经营月报"\]/);
+  assert.doesNotMatch(featureSource, /new URLSearchParams\(\{ view: "store-operating-monthly-report" \}\)/);
+  assert.match(budgetSource, /budgetMonths/);
+  assert.match(budgetSource, /budgetStores/);
+  assert.match(budgetSource, /budgetCountries/);
+});
+
+test("monthly report delegates widths to shared tooling and sorts hierarchy blocks safely", async () => {
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const css = await readFile(new URL("../assets/css/pages/56-store-operating-monthly-report.css", import.meta.url), "utf8");
+  const generatedCss = await readFile(new URL("../styles.css", import.meta.url), "utf8");
+  const shellCss = await readFile(new URL("../assets/css/layout/10-shell.css", import.meta.url), "utf8");
+  const shellParityCss = await readFile(new URL("../assets/css/legacy/98-shell-topbar-parity.css", import.meta.url), "utf8");
+
+  assert.match(indexSource, /data-table-key="store-operating-monthly-report"/);
+  assert.ok((indexSource.match(/data-column-sortable="false"/g) || []).length >= 6);
+  assert.match(indexSource, /data-table-key="store-operating-monthly-report"/);
+  assert.match(css, /tr\[data-report-row-level="1"\]/);
+  assert.doesNotMatch(css, /module-hero/);
+  assert.match(shellCss, /\/\* Nested module hero and breadcrumb specificity fix v1\. \*\/[\s\S]*@media \(max-width: 900px\) \{[\s\S]*\.view > \.module-hero,[\s\S]*\.view \.module-hero \{[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
+  assert.match(shellCss, /body:not\(\.login-body\) \.topbar \.world-clock \{\n  display: flex;\n\}/);
+  assert.ok(
+    shellCss.indexOf("body:not(.login-body) .topbar .world-clock {\n  display: flex;\n}")
+      < shellCss.indexOf("@media (max-width: 620px)"),
+    "the narrow viewport hide rule must override the desktop world-clock display",
+  );
+  assert.match(generatedCss, /#view-store-operating-monthly-report tr\[data-report-row-level="1"\]>/);
+  const generatedDesktopClock = "body:not(.login-body) .topbar .world-clock{display:flex}";
+  const generatedNarrowBreakpoint = "@media(max-width:620px){";
+  const generatedNarrowClock = "body:not(.login-body) .topbar .world-clock{display:none}";
+  const generatedNestedHeroTwoColumns = "body:not(.login-body) .view .module-hero{display:grid;grid-template-columns:minmax(0,1fr) auto";
+  const generatedSharedHeroOneColumn = "@media(max-width:900px){body:not(.login-body) .view>.module-hero,body:not(.login-body) .view .module-hero{grid-template-columns:minmax(0,1fr)";
+  const desktopClockIndex = generatedCss.indexOf(generatedDesktopClock);
+  const narrowBreakpointIndex = generatedCss.indexOf(generatedNarrowBreakpoint);
+  const narrowClockIndex = generatedCss.indexOf(generatedNarrowClock, narrowBreakpointIndex);
+  const nestedHeroTwoColumnsIndex = generatedCss.indexOf(generatedNestedHeroTwoColumns);
+  const sharedHeroOneColumnIndex = generatedCss.indexOf(generatedSharedHeroOneColumn);
+
+  assert.notEqual(desktopClockIndex, -1, "generated CSS must retain the desktop world-clock flex layout");
+  assert.notEqual(narrowClockIndex, -1, "generated CSS must hide the world clock at 620px");
+  assert.ok(desktopClockIndex < narrowBreakpointIndex && narrowBreakpointIndex < narrowClockIndex);
+  assert.doesNotMatch(
+    generatedCss.slice(narrowClockIndex + generatedNarrowClock.length),
+    /body:not\(\.login-body\) \.topbar \.world-clock\{[^}]*display:flex/,
+    "no later generated rule may re-enable the world clock after the 620px hide rule",
+  );
+  assert.notEqual(nestedHeroTwoColumnsIndex, -1, "generated CSS must retain the shared desktop Hero layout");
+  assert.notEqual(sharedHeroOneColumnIndex, -1, "generated CSS must retain the shared 900px Hero layout");
+  assert.ok(nestedHeroTwoColumnsIndex < sharedHeroOneColumnIndex);
+  assert.doesNotMatch(
+    generatedCss.slice(sharedHeroOneColumnIndex + generatedSharedHeroOneColumn.length),
+    /body:not\(\.login-body\) \.view(?:>| )\.module-hero\{[^}]*grid-template-columns:minmax\(0,1fr\) auto/,
+    "no later generated Hero rule may reset the shared 900px single-column layout",
+  );
+  const worldClockParityRule = shellParityCss.slice(
+    shellParityCss.indexOf("body:not(.login-body) .topbar .world-clock"),
+    shellParityCss.indexOf("body:not(.login-body) .world-clock span", shellParityCss.indexOf("body:not(.login-body) .topbar .world-clock")),
+  );
+  assert.doesNotMatch(worldClockParityRule, /display:\s*flex\s*!important/);
+  assert.equal(/(?:th|td):nth-child\([^)]*\)\s*\{[^}]*\b(?:width|min-width)\s*:/.test(css), false);
+  assert.equal(/\.store-operating[^,{]*\{[^}]*min-width\s*:/.test(css), false);
+});
+
+test("browser CSS cascade runner is pinned, bounded, and included in CI", async () => {
+  const packageSource = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  const browserRunner = await readFile(new URL("../scripts/verify-store-operating-monthly-report-css-browser.js", import.meta.url), "utf8");
+  const ciSource = await readFile(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
+
+  assert.equal(packageSource.devDependencies["@playwright/cli"], "0.1.17");
+  assert.match(packageSource.scripts.test, /test:store-operating-css-browser/);
+  assert.match(browserRunner, /node_modules", "\.bin", process\.platform === "win32" \? "playwright-cli\.cmd" : "playwright-cli"/);
+  assert.match(browserRunner, /"--browser=chromium"/);
+  assert.match(browserRunner, /NO_UPDATE_NOTIFIER: "1"/);
+  assert.match(browserRunner, /const testDeadline = Date\.now\(\) \+ 45_000/);
+  assert.match(browserRunner, /close reported success but daemon/);
+  assert.match(browserRunner, /waitForDaemonExit\(Date\.now\(\) \+ cleanupTimeoutMs\)/);
+  assert.match(browserRunner, /await stopBrowserDaemon\(errors\)/);
+  assert.match(browserRunner, /process\.kill\(browserDaemonPid, "SIGKILL"\)/);
+  assert.match(browserRunner, /clearTimeout\(timeoutId\)/);
+  assert.match(ciSource, /\.\/node_modules\/\.bin\/playwright install --with-deps chromium/);
+});
+
 test("index.html startup health check centralizes sync tone class switching", async () => {
   const source = await readFile(new URL("../index.html", import.meta.url), "utf8");
   const healthStart = source.indexOf("window.__tanjiaBasicNavigationReady = true;");
@@ -43,6 +166,103 @@ test("frontend module cache-bust versions stay aligned", async () => {
   assert.equal(dashboardLoaderUiUtilsVersion, indexUiUtilsVersion);
 });
 
+test("date range completion uses the shared auto-refresh convention", async () => {
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const appSource = await readFile(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.match(appSource, /installDateRangeAutoRefresh\(\{ root: document \}\)/);
+  assert.match(indexSource, /id="fba-freight-refresh" data-date-range-auto-refresh/);
+  assert.match(indexSource, /id="fba-shipment-variance-refresh" data-date-range-auto-refresh/);
+});
+
+test("sales forecast delegates default column widths to the shared table manager", async () => {
+  const source = await readFile(new URL("../assets/js/features/sales-forecast.js", import.meta.url), "utf8");
+  const columnsSource = source.slice(source.indexOf("const salesForecastColumns"), source.indexOf("function renderSalesForecastHeader"));
+
+  assert.equal(/\bwidth:\s*\d+/.test(columnsSource), false);
+  assert.equal(source.includes("data-column-width="), false);
+  assert.match(source, /data-column-key=/);
+});
+
+test("data table manager is the shared owner for BI table sort affordances", async () => {
+  const source = await readFile(new URL("../assets/js/data-table-manager.js", import.meta.url), "utf8");
+
+  assert.match(source, /const TABLE_SELECTOR = "\.view table, \.table-wrap table, \.table-scroll table, table\.data-table"/);
+  assert.match(source, /function ensureHeaderSortButtons/);
+  assert.match(source, /button\.className = "sort-button"/);
+  assert.match(source, /button\.dataset\.tableSort/);
+});
+
+test("FBA logistics views stay grouped under logistics metadata", async () => {
+  const breadcrumbShellSource = await readFile(new URL("../assets/js/features/breadcrumb-shell.js", import.meta.url), "utf8");
+  const homeQuickLinksSource = await readFile(new URL("../assets/js/features/home-quick-links.js", import.meta.url), "utf8");
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const appSource = await readFile(new URL("../app.js", import.meta.url), "utf8");
+  const fbaFreightSource = await readFile(new URL("../assets/js/features/fba-freight.js", import.meta.url), "utf8");
+
+  assert.match(breadcrumbShellSource, /"fba-freight": \["首页", "物流", "FBA货件处理"\]/);
+  assert.equal(breadcrumbShellSource.includes('"fba-shipment-order"'), false);
+  assert.match(breadcrumbShellSource, /breadcrumbGroups = new Set\(\[[^\]]*"物流"/);
+  assert.match(homeQuickLinksSource, /target: "fba-freight", group: "物流", title: "FBA货件处理"/);
+  assert.equal(homeQuickLinksSource.includes('target: "fba-shipment-order"'), false);
+  assert.match(indexSource, /data-view="fba-freight"[\s\S]*<span class="nav-label">FBA货件处理<\/span>/);
+  assert.equal(indexSource.includes('data-view="fba-shipment-order"'), false);
+  assert.match(indexSource, /id="fba-freight-warehouse"/);
+  assert.equal(indexSource.includes('id="fba-freight-create-order"'), false);
+  assert.equal(appSource.includes("createFbaShipmentOrderFeature"), false);
+  assert.equal(appSource.includes("loadFbaShipmentOrderInitial"), false);
+  assert.match(fbaFreightSource, /fetchImpl\("\/api\/fba\/warehouses"\)/);
+  assert.match(fbaFreightSource, /fetchImpl\("\/api\/fba\/shipment-orders\/create"/);
+  assert.match(fbaFreightSource, /data-fba-freight-create-order/);
+  assert.match(fbaFreightSource, /data-fba-freight-order-result/);
+  assert.match(fbaFreightSource, /return value \? \{ sysWid: Number\(value\) \} : \{\}/);
+  assert.match(fbaFreightSource, /fbaFreightOrderCreating/);
+  assert.match(fbaFreightSource, /接口没有返回创建结果/);
+});
+
+test("freight rates dashboard is grouped under logistics metadata", async () => {
+  const breadcrumbShellSource = await readFile(new URL("../assets/js/features/breadcrumb-shell.js", import.meta.url), "utf8");
+  const homeQuickLinksSource = await readFile(new URL("../assets/js/features/home-quick-links.js", import.meta.url), "utf8");
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const appSource = await readFile(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.match(breadcrumbShellSource, /"freight-rates": \["首页", "物流", "运费看板"\]/);
+  assert.match(homeQuickLinksSource, /target: "freight-rates", group: "物流", title: "运费看板"/);
+  assert.match(indexSource, /data-view="freight-rates"[\s\S]*<span class="nav-label">运费看板<\/span>/);
+  assert.match(indexSource, /<section class="view" id="view-freight-rates">/);
+  assert.match(indexSource, /<th>周数<\/th>[\s\S]*<th>日期<\/th>[\s\S]*<th>国家<\/th>[\s\S]*<th>仓库代码<\/th>[\s\S]*<th>承运商<\/th>[\s\S]*<th>渠道名称<\/th>[\s\S]*<th>价格<\/th>[\s\S]*<th>操作人<\/th>/);
+  assert.match(indexSource, /id="freight-rates-create-row"[\s\S]*id="freight-rate-inline-week"[\s\S]*id="freight-rate-inline-date"/);
+  assert.match(indexSource, /<select id="freight-rate-inline-country"[\s\S]*<option value="美国">美国<\/option>[\s\S]*<option value="加拿大">加拿大<\/option>[\s\S]*<option value="澳洲">澳洲<\/option>[\s\S]*<option value="德国">德国<\/option>[\s\S]*<option value="英国">英国<\/option>/);
+  assert.match(indexSource, /<select id="freight-rate-inline-warehouse-select"[\s\S]*aria-label="仓库代码选项"/);
+  assert.match(indexSource, /<input id="freight-rate-inline-warehouse-code"[\s\S]*placeholder="手填仓库"/);
+  assert.match(indexSource, /<select id="freight-rate-warehouse-select"[\s\S]*aria-label="仓库代码选项"/);
+  assert.match(indexSource, /<input id="freight-rate-warehouse-code"[\s\S]*placeholder="手填仓库"/);
+  assert.match(indexSource, /<select id="freight-rate-inline-carrier"[\s\S]*<option value="九方通逊">九方通逊<\/option>[\s\S]*<option value="同袍">同袍<\/option>/);
+  assert.match(indexSource, /<select id="freight-rate-inline-transport-method"[\s\S]*aria-label="渠道名称"/);
+  assert.match(indexSource, /<input id="freight-rate-inline-price" type="number"/);
+  const freightRatesFeatureSource = await readFile(new URL("../assets/js/features/freight-rates.js", import.meta.url), "utf8");
+  const fbaFreightFeatureSource = await readFile(new URL("../assets/js/features/fba-freight.js", import.meta.url), "utf8");
+  const fbaLogisticsRulesSource = await readFile(new URL("../assets/js/fba-logistics-rules.js", import.meta.url), "utf8");
+  assert.match(freightRatesFeatureSource, /warehouseCodesByCountry/);
+  assert.match(freightRatesFeatureSource, /fbaLogisticsChannelNamesForCountry/);
+  assert.match(fbaFreightFeatureSource, /fbaLogisticsChannelsForCountry/);
+  assert.match(fbaLogisticsRulesSource, /美森闪送卡派（包税）/);
+  assert.match(freightRatesFeatureSource, /syncWarehouseControl/);
+  assert.match(freightRatesFeatureSource, /"#freight-rate-inline-country", "change", syncInlineCountryControls/);
+  assert.match(indexSource, /id="freight-rates-export-logs"/);
+  assert.match(indexSource, /导出日志/);
+  assert.equal(indexSource.includes('id="freight-rates-log-table"'), false);
+  assert.equal(indexSource.includes("最近半年操作记录"), false);
+  assert.equal(freightRatesFeatureSource.includes("renderFreightRateLogs"), false);
+  assert.match(freightRatesFeatureSource, /exportFreightRateLogs/);
+  assert.match(freightRatesFeatureSource, /\/api\/fba\/freight-rates\/logs\/export/);
+  assert.match(freightRatesFeatureSource, /startInlineEdit/);
+  assert.equal(freightRatesFeatureSource.includes("openFreightRateModal(row)"), false);
+  assert.match(appSource, /createFreightRatesFeature/);
+  assert.match(appSource, /downloadBlob,/);
+  assert.match(appSource, /loadFreightRatesDashboard/);
+});
+
 test("ui-utils.js exposes ES module exports while keeping the legacy global", async () => {
   const source = await readFile(new URL("../assets/js/ui-utils.js", import.meta.url), "utf8");
 
@@ -51,6 +271,38 @@ test("ui-utils.js exposes ES module exports while keeping the legacy global", as
   assert.match(source, /export \{[\s\S]*setElementsHidden[\s\S]*\}/);
   assert.match(source, /export default TanjiaUiUtils/);
   assert.equal(source.includes("(function initTanjiaUiUtils"), false);
+});
+
+test("webhook assistant uses built-in DingTalk targets instead of raw webhook inputs", async () => {
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const appSource = await readFile(new URL("../app.js", import.meta.url), "utf8");
+  const featureSource = await readFile(new URL("../assets/js/features/webhook-assistant.js", import.meta.url), "utf8");
+
+  assert.match(indexSource, /data-view="webhook-assistant" data-permission="admin"/);
+  assert.match(indexSource, /id="webhook-target"/);
+  assert.match(indexSource, /value="fba-sta">FBA刷仓/);
+  assert.match(indexSource, /value="default">企业总群/);
+  assert.match(indexSource, /value="weekly">每周/);
+  assert.match(indexSource, /value="monthly">每月/);
+  assert.match(indexSource, /id="webhook-message"/);
+  assert.match(indexSource, /id="webhook-at-all"/);
+  assert.equal(indexSource.includes('id="webhook-url"'), false);
+  assert.equal(indexSource.includes('id="webhook-secret"'), false);
+  assert.equal(indexSource.includes('id="webhook-run-at"'), false);
+  assert.equal(indexSource.includes('id="webhook-interval-minutes"'), false);
+  assert.equal(indexSource.includes('id="webhook-at-mobiles"'), false);
+  assert.equal(indexSource.includes('id="webhook-at-user-ids"'), false);
+
+  assert.match(appSource, /import \{ createWebhookAssistantFeature \} from "\.\/assets\/js\/features\/webhook-assistant\.js/);
+  assert.match(appSource, /createWebhookAssistantFeature\(\{/);
+  assert.match(appSource, /if \(view === "webhook-assistant"\) \{[\s\S]*await loadWebhookTasks\(\)/);
+  assert.match(featureSource, /targetKey: fieldValue\("#webhook-target"/);
+  assert.match(featureSource, /message: trimmedFieldValue\("#webhook-message"/);
+  assert.match(featureSource, /atAll: query\("#webhook-at-all"\)/);
+  assert.equal(featureSource.includes("webhook: trimmedFieldValue"), false);
+  assert.equal(featureSource.includes("secret: trimmedFieldValue"), false);
+  assert.equal(featureSource.includes("atMobiles"), false);
+  assert.equal(featureSource.includes("atUserIds"), false);
 });
 
 test("modal close buttons and dialogs expose accessible names", async () => {
@@ -107,7 +359,7 @@ test("app.js starts using shared dashboard section loader", async () => {
   const authShellFeatureSource = await readFile(new URL("../assets/js/features/auth-shell.js", import.meta.url), "utf8");
   const budgetTargetsFeatureSource = await readFile(new URL("../assets/js/features/budget-targets.js", import.meta.url), "utf8");
   const cashflowFeatureSource = await readFile(new URL("../assets/js/features/cashflow-dashboard.js", import.meta.url), "utf8");
-  const clearanceFeatureSource = await readFile(new URL("../assets/js/features/clearance-calculator.js", import.meta.url), "utf8");
+  const slowMovingRiskFeatureSource = await readFile(new URL("../assets/js/features/slow-moving-risk.js", import.meta.url), "utf8");
   const knowledgeFeatureSource = await readFile(new URL("../assets/js/features/knowledge-library.js", import.meta.url), "utf8");
   const inventoryProvisionFeatureSource = await readFile(new URL("../assets/js/features/inventory-provision.js", import.meta.url), "utf8");
   const lowFeeFeatureSource = await readFile(new URL("../assets/js/features/low-inventory-fee.js", import.meta.url), "utf8");
@@ -183,10 +435,10 @@ test("app.js starts using shared dashboard section loader", async () => {
   );
   const reviewRatingSource = appSource.slice(
     appSource.indexOf("createReviewRatingFeature({"),
-    appSource.indexOf("createClearanceCalculatorFeature({"),
+    appSource.indexOf("createSlowMovingRiskFeature({"),
   );
-  const clearanceSource = appSource.slice(
-    appSource.indexOf("createClearanceCalculatorFeature({"),
+  const slowMovingRiskSource = appSource.slice(
+    appSource.indexOf("createSlowMovingRiskFeature({"),
     appSource.indexOf("createAiImageWorkflowFeature({"),
   );
   const aiImageWorkflowSource = appSource.slice(
@@ -282,7 +534,7 @@ test("app.js starts using shared dashboard section loader", async () => {
     appSource.indexOf("createSyncCenterFeature({"),
   );
 
-  assert.match(appSource, /import \{ loadDashboardSection \} from "\.\/assets\/js\/dashboard-loader\.js/);
+  assert.match(appSource, /import \{[^}]*\bloadDashboardSection\b[^}]*\} from "\.\/assets\/js\/dashboard-loader\.js/);
   assert.match(appSource, /from "\.\/assets\/js\/date-utils\.js/);
   assert.match(appSource, /import \{ createFbaUtils \} from "\.\/assets\/js\/fba-utils\.js/);
   assert.match(appSource, /from "\.\/assets\/js\/front-shop-filters\.js/);
@@ -315,7 +567,7 @@ test("app.js starts using shared dashboard section loader", async () => {
   assert.match(appSource, /import \{ createSidebarShellFeature \} from "\.\/assets\/js\/features\/sidebar-shell\.js/);
   assert.match(appSource, /import \{ createBreadcrumbShellFeature \} from "\.\/assets\/js\/features\/breadcrumb-shell\.js/);
   assert.match(appSource, /import \{ createStoreInspectionFeature \} from "\.\/assets\/js\/features\/store-inspection\.js/);
-  assert.match(appSource, /import \{ createClearanceCalculatorFeature \} from "\.\/assets\/js\/features\/clearance-calculator\.js/);
+  assert.match(appSource, /import \{ createSlowMovingRiskFeature \} from "\.\/assets\/js\/features\/slow-moving-risk\.js/);
   assert.match(appSource, /import \{ createKnowledgeLibraryFeature \} from "\.\/assets\/js\/features\/knowledge-library\.js/);
   assert.match(appSource, /import \{ createSyncCenterFeature \} from "\.\/assets\/js\/features\/sync-center\.js/);
   assert.match(appSource, /import \{ createTopbarStatusFeature \} from "\.\/assets\/js\/features\/topbar-status\.js/);
@@ -349,7 +601,7 @@ test("app.js starts using shared dashboard section loader", async () => {
   assert.match(appSource, /createSidebarShellFeature\(\{/);
   assert.match(appSource, /createBreadcrumbShellFeature\(\{/);
   assert.match(appSource, /createStoreInspectionFeature\(\{/);
-  assert.match(appSource, /createClearanceCalculatorFeature\(\{/);
+  assert.match(appSource, /createSlowMovingRiskFeature\(\{/);
   assert.match(appSource, /createKnowledgeLibraryFeature\(\{/);
   assert.match(appSource, /createSyncCenterFeature\(\{/);
   assert.match(appSource, /createTopbarStatusFeature\(\{/);
@@ -389,11 +641,14 @@ test("app.js starts using shared dashboard section loader", async () => {
   assert.equal(appSource.includes("async function loadStoreInspectionDashboard"), false);
   assert.equal(appSource.includes("async function loadClearanceInventory"), false);
   assert.equal(appSource.includes("function renderClearanceCalculator"), false);
+  assert.match(appSource, /installDashboardLoadingFetchOverlay\(\{ root: document \}\)/);
   assert.equal(appSource.includes('bind(document, "#front-country-filter"'), false);
   assert.equal(appSource.includes('bind(document, "#front-shop-filter"'), false);
   assert.equal(appSource.includes('bind(document, "#front-owner-filter"'), false);
   assert.equal(appSource.includes('bind(document, "#front-currency-filter"'), false);
   assert.match(helperSource, /export async function loadDashboardSection/);
+  assert.match(helperSource, /export function installDashboardLoadingFetchOverlay/);
+  assert.match(helperSource, /export function markDashboardLoadingRequest/);
   assert.match(dateUtilsSource, /export function getDateRangeByPreset/);
   assert.match(dateUtilsSource, /export function formatCompactDateTime/);
   assert.match(fbaUtilsSource, /export function createFbaUtils/);
@@ -436,7 +691,7 @@ test("app.js starts using shared dashboard section loader", async () => {
   assert.match(sidebarShellFeatureSource, /export function createSidebarShellFeature/);
   assert.match(breadcrumbShellFeatureSource, /export function createBreadcrumbShellFeature/);
   assert.match(storeInspectionFeatureSource, /export function createStoreInspectionFeature/);
-  assert.match(clearanceFeatureSource, /export function createClearanceCalculatorFeature/);
+  assert.match(slowMovingRiskFeatureSource, /export function createSlowMovingRiskFeature/);
   assert.match(knowledgeFeatureSource, /export function createKnowledgeLibraryFeature/);
   assert.match(adminSettingsFeatureSource, /export function createAdminSettingsFeature/);
   assert.match(syncCenterFeatureSource, /export function createSyncCenterFeature/);
@@ -491,10 +746,10 @@ test("app.js starts using shared dashboard section loader", async () => {
   assert.ok(breadcrumbShellFeatureSource.includes("function renderTopbarBreadcrumb"), "missing topbar breadcrumb renderer");
   assert.ok(breadcrumbShellFeatureSource.includes("function applyModuleBreadcrumbs"), "missing module breadcrumb applier");
   assert.ok(breadcrumbShellFeatureSource.includes("function setupBreadcrumbNavigation"), "missing breadcrumb navigation setup");
-  assert.ok(clearanceFeatureSource.includes("async function loadClearanceInventory"), "missing loadClearanceInventory feature loader");
-  assert.ok(clearanceFeatureSource.includes("async function loadClearanceView"), "missing loadClearanceView feature entry");
-  assert.ok(clearanceFeatureSource.includes("function renderClearanceCalculator"), "missing renderClearanceCalculator feature renderer");
-  assert.ok(clearanceFeatureSource.includes("function setupClearanceCalculator"), "missing setupClearanceCalculator feature setup");
+  assert.ok(slowMovingRiskFeatureSource.includes("async function loadSlowMovingRiskLive"), "missing live-risk feature loader");
+  assert.ok(slowMovingRiskFeatureSource.includes("async function loadSlowMovingRiskView"), "missing weekly-risk feature entry");
+  assert.ok(slowMovingRiskFeatureSource.includes("function renderDashboard"), "missing slow-moving-risk renderer");
+  assert.ok(slowMovingRiskFeatureSource.includes("function setupSlowMovingRisk"), "missing slow-moving-risk setup");
   assert.ok(knowledgeFeatureSource.includes("async function loadKnowledgeLibrary"), "missing loadKnowledgeLibrary feature loader");
   assert.ok(knowledgeFeatureSource.includes("function renderKnowledgeLibrary"), "missing renderKnowledgeLibrary feature renderer");
   assert.ok(knowledgeFeatureSource.includes("function closeKnowledgeExternalDocument"), "missing closeKnowledgeExternalDocument feature action");
@@ -771,8 +1026,8 @@ test("app.js starts using shared dashboard section loader", async () => {
   assert.equal(appSource.includes("const CLEARANCE_SAMPLE_ROWS"), false);
   assert.equal(appSource.includes("function buildClearanceResults"), false);
   assert.equal(appSource.includes("function populateClearanceStoreOptions"), false);
-  assert.equal(clearanceSource.includes("fetch(`/api/dashboard/clearance-inventory"), false);
-  assert.equal(clearanceSource.includes("setButtonBusy("), false);
+  assert.equal(slowMovingRiskSource.includes("fetch(`/api/dashboard/clearance-inventory"), false);
+  assert.equal(appSource.includes("function refreshSlowMovingRisk"), false);
 
   assert.equal(appSource.includes("const KNOWLEDGE_CATEGORIES"), false);
   assert.equal(appSource.includes("const KNOWLEDGE_BUILT_IN_DOCUMENTS"), false);
@@ -926,6 +1181,20 @@ test("app.js starts using shared dashboard section loader", async () => {
   assert.match(inventoryProvisionFeatureSource, /bind\(root, "#inventory-provision-keyword", "keydown"/);
 });
 
+test("sales clearance view is replaced by slow-moving risk report tabs", async () => {
+  const source = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  assert.match(source, /data-slow-moving-risk-tab="weekly"/);
+  assert.match(source, /data-slow-moving-risk-tab="live"/);
+  assert.match(source, /data-slow-moving-risk-tab="history"/);
+  assert.match(source, /id="slow-moving-risk-table"/);
+  assert.match(source, /id="slow-moving-risk-currency-filter"/);
+  assert.match(source, /data-column-key="currency-code"/);
+  assert.equal(source.includes("店铺 \/ 站点"), false);
+  assert.equal(source.includes("当前可售 \/ 90天+"), false);
+  assert.equal(source.includes("广告花费 \/ 占比 \/ ACOS"), false);
+  assert.equal(source.includes("clearance-load-real-button"), false);
+});
+
 test("shared filter controls live outside app.js", async () => {
   const appSource = await readFile(new URL("../app.js", import.meta.url), "utf8");
   const filterControlsSource = await readFile(new URL("../assets/js/filter-controls.js", import.meta.url), "utf8");
@@ -1002,12 +1271,28 @@ test("app.js centralizes FBA floating panel visibility", async () => {
   assert.equal(source.includes("if (menu) menu.hidden = !menu.hidden"), false);
 });
 
+test("FBA shop picker preserves the shared dropdown label contract", async () => {
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const fbaShopsFeatureSource = await readFile(new URL("../assets/js/features/fba-shops.js", import.meta.url), "utf8");
+
+  assert.match(indexSource, /<button class="multi-select-button" id="fba-shop-button" type="button"><span class="filter-dropdown-button-label">tandanbo-CA · 加拿大<\/span><\/button>/);
+  assert.match(fbaShopsFeatureSource, /const label = button\.querySelector\("\.filter-dropdown-button-label"\);/);
+  assert.match(fbaShopsFeatureSource, /if \(!label\) throw new Error\("FBA shop button requires \.filter-dropdown-button-label\."\);/);
+  assert.match(fbaShopsFeatureSource, /label\.textContent = `\$\{shop\.name\} · \$\{shop\.country\}`;/);
+  assert.equal(fbaShopsFeatureSource.includes("button.textContent ="), false);
+});
+
 test("sales shell centralizes front date popover visibility", async () => {
   const appSource = await readFile(new URL("../app.js", import.meta.url), "utf8");
   const source = await readFile(new URL("../assets/js/sales-shell.js", import.meta.url), "utf8");
+  assert.match(source, /import \{ createDateRangePicker \} from "\.\/date-range-picker\.js(?:\?v=[^"]+)?"/);
   assert.match(source, /function setFrontDatePopoverOpen\(open\) \{[\s\S]*?setElementsHidden\(popover, !open\)/);
   assert.match(source, /function toggleFrontDatePopover\(\) \{[\s\S]*?setFrontDatePopoverOpen\(popover.hidden\)/);
-  assert.match(source, /function setupFrontDateRangeControls\(\) \{[\s\S]*?bind\(root, "#front-date-range-button", "click", toggleFrontDatePopover\)/);
+  assert.match(source, /function setupFrontDateRangeControls\(\) \{[\s\S]*?createDateRangePickerImpl\(\{/);
+  assert.match(source, /triggerSelector: "#front-date-range-button"/);
+  assert.match(source, /popoverSelector: "#front-date-range-popover"/);
+  assert.match(source, /startInputSelector: "#front-date-start"/);
+  assert.match(source, /endInputSelector: "#front-date-end"/);
   assert.equal(appSource.includes('bind(document, "#front-date-range-button"'), false);
   assert.equal(appSource.includes('bindAll(document, "[data-range-preset]"'), false);
   assert.equal(appSource.includes('bind(document, "#front-date-apply"'), false);

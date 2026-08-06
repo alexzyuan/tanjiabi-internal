@@ -11,8 +11,11 @@ node_modules/
 data-cache/
 uploads/
 output/
+outputs/
 releases/
 .deploy-tmp-*
 .playwright-cli/
+.superpowers/
+.worktrees/
 *.log
 tanjia-bi-deploy.tar.gz

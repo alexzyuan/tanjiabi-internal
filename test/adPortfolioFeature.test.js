@@ -55,3 +55,27 @@ test("ad portfolio feature owns refresh, filter, search, and column bindings", (
     ],
   );
 });
+
+test("ad portfolio renders stable semantic metadata for configured columns", () => {
+  const header = { innerHTML: "" };
+  const body = { innerHTML: "" };
+  const picker = { innerHTML: "" };
+  const { feature } = createFeature({
+    root: {
+      querySelector(selector) {
+        if (selector === "#ads-portfolio-table thead tr") return header;
+        if (selector === "#ads-portfolio-table tbody") return body;
+        if (selector === "#ads-portfolio-columns") return picker;
+        return null;
+      },
+    },
+    storage: { getItem: () => JSON.stringify(["name", "budget"]), setItem: () => {} },
+  });
+
+  feature.renderAdPortfolios({ rows: [], summary: {} });
+
+  assert.match(header.innerHTML, /data-column-key="name"/);
+  assert.match(header.innerHTML, /data-column-profile="name"/);
+  assert.match(header.innerHTML, /data-column-key="budget"/);
+  assert.match(header.innerHTML, /data-column-kind="money"/);
+});

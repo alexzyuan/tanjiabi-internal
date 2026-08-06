@@ -1,3 +1,8 @@
+export function normalizeBudgetDeepLinkCountry(value) {
+  const country = String(value || "").trim().replace(/站$/, "");
+  return country === "澳大利亚" ? "澳洲" : country;
+}
+
 export function createBudgetTargetsFeature({
   root = globalThis.document,
   bind,
@@ -8,6 +13,7 @@ export function createBudgetTargetsFeature({
   formatNumber,
   formatPercent,
   getPacificDateParts,
+  locationRef = globalThis.location,
   readFileAsBase64,
   renderTableMessage,
   setButtonBusy,
@@ -20,6 +26,44 @@ export function createBudgetTargetsFeature({
   let budgetTargetRows = [];
   let budgetMskuRows = [];
   let selectedBudgetMonths = [];
+  let budgetDeepLinkInitialized = false;
+  let consumedBudgetDeepLinkSearch = "";
+  let budgetDeepLinkScope = { stores: [], countries: [] };
+
+  function uniqueValues(values = []) {
+    return [...new Set(values.map((value) => String(value || "").trim()).filter(Boolean))];
+  }
+
+  function initializeBudgetDeepLinkScope() {
+    const search = String(locationRef?.search || "");
+    const params = new URLSearchParams(search);
+    const deepLinkSearch = new URLSearchParams();
+    params.getAll("budgetMonths").forEach((value) => deepLinkSearch.append("budgetMonths", value));
+    params.getAll("budgetStores").forEach((value) => deepLinkSearch.append("budgetStores", value));
+    params.getAll("budgetCountries").forEach((value) => deepLinkSearch.append("budgetCountries", value));
+    const signature = deepLinkSearch.toString();
+    if (budgetDeepLinkInitialized && consumedBudgetDeepLinkSearch === signature) return;
+    budgetDeepLinkInitialized = true;
+    consumedBudgetDeepLinkSearch = signature;
+    selectedBudgetMonths = uniqueValues(
+      params.getAll("budgetMonths").flatMap((value) => value.split(",")),
+    ).filter((value) => /^\d{4}-(0[1-9]|1[0-2])$/.test(value)).slice(0, 12).sort();
+    budgetDeepLinkScope = {
+      stores: uniqueValues(params.getAll("budgetStores")),
+      countries: uniqueValues(params.getAll("budgetCountries")),
+    };
+    const storeInput = root?.querySelector?.("#budget-store-filter");
+    if (storeInput) {
+      storeInput.value = budgetDeepLinkScope.stores.length === 1 ? budgetDeepLinkScope.stores[0] : "";
+    }
+  }
+
+  function getBudgetDeepLinkScope() {
+    return {
+      stores: budgetDeepLinkScope.stores.slice(),
+      countries: budgetDeepLinkScope.countries.slice(),
+    };
+  }
 
   function formatMonthLabel(month) {
     const [year, monthNumber] = String(month).split("-");
@@ -99,18 +143,23 @@ export function createBudgetTargetsFeature({
       store: trimmedFieldValue("#budget-store-filter", "", root),
       status: fieldValue("#budget-status-filter", "", root),
       keyword: trimmedFieldValue("#budget-keyword-filter", "", root),
+      linkedStores: budgetDeepLinkScope.stores,
+      linkedCountries: budgetDeepLinkScope.countries,
     };
   }
 
   function getFilteredBudgetRows() {
-    const { platform, store, status, keyword } = budgetFilterValues();
+    const { platform, store, status, keyword, linkedStores, linkedCountries } = budgetFilterValues();
     const normalizedKeyword = keyword.toLowerCase();
+    const linkedCountrySet = new Set(linkedCountries.map(normalizeBudgetDeepLinkCountry));
 
     return budgetTargetRows.filter((row) => {
       const haystack = `${row.month} ${row.platform} ${row.storeName} ${row.site} ${row.status}`.toLowerCase();
       if (selectedBudgetMonths.length && !selectedBudgetMonths.includes(row.month)) return false;
       if (platform && row.platform !== platform) return false;
       if (store && !row.storeName.includes(store)) return false;
+      if (!store && linkedStores.length && !linkedStores.includes(row.storeName)) return false;
+      if (linkedCountrySet.size && !linkedCountrySet.has(normalizeBudgetDeepLinkCountry(row.site || row.country))) return false;
       if (status && !row.status.includes(status)) return false;
       if (normalizedKeyword && !haystack.includes(normalizedKeyword)) return false;
       return true;
@@ -118,14 +167,17 @@ export function createBudgetTargetsFeature({
   }
 
   function getFilteredBudgetMskuRows() {
-    const { platform, store, status, keyword: rawKeyword } = budgetFilterValues();
+    const { platform, store, status, keyword: rawKeyword, linkedStores, linkedCountries } = budgetFilterValues();
     const keyword = rawKeyword.toLowerCase();
+    const linkedCountrySet = new Set(linkedCountries.map(normalizeBudgetDeepLinkCountry));
 
     return budgetMskuRows.filter((row) => {
       const haystack = `${row.month} ${row.platform} ${row.storeName} ${row.site} ${row.status} ${row.msku} ${row.asin} ${row.skuOwner}`.toLowerCase();
       if (selectedBudgetMonths.length && !selectedBudgetMonths.includes(row.month)) return false;
       if (platform && row.platform !== platform) return false;
       if (store && !row.storeName.includes(store)) return false;
+      if (!store && linkedStores.length && !linkedStores.includes(row.storeName)) return false;
+      if (linkedCountrySet.size && !linkedCountrySet.has(normalizeBudgetDeepLinkCountry(row.site || row.country))) return false;
       if (status && !row.status.includes(status)) return false;
       if (keyword && !haystack.includes(keyword)) return false;
       return true;
@@ -227,6 +279,7 @@ export function createBudgetTargetsFeature({
   }
 
   async function loadBudgetTargets() {
+    initializeBudgetDefaults();
     try {
       const response = await fetch("/api/budget-targets");
       if (!response.ok) throw new Error(`API ${response.status}`);
@@ -309,6 +362,7 @@ export function createBudgetTargetsFeature({
     const statusInput = root?.querySelector?.("#budget-status-filter");
     const keywordInput = root?.querySelector?.("#budget-keyword-filter");
     selectedBudgetMonths = [];
+    budgetDeepLinkScope = { stores: [], countries: [] };
     if (monthInput) monthInput.value = "";
     if (platformInput) platformInput.value = "";
     if (storeInput) storeInput.value = "";
@@ -324,6 +378,7 @@ export function createBudgetTargetsFeature({
   }
 
   function initializeBudgetDefaults() {
+    initializeBudgetDeepLinkScope();
     const uploadMonthInput = root?.querySelector?.("#budget-upload-month");
     if (uploadMonthInput && !uploadMonthInput.value) uploadMonthInput.value = defaultBudgetUploadMonth();
     const budgetMonthPicker = root?.querySelector?.("#budget-month-picker");
@@ -338,7 +393,10 @@ export function createBudgetTargetsFeature({
       if (event.key === "Enter") addBudgetMonth();
     });
     bind(root, "#budget-month-chip-list", "click", handleBudgetMonthChipListClick);
-    bind(root, "#budget-query-button", "click", () => renderBudgetTargets({ rows: budgetTargetRows }));
+    bind(root, "#budget-query-button", "click", () => {
+      budgetDeepLinkScope = { stores: [], countries: [] };
+      renderBudgetTargets({ rows: budgetTargetRows });
+    });
     bind(root, "#budget-reset-button", "click", resetBudgetFilters);
     bind(root, "#budget-file-input", "change", (event) => {
       const file = event.target.files?.[0];
@@ -366,6 +424,7 @@ export function createBudgetTargetsFeature({
   }
 
   return {
+    getBudgetDeepLinkScope,
     initializeBudgetDefaults,
     loadBudgetTargets,
     loadBudgetUploads,

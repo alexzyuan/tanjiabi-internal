@@ -1,24 +1,205 @@
 import { mockDashboard } from "../data/mockDashboard.js";
 import { getConfig } from "../config/index.js";
 import { getSyncState } from "./syncService.js";
-import { readMskuDetailCache, readSalesDashboardCache, saveMskuDetailCache } from "../utils/cacheStore.js";
+import {
+  readMskuDetailCache,
+  readSalesDashboardCache,
+  readSalesWeeklySourceCache,
+  saveMskuDetailCache,
+  saveSalesDashboardCache,
+  saveSalesWeeklySourceCache,
+} from "../utils/cacheStore.js";
 import { filterCoreSellers, getLingxingAdapter } from "../adapters/lingxingAdapter.js";
 import { buildBudgetMskuDetailRows, mapLingxingToSalesDashboard } from "./lingxingDashboardMapper.js";
 import { getDefaultWeekRange } from "../utils/dateRange.js";
 import { getBudgetTargetContext } from "./budgetTargetService.js";
-import { fetchListingOwnerRows, ownerLookupRowsFromRecords } from "./listingOwnerService.js";
+import {
+  fetchListingOwnerRows,
+  listingOwnerRowsFromRecords,
+  ownerLookupRowsFromBudgetTargets,
+  ownerLookupRowsFromRecords,
+} from "./listingOwnerService.js";
 import { getSharedSellers } from "./sharedDataService.js";
 
 function hasLiveFilters(filters) {
   return Boolean(filters.startDate || filters.endDate || filters.sids?.length);
 }
 
-async function fetchSalesListingOwnerRows(adapter, records = []) {
+const salesWeeklySourceRefreshes = new Map();
+
+function nowMs() {
+  return Date.now();
+}
+
+function logSalesWeeklyTiming(stage, startedAt, extra = {}) {
+  console.info("[sales-weekly]", {
+    stage,
+    durationMs: nowMs() - startedAt,
+    ...extra,
+  });
+}
+
+function normalizedCurrencyCode(filters = {}) {
+  return String(filters.currencyCode || "CNY").trim().toUpperCase() || "CNY";
+}
+
+function uniqueNumbers(values = []) {
+  return [...new Set(values.map(Number).filter(Boolean))];
+}
+
+function salesWeeklySourceScope(filters = {}) {
+  const defaultRange = getDefaultWeekRange(getConfig().dashboard);
+  const startDate = filters.startDate || defaultRange.startDate;
+  const endDate = filters.endDate || defaultRange.endDate;
+  const sids = Array.isArray(filters.sids) ? uniqueNumbers(filters.sids).sort((a, b) => a - b) : [];
+  return {
+    version: "sales-weekly-source-v1",
+    startDate,
+    endDate,
+    currencyCode: normalizedCurrencyCode(filters),
+    sids,
+  };
+}
+
+function salesWeeklySourceCacheKey(filters = {}) {
+  return JSON.stringify(salesWeeklySourceScope(filters));
+}
+
+function sourceFiltersFromCacheScope(scope = {}) {
+  return {
+    startDate: scope.startDate || "",
+    endDate: scope.endDate || "",
+    currencyCode: scope.currencyCode || "CNY",
+    sids: Array.isArray(scope.sids) ? scope.sids : [],
+  };
+}
+
+function matchesDefaultSalesWeeklyRange(filters = {}) {
+  const defaultRange = getDefaultWeekRange(getConfig().dashboard);
+  const startDate = filters.startDate || defaultRange.startDate;
+  const endDate = filters.endDate || defaultRange.endDate;
+  return startDate === defaultRange.startDate && endDate === defaultRange.endDate;
+}
+
+function canUseDefaultSalesDashboardCache(filters = {}) {
+  const listingOwner = String(filters.listingOwner || filters.owner || "").trim();
+  const hasSelectedSids = Array.isArray(filters.sids) && filters.sids.length > 0;
+  return matchesDefaultSalesWeeklyRange(filters)
+    && !listingOwner
+    && !hasSelectedSids
+    && normalizedCurrencyCode(filters) === "CNY";
+}
+
+function dashboardFiltersFromSource(source = {}, filters = {}) {
+  return {
+    ...sourceFiltersFromCacheScope(source.cacheScope || salesWeeklySourceScope(filters)),
+    listingOwner: String(filters.listingOwner || filters.owner || "").trim(),
+    owner: String(filters.owner || filters.listingOwner || "").trim(),
+  };
+}
+
+function mapSalesWeeklySourceToDashboard(source = {}, filters = {}) {
+  const nextFilters = dashboardFiltersFromSource(source, filters);
+  return mapLingxingToSalesDashboard({
+    sellers: source.sellers || [],
+    sellerProfitRecords: source.sellerProfitRecords || [],
+    orderProfitRecords: source.orderProfitRecords || [],
+    dailyProfitRecords: source.dailyProfitRecords || [],
+    inventoryRecords: source.inventoryRecords || [],
+    listingOwnerRows: source.listingOwnerRows || [],
+    filters: nextFilters,
+    range: source.range || {
+      startDate: nextFilters.startDate,
+      endDate: nextFilters.endDate,
+    },
+    currencyCode: source.currencyCode || nextFilters.currencyCode || "CNY",
+    raw: {
+      ...(source.raw || {}),
+      cacheState: source.raw?.cacheState || "hit",
+      cacheUpdatedAt: source.cacheUpdatedAt || source.updatedAt || "",
+    },
+    budgetTargets: source.budgetTargets || {},
+  });
+}
+
+function salesListingOwnerLookupRows(records = [], budgetTargets = {}, sellers = []) {
+  return [
+    ...ownerLookupRowsFromRecords(records),
+    ...ownerLookupRowsFromBudgetTargets(budgetTargets, sellers),
+  ];
+}
+
+async function fetchSalesListingOwnerRows(adapter, records = [], budgetTargets = {}, sellers = []) {
+  const directOwnerRows = listingOwnerRowsFromRecords(records);
+  const lookupRows = salesListingOwnerLookupRows(records, budgetTargets, sellers);
   try {
-    return await fetchListingOwnerRows(adapter, ownerLookupRowsFromRecords(records));
-  } catch {
-    return [];
+    const fetchedOwnerRows = await fetchListingOwnerRows(adapter, lookupRows);
+    return [...directOwnerRows, ...fetchedOwnerRows];
+  } catch (error) {
+    console.error("[sales-weekly] listing owner lookup failed", {
+      recordCount: records.length,
+      directOwnerRecordCount: directOwnerRows.length,
+      lookupRowCount: lookupRows.length,
+      error: error.message,
+    });
+    return directOwnerRows;
   }
+}
+
+async function fetchSalesWeeklySource(filters = {}) {
+  const adapter = getLingxingAdapter();
+  const data = await adapter.fetchSalesWeeklyData(filters);
+  const budgetTargets = await getBudgetTargetContext(data.range);
+  const listingOwnerRows = await fetchSalesListingOwnerRows(
+    adapter,
+    data.orderProfitRecords || data.sellerProfitRecords || [],
+    budgetTargets,
+    data.sellers || [],
+  );
+  return {
+    cacheScope: salesWeeklySourceScope(filters),
+    sellers: data.sellers || [],
+    sellerProfitRecords: data.sellerProfitRecords || [],
+    orderProfitRecords: data.orderProfitRecords || [],
+    dailyProfitRecords: data.dailyProfitRecords || [],
+    inventoryRecords: data.inventoryRecords || [],
+    listingOwnerRows,
+    budgetTargets,
+    range: data.range,
+    currencyCode: data.currencyCode || normalizedCurrencyCode(filters),
+    raw: data.raw || {},
+    updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
+  };
+}
+
+function refreshSalesWeeklySourceCacheInBackground(filters = {}) {
+  const cacheKey = salesWeeklySourceCacheKey(filters);
+  if (salesWeeklySourceRefreshes.has(cacheKey)) return;
+  const startedAt = nowMs();
+  const promise = fetchSalesWeeklySource(filters)
+    .then(async (source) => {
+      await saveSalesWeeklySourceCache(cacheKey, source);
+      logSalesWeeklyTiming("background-refresh-success", startedAt, {
+        cacheKey,
+        sourceUpdatedAt: source.updatedAt || "",
+      });
+    })
+    .catch((error) => {
+      console.error("[sales-weekly] background refresh failed", {
+        durationMs: nowMs() - startedAt,
+        filters: {
+          startDate: filters.startDate || "",
+          endDate: filters.endDate || "",
+          currencyCode: filters.currencyCode || "CNY",
+          sids: Array.isArray(filters.sids) ? filters.sids : [],
+        },
+        error: error.message,
+      });
+    })
+    .finally(() => {
+      salesWeeklySourceRefreshes.delete(cacheKey);
+    });
+  salesWeeklySourceRefreshes.set(cacheKey, promise);
 }
 
 function emptyLingxingDashboard(syncState, syncStatus = "领星数据尚未成功返回，请先检查同步中心错误信息。") {
@@ -106,33 +287,106 @@ function normalizeCachedDashboard(cachedDashboard, syncState, syncStatus) {
 }
 
 export async function getSalesWeeklyDashboard(filters = {}) {
+  const startedAt = nowMs();
   const syncState = getSyncState();
-  const cachedDashboard = await readSalesDashboardCache();
+  const sourceCacheKey = salesWeeklySourceCacheKey(filters);
+  const defaultCacheEligible = canUseDefaultSalesDashboardCache(filters);
+  let cachedSource = null;
+  let cachedDashboard = null;
+
+  try {
+    cachedSource = await readSalesWeeklySourceCache(sourceCacheKey);
+  } catch (error) {
+    console.error("[sales-weekly] source cache read failed", {
+      cacheKey: sourceCacheKey,
+      error: error.message,
+    });
+  }
+
+  if (syncState.provider === "lingxing" && cachedSource?.data) {
+    const dashboard = mapSalesWeeklySourceToDashboard(cachedSource.data, filters);
+    if (defaultCacheEligible) refreshSalesWeeklySourceCacheInBackground(filters);
+    logSalesWeeklyTiming("cache-hit-source", startedAt, {
+      cacheKey: sourceCacheKey,
+      updatedAt: cachedSource.updatedAt || cachedSource.data.updatedAt || "",
+    });
+    return {
+      ...dashboard,
+      cacheHit: true,
+    };
+  }
+
+  try {
+    cachedDashboard = await readSalesDashboardCache();
+  } catch (error) {
+    console.error("[sales-weekly] legacy cache read failed", {
+      error: error.message,
+    });
+  }
+
+  if (syncState.provider === "lingxing" && cachedDashboard && defaultCacheEligible) {
+    refreshSalesWeeklySourceCacheInBackground(filters);
+    logSalesWeeklyTiming("cache-hit-default", startedAt, {
+      updatedAt: cachedDashboard.meta?.updatedAt || "",
+      requestedRange: {
+        startDate: filters.startDate || "",
+        endDate: filters.endDate || "",
+      },
+    });
+    return normalizeCachedDashboard(
+      cachedDashboard,
+      syncState,
+      cachedDashboard.meta?.syncStatus || syncState.lastStatus || "已显示最近同步缓存，后台刷新实时数据",
+    );
+  }
 
   if (syncState.provider === "lingxing" && hasLiveFilters(filters)) {
-    const adapter = getLingxingAdapter();
     try {
-      const data = await adapter.fetchSalesWeeklyData(filters);
-      const budgetTargets = await getBudgetTargetContext(data.range);
-      const listingOwnerRows = await fetchSalesListingOwnerRows(adapter, data.orderProfitRecords || data.sellerProfitRecords || []);
-      return mapLingxingToSalesDashboard({ ...data, budgetTargets, listingOwnerRows, filters });
+      const source = await fetchSalesWeeklySource(filters);
+      await saveSalesWeeklySourceCache(sourceCacheKey, source);
+      if (defaultCacheEligible) {
+        await saveSalesDashboardCache(mapSalesWeeklySourceToDashboard(source, {}));
+      }
+      const dashboard = mapSalesWeeklySourceToDashboard(source, filters);
+      logSalesWeeklyTiming("live-success", startedAt, {
+        defaultCacheEligible,
+        cacheKey: sourceCacheKey,
+        recordStatus: dashboard?.meta?.syncStatus || "",
+      });
+      return {
+        ...dashboard,
+        cacheHit: false,
+      };
     } catch (error) {
       if (cachedDashboard) {
+        logSalesWeeklyTiming("live-failed-cache-fallback", startedAt, {
+          defaultCacheEligible,
+          cacheKey: sourceCacheKey,
+          error: error.message,
+        });
         return normalizeCachedDashboard(
           cachedDashboard,
           syncState,
           `已显示最近同步缓存；实时接口暂不可用：${error.message}`,
         );
       }
+      logSalesWeeklyTiming("live-failed-empty", startedAt, {
+        defaultCacheEligible,
+        cacheKey: sourceCacheKey,
+        error: error.message,
+      });
       return emptyLingxingDashboard(syncState, `销售看板实时接口失败：${error.message}`);
     }
   }
 
   if (syncState.provider === "lingxing" && cachedDashboard) {
+    logSalesWeeklyTiming("cache-hit", startedAt, {
+      updatedAt: cachedDashboard.meta?.updatedAt || "",
+    });
     return normalizeCachedDashboard(
       cachedDashboard,
       syncState,
-      syncState.lastStatus || cachedDashboard.meta?.syncStatus || "已显示最近同步缓存",
+      cachedDashboard.meta?.syncStatus || syncState.lastStatus || "已显示最近同步缓存",
     );
   }
 
@@ -147,9 +401,11 @@ export async function getSalesWeeklyDashboard(filters = {}) {
   };
 
   if (syncState.provider === "lingxing") {
+    logSalesWeeklyTiming("empty-lingxing", startedAt);
     return emptyLingxingDashboard(syncState);
   }
 
+  logSalesWeeklyTiming("mock-fallback", startedAt);
   return fallback;
 }
 
@@ -159,13 +415,9 @@ function stableMskuDetailCacheKey(filters) {
     startDate: filters.startDate || "",
     endDate: filters.endDate || "",
     listingOwner: filters.listingOwner || filters.owner || "",
-    currencyCode: filters.currencyCode || "ORIGINAL",
+    currencyCode: filters.currencyCode || "CNY",
     sids: Array.isArray(filters.sids) ? uniqueNumbers(filters.sids).sort((a, b) => a - b) : [],
   });
-}
-
-function uniqueNumbers(values) {
-  return [...new Set(values.map(Number).filter(Boolean))];
 }
 
 export async function getMskuDetailDashboard(filters = {}) {
@@ -207,7 +459,7 @@ export async function getMskuDetailDashboard(filters = {}) {
     startDate: range.startDate,
     endDate: range.endDate,
     sids: selectedSids,
-    currencyCode: filters.currencyCode || "ORIGINAL",
+    currencyCode: filters.currencyCode || "CNY",
   });
   const selectedSidSet = new Set(selectedSids);
   const records = adapter.normalizeMskuOrderProfitRecords(adapter.normalizeRecordList(orderProfit), sellerList).filter((record) => {
@@ -222,14 +474,15 @@ export async function getMskuDetailDashboard(filters = {}) {
   } catch (error) {
     inventoryWarning = error.message;
   }
-  const listingOwnerRows = await fetchSalesListingOwnerRows(adapter, records);
+  const budgetTargets = await getBudgetTargetContext(range);
+  const listingOwnerRows = await fetchSalesListingOwnerRows(adapter, records, budgetTargets, sellerList);
 
   const data = {
     ok: true,
     source: inventoryWarning ? "领星 ERP · 订单利润 MSKU，FBA库存读取失败" : "领星 ERP · 订单利润 MSKU + FBA库存",
     cacheHit: false,
     recordCount: records.length,
-    detailRows: buildBudgetMskuDetailRows(records, await getBudgetTargetContext(range), inventoryRecords, sellerList, listingOwnerRows, filters),
+    detailRows: buildBudgetMskuDetailRows(records, budgetTargets, inventoryRecords, sellerList, listingOwnerRows, filters),
     inventoryRecordCount: inventoryRecords.length,
     listingOwnerRecordCount: listingOwnerRows.length,
     inventoryWarning,

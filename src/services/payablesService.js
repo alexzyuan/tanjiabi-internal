@@ -1,6 +1,7 @@
 import { getConfig } from "../config/index.js";
 import { getLingxingAdapter } from "../adapters/lingxingAdapter.js";
 import { formatDate, getPacificTodayDate } from "../utils/pacificDate.js";
+import { normalizeRecordList, readFirst, toNumber } from "../utils/recordAccess.js";
 
 const metricDocs = [
   ["供应商金额来源", "领星 ERP - 请款池 - 采购 - 现结货款。"],
@@ -39,29 +40,9 @@ function monthText(value) {
   return normalizeDateText(value).slice(0, 7) || "未分月";
 }
 
-function toNumber(value) {
-  if (value === null || value === undefined || value === "") return 0;
-  const number = Number(String(value).replace(/,/g, "").replace(/[^\d.-]/g, ""));
-  return Number.isFinite(number) ? number : 0;
-}
-
 function round(value, digits = 2) {
   const factor = 10 ** digits;
   return Math.round(toNumber(value) * factor) / factor;
-}
-
-function readFirst(item, keys) {
-  for (const key of keys) {
-    const value = item?.[key];
-    if (value !== undefined && value !== null && String(value).trim() !== "") return value;
-  }
-  return "";
-}
-
-function normalizeRecordList(payload) {
-  const data = payload?.data || payload || {};
-  const records = data.records || data.list || data.rows || data.data || data.items || data.result || data;
-  return Array.isArray(records) ? records : [];
 }
 
 function totalCountOf(payload, recordsLength = 0) {
@@ -267,20 +248,20 @@ function monthlyRows(rows) {
   })).sort((a, b) => a.month.localeCompare(b.month));
 }
 
-function buildRequestParams({ startDate, endDate, keyword = "" }, offset = 0, length = 200) {
+export function buildRequestParams({ startDate, endDate, keyword = "" }, offset = 0, length = 200, kind = "purchase") {
   const params = {
     offset,
     length,
-    start_date: startDate,
-    end_date: endDate,
-    startDate,
-    endDate,
-    created_start_time: startDate,
-    created_end_time: endDate,
-    date_type: "create_time",
-    dateType: "create_time",
-    status: "",
   };
+  if (kind === "logistics" || kind === "customFee") {
+    params.start_time = startDate;
+    params.end_time = endDate;
+    params.search_field_time = "create_time";
+  } else {
+    params.start_time = startDate;
+    params.end_time = endDate;
+    params.time_field = "create_time";
+  }
   if (keyword) {
     params.keyword = keyword;
     params.search_value = keyword;
@@ -295,7 +276,8 @@ async function fetchAllRows(call, filters, type) {
   const length = 200;
   let lastPayload = null;
   for (let page = 0; page < 20; page += 1) {
-    const payload = await call(buildRequestParams(filters, offset, length));
+    const requestKind = type === "carrier" ? "logistics" : type === "other" ? "customFee" : "purchase";
+    const payload = await call(buildRequestParams(filters, offset, length, requestKind));
     lastPayload = payload;
     const records = normalizeRecordList(payload);
     rows.push(...records.map((record) => normalizePayableRow(record, type)));

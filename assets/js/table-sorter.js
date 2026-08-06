@@ -57,13 +57,19 @@ export function createTableSorter({
   getApplyFactoryInventorySort = () => null,
   getApplyMskuDetailSort = () => null,
   getApplySupplierBoardSort = () => null,
+  getApplyStoreOperatingMonthlyReportSort = () => null,
   root = globalThis.document,
   setTableSortState,
 } = {}) {
   if (typeof setTableSortState !== "function") throw new Error("createTableSorter requires setTableSortState.");
 
+  function isFeatureOwnedSortButton(button) {
+    return Boolean(button?.dataset?.mskuSort || button?.dataset?.supplierSort || button?.dataset?.factorySort);
+  }
+
   function sortTableByHeader(th) {
     if (!th || th.closest(".login-body")) return;
+    if (th.dataset?.columnSortable === "false") return;
     const table = th.closest("table");
     if (table?.id === "supplier-board-table") {
       getApplySupplierBoardSort()?.(th.dataset.supplierSort || th.querySelector("[data-supplier-sort]")?.dataset.supplierSort || "");
@@ -73,12 +79,15 @@ export function createTableSorter({
       getApplyFactoryInventorySort()?.(th.dataset.factorySort || th.querySelector("[data-factory-sort]")?.dataset.factorySort || "");
       return;
     }
+    if (table?.id === "store-operating-report-table") {
+      getApplyStoreOperatingMonthlyReportSort()?.(th.dataset.columnKey || "");
+      return;
+    }
     const mskuSortButton = th.querySelector("[data-msku-sort]");
     if (mskuSortButton) {
       getApplyMskuDetailSort()?.(mskuSortButton.dataset.mskuSort);
       return;
     }
-    if (th.querySelector(".sort-button")) return;
     const tbody = table?.tBodies?.[0];
     const headerRow = th.parentElement;
     if (!table || !tbody || !headerRow || th.colSpan > 1) return;
@@ -104,9 +113,9 @@ export function createTableSorter({
       return result === 0 ? left.index - right.index : result * multiplier;
     });
     Array.from(headerRow.children).forEach((header) => {
-      setTableSortState(header, false);
+      setTableSortState(header, false, nextDirection, header.querySelector?.(".sort-button") || null);
     });
-    setTableSortState(th, true, nextDirection);
+    setTableSortState(th, true, nextDirection, th.querySelector?.(".sort-button") || null);
     table.dataset.sortColumn = String(columnIndex);
     table.dataset.sortDirection = nextDirection;
     sortableRows.forEach(({ row }) => tbody.appendChild(row));
@@ -117,7 +126,12 @@ export function createTableSorter({
     if (typeof bindEventTarget !== "function") throw new Error("setupTableSortBridge requires bindEventTarget.");
     if (typeof closestTarget !== "function") throw new Error("setupTableSortBridge requires closestTarget.");
     return bindEventTarget(root, "click", (event) => {
-      if (closestTarget(event, ".sort-button")) return;
+      const sortButton = closestTarget(event, ".sort-button");
+      if (sortButton) {
+        if (isFeatureOwnedSortButton(sortButton)) return;
+        sortTableByHeader(sortButton.closest?.("th"));
+        return;
+      }
       sortTableByHeader(closestTarget(event, "th"));
     });
   }

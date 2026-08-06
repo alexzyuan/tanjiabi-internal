@@ -1,7 +1,4 @@
 /* Sales forecast table and controls */
-.sales-forecast-filters {
-  grid-template-columns: minmax(160px, 220px) minmax(180px, 260px) minmax(280px, 1fr);
-}
 
 .sales-forecast-table-wrap {
   --sales-forecast-border: var(--tj-border-subtle);
@@ -16,13 +13,12 @@
   --sales-forecast-month-bg: color-mix(in srgb, var(--tj-warning) 13%, var(--tj-content-bg));
   max-height: calc(100vh - 360px);
   border: 1px solid var(--sales-forecast-border);
-  border-radius: 8px;
+  border-radius: var(--tj-panel-radius);
   position: relative;
   isolation: isolate;
 }
 
 .sales-forecast-table {
-  min-width: 2540px;
   font-size: 12px;
 }
 
@@ -77,59 +73,12 @@
 
 .sales-forecast-table .sticky-product-group {
   position: sticky;
-  left: 0;
-  min-width: 614px;
   box-shadow: 1px 0 0 var(--sales-forecast-sticky-border);
 }
 
 .sales-forecast-table thead tr:first-child th.sticky-product-group {
   z-index: 70;
   background: var(--sales-forecast-product-bg);
-}
-
-.sales-forecast-table .sticky-focus {
-  left: 0;
-  width: 38px;
-  min-width: 38px;
-  text-align: center;
-}
-
-.sales-forecast-table .sticky-image {
-  left: 106px;
-  width: 52px;
-  min-width: 52px;
-  text-align: center;
-}
-
-.sales-forecast-table .sticky-hide {
-  left: 48px;
-  width: 54px;
-  min-width: 54px;
-  text-align: center;
-}
-
-.sales-forecast-table .sticky-store {
-  left: 162px;
-  width: 92px;
-  min-width: 92px;
-}
-
-.sales-forecast-table .sticky-country {
-  left: 254px;
-  width: 62px;
-  min-width: 62px;
-}
-
-.sales-forecast-table .sticky-product {
-  left: 316px;
-  width: 160px;
-  min-width: 160px;
-}
-
-.sales-forecast-table .sticky-msku {
-  left: 476px;
-  width: 128px;
-  min-width: 128px;
 }
 
 .sales-forecast-table th.sticky-col,
@@ -145,39 +94,12 @@
   background: var(--sales-forecast-sticky-hover-bg);
 }
 
-.sales-forecast-table .text-cell {
-  text-align: left;
-}
-
-.sales-forecast-table .sticky-focus,
-.sales-forecast-table .sticky-hide,
-.sales-forecast-table .sticky-image {
-  text-align: center;
-}
-
 .sales-forecast-table .forecast-emphasis {
   font-weight: 800;
   color: var(--tj-text-strong);
 }
 
-.sales-forecast-table .compact-number-col {
-  width: 64px;
-  min-width: 64px;
-}
-
-.sales-forecast-table .compact-date-col {
-  width: 86px;
-  min-width: 86px;
-}
-
-.sales-forecast-table .month-daily-col {
-  width: 48px;
-  min-width: 48px;
-}
-
 .sales-forecast-table .month-sales-col {
-  width: 54px;
-  min-width: 54px;
   background: var(--sales-forecast-month-bg) !important;
 }
 
@@ -241,7 +163,7 @@
   display: inline-flex;
   padding: 3px;
   border: 1px solid var(--tj-border-control);
-  border-radius: 8px;
+  border-radius: var(--tj-control-radius);
   background: var(--tj-action-blue-soft);
 }
 
@@ -261,11 +183,45 @@
   background: var(--tj-action-blue);
 }
 
+@media (max-width: 720px) {
+  .sales-forecast-panel .panel-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: var(--spectrum-spacing-100);
+  }
+
+  .sales-forecast-panel .panel-head h2 {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    line-height: 1.25;
+  }
+
+  .sales-forecast-panel-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: start;
+    gap: var(--spectrum-spacing-75);
+  }
+
+  .sales-forecast-view-toggle {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  #sales-forecast-status {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    text-align: left;
+  }
+}
+
 .sales-focus-toggle {
   width: 22px;
   height: 22px;
   border: 2px solid var(--tj-border-control);
-  border-radius: 4px;
+  border-radius: var(--spectrum-control-radius);
   color: var(--tj-tone-warning-text);
   background: var(--tj-content-bg);
   display: inline-grid;

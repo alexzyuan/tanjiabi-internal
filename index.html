@@ -57,8 +57,19 @@
             </button>
             <button class="nav-item" data-view="review-rating"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1L12 16.9 6.6 19.8l1-6.1-4.4-4.3 6.1-.9z"/></svg></span><span class="nav-label">review计算</span></button>
             <button class="nav-item" data-view="ai-image-workflow"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 5h7v6H4z"/><path d="M13 13h7v6h-7z"/><path d="M14 4h6"/><path d="M17 4v6"/><path d="m6 18 2 2 4-5"/></svg></span><span class="nav-label">AI图片工作流</span></button>
-            <button class="nav-item" data-view="fba-freight"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 6h16v12H4z"/><path d="M7 10h10"/><path d="M7 14h6"/><path d="M17 18l3 3"/><path d="M20 18l-3 3"/></svg></span><span class="nav-label">货代表格</span></button>
             <button class="nav-item" data-view="fba"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 8l8-4 8 4-8 4z"/><path d="M4 8v8l8 4 8-4V8"/></svg></span><span class="nav-label">FBA刷仓</span></button>
+          </section>
+          <section class="nav-group" aria-label="物流">
+            <button class="nav-group-title" type="button" aria-expanded="false">
+              <span class="nav-group-icon inventory-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M4 7h10v10H4z"/><path d="M14 10h4l2 3v4h-6z"/><path d="M7 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/><path d="M17 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/></svg>
+              </span>
+              <span>物流</span>
+              <span class="nav-group-caret" aria-hidden="true">⌄</span>
+            </button>
+            <button class="nav-item" data-view="fba-freight"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 6h16v12H4z"/><path d="M7 10h10"/><path d="M7 14h6"/><path d="M17 18l3 3"/><path d="M20 18l-3 3"/></svg></span><span class="nav-label">FBA货件处理</span></button>
+            <button class="nav-item" data-view="fba-shipment-variance"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5z"/><path d="M8 9h8"/><path d="M8 13h5"/><path d="m14 17 2 2 4-5"/></svg></span><span class="nav-label">货件收发差异</span></button>
+            <button class="nav-item" data-view="freight-rates"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h10"/><path d="M17 14l3 3-3 3"/></svg></span><span class="nav-label">运费看板</span></button>
           </section>
           <section class="nav-group" aria-label="产品">
             <button class="nav-group-title" type="button" aria-expanded="false">
@@ -116,6 +127,10 @@
               <span class="nav-group-caret" aria-hidden="true">⌄</span>
             </button>
             <button class="nav-item" data-view="cashflow"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16v11H4z"/><path d="M7 7V5h10v2"/><path d="M16 13h4"/></svg></span><span class="nav-label">平台回款</span></button>
+            <button class="nav-item" data-view="store-operating-monthly-report">
+              <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5z"/><path d="M8 8h8"/><path d="M8 12h8"/><path d="M8 16h5"/></svg></span>
+              <span class="nav-label">店铺经营月报</span>
+            </button>
           </section>
           <section class="nav-group" aria-label="知识库">
             <button class="nav-group-title" type="button" aria-expanded="false">
@@ -136,6 +151,7 @@
               <span class="nav-group-caret" aria-hidden="true">⌄</span>
             </button>
             <button class="nav-item" data-view="admin" hidden><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.5-2.4 1a7 7 0 0 0-2-1.1L14 3h-4l-.5 2.7a7 7 0 0 0-2 1.1l-2.4-1-2 3.5 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.5 2.4-1a7 7 0 0 0 2 1.1L10 21h4l.5-2.7a7 7 0 0 0 2-1.1l2.4 1 2-3.5-2-1.5c.1-.4.1-.8.1-1.2z"/></svg></span><span class="nav-label">后台管理</span></button>
+            <button class="nav-item" data-view="webhook-assistant" data-permission="admin" hidden><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M5 12h4"/><path d="M15 12h4"/><path d="M9 12a3 3 0 0 1 3-3h1"/><path d="M15 12a3 3 0 0 1-3 3h-1"/><path d="M7 5v3"/><path d="M17 16v3"/><path d="M4 5h6"/><path d="M14 19h6"/></svg></span><span class="nav-label">Webhook 助手</span></button>
             <button class="nav-item" data-view="sync"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M20 7h-9a4 4 0 0 0-4 4v1"/><path d="M16 3l4 4-4 4"/><path d="M4 17h9a4 4 0 0 0 4-4v-1"/><path d="M8 21l-4-4 4-4"/></svg></span><span class="nav-label">同步中心</span></button>
           </section>
         </nav>
@@ -248,32 +264,17 @@
           <label>
             日期
             <div class="date-range-control">
-              <button id="front-date-range-button" class="date-range-button" type="button">本月</button>
-              <div class="date-range-popover" id="front-date-range-popover" hidden>
-                <div class="date-presets">
-                  <button type="button" data-range-preset="today">今日</button>
-                  <button type="button" data-range-preset="yesterday">昨日</button>
-                  <button type="button" data-range-preset="last7">近7天</button>
-                  <button type="button" data-range-preset="last30">近30天</button>
-                  <button type="button" data-range-preset="thisWeek">本周</button>
-                  <button type="button" data-range-preset="lastWeek">上周</button>
-                  <button type="button" data-range-preset="thisMonth">本月</button>
-                  <button type="button" data-range-preset="lastMonth">上月</button>
-                </div>
-                <div class="date-range-fields">
-                  <input id="front-date-start" type="date" />
-                  <span>至</span>
-                  <input id="front-date-end" type="date" />
-                  <button id="front-date-apply" class="primary-button" type="button">确定</button>
-                </div>
-              </div>
+              <button id="front-date-range-button" class="date-range-button date-range-picker__trigger" type="button">本月</button>
+              <input id="front-date-start" type="hidden" />
+              <input id="front-date-end" type="hidden" />
+              <div class="date-range-popover date-range-picker__popover" id="front-date-range-popover" hidden></div>
             </div>
           </label>
           <label>
             币种
             <select id="front-currency-filter">
-              <option value="ORIGINAL">站点原币</option>
               <option value="CNY">CNY</option>
+              <option value="ORIGINAL">站点原币</option>
             </select>
           </label>
           <label>
@@ -282,6 +283,27 @@
               <option value="">全部负责人</option>
             </select>
           </label>
+          <div class="multi-select front-owner-quick-filter" id="front-owner-quick-filter">
+            <button class="filter-dropdown-button multi-select-button" type="button" aria-haspopup="listbox" aria-expanded="false">
+              <span class="filter-dropdown-button-label">负责人快捷筛选</span>
+            </button>
+            <div class="filter-dropdown-menu multi-select-menu" hidden>
+              <div class="multi-select-options" role="radiogroup" aria-label="销售负责人快捷筛选">
+                <label class="multi-select-option">
+                  <input type="radio" name="front-owner-quick-filter" value="林芃" />
+                  <span>林芃</span>
+                </label>
+                <label class="multi-select-option">
+                  <input type="radio" name="front-owner-quick-filter" value="熊丹轩" />
+                  <span>熊丹轩</span>
+                </label>
+                <label class="multi-select-option">
+                  <input type="radio" name="front-owner-quick-filter" value="黄超" />
+                  <span>黄超</span>
+                </label>
+              </div>
+            </div>
+          </div>
           <label>
             品类
             <select>
@@ -294,7 +316,7 @@
           </label>
           <label>
             SKU | MSKU | ASIN
-            <input type="search" placeholder="输入关键词" />
+            <input type="search" placeholder="搜索内容" />
           </label>
         </section>
 
@@ -306,6 +328,7 @@
             <p>按国家、店铺、日期和负责人查看销售收入、利润、广告费率与核心达成率。</p>
           </div>
         </section>
+        <section class="dashboard-loading-scope" id="sales-dashboard-content" aria-label="销售复盘数据区">
         <section class="overview-grid sales-overview-grid" aria-label="总体业绩达成情况（月初至筛选器最后一天）">
           <div class="kpi-stack">
             <article class="kpi-card">
@@ -339,7 +362,7 @@
               <table>
                 <thead>
                   <tr>
-                    <th>站点</th>
+                    <th data-column-profile="name">站点</th>
                     <th>币种</th>
                     <th>销售收入目标</th>
                     <th>销售收入</th>
@@ -383,33 +406,35 @@
             <h2>销售复盘明细</h2>
             <span id="msku-detail-status">随销售看板同步加载</span>
           </div>
-          <div class="table-wrap sales-review-detail-table-wrap">
-            <table>
+          <div class="table-wrap data-table-wrap--detail">
+            <table class="data-table data-table--detail" id="sales-review-detail-table" data-table-key="sales-review-detail">
               <thead>
                 <tr>
-                  <th><button class="sort-button" type="button" data-msku-sort="budgetStoreName">店铺</button></th>
-                  <th><button class="sort-button" type="button" data-msku-sort="msku">msku</button></th>
-                  <th><button class="sort-button" type="button" data-msku-sort="productName">产品名称</button></th>
-                  <th><button class="sort-button" type="button" data-msku-sort="budgetQuantity">销量目标</button></th>
-                  <th><button class="sort-button" type="button" data-msku-sort="actualQuantity">实际销量</button></th>
-                  <th><button class="sort-button" type="button" data-msku-sort="fbaInventory">FBA库存</button></th>
-                  <th><button class="sort-button" type="button" data-msku-sort="quantityAchievement">销量达成率</button></th>
-                  <th><button class="sort-button" type="button" data-msku-sort="orderProfit">订单利润</button></th>
-                  <th><button class="sort-button" type="button" data-msku-sort="grossRate">毛利率</button></th>
-                  <th><button class="sort-button" type="button" data-msku-sort="refundRate">退款率</button></th>
-                  <th><button class="sort-button" type="button" data-msku-sort="adFeeRate">广告费率</button></th>
-                  <th><button class="sort-button" type="button" data-msku-sort="promotionDiscountRate">促销折扣占比</button></th>
-                  <th><button class="sort-button" type="button" data-msku-sort="storageFeeRate">仓储费占比</button></th>
-                  <th><button class="sort-button" type="button" data-msku-sort="platformFeeRate">平台费占比</button></th>
-                  <th><button class="sort-button" type="button" data-msku-sort="fbaDeliveryFeeRate">FBA发货费占比</button></th>
-                  <th><button class="sort-button" type="button" data-msku-sort="purchaseCostRate">采购成本占比</button></th>
-                  <th><button class="sort-button" type="button" data-msku-sort="firstLegCostRate">头程成本占比</button></th>
+                  <th data-column-key="budgetStoreName" data-column-kind="text" data-column-profile="short-name"><button class="sort-button" type="button" data-msku-sort="budgetStoreName">店铺</button></th>
+                  <th data-column-key="msku" data-column-kind="text" data-column-profile="identifier"><button class="sort-button" type="button" data-msku-sort="msku">msku</button></th>
+                  <th data-column-key="productName" data-column-kind="text" data-column-profile="name"><button class="sort-button" type="button" data-msku-sort="productName">产品名称</button></th>
+                  <th data-column-key="budgetQuantity" data-column-kind="number" data-column-profile="number"><button class="sort-button" type="button" data-msku-sort="budgetQuantity">销量目标</button></th>
+                  <th data-column-key="actualQuantity" data-column-kind="number" data-column-profile="number"><button class="sort-button" type="button" data-msku-sort="actualQuantity">实际销量</button></th>
+                  <th data-column-key="fbaInventory" data-column-kind="number" data-column-profile="number"><button class="sort-button" type="button" data-msku-sort="fbaInventory">FBA库存</button></th>
+                  <th data-column-key="quantityAchievement" data-column-kind="number" data-column-profile="money-rate"><button class="sort-button" type="button" data-msku-sort="quantityAchievement">销量达成率</button></th>
+                  <th data-column-key="orderProfit" data-column-kind="number" data-column-profile="money-rate"><button class="sort-button" type="button" data-msku-sort="orderProfit">订单利润</button></th>
+                  <th data-column-key="averageProfit" data-column-kind="number" data-column-profile="money-rate"><button class="sort-button" type="button" data-msku-sort="averageProfit">平均利润</button></th>
+                  <th data-column-key="grossRate" data-column-kind="number" data-column-profile="money-rate"><button class="sort-button" type="button" data-msku-sort="grossRate">毛利率</button></th>
+                  <th data-column-key="refundRate" data-column-kind="number" data-column-profile="money-rate"><button class="sort-button" type="button" data-msku-sort="refundRate">退款率</button></th>
+                  <th data-column-key="adFeeRate" data-column-kind="number" data-column-profile="money-rate"><button class="sort-button" type="button" data-msku-sort="adFeeRate">广告费率</button></th>
+                  <th data-column-key="promotionDiscountRate" data-column-kind="number" data-column-profile="money-rate"><button class="sort-button" type="button" data-msku-sort="promotionDiscountRate">促销折扣占比</button></th>
+                  <th data-column-key="storageFeeRate" data-column-kind="number" data-column-profile="money-rate"><button class="sort-button" type="button" data-msku-sort="storageFeeRate">仓储费占比</button></th>
+                  <th data-column-key="platformFeeRate" data-column-kind="number" data-column-profile="money-rate"><button class="sort-button" type="button" data-msku-sort="platformFeeRate">平台费占比</button></th>
+                  <th data-column-key="fbaDeliveryFeeRate" data-column-kind="number" data-column-profile="money-rate"><button class="sort-button" type="button" data-msku-sort="fbaDeliveryFeeRate">FBA占比</button></th>
+                  <th data-column-key="purchaseCostRate" data-column-kind="number" data-column-profile="money-rate"><button class="sort-button" type="button" data-msku-sort="purchaseCostRate">采购成本占比</button></th>
+                  <th data-column-key="firstLegCostRate" data-column-kind="number" data-column-profile="money-rate"><button class="sort-button" type="button" data-msku-sort="firstLegCostRate">头程成本占比</button></th>
                 </tr>
               </thead>
               <tbody id="detail-table"></tbody>
             </table>
           </div>
         </article>
+        </section>
         </section>
 
         <section class="view" id="view-pulse">
@@ -491,6 +516,7 @@
             <article class="metric-tile"><span>新增 review</span><strong id="inspection-review-count">0</strong><small id="inspection-review-note">近 30 天新增</small></article>
             <article class="metric-tile"><span>买家之声异常</span><strong id="inspection-voice-count">0</strong><small>极差 / 不合格 / 一般</small></article>
             <article class="metric-tile"><span>Account Health</span><strong id="inspection-account-health-count">0</strong><small>政策合规与 AHR</small></article>
+            <article class="metric-tile"><span>低库存费 MSKU</span><strong id="inspection-low-inventory-fee-count">0</strong><small>当前已进入收费区间</small></article>
           </section>
 
           <article class="panel store-inspection-schedule-panel">
@@ -548,8 +574,8 @@
             <div class="panel-head"><h2>最近巡检历史</h2><span id="store-inspection-history-count">暂无历史</span></div>
             <div class="table-wrap">
               <table>
-                <thead><tr><th>时间</th><th>结论</th><th>店铺数</th><th>feedback</th><th>低星 review</th><th>买家之声</th><th>Account Health</th></tr></thead>
-                <tbody id="store-inspection-history"><tr><td colspan="7">暂无历史巡检。</td></tr></tbody>
+                <thead><tr><th>时间</th><th>结论</th><th>店铺数</th><th>feedback</th><th>低星 review</th><th>买家之声</th><th>Account Health</th><th>低库存费 MSKU</th></tr></thead>
+                <tbody id="store-inspection-history"><tr><td colspan="8">暂无历史巡检。</td></tr></tbody>
               </table>
             </div>
           </article>
@@ -794,6 +820,54 @@
           </section>
         </section>
 
+        <section class="view" id="view-store-operating-monthly-report">
+          <section class="module-hero">
+            <div>
+              <span>财务</span>
+              <h2>店铺经营月报</h2>
+              <p id="store-operating-report-meta">等待读取经营数据。</p>
+            </div>
+            <div class="hero-actions">
+              <button class="ghost-button" id="store-operating-report-export" type="button" disabled>导出 Excel</button>
+              <button class="primary-button" id="store-operating-report-budget" type="button">查看预算目标</button>
+            </div>
+          </section>
+          <section class="filters" aria-label="店铺经营月报筛选">
+            <label>开始月份<input id="store-operating-report-start-month" type="month" /></label>
+            <label>结束月份<input id="store-operating-report-end-month" type="month" /></label>
+            <label>店铺<select id="store-operating-report-store" multiple size="4"><option value="">全部店铺</option></select></label>
+            <label>国家<select id="store-operating-report-country" multiple size="3"><option value="">全部国家</option></select></label>
+            <label>币种<select id="store-operating-report-currency"><option value="CNY" selected>人民币（CNY）</option><option value="ORIGINAL">原币分币种</option></select></label>
+            <button class="primary-button" id="store-operating-report-query" type="button">查询</button>
+            <button class="ghost-button" id="store-operating-report-reset" type="button">重置</button>
+          </section>
+          <article class="panel detail-panel">
+            <div class="panel-head">
+              <h2>经营损益矩阵</h2>
+              <p id="store-operating-report-status" role="status" aria-live="polite">等待查询。</p>
+            </div>
+            <div class="table-wrap data-table-wrap--detail store-operating-report-table-wrap">
+              <table class="data-table data-table--detail" id="store-operating-report-table" data-table-key="store-operating-monthly-report" data-table-fixed-width="true">
+                <thead id="store-operating-report-head">
+                  <tr>
+                    <th colspan="2" data-column-sortable="false">店铺信息</th>
+                    <th colspan="4" data-column-sortable="false">全部店铺</th>
+                  </tr>
+                  <tr>
+                    <th data-column-key="category" data-column-width="148" data-column-sortable="false" data-column-profile="name">上级</th>
+                    <th data-column-key="name" data-column-width="176" data-column-sortable="false" data-column-profile="name">名称</th>
+                    <th data-column-key="group-0-actual" data-column-width="160" data-column-sortable="false" data-column-kind="number" data-column-profile="money-rate">实际完成值</th>
+                    <th data-column-key="group-0-share" data-column-width="104" data-column-sortable="false" data-column-kind="number" data-column-profile="money-rate">占比</th>
+                    <th data-column-key="group-0-budget" data-column-width="160" data-column-sortable="false" data-column-kind="number" data-column-profile="money-rate">预算值</th>
+                    <th data-column-key="group-0-achievement" data-column-width="112" data-column-sortable="false" data-column-kind="number" data-column-profile="money-rate">达成率</th>
+                  </tr>
+                </thead>
+                <tbody id="store-operating-report-body"><tr><td colspan="6">等待查询。</td></tr></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
         <section class="view" id="view-payables">
           <section class="module-hero payable-hero">
             <div>
@@ -1016,7 +1090,7 @@
 	          <article class="panel supplier-board-panel">
 	            <div class="panel-head"><h2>供应商销售明细</h2><span id="supplier-board-count">等待加载</span></div>
 	            <div class="table-wrap supplier-board-table-wrap">
-	              <table id="supplier-board-table">
+              <table id="supplier-board-table" class="data-table--middle">
 	                <thead>
 	                  <tr>
 	                    <th data-supplier-sort="imageUrl"><button class="sort-button supplier-sort-button" type="button" data-supplier-sort="imageUrl">图片</button></th>
@@ -1076,7 +1150,7 @@
 	          <article class="panel factory-inventory-panel">
 	            <div class="panel-head"><h2>工厂库存明细</h2><span id="factory-inventory-count">等待加载</span></div>
 	            <div class="table-wrap factory-inventory-table-wrap">
-	              <table id="factory-inventory-table">
+              <table id="factory-inventory-table" class="data-table--middle">
 	                <thead>
 	                  <tr>
 	                    <th>图片</th>
@@ -1131,7 +1205,7 @@
 	          <article class="panel supplier-detail-panel">
 	            <div class="panel-head"><h2>供应商明细</h2><span id="supplier-detail-table-count">共 0 条数据</span></div>
 	            <div class="table-wrap supplier-detail-table-wrap">
-	              <table id="supplier-detail-table">
+              <table id="supplier-detail-table" class="data-table--middle">
 	                <thead>
 	                  <tr>
 	                    <th>供应商</th>
@@ -1190,12 +1264,12 @@
           <section class="module-grid">
             <article class="metric-tile"><span>销量预测</span><strong id="sales-forecast-total">0</strong><small>按当前月份公式汇总</small></article>
             <article class="metric-tile"><span>FBA在途</span><strong id="sales-forecast-inbound">0</strong><small>补货建议库存口径</small></article>
-            <article class="metric-tile"><span>低库存 SKU</span><strong id="sales-forecast-low-stock">0</strong><small>FBA 可售小于 14 天</small></article>
-            <article class="metric-tile"><span>需补货 SKU</span><strong id="sales-forecast-replenishment">0</strong><small>补货建议大于 0</small></article>
+            <button class="metric-tile" type="button" data-sales-forecast-locator="low-stock" aria-pressed="false" title="点击定位低库存 SKU"><span>低库存 SKU</span><strong id="sales-forecast-low-stock">0</strong><small>FBA 可售小于 14 天</small></button>
+            <button class="metric-tile" type="button" data-sales-forecast-locator="replenishment" aria-pressed="false" title="点击定位需补货 SKU"><span>需补货 SKU</span><strong id="sales-forecast-replenishment">0</strong><small>补货建议大于 0</small></button>
           </section>
 	          <article class="panel sales-forecast-panel">
 	            <div class="panel-head">
-	              <h2>销售预估明细</h2>
+	              <h2 id="sales-forecast-detail-title">销售预估明细</h2>
 	              <div class="sales-forecast-panel-actions">
 	                <div class="sales-forecast-view-toggle" role="tablist" aria-label="销售预估视图">
 	                  <button class="active" type="button" data-sales-forecast-view="default">默认</button>
@@ -1280,8 +1354,8 @@
               <div class="panel-head"><h2>库存减值明细</h2><span>按 MSKU 展示高风险库存</span></div>
               <div class="table-wrap">
                 <table>
-                  <thead><tr><th>店铺</th><th>国家</th><th>MSKU</th><th>Listing负责人</th><th>库龄</th><th>数量</th><th>单位采购成本</th><th>单位头程费用</th><th id="inventory-unit-cost-head">成本计算单价</th><th>库存金额</th><th>计提比例</th><th>期末计提余额</th><th>本月增加计提（当月）</th><th>已计提冲回</th><th>本月计提金额</th></tr></thead>
-                  <tbody id="inventory-detail-table"><tr><td colspan="15">等待加载</td></tr></tbody>
+                  <thead><tr><th>店铺</th><th>国家</th><th>MSKU</th><th>Listing负责人</th><th>数量</th><th>到库金额（库存金额）</th><th>期末计提余额</th><th>本月新增计提</th><th>本月计提冲回</th><th>本月计提金额</th></tr></thead>
+                  <tbody id="inventory-detail-table"><tr><td colspan="10">等待加载</td></tr></tbody>
                 </table>
               </div>
             </article>
@@ -1534,6 +1608,73 @@
             <article class="panel"><div class="panel-head"><h2>用户与角色</h2><span>角色规划与查看范围</span></div><div id="admin-users" class="config-list"></div></article>
             <article class="panel"><div class="panel-head"><h2>店铺权限</h2><span>控制用户可查看的店铺和站点</span></div><div id="admin-shops" class="config-list"></div></article>
             <article class="panel"><div class="panel-head"><h2>目标配置</h2><span>月目标、销售目标、利润目标</span></div><div id="admin-targets" class="config-list"></div></article>
+          </section>
+        </section>
+
+        <section class="view" id="view-webhook-assistant">
+          <section class="module-hero">
+            <div>
+              <span>Webhook 助手</span>
+              <h2>钉钉群机器人发送任务</h2>
+              <p>选择系统已配置的钉钉群机器人，创建每日、每周或每月定时发送任务。</p>
+            </div>
+          </section>
+          <section class="admin-grid">
+            <article class="panel admin-account-panel">
+              <div class="panel-head"><h2>新增发送任务</h2><span id="webhook-assistant-status">可新增钉钉群机器人发送任务</span></div>
+              <form class="form-grid admin-account-form" id="webhook-task-form">
+                <label>任务名称
+                  <input id="webhook-task-name" type="text" autocomplete="off" placeholder="例如 FBA 刷仓提醒" required />
+                </label>
+                <label>发送目标
+                  <select id="webhook-target" required>
+                    <option value="fba-sta">FBA刷仓</option>
+                    <option value="default">企业总群</option>
+                  </select>
+                </label>
+                <label>发送方式
+                  <select id="webhook-schedule-mode">
+                    <option value="daily">每日</option>
+                    <option value="weekly">每周</option>
+                    <option value="monthly">每月</option>
+                  </select>
+                </label>
+                <label data-webhook-schedule-field="weekly" hidden>每周发送日
+                  <select id="webhook-weekday">
+                    <option value="1">周一</option>
+                    <option value="2">周二</option>
+                    <option value="3">周三</option>
+                    <option value="4">周四</option>
+                    <option value="5">周五</option>
+                    <option value="6">周六</option>
+                    <option value="7">周日</option>
+                  </select>
+                </label>
+                <label data-webhook-schedule-field="monthly" hidden>每月发送日
+                  <input id="webhook-month-day" type="number" min="1" max="31" step="1" value="1" />
+                </label>
+                <label>发送时间
+                  <input id="webhook-send-time" type="time" value="09:30" />
+                </label>
+                <label class="form-span-2">消息内容
+                  <textarea id="webhook-message" rows="4" placeholder="输入要发送到钉钉群的消息内容" required></textarea>
+                </label>
+                <label class="multi-select-option"><input id="webhook-at-all" type="checkbox" /> @ 所有人</label>
+                <div class="admin-account-actions">
+                  <button class="primary-button" id="webhook-task-save" type="submit">新增任务</button>
+                  <button class="secondary-button" id="webhook-task-reset" type="button">清空</button>
+                </div>
+              </form>
+            </article>
+            <article class="panel admin-account-panel">
+              <div class="panel-head"><h2>发送任务</h2><span>Webhook 地址和密钥由服务器配置，页面只显示发送目标</span></div>
+              <div class="table-wrap admin-account-table-wrap">
+                <table class="data-table">
+                  <thead><tr><th>任务</th><th>状态</th><th>计划</th><th>目标</th><th>最近结果</th><th>次数</th><th>操作</th></tr></thead>
+                  <tbody id="webhook-task-table"><tr><td colspan="7">正在读取 webhook 任务...</td></tr></tbody>
+                </table>
+              </div>
+            </article>
           </section>
         </section>
 
@@ -1828,51 +1969,74 @@
           <section class="module-hero">
             <div>
               <span>动销预警</span>
-              <h2>动销毛利预警</h2>
-              <p>按 MSKU 的 FBA 总库存、订单利润里的近 30 天单只平均毛利润，以及采购加头程除以售出件数，筛选近 30 天均毛利为负且库存大于 10 的库存。</p>
+              <h2>滞销处置周报</h2>
+              <p>聚合 FBA 库龄、近 30 天利润与广告数据，按现金风险金额定位本周应优先处置的 SKU。</p>
             </div>
             <div class="hero-actions">
-              <small id="clearance-real-status">未读取真实库存</small>
-              <button class="secondary-button" id="clearance-load-real-button" type="button">刷新数据</button>
+              <small id="slow-moving-risk-status">等待读取周报</small>
+              <button class="secondary-button" id="slow-moving-risk-refresh" type="button">刷新数据</button>
             </div>
           </section>
-          <section class="filters clearance-rate-panel" aria-label="动销预警筛选">
-            <label>国家<select id="clearance-country-filter" multiple size="3"><option value="">全部国家</option></select></label>
-            <label>店铺<select id="clearance-store-filter" multiple size="4"><option value="">全部店铺</option></select></label>
-            <label>运营<select id="clearance-owner-filter"><option value="">全部运营</option></select></label>
+          <div class="slow-moving-risk-tabs" role="tablist" aria-label="动销预警视图">
+            <button id="slow-moving-risk-weekly-tab" type="button" role="tab" aria-controls="slow-moving-risk-weekly-panel" aria-selected="true" data-slow-moving-risk-tab="weekly">滞销处置周报</button>
+            <button id="slow-moving-risk-live-tab" type="button" role="tab" aria-controls="slow-moving-risk-live-panel" aria-selected="false" tabindex="-1" data-slow-moving-risk-tab="live">日常预警</button>
+            <button id="slow-moving-risk-history-tab" type="button" role="tab" aria-controls="slow-moving-risk-history-panel" aria-selected="false" tabindex="-1" data-slow-moving-risk-tab="history">历史周报</button>
+          </div>
+          <section id="slow-moving-risk-weekly-panel" class="slow-moving-risk-panel" role="tabpanel" aria-labelledby="slow-moving-risk-weekly-tab" data-slow-moving-risk-panel="weekly">
+            <p>每周二 09:00（北京时间）生成，统计截至上周日的连续 30 天数据。</p>
           </section>
-          <section class="module-grid clearance-kpi-grid" aria-label="动销预警概览">
-            <article class="metric-tile"><span>预警 MSKU</span><strong id="clearance-msku-count">0</strong><small>均毛利为负，库存>10</small></article>
-            <article class="metric-tile"><span>建议清货 MSKU</span><strong id="clearance-daily-cost">0</strong><small id="clearance-daily-cost-cny">均毛利为负，库存>10</small></article>
-            <article class="metric-tile"><span>近30天单只均毛利</span><strong id="clearance-hold-cost">$0</strong><small>按销量加权</small></article>
-            <article class="metric-tile"><span>单只货值</span><strong id="clearance-loss">$0</strong><small>按近30天销量加权</small></article>
-            <article class="metric-tile"><span>库存差额</span><strong id="clearance-delta">$0</strong><small id="clearance-delta-note">按 |均毛利| - 单只货值 加权</small></article>
+          <section id="slow-moving-risk-live-panel" class="slow-moving-risk-panel" role="tabpanel" aria-labelledby="slow-moving-risk-live-tab" data-slow-moving-risk-panel="live" hidden>
+            <section class="filters slow-moving-risk-filters" aria-label="日常预警筛选">
+              <label>国家<select id="slow-moving-risk-country-filter" multiple size="3"><option value="">全部国家</option></select></label>
+              <label>店铺<select id="slow-moving-risk-store-filter" multiple size="4"><option value="">全部店铺</option></select></label>
+              <label>运营<select id="slow-moving-risk-owner-filter"><option value="">全部运营</option></select></label>
+              <label>风险<select id="slow-moving-risk-level-filter"><option value="">全部等级</option><option value="强制处置">强制处置</option><option value="高风险">高风险</option><option value="关注">关注</option><option value="正常">正常</option></select></label>
+              <label>币种<select id="slow-moving-risk-currency-filter"><option value="">全部原币种</option></select></label>
+            </section>
           </section>
-          <article class="panel clearance-result-panel">
+          <section id="slow-moving-risk-history-panel" class="slow-moving-risk-panel" role="tabpanel" aria-labelledby="slow-moving-risk-history-tab" data-slow-moving-risk-panel="history" hidden>
+            <label class="slow-moving-risk-history-label">报告周<select id="slow-moving-risk-history-select"><option value="">暂无历史周报</option></select></label>
+          </section>
+          <section class="module-grid slow-moving-risk-kpis" aria-label="滞销处置周报概览">
+            <article class="metric-tile"><span>高风险 SKU</span><strong id="slow-moving-risk-kpi-count">0</strong><small>强制处置与高风险</small></article>
+            <article class="metric-tile"><span>90天+ 库存数量</span><strong id="slow-moving-risk-kpi-quantity">0</strong><small>件</small></article>
+            <article class="metric-tile"><span>90天+ 库存金额</span><strong id="slow-moving-risk-kpi-amount">—</strong><small>人民币</small></article>
+            <article class="metric-tile"><span>近30日毛利</span><strong id="slow-moving-risk-kpi-profit">—</strong><small>人民币，强制处置与高风险 SKU</small></article>
+          </section>
+          <article class="panel slow-moving-risk-result-panel">
             <div class="panel-head">
-              <h2>MSKU 明细对比</h2>
-              <span id="clearance-result-status">等待计算</span>
+              <h2>现金风险 SKU 明细</h2>
+              <span>按资金风险金额降序</span>
             </div>
-            <div class="table-wrap clearance-table-wrap">
-              <table>
+            <div class="table-wrap data-table-wrap--detail slow-moving-risk-table-wrap">
+              <table class="data-table data-table--middle data-table--detail slow-moving-risk-table" data-table-key="slow-moving-risk-weekly">
                 <thead>
                   <tr>
-                    <th>风险</th>
-                    <th>国家</th>
-                    <th>店铺</th>
-                    <th>运营</th>
-                    <th>MSKU</th>
-                    <th>库存</th>
-                    <th>日销</th>
-                    <th>可售天数</th>
-                    <th>近30天均毛利</th>
-                    <th>近7天均毛利</th>
-                    <th>单只货值</th>
-                    <th>差额</th>
-                    <th>货值合计</th>
+                    <th data-column-key="risk-level">风险</th>
+                    <th data-column-key="store-name">店铺</th>
+                    <th data-column-key="site-country">站点</th>
+                    <th data-column-key="msku">MSKU</th>
+                    <th data-column-key="currency-code">原币种</th>
+                    <th data-column-key="available-quantity">当前可售</th>
+                    <th data-column-key="aged-quantity">90天+库存</th>
+                    <th data-column-key="inventory-amount-cny">库存金额（人民币）</th>
+                    <th data-column-key="aged-inventory-amount-cny">90天+库存金额（人民币）</th>
+                    <th data-column-key="supply-days">可售天数</th>
+                    <th data-column-key="cash-conversion-rate">30日转化</th>
+                    <th data-column-key="recent30-sales-quantity">30日销量</th>
+                    <th data-column-key="recent30-gross-profit-cny">30日毛利（人民币）</th>
+                    <th data-column-key="average-gross-profit-cny">30日均毛利（人民币）</th>
+                    <th data-column-key="recent30-ad-spend-cny">广告花费（人民币）</th>
+                    <th data-column-key="ad-share">广告占比</th>
+                    <th data-column-key="acos">ACOS</th>
+                    <th data-column-key="cash-risk-amount-cny">资金风险金额（人民币）</th>
+                    <th data-column-key="clearance-recovery-original">清仓回收（原币）</th>
+                    <th data-column-key="liquidation-recovery-original">清算回收（原币）</th>
+                    <th data-column-key="removal-fee-original">移除费（原币）</th>
+                    <th data-column-key="recommendation">本周建议</th>
                   </tr>
                 </thead>
-                <tbody id="clearance-table"><tr><td colspan="13">正在读取数据。</td></tr></tbody>
+                <tbody id="slow-moving-risk-table"><tr><td colspan="22">正在读取数据。</td></tr></tbody>
               </table>
             </div>
           </article>
@@ -1881,9 +2045,9 @@
         <section class="view" id="view-fba-freight">
           <section class="module-hero">
             <div>
-              <span>货代表格</span>
-              <h2>FBA货代发货表格</h2>
-              <p>直接读取领星 FBA 货件 fbaCargo 数据，按货件汇总发货数量并生成货代表格。</p>
+              <span>FBA货件处理</span>
+              <h2>FBA货件处理</h2>
+              <p>读取领星 FBA 货件，同一批货件可批量转货代表格，也可直接创建领星待发货发货单。</p>
             </div>
           </section>
           <article class="panel fba-freight-panel">
@@ -1892,8 +2056,14 @@
               <span id="fba-freight-status">等待读取货件</span>
             </div>
             <section class="filter-toolbar fba-freight-toolbar">
-              <label>开始日期<input id="fba-freight-start-date" type="date" /></label>
-              <label>结束日期<input id="fba-freight-end-date" type="date" /></label>
+              <label>日期
+                <div class="date-range-control date-range-control--inline">
+                  <button id="fba-freight-date-range-button" class="date-range-button date-range-picker__trigger" type="button">选择日期</button>
+                  <input id="fba-freight-start-date" type="hidden" />
+                  <input id="fba-freight-end-date" type="hidden" />
+                  <div class="date-range-popover date-range-picker__popover" id="fba-freight-date-range-popover" hidden></div>
+                </div>
+              </label>
               <label>店铺
                 <select id="fba-freight-sid">
                   <option value="">全部核心店铺</option>
@@ -1914,7 +2084,12 @@
                   <option value="CANCELLED">CANCELLED</option>
                 </select>
               </label>
-              <button class="secondary-button" id="fba-freight-refresh" type="button">读取货件</button>
+              <label>发货仓库
+                <select id="fba-freight-warehouse">
+                  <option value="">请选择发货仓库</option>
+                </select>
+              </label>
+              <button class="secondary-button" id="fba-freight-refresh" data-date-range-auto-refresh type="button">读取货件</button>
               <button class="secondary-button" id="fba-freight-export" type="button">生成表格</button>
               <button class="primary-button" id="fba-freight-batch-convert" type="button">批量转表格</button>
             </section>
@@ -1937,10 +2112,11 @@
                     <th>货件状态</th>
                     <th>物流中心编码</th>
                     <th>创建时间</th>
+                    <th>处理结果</th>
                     <th>操作</th>
                   </tr>
                 </thead>
-                <tbody id="fba-freight-table"><tr><td colspan="11">请选择条件后读取货件。</td></tr></tbody>
+                <tbody id="fba-freight-table"><tr><td colspan="12">请选择条件后读取货件。</td></tr></tbody>
               </table>
             </div>
           </article>
@@ -1971,6 +2147,145 @@
                 <button class="secondary-button" id="fba-freight-template-cancel" type="button">取消</button>
                 <button class="primary-button" id="fba-freight-template-confirm" type="button" disabled>生成表格</button>
               </div>
+            </article>
+          </div>
+          <div class="modal-backdrop" id="fba-freight-jiufang-modal" hidden>
+            <article class="fba-jiufang-order-dialog" role="dialog" aria-modal="true" aria-labelledby="fba-freight-jiufang-title">
+              <div class="modal-head">
+                <h2 id="fba-freight-jiufang-title">确认提交九方</h2>
+                <button class="modal-close-button" id="fba-freight-jiufang-close" type="button" aria-label="关闭九方下单弹窗">×</button>
+              </div>
+              <div class="modal-body">
+                <label class="fba-forwarder-template-field">九方渠道
+                  <select id="fba-freight-jiufang-channel">
+                    <option value="">请选择九方渠道</option>
+                  </select>
+                </label>
+                <div class="fba-jiufang-summary" id="fba-freight-jiufang-summary"></div>
+              </div>
+              <div class="modal-foot">
+                <button class="secondary-button" id="fba-freight-jiufang-cancel" type="button">取消</button>
+                <button class="primary-button" id="fba-freight-jiufang-confirm" type="button" disabled>确认下单</button>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="view-fba-shipment-variance">
+          <section class="module-hero"><div><span>货件收发差异</span><h2>货件收发差异</h2><p>查看领星货件发货与实收差异。倒计时为内部调查提醒，不代表亚马逊官方理赔时效。</p></div></section>
+          <article class="panel fba-shipment-variance-panel">
+            <div class="panel-head"><h2>调查跟进</h2><span id="fba-shipment-variance-status">等待读取货件</span></div>
+            <section class="filter-toolbar fba-shipment-variance-toolbar">
+              <label>日期<div class="date-range-control date-range-control--inline"><button id="fba-shipment-variance-date-range-button" class="date-range-button date-range-picker__trigger" type="button">选择日期</button><input id="fba-shipment-variance-start-date" type="hidden" /><input id="fba-shipment-variance-end-date" type="hidden" /><div class="date-range-popover date-range-picker__popover" id="fba-shipment-variance-date-range-popover" hidden></div></div></label>
+              <label>店铺<select id="fba-shipment-variance-sid"><option value="">全部店铺</option></select></label>
+              <label>货件状态<select id="fba-shipment-variance-status-filter"><option value="RECEIVING,CLOSED" selected>RECEIVING、CLOSED</option><option value="RECEIVING">RECEIVING</option><option value="CLOSED">CLOSED</option><option value="">全部状态</option></select></label>
+              <label>跟进状态<select id="fba-shipment-variance-followup-status"><option value="">全部</option><option value="pending">待跟进</option><option value="followed-up">已跟进</option><option value="overdue">已超期</option></select></label>
+              <button class="secondary-button" id="fba-shipment-variance-refresh" data-date-range-auto-refresh type="button">读取/刷新</button>
+            </section>
+            <section class="metric-grid fba-shipment-variance-summary"><article class="metric-tile"><span>收货中</span><strong id="fba-shipment-variance-receiving">0</strong></article><article class="metric-tile"><span>已关闭短收</span><strong id="fba-shipment-variance-closed-shortage">0</strong></article><article class="metric-tile"><span>七天内到期</span><strong id="fba-shipment-variance-due">0</strong></article><article class="metric-tile"><span>已超内部 SLA</span><strong id="fba-shipment-variance-overdue">0</strong></article></section>
+            <div class="table-shell fba-shipment-variance-table-shell"><table class="data-table fba-shipment-variance-table" data-table-key="fba-shipment-variance"><thead><tr><th data-column-key="store-name">店铺</th><th data-column-key="shipment-id">货件单号</th><th data-column-key="msku">MSKU</th><th data-column-key="shipment-status">状态</th><th data-column-key="shipped-quantity">发货数量</th><th data-column-key="received-quantity">实收数量</th><th data-column-key="difference-quantity">差异数量</th><th data-column-key="created-at">货件创建时间</th><th data-column-key="updated-at">货件更新时间</th><th data-column-key="closed-at">关闭时间</th><th data-column-key="investigation-window">剩余调查申请窗口</th><th data-column-key="followup-status">跟进状态</th><th data-column-key="actions">操作</th></tr></thead><tbody id="fba-shipment-variance-table"><tr><td colspan="13">请选择条件后读取货件。</td></tr></tbody></table></div>
+          </article>
+          <div class="modal-backdrop" id="fba-shipment-variance-followup-modal" hidden><article class="fba-shipment-variance-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="fba-shipment-variance-followup-title"><div class="modal-title-row"><h2 id="fba-shipment-variance-followup-title">跟进货件差异</h2></div><div class="fba-shipment-variance-followup-fields"><p>跟进人：<strong id="fba-shipment-variance-followup-user">当前登录用户</strong></p><label>跟进状态<select id="fba-shipment-variance-followup-select"><option>已跟进</option><option>调查中</option><option>已理赔</option><option>无需处理</option></select></label></div><div class="modal-foot"><button class="secondary-button" id="fba-shipment-variance-followup-cancel" type="button">取消</button><button class="primary-button" id="fba-shipment-variance-followup-confirm" type="button">保存跟进</button></div></article></div>
+        </section>
+
+        <section class="view" id="view-freight-rates">
+          <section class="module-hero">
+            <div>
+              <span>运费看板</span>
+              <h2>运费看板</h2>
+              <p>维护每周国家、仓库、承运商和渠道名称对应的运费价格，作为 FBA 货件转发货单的物流费用数据源。</p>
+            </div>
+          </section>
+          <article class="panel">
+            <div class="panel-head">
+              <h2>运费数据</h2>
+              <span id="freight-rates-status">等待加载</span>
+            </div>
+            <div class="panel-head">
+              <h2>每周运价</h2>
+              <span><button class="secondary-button compact-button" id="freight-rates-refresh" type="button">刷新</button> <button class="secondary-button compact-button" id="freight-rates-export-logs" type="button">导出日志</button> <span id="freight-rates-count">共 0 条</span></span>
+            </div>
+            <div class="table-shell" style="max-width: 100%; overflow-x: auto">
+              <table class="data-table">
+                <colgroup>
+                  <col style="width: 96px" />
+                  <col style="width: 108px" />
+                  <col style="width: 88px" />
+                  <col style="width: 132px" />
+                  <col style="width: 104px" />
+                  <col style="width: 252px" />
+                  <col style="width: 104px" />
+                  <col style="width: 96px" />
+                  <col style="width: 180px" />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th>周数</th>
+                    <th>日期</th>
+                    <th>国家</th>
+                    <th>仓库代码</th>
+                    <th>承运商</th>
+                    <th>渠道名称</th>
+                    <th>价格</th>
+                    <th>操作人</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="freight-rates-create-row">
+                  <tr>
+                    <td><output id="freight-rate-inline-week" class="table-select" style="display: inline-flex; align-items: center; white-space: nowrap; width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box">-</output></td>
+                    <td><output id="freight-rate-inline-date" class="table-select" style="display: inline-flex; align-items: center; white-space: nowrap; width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box">-</output></td>
+                    <td>
+                      <select id="freight-rate-inline-country" class="table-select" style="width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box" aria-label="国家" required>
+                        <option value="美国">美国</option>
+                        <option value="加拿大">加拿大</option>
+                        <option value="澳洲">澳洲</option>
+                        <option value="德国">德国</option>
+                        <option value="英国">英国</option>
+                      </select>
+                    </td>
+                    <td>
+                      <select id="freight-rate-inline-warehouse-select" class="table-select" style="width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box" aria-label="仓库代码选项"></select>
+                      <input id="freight-rate-inline-warehouse-code" class="table-select" style="width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box" aria-label="仓库代码" placeholder="手填仓库" required hidden disabled />
+                    </td>
+                    <td>
+                      <select id="freight-rate-inline-carrier" class="table-select" style="width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box" aria-label="承运商" required>
+                        <option value="九方通逊">九方通逊</option>
+                        <option value="同袍">同袍</option>
+                      </select>
+                    </td>
+                    <td>
+                      <select id="freight-rate-inline-transport-method" class="table-select" style="width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; text-overflow: ellipsis" aria-label="渠道名称" required></select>
+                    </td>
+                    <td><input id="freight-rate-inline-price" type="number" class="table-select" style="width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box" min="0" step="0.0001" aria-label="价格" placeholder="手填价格" required /></td>
+                    <td>-</td>
+                    <td class="table-actions"><button class="primary-button compact-button" id="freight-rate-inline-save" type="button">保存</button></td>
+                  </tr>
+                </tbody>
+                <tbody id="freight-rates-table"><tr><td colspan="9">正在读取运费记录。</td></tr></tbody>
+              </table>
+            </div>
+          </article>
+          <div class="modal-backdrop" id="freight-rate-modal" hidden>
+            <article class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="freight-rate-modal-title">
+              <div class="modal-title-row">
+                <h2 id="freight-rate-modal-title">新增运费</h2>
+                <button class="modal-close-button" id="freight-rate-close" type="button" aria-label="关闭运费编辑弹窗">×</button>
+              </div>
+              <form id="freight-rate-form" class="modal-body">
+                <label>周数<output id="freight-rate-week-preview">-</output></label>
+                <label>日期<input id="freight-rate-date" type="date" required /></label>
+                <label>国家<select id="freight-rate-country" required><option value="美国">美国</option><option value="加拿大">加拿大</option><option value="澳洲">澳洲</option><option value="德国">德国</option><option value="英国">英国</option></select></label>
+                <label>仓库代码<select id="freight-rate-warehouse-select" aria-label="仓库代码选项"></select><input id="freight-rate-warehouse-code" placeholder="手填仓库" required hidden disabled /></label>
+                <label>承运商<select id="freight-rate-carrier" required><option value="九方通逊">九方通逊</option><option value="同袍">同袍</option></select></label>
+                <label>渠道名称<select id="freight-rate-transport-method" required></select></label>
+                <label>价格<input id="freight-rate-price" type="number" min="0" step="0.0001" required /></label>
+                <div class="modal-foot">
+                  <button class="secondary-button danger" id="freight-rate-delete" type="button" hidden>删除</button>
+                  <button class="secondary-button" id="freight-rate-cancel" type="button">取消</button>
+                  <button class="primary-button" type="submit">保存</button>
+                </div>
+              </form>
             </article>
           </div>
         </section>
@@ -2024,7 +2339,7 @@
                   <div class="form-field form-span-2">
                     <span>店铺单选</span>
                     <div class="multi-select" id="fba-shop-picker">
-                      <button class="multi-select-button" id="fba-shop-button" type="button">tandanbo-CA · 加拿大</button>
+                      <button class="multi-select-button" id="fba-shop-button" type="button"><span class="filter-dropdown-button-label">tandanbo-CA · 加拿大</span></button>
                       <div class="multi-select-menu" id="fba-shop-menu" hidden>
                         <input id="fba-shop-search" placeholder="搜索店铺 / 国家 / SID" />
                         <div class="multi-select-options" id="fba-shop-options"></div>
@@ -2321,6 +2636,6 @@
       });
     </script>
     <script type="module" src="./assets/js/ui-utils.js?v=20260706-frontend-refactor-v41" onerror="document.querySelector('#data-source').textContent='脚本未加载';document.querySelector('#data-source-note').textContent='ui-utils.js 请求失败，请检查服务器静态文件';"></script>
-    <script type="module" src="./app.js?v=20260706-frontend-refactor-v76" onerror="document.querySelector('#data-source').textContent='脚本未加载';document.querySelector('#data-source-note').textContent='app.js 请求失败，请检查服务器静态文件';document.querySelector('#topbar-sync-state').textContent='脚本未加载';document.querySelector('#topbar-sync-time').textContent='app.js 失败';"></script>
+    <script type="module" src="./app.js?v=20260803-date-auto-refresh-v1" onerror="document.querySelector('#data-source').textContent='脚本未加载';document.querySelector('#data-source-note').textContent='app.js 请求失败，请检查服务器静态文件';document.querySelector('#topbar-sync-state').textContent='脚本未加载';document.querySelector('#topbar-sync-time').textContent='app.js 失败';"></script>
   </body>
 </html>

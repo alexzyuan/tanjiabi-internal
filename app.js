@@ -1,12 +1,13 @@
 import TanjiaUiUtils from "./assets/js/ui-utils.js?v=20260706-frontend-refactor-v41";
-import { loadDashboardSection } from "./assets/js/dashboard-loader.js?v=20260706-frontend-refactor-v2";
+import { installDashboardLoadingFetchOverlay, loadDashboardSection } from "./assets/js/dashboard-loader.js?v=20260803-global-page-loading-v1";
+import { installDateRangeAutoRefresh } from "./assets/js/date-range-picker.js?v=20260803-date-auto-refresh-v1";
 import { createFilterControls } from "./assets/js/filter-controls.js?v=20260707-frontend-refactor-v1";
 import {
   createFrontShopFilters,
   getDisplayShopName,
   pickSellerCountry,
   pickSellerName,
-} from "./assets/js/front-shop-filters.js?v=20260707-frontend-refactor-v1";
+} from "./assets/js/front-shop-filters.js?v=20260724-sales-owner-detail-jump-v1";
 import { readFileAsBase64 } from "./assets/js/file-utils.js?v=20260707-frontend-refactor-v1";
 import { cachedSalesImageUrl, normalizedSalesImageUrl } from "./assets/js/image-url.js?v=20260707-frontend-refactor-v1";
 import { createFbaUtils } from "./assets/js/fba-utils.js?v=20260707-frontend-refactor-v1";
@@ -21,9 +22,10 @@ import {
   getPacificTodayDate,
   getPacificTodayText,
 } from "./assets/js/date-utils.js?v=20260707-frontend-refactor-v1";
-import { createSalesShell } from "./assets/js/sales-shell.js?v=20260707-frontend-refactor-v1";
+import { createSalesShell } from "./assets/js/sales-shell.js?v=20260717-date-range-window-v3";
 import { createNavigationUtils } from "./assets/js/navigation-utils.js?v=20260707-frontend-refactor-v1";
 import { compareTableSortableValues, createTableSorter } from "./assets/js/table-sorter.js?v=20260707-frontend-refactor-v1";
+import { createDataTableManager } from "./assets/js/data-table-manager.js?v=20260717-resize-sort-guard-v1";
 import { createAftersalesDashboardFeature } from "./assets/js/features/aftersales-dashboard.js?v=20260706-frontend-refactor-v1";
 import { createAftersalesMailFeature } from "./assets/js/features/aftersales-mail.js?v=20260706-frontend-refactor-v1";
 import { createCashflowDashboardFeature } from "./assets/js/features/cashflow-dashboard.js?v=20260706-frontend-refactor-v1";
@@ -40,19 +42,23 @@ import { createSupplierDetailFeature } from "./assets/js/features/supplier-detai
 import { createPayablesDashboardFeature } from "./assets/js/features/payables-dashboard.js?v=20260706-frontend-refactor-v1";
 import { createReviewRatingFeature } from "./assets/js/features/review-rating.js?v=20260706-frontend-refactor-v1";
 import { createStoreInspectionFeature } from "./assets/js/features/store-inspection.js?v=20260706-frontend-refactor-v1";
-import { createClearanceCalculatorFeature } from "./assets/js/features/clearance-calculator.js?v=20260706-frontend-refactor-v1";
+import { createSlowMovingRiskFeature } from "./assets/js/features/slow-moving-risk.js?v=20260731-slow-moving-risk-v1";
 import { createKnowledgeLibraryFeature } from "./assets/js/features/knowledge-library.js?v=20260706-frontend-refactor-v1";
 import { createAiImageWorkflowFeature } from "./assets/js/features/ai-image-workflow.js?v=20260706-frontend-refactor-v1";
 import { createAdminSettingsFeature } from "./assets/js/features/admin-settings.js?v=20260706-frontend-refactor-v1";
+import { createWebhookAssistantFeature } from "./assets/js/features/webhook-assistant.js?v=20260720-webhook-assistant-v1";
 import { createBudgetTargetsFeature } from "./assets/js/features/budget-targets.js?v=20260706-frontend-refactor-v1";
+import { createStoreOperatingMonthlyReportFeature } from "./assets/js/features/store-operating-monthly-report.js?v=20260805-store-operating-monthly-report-currency-v4";
 import { createSyncCenterFeature } from "./assets/js/features/sync-center.js?v=20260706-frontend-refactor-v1";
-import { createFbaFreightFeature } from "./assets/js/features/fba-freight.js?v=20260706-frontend-refactor-v1";
+import { createFbaFreightFeature } from "./assets/js/features/fba-freight.js?v=20260717-shared-logistics-channels";
+import { createFbaShipmentVarianceFeature } from "./assets/js/features/fba-shipment-variance.js?v=20260803-shipment-variance-v1";
 import { createFbaShopsFeature } from "./assets/js/features/fba-shops.js?v=20260706-frontend-refactor-v1";
 import { createFbaMskuFeature } from "./assets/js/features/fba-msku.js?v=20260707-frontend-refactor-v1";
 import { createFbaAutomationFeature } from "./assets/js/features/fba-automation.js?v=20260707-frontend-refactor-v1";
 import { createFbaTaskFormFeature } from "./assets/js/features/fba-task-form.js?v=20260707-frontend-refactor-v1";
-import { createSalesForecastFeature } from "./assets/js/features/sales-forecast.js?v=20260707-frontend-refactor-v1";
-import { createSalesDashboardFeature } from "./assets/js/features/sales-dashboard.js?v=20260707-frontend-refactor-v1";
+import { createFreightRatesFeature } from "./assets/js/features/freight-rates.js?v=20260724-freight-rate-au-xys";
+import { createSalesForecastFeature } from "./assets/js/features/sales-forecast.js?v=20260713-sales-forecast-locator-v2";
+import { createSalesDashboardFeature } from "./assets/js/features/sales-dashboard.js?v=20260724-sales-owner-detail-jump-v1";
 import { createSidebarShellFeature } from "./assets/js/features/sidebar-shell.js?v=20260707-frontend-refactor-v1";
 import { createTopbarStatusFeature } from "./assets/js/features/topbar-status.js?v=20260707-frontend-refactor-v1";
 import { createBreadcrumbShellFeature } from "./assets/js/features/breadcrumb-shell.js?v=20260707-frontend-refactor-v1";
@@ -68,6 +74,9 @@ import {
 if (!TanjiaUiUtils) {
   throw new Error("TanjiaUiUtils 未加载，请确认 assets/js/ui-utils.js 已在 app.js 前加载。");
 }
+
+installDashboardLoadingFetchOverlay({ root: document });
+installDateRangeAutoRefresh({ root: document });
 
 const {
   bind,
@@ -175,10 +184,12 @@ const {
 } = createFrontShopFilters({
   root: document,
   bind,
+  bindClickOutside,
   fieldValue,
   getFrontDateRange,
   normalizeCountryName,
   onFiltersChange: refreshDashboardFromFilters,
+  onOwnerFilterChange: () => revealMskuDetailPanel(),
   selectedFilterValue,
   selectedFilterValues,
   setSelectOptions,
@@ -201,11 +212,13 @@ const {
 
 let loadAdPerformanceReview = async () => {};
 let loadDashboard = async () => {};
+let revealMskuDetailPanel = () => {};
 let setDefaultAdReviewDates = () => {};
 let setupAdPerformanceReview = () => {};
 let applyFactoryInventorySort = () => {};
 let applyMskuDetailSort = () => {};
 let applySupplierBoardSort = () => {};
+let applyStoreOperatingMonthlyReportSort = () => {};
 let calculateReviewRating = () => {};
 let closeKnowledgeExternalDocument = () => {};
 let collapseSidebar = () => {};
@@ -217,12 +230,14 @@ let loadAdKeywordDashboard = async () => {};
 let setupAdKeywordDashboard = () => {};
 let loadAdminAccounts = async () => {};
 let loadAdminOverview = async () => {};
+let loadWebhookTasks = async () => {};
 let loadAftersalesDashboard = async () => {};
 let loadAftersalesMailDashboard = async () => {};
 let loadBudgetUploads = async () => {};
 let loadBudgetTargets = async () => {};
+let loadStoreOperatingMonthlyReport = async () => {};
 let loadCashflowDashboard = async () => {};
-let loadClearanceView = async () => {};
+let loadSlowMovingRiskView = async () => {};
 let loadInventoryProvision = async () => {};
 let loadKnowledgeLibrary = async () => {};
 let loadLowInventoryFee = async () => {};
@@ -236,6 +251,9 @@ let loadLingxingShops = async () => {};
 let loadSyncStatus = async () => {};
 let loadSalesForecast = async () => {};
 let loadFbaFreightInitial = async () => {};
+let loadFbaShipmentVarianceInitial = async () => {};
+let loadFreightRatesDashboard = async () => {};
+let loadFreightRatesInitial = async () => {};
 let openSupplierDetailModal = () => {};
 let renderPayableDetail = () => {};
 let renderSyncStatus = () => {};
@@ -253,13 +271,17 @@ let setDefaultFactoryInventoryDates = () => {};
 let setDefaultAdPortfolioDate = () => {};
 let setDefaultAdKeywordDate = () => {};
 let setupHomeQuickLinks = () => {};
-let setupClearanceCalculator = () => {};
+let setupSlowMovingRisk = () => {};
 let setupKnowledgeLibrary = () => {};
 let setupAiImageWorkflow = () => {};
 let setupAdminSettings = () => {};
+let setupWebhookAssistant = () => {};
 let setupBreadcrumbNavigation = () => {};
 let setupBudgetTargets = () => {};
+let setupStoreOperatingMonthlyReport = () => {};
 let setupFbaFreight = () => {};
+let setupFbaShipmentVariance = () => {};
+let setupFreightRatesDashboard = () => {};
 let setupFbaShopPicker = () => {};
 let setupReviewRatingCalculator = () => {};
 let setupSalesDashboard = () => {};
@@ -268,6 +290,7 @@ let setupSidebarShell = () => {};
 let setupSyncCenter = () => {};
 let setupStoreInspectionModule = () => {};
 let initializeBudgetDefaults = () => {};
+let initializeStoreOperatingMonthlyReportDefaults = () => {};
 let loadDingtalkAuthUsers = async () => {};
 let setDefaultAftersalesDates = () => {};
 let setupAftersalesDashboard = () => {};
@@ -321,6 +344,8 @@ let getCurrentAuthUser = () => null;
 let loadAuthStatus = async () => ({ enabled: false, authenticated: true });
 let setupAuthShell = () => {};
 let setupTableSortBridge = () => {};
+let setupDataTables = () => {};
+let refreshTable = () => null;
 let makeUnavailableDashboard = (message) => ({
   meta: { syncStatus: message },
   kpis: [],
@@ -339,13 +364,19 @@ let makeUnavailableDashboard = (message) => ({
   getApplyFactoryInventorySort: () => applyFactoryInventorySort,
   getApplyMskuDetailSort: () => applyMskuDetailSort,
   getApplySupplierBoardSort: () => applySupplierBoardSort,
+  getApplyStoreOperatingMonthlyReportSort: () => applyStoreOperatingMonthlyReportSort,
   setTableSortState,
+}));
+({ refreshTable, setupDataTables } = createDataTableManager({
+  root: document,
+  windowRef: window,
 }));
 
 ({
   applyMskuDetailSort,
   loadDashboard,
   makeUnavailableDashboard,
+  revealMskuDetailPanel,
   renderDashboard,
   setupSalesDashboard,
 } = createSalesDashboardFeature({
@@ -671,6 +702,19 @@ async function refreshDashboardFromFilters() {
   trimmedFieldValue,
 }));
 
+({ loadWebhookTasks, setupWebhookAssistant } = createWebhookAssistantFeature({
+  root: document,
+  bind,
+  closestTarget,
+  escapeHtml,
+  fieldValue,
+  renderTableMessage,
+  setButtonBusy,
+  setElementsHidden,
+  setStatusMessage,
+  trimmedFieldValue,
+}));
+
 ({ closeKnowledgeExternalDocument, loadKnowledgeLibrary, setupKnowledgeLibrary } = createKnowledgeLibraryFeature({
   root: document,
   bind,
@@ -698,11 +742,39 @@ async function refreshDashboardFromFilters() {
   formatNumber,
   formatPercent,
   getPacificDateParts,
+  locationRef: location,
   renderTableMessage,
   readFileAsBase64,
   setButtonBusy,
   setText,
   trimmedFieldValue,
+}));
+
+({
+  applyStoreOperatingMonthlyReportSort,
+  initializeStoreOperatingMonthlyReportDefaults,
+  loadStoreOperatingMonthlyReport,
+  setupStoreOperatingMonthlyReport,
+} = createStoreOperatingMonthlyReportFeature({
+  root: document,
+  bind,
+  clickVisibleNavItem,
+  downloadBlob,
+  escapeHtml,
+  fetchImpl: fetch.bind(window),
+  formatActualMoney,
+  getStoreOptions: getFrontShopSellers,
+  historyRef: history,
+  locationRef: location,
+  normalizeCountryName,
+  pickSellerCountry,
+  pickSellerName,
+  refreshTable,
+  selectedFilterValues,
+  setButtonBusy,
+  setSelectOptions,
+  setText,
+  syncAllOptionSelection,
 }));
 
 ({ renderTopbarSyncStatus, syncToneClasses, updateWorldClock } = createTopbarStatusFeature({
@@ -758,7 +830,9 @@ async function refreshDashboardFromFilters() {
   getFrontShopSellers,
   normalizeCountryName,
   onShopChange: (...args) => handleFbaShopSelectionChange(...args),
-  onShopListChange: () => renderFbaFreightShopOptions(),
+  onShopListChange: () => {
+    renderFbaFreightShopOptions();
+  },
   pickSellerCountry,
   pickSellerName,
   setElementsHidden,
@@ -875,6 +949,25 @@ async function refreshDashboardFromFilters() {
   setText,
 }));
 
+({ loadFbaShipmentVarianceInitial, setupFbaShipmentVariance } = createFbaShipmentVarianceFeature({
+  root: document, bind, bindBackdropClose, closestTarget, escapeHtml, fbaValue,
+  fetchImpl: fetch.bind(window), formatDate, formatNumber, getFbaShops, getCurrentAuthUser: () => getCurrentAuthUser(), loadFbaShops,
+  normalizeFbaShop, renderTableMessage, setModalOpenState, setText,
+}));
+
+({ loadFreightRatesDashboard, loadFreightRatesInitial, setupFreightRatesDashboard } = createFreightRatesFeature({
+  root: document,
+  bind,
+  closestTarget,
+  downloadBlob,
+  escapeHtml,
+  fetchImpl: fetch.bind(window),
+  renderTableMessage,
+  setModalOpenState,
+  setText,
+  windowApi: window,
+}));
+
 ({ applyAuthVisibility, getCurrentAuthUser, loadAuthStatus, setupAuthShell } = createAuthShellFeature({
   root: document,
   windowObj: window,
@@ -899,14 +992,15 @@ async function refreshDashboardFromFilters() {
   setText,
 }));
 
-({ loadClearanceView, setupClearanceCalculator } = createClearanceCalculatorFeature({
+({ loadSlowMovingRiskView, setupSlowMovingRisk } = createSlowMovingRiskFeature({
   root: document,
   bind,
+  bindAll,
   escapeHtml,
-  fieldValue,
+  fetchImpl: fetch.bind(window),
   formatActualMoney,
   formatNumber,
-  selectedFilterValue,
+  formatPercent,
   selectedFilterValues,
   setButtonBusy,
   setSelectOptions,
@@ -984,6 +1078,7 @@ function setupNavigation() {
     clearance: "",
     "ai-image-workflow": "",
     "fba-freight": "",
+    "fba-shipment-variance": "",
     "product-progress": "",
     aftersales: "",
     "aftersales-mail": "",
@@ -996,12 +1091,15 @@ function setupNavigation() {
     provision: "",
     lowfee: "",
     cashflow: "",
+    "store-operating-monthly-report": "",
     payables: "",
     guide: "",
     budget: "",
     fba: "",
     admin: "",
+    "webhook-assistant": "",
     sync: "",
+    "freight-rates": "",
   };
 
   setupSidebarShell();
@@ -1011,7 +1109,7 @@ function setupNavigation() {
     if (!isVisibleElement(button)) return;
     const view = button.dataset.view;
     const currentAuthUser = getCurrentAuthUser();
-    if (view === "cashflow" && !canAccessFinance(currentAuthUser)) {
+    if (["cashflow", "store-operating-monthly-report"].includes(view) && !canAccessFinance(currentAuthUser)) {
       applyAuthVisibility(currentAuthUser);
       document.querySelector('.nav-item[data-view="home"]')?.click();
       return;
@@ -1077,7 +1175,7 @@ function setupNavigation() {
       calculateReviewRating();
     }
     if (view === "clearance") {
-      await loadClearanceView();
+      await loadSlowMovingRiskView();
     }
     if (view === "provision") {
       setDefaultInventoryProvisionDate();
@@ -1091,6 +1189,10 @@ function setupNavigation() {
       setDefaultCashflowDates();
       await loadCashflowDashboard();
     }
+    if (view === "store-operating-monthly-report") {
+      initializeStoreOperatingMonthlyReportDefaults();
+      await loadStoreOperatingMonthlyReport();
+    }
     if (view === "payables") {
       await loadPayablesDashboard();
     }
@@ -1103,6 +1205,9 @@ function setupNavigation() {
       loadDingtalkAuthUsers();
       loadKnowledgeLibrary({ renderAdmin: true });
     }
+    if (view === "webhook-assistant") {
+      await loadWebhookTasks();
+    }
     if (view === "budget") {
       loadBudgetUploads();
       loadBudgetTargets();
@@ -1113,6 +1218,10 @@ function setupNavigation() {
     }
     if (view === "fba-freight") {
       await loadFbaFreightInitial();
+    }
+    if (view === "fba-shipment-variance") await loadFbaShipmentVarianceInitial();
+    if (view === "freight-rates") {
+      await loadFreightRatesInitial();
     }
     if (view === "sync") loadSyncStatus();
     if (view === "sync") loadLingxingShops();
@@ -1131,7 +1240,7 @@ function setupNavigation() {
   setupBreadcrumbNavigation();
   setupAuthShell();
   updateNavGroupActiveStates();
-  setupClearanceCalculator();
+  setupSlowMovingRisk();
   setupKnowledgeLibrary();
   setupReviewRatingCalculator();
   setupAiImageWorkflow();
@@ -1152,17 +1261,35 @@ function setupNavigation() {
   setupFrontDateRangeControls();
   setupFrontShopFilterControls();
   initializeFilterDropdowns();
+  setupDataTables();
   setupTableSortBridge();
   setupAdminSettings();
+  setupWebhookAssistant();
+  setupStoreOperatingMonthlyReport();
 
   setupSyncCenter();
   setupFbaFreight();
+  setupFbaShipmentVariance();
+  setupFreightRatesDashboard();
   setupFbaShopPicker();
   setupFbaMskuPicker();
   setupFbaAutomationBoard();
   setupFbaTaskForm();
   setupBudgetTargets();
 
+}
+
+function openRequestedViewFromLocation() {
+  const params = new URLSearchParams(location.search);
+  const requestedView = params.get("view");
+  if (requestedView === "store-operating-monthly-report") {
+    params.delete("view");
+    const suffix = params.toString();
+    history.replaceState({}, "", `${location.pathname}${suffix ? `?${suffix}` : ""}`);
+    return null;
+  }
+  if (requestedView !== "budget") return null;
+  return clickVisibleNavItem(requestedView);
 }
 
 async function init() {
@@ -1184,6 +1311,7 @@ async function init() {
   }
   const authState = await loadAuthStatus({ redirectIfNeeded: true });
   if (authState?.enabled && !authState.authenticated) return;
+  openRequestedViewFromLocation();
   renderHomeQuickLinks();
   resetFrontDateRange();
   renderDashboard(makeUnavailableDashboard("正在读取销售看板真实数据，请稍候。"));
@@ -1195,6 +1323,7 @@ async function init() {
   });
   syncSalesToolbarVisibility(salesActive);
   initializeBudgetDefaults();
+  initializeStoreOperatingMonthlyReportDefaults();
   const pulseDateInput = document.querySelector("#pulse-date");
   if (pulseDateInput && !pulseDateInput.value) pulseDateInput.value = getFrontDateEnd();
   setDefaultInventoryProvisionDate();
@@ -1207,7 +1336,8 @@ async function init() {
       renderDashboard(makeUnavailableDashboard(`销售看板初始化失败：${error.message}`));
     });
 
-  Promise.allSettled([loadSyncStatus(), loadLingxingShops()]);
+  Promise.allSettled([loadSyncStatus(), loadLingxingShops()])
+    .then(() => initializeStoreOperatingMonthlyReportDefaults());
 
   Promise.allSettled([
     loadAdminOverview(),
