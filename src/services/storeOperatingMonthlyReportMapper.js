@@ -263,6 +263,16 @@ function sumPresent(records, fields, magnitude = false, label = fields.join("/")
   }, 0);
 }
 
+function sumAvailable(records, fields, magnitude = false, label = fields.join("/") || "字段") {
+  if (records.length === 0) return null;
+  const values = records.map((row) => readValue(row, fields)).filter(isPresent);
+  if (!values.length) return null;
+  return values.reduce((sum, value) => {
+    const number = toFiniteNumber(value, `订单利润字段 ${label}`);
+    return sum + (magnitude ? Math.abs(number) : number);
+  }, 0);
+}
+
 function sumCompositeFields(records, fieldGroups, magnitude = false, label = "字段") {
   if (records.length === 0) return null;
   const values = records.map((row) => fieldGroups.map((fields) => readValue(row, fields)).filter(isPresent));
@@ -401,14 +411,15 @@ export function buildStoreOperatingReportRows({ records, budgetByMetric = {}, cu
 
   const actualByKey = new Map();
   METRIC_DEFINITIONS.filter((metric) => !metric.derived).forEach((metric) => {
+    const sumMetric = metric.category === "custom-expense" ? sumAvailable : sumPresent;
     const actual = metric.key === "offsite-ad-spend"
       ? (sumCompositeFields(records, [["customOrderFeePrincipal", "custom_order_fee_principal"], ["customOrderFeeCommission", "custom_order_fee_commission"]], metric.magnitude, "customOrderFeePrincipal/customOrderFeeCommission")
-        ?? sumPresent(records, metric.fields, metric.magnitude, metric.fields[0]))
-      : sumPresent(records, metric.fields, metric.magnitude, metric.fields[0]);
+        ?? sumMetric(records, metric.fields, metric.magnitude, metric.fields[0]))
+      : sumMetric(records, metric.fields, metric.magnitude, metric.fields[0]);
     actualByKey.set(metric.key, actual);
   });
   LEGACY_CUSTOM_METRIC_DEFINITIONS.forEach(([key, fields]) => {
-    if (!actualByKey.has(key)) actualByKey.set(key, sumPresent(records, fields, key !== "non-operating-income", fields[0]));
+    if (!actualByKey.has(key)) actualByKey.set(key, sumAvailable(records, fields, key !== "non-operating-income", fields[0]));
   });
 
   const rawNetSales = sumPresent(records, NET_SALES_FIELDS, false, "netSalesAmount");
