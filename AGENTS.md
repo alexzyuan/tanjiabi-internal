@@ -51,7 +51,7 @@ Default ownership:
 Production deploys are package-based, so the deployment source branch must be guarded before the archive reaches the server.
 
 1. Generate deploy packages only from a clean, committed worktree.
-2. The current production branch is `codex/yesterday-plus-webhook` unless the operator explicitly sets `PRODUCTION_DEPLOY_BRANCH`.
+2. The current production branch is `main` unless the operator explicitly sets `PRODUCTION_DEPLOY_BRANCH`.
 3. `scripts/package-deploy.js` must require `DEPLOY_CONFIRM_BRANCH=<current branch>` and write `.deploy-manifest.json` with branch, commit, clean state, CSS mode, and confirmed branch.
 4. `deploy.sh` must reject archives without `.deploy-manifest.json`, archives from an unconfirmed branch, or archives whose branch differs from `PRODUCTION_DEPLOY_BRANCH` unless `ALLOW_NON_PRODUCTION_DEPLOY=1` is explicitly set.
 5. Do not bypass these guards by hand-copying runtime files into `/opt/tanjia-bi`.
