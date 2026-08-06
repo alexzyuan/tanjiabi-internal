@@ -80,7 +80,7 @@ bash deploy.sh
 正式部署包必须从当前生产分支打包，并显式确认分支：
 
 ```bash
-DEPLOY_CONFIRM_BRANCH=codex/yesterday-plus-webhook npm run package:deploy
+DEPLOY_CONFIRM_BRANCH=main npm run package:deploy
 ```
 
 服务器会校验部署包内的 `.deploy-manifest.json`，确认分支、提交、干净工作区状态、部署文件哈希，并逐项核对首页侧边栏全部板块和对应页面容器，避免从错误分支或不完整部署包覆盖线上版本。
