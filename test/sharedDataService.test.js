@@ -85,6 +85,24 @@ test("共享商品目录读取产品管理物流报关清关嵌套字段", () =>
   assert.equal(product.declaredValue, 2);
 });
 
+test("共享商品目录将领星普货属性码 8 标准化为非带电", () => {
+  const map = buildSharedProductCatalogMap({
+    sourceRows: [{ sid: 11500, msku: "MD-889-382", sku: "TJ040" }],
+    listingRecords: [{
+      sid: 11500,
+      seller_sku: "MD-889-382",
+      local_sku: "TJ040",
+    }],
+    productRecords: [{
+      sku: "TJ040",
+      special_attr: ["8"],
+    }],
+  });
+
+  const product = map.get(listingMskuCatalogKey(11500, "MD-889-382"));
+  assert.equal(product.isBattery, "否");
+});
+
 test("共享商品目录通过 listing seller_sku 映射到领星内部 SKU", () => {
   const map = buildSharedProductCatalogMap({
     sourceRows: [{ sid: 8708, msku: "JMCA-DGC-Spider", sku: "JMCA-DGC-Spider" }],

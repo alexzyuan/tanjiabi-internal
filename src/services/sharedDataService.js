@@ -225,7 +225,17 @@ function readBatteryDeclaration(record = {}) {
     : Array.isArray(record.specialAttr)
       ? record.specialAttr
       : [];
-  return specialAttrs.map((value) => String(value).trim()).includes("1") ? "是" : "";
+  const codes = specialAttrs.map((value) => String(value).trim()).filter(Boolean);
+  if (codes.includes("1")) return "是";
+  if (codes.includes("8")) return "否";
+  if (codes.length) {
+    console.warn("[shared-product-catalog] 未识别产品带电属性码", {
+      sku: readFirst(record, ["sku", "local_sku", "localSku", "product_sku"]),
+      productId: readFirst(record, ["product_id", "productId", "local_product_id", "localProductId"]),
+      specialAttrs: codes,
+    });
+  }
+  return "";
 }
 
 function readArrayText(value) {
