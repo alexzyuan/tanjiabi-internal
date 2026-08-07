@@ -17,7 +17,8 @@ test("store operating monthly report is a finance-owned feature with shared cont
   assert.match(financeGroup, />店铺经营月报</);
   assert.match(indexSource, /id="view-store-operating-monthly-report"/);
   assert.match(indexSource, /id="store-operating-report-store" multiple/);
-  assert.match(indexSource, /id="store-operating-report-country" multiple/);
+  assert.match(indexSource, /id="store-operating-report-country"[^>]*multiple/);
+  assert.match(indexSource, /id="store-operating-report-country"[^>]*data-filter-clear-target="#store-operating-report-store"/);
   assert.match(indexSource, /id="store-operating-report-currency"[^>]*>\s*<option value="CNY" selected>人民币/);
   assert.match(indexSource, /id="store-operating-report-row-visibility"/);
   assert.match(indexSource, /class="modal-backdrop" id="store-operating-report-row-visibility-modal"/);

@@ -203,6 +203,7 @@ font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
 - 当 .filters 或 .filter-toolbar 紧跟 .module-hero 后面时，筛选栏必须使用共享 sticky 规则固定在 topbar 下方；页面 CSS 不得为单个板块重复写 sticky 筛选栏规则。
 - 所有当前站点的读取型 `/api/*` 请求都由 `assets/js/dashboard-loader.js` 的全局页面加载器统一呈现。请求超过 300ms 时，只在当前活动页面的数据区显示遮罩、状态文案与进度条；侧边栏、顶部栏和筛选栏保持可操作。加载器优先使用 `.dashboard-loading-scope`，否则从当前页面首个筛选栏下方开始覆盖；已使用 `loadDashboardSection()` 的模块不得另行产生第二层遮罩。
 - checkbox 型筛选使用 `.checkbox-label`，由共享筛选栏规则统一控制字号、间距和 checkbox 尺寸。
+- 增强型多选筛选在存在具体选项时，鼠标悬停控件右侧显示清除图标；点击后恢复该筛选的“全部”选项。国家筛选通过 `data-filter-clear-target` 声明关联店铺，清除国家时必须同时恢复“全部国家”和“全部店铺”；清除店铺时只恢复“全部店铺”，保留当前国家。
 - 页面级 CSS 不允许重新定义 `.filters` / `.filter-toolbar` / `*-filters` / `*-toolbar` 的 `display`、`grid-template-*`、`gap`、`padding`、`border`、控件高度、控件边框、focus 样式或日期控件宽度。页面可以控制筛选栏是否显示，也可以调整所在业务面板、KPI、表格和图表布局。
 - 结构测试会扫描 page CSS，防止新页面继续用页面私有规则覆盖共享筛选栏基线。
 

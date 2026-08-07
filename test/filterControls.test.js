@@ -33,9 +33,9 @@ function selectedValues(select) {
   return select.selectedValues.slice();
 }
 
-function makeCountryStoreControls({ selectedFilterValues, setSelectOptions } = {}) {
+function makeCountryStoreControls({ selectedFilterValues, setSelectOptions, querySelector = () => null } = {}) {
   const controls = createFilterControls({
-    root: { querySelector() { return null; } },
+    root: { querySelector },
     globalObject: {},
     normalizeCountryName: (country) => country,
     normalizeFilterOptions: (options) => options,
@@ -46,6 +46,28 @@ function makeCountryStoreControls({ selectedFilterValues, setSelectOptions } = {
     escapeHtml: (value) => String(value),
   });
   return { controls };
+}
+
+function makeClearableSelect({ selectedValues = [], clearTarget = "" } = {}) {
+  const options = [
+    { value: "", selected: selectedValues.length === 0 },
+    { value: "one", selected: selectedValues.includes("one") },
+    { value: "two", selected: selectedValues.includes("two") },
+  ];
+  const changeEvents = [];
+  return {
+    multiple: true,
+    dataset: clearTarget ? { filterClearTarget: clearTarget } : {},
+    options,
+    get selectedOptions() {
+      return options.filter((option) => option.selected);
+    },
+    dispatchEvent(event) {
+      changeEvents.push(event.type);
+      return true;
+    },
+    changeEvents,
+  };
 }
 
 function makeSelect(allLabel, selectedLabels) {
@@ -167,6 +189,31 @@ test("filter dropdown renders the all option as its first selectable checkbox", 
   assert.match(container.innerHTML, /^\s*<label[^>]*>\s*<input type="checkbox" value="" checked/);
   assert.match(container.innerHTML, /<span>全部国家<\/span>/);
   assert.match(container.innerHTML, /<input type="checkbox" value="美国"/);
+});
+
+test("clearing a selected filter restores its all option and emits a change", () => {
+  const select = makeClearableSelect({ selectedValues: ["one"] });
+  const { controls } = makeCountryStoreControls();
+
+  controls.clearFilterDropdownSelection(select);
+
+  assert.deepEqual(select.selectedOptions.map((option) => option.value), [""]);
+  assert.deepEqual(select.changeEvents, ["change"]);
+});
+
+test("clearing a country filter also restores its linked store filter", () => {
+  const countrySelect = makeClearableSelect({ selectedValues: ["one"], clearTarget: "#store-filter" });
+  const storeSelect = makeClearableSelect({ selectedValues: ["one", "two"] });
+  const { controls } = makeCountryStoreControls({
+    querySelector: (selector) => selector === "#store-filter" ? storeSelect : null,
+  });
+
+  controls.clearFilterDropdownSelection(countrySelect);
+
+  assert.deepEqual(countrySelect.selectedOptions.map((option) => option.value), [""]);
+  assert.deepEqual(storeSelect.selectedOptions.map((option) => option.value), [""]);
+  assert.deepEqual(countrySelect.changeEvents, ["change"]);
+  assert.deepEqual(storeSelect.changeEvents, []);
 });
 
 test("filter dropdown menu aligns to its end edge when its start edge would exceed the viewport", () => {

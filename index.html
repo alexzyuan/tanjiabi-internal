@@ -251,7 +251,7 @@
         <section class="filters" id="sales-global-filters" aria-label="筛选条件" hidden>
           <label>
             国家
-            <select id="front-country-filter" multiple size="3">
+            <select id="front-country-filter" data-filter-clear-target="#front-shop-filter" multiple size="3">
               <option value="">全部国家</option>
             </select>
           </label>
@@ -788,7 +788,7 @@
             <label>日期类型<select id="cashflow-date-type"><option value="0">结算开始日</option><option value="estimatedTransferDate">预计转账日</option></select></label>
             <label>币种<select id="cashflow-currency"><option value="ORIGINAL">站点原币</option><option value="CNY">人民币 CNY</option></select></label>
             <label>状态<select id="cashflow-status"><option value="Open">待结算</option><option value="Closed">已结算</option></select></label>
-            <label>国家<select id="cashflow-country" multiple size="3"><option value="">全部国家</option></select></label>
+            <label>国家<select id="cashflow-country" data-filter-clear-target="#cashflow-store" multiple size="3"><option value="">全部国家</option></select></label>
             <label>店铺<select id="cashflow-store" multiple size="4"><option value="">全部店铺</option></select></label>
           </section>
           <section class="module-grid cashflow-metrics">
@@ -835,7 +835,7 @@
           </section>
           <section class="filters" aria-label="店铺经营月报筛选">
             <label>日期范围<div class="date-range-control"><button id="store-operating-report-date-range-button" class="date-range-button date-range-picker__trigger" type="button">选择日期范围</button><input id="store-operating-report-start-date" type="hidden" /><input id="store-operating-report-end-date" type="hidden" /><div class="date-range-popover date-range-picker__popover" id="store-operating-report-date-range-popover" hidden></div></div></label>
-            <label>国家<select id="store-operating-report-country" multiple size="3"><option value="">全部国家</option></select></label>
+            <label>国家<select id="store-operating-report-country" data-filter-clear-target="#store-operating-report-store" multiple size="3"><option value="">全部国家</option></select></label>
             <label>店铺<select id="store-operating-report-store" multiple size="4"><option value="">全部店铺</option></select></label>
             <label>币种<select id="store-operating-report-currency"><option value="CNY" selected>人民币（CNY）</option><option value="ORIGINAL">原币分币种</option></select></label>
             <button class="primary-button" id="store-operating-report-query" type="button">查询</button>
@@ -1096,7 +1096,7 @@
 	            <label>统计维度<select id="supplier-board-dimension"><option value="month" selected>按月</option><option value="year">按年</option></select></label>
 	            <label><span id="supplier-board-start-label">开始月份</span><input id="supplier-board-start-date" type="text" inputmode="numeric" placeholder="2025-01" /></label>
 	            <label><span id="supplier-board-end-label">结束月份</span><input id="supplier-board-end-date" type="text" inputmode="numeric" placeholder="2025-12" /></label>
-	            <label>国家<select id="supplier-board-country" multiple size="3"><option value="">全部国家</option></select></label>
+	            <label>国家<select id="supplier-board-country" data-filter-clear-target="#supplier-board-store" multiple size="3"><option value="">全部国家</option></select></label>
 	            <label>店铺<select id="supplier-board-store" multiple size="4"><option value="">全部店铺</option></select></label>
 	            <label>供应商<input id="supplier-board-supplier" type="search" placeholder="输入供应商关键词" /></label>
 	            <label>MSKU / SKU<input id="supplier-board-keyword" type="search" placeholder="输入 MSKU、SKU、品名" /></label>
@@ -1280,7 +1280,7 @@
             </div>
           </section>
 	          <section class="filters sales-forecast-filters" aria-label="销售预估筛选">
-	            <label>国家<select id="sales-forecast-country" multiple size="3"><option value="">全部国家</option><option value="美国">美国</option><option value="加拿大">加拿大</option><option value="澳洲">澳洲</option></select></label>
+	            <label>国家<select id="sales-forecast-country" data-filter-clear-target="#sales-forecast-store" multiple size="3"><option value="">全部国家</option><option value="美国">美国</option><option value="加拿大">加拿大</option><option value="澳洲">澳洲</option></select></label>
 	            <label>店铺<select id="sales-forecast-store" multiple size="4"><option value="">全部店铺</option></select></label>
 	            <label>关键词<input id="sales-forecast-keyword" type="search" placeholder="产品 / MSKU" /></label>
 	          </section>
@@ -1328,7 +1328,7 @@
           </section>
           <section class="filters inventory-filters" aria-label="库存计提筛选">
             <label>月份<input id="inventory-provision-date" type="month" /></label>
-            <label>国家<select id="inventory-provision-country" multiple size="3"><option value="">全部国家</option></select></label>
+            <label>国家<select id="inventory-provision-country" data-filter-clear-target="#inventory-provision-store" multiple size="3"><option value="">全部国家</option></select></label>
             <label>店铺<select id="inventory-provision-store" multiple size="4"><option value="">全部店铺</option></select></label>
             <label>成本计算<select id="inventory-provision-cost-mode"><option value="purchase">采购成本</option><option value="landed">采购成本 + 单位头程费用</option></select></label>
             <label>MSKU<input id="inventory-provision-keyword" type="search" placeholder="输入 MSKU 或商品名" /></label>
@@ -1396,7 +1396,7 @@
           </section>
           <section class="filters inventory-filters" aria-label="低库存费筛选">
             <label>日期<input id="lowfee-date" type="date" /></label>
-            <label>国家<select id="lowfee-country" multiple size="3"><option value="">全部国家</option></select></label>
+            <label>国家<select id="lowfee-country" data-filter-clear-target="#lowfee-store" multiple size="3"><option value="">全部国家</option></select></label>
             <label>店铺<select id="lowfee-store" multiple size="4"><option value="">全部店铺</option></select></label>
             <label>显示范围<select id="lowfee-only-risk"><option value="1">只看预警</option><option value="0">全部MSKU</option></select></label>
             <label>FNSKU/MSKU<input id="lowfee-keyword" type="search" placeholder="输入 FNSKU、MSKU 或商品名" /></label>
@@ -2010,7 +2010,7 @@
           </section>
           <section id="slow-moving-risk-live-panel" class="slow-moving-risk-panel" role="tabpanel" aria-labelledby="slow-moving-risk-live-tab" data-slow-moving-risk-panel="live" hidden>
             <section class="filters slow-moving-risk-filters" aria-label="日常预警筛选">
-              <label>国家<select id="slow-moving-risk-country-filter" multiple size="3"><option value="">全部国家</option></select></label>
+              <label>国家<select id="slow-moving-risk-country-filter" data-filter-clear-target="#slow-moving-risk-store-filter" multiple size="3"><option value="">全部国家</option></select></label>
               <label>店铺<select id="slow-moving-risk-store-filter" multiple size="4"><option value="">全部店铺</option></select></label>
               <label>运营<select id="slow-moving-risk-owner-filter"><option value="">全部运营</option></select></label>
               <label>风险<select id="slow-moving-risk-level-filter"><option value="">全部等级</option><option value="强制处置">强制处置</option><option value="高风险">高风险</option><option value="关注">关注</option><option value="正常">正常</option></select></label>

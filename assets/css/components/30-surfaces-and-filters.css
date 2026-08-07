@@ -85,6 +85,43 @@ body:not(.login-body) .view > .module-hero + :is(.filters, .filter-toolbar) {
   min-width: 0;
 }
 
+.filter-dropdown--has-selection .filter-dropdown-button {
+  padding-right: calc(var(--tj-control-padding-x) + 28px);
+}
+
+.filter-dropdown-clear {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  display: none;
+  place-items: center;
+  width: 28px;
+  height: calc(var(--tj-control-height-compact) - 2px);
+  border: 0;
+  color: var(--tj-text-muted);
+  background: var(--tj-content-bg);
+  cursor: pointer;
+  font-size: 26px;
+}
+
+.filter-dropdown--has-selection:hover .filter-dropdown-clear,
+.filter-dropdown-clear:focus-visible {
+  display: grid;
+}
+
+.filter-dropdown--has-selection:hover .filter-dropdown-button::after {
+  content: none;
+}
+
+.filter-dropdown-clear:hover {
+  color: var(--tj-text-body);
+}
+
+.filter-dropdown-clear:focus-visible {
+  outline: 0;
+  box-shadow: var(--tj-focus-ring);
+}
+
 .filters .date-range-control {
   width: 100%;
 }
