@@ -202,6 +202,21 @@ export function createFilterControls({
     renderFilterDropdown(select);
   }
 
+  function syncCountryStoreSelection({ countrySelect, storeSelect, storeOptions = [], setSelectOptionsImpl = setSelectOptions } = {}) {
+    if (!countrySelect) throw new Error("syncCountryStoreSelection requires a country select.");
+    if (!storeSelect) throw new Error("syncCountryStoreSelection requires a store select.");
+    if (!Array.isArray(storeOptions)) throw new Error("syncCountryStoreSelection requires storeOptions to be an array.");
+    if (typeof setSelectOptionsImpl !== "function") throw new Error("syncCountryStoreSelection requires a setSelectOptions implementation.");
+
+    syncAllOptionSelection(countrySelect);
+    const countries = selectedFilterValues(countrySelect);
+    setSelectOptionsImpl(storeSelect, storeOptions, "全部店铺", {
+      groupByCountry: true,
+      countries,
+      selectAllVisible: countries.length > 0,
+    });
+  }
+
   return {
     createFilterDropdown,
     handleFilterDropdownOptionChange,
@@ -210,6 +225,7 @@ export function createFilterControls({
     selectedFilterLabels,
     setSelectOptions,
     syncAllOptionSelection,
+    syncCountryStoreSelection,
     updateFilterDropdownButton,
   };
 }
