@@ -352,8 +352,9 @@ export async function getStoreOperatingMonthlyReport(filters, {
         throw new Error("领星适配器缺少店铺利润自定义费用读取能力");
       }
       const sellerProfitPayload = await adapter.fetchSellerProfitReport({
-        startDate,
-        endDate,
+        // 店铺利润接口的 monthlyQuery 只接受 yyyy-MM；订单利润仍使用精确日范围。
+        startDate: month,
+        endDate: month,
         sids: sellers.map((seller) => seller.sid),
         currencyCode: currencyMode === "CNY" ? "CNY" : "ORIGINAL",
         monthlyQuery: true,

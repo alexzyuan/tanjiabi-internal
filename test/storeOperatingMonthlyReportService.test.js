@@ -114,8 +114,8 @@ test("monthly report sends exact partial-month boundaries for a date range", asy
   const sellerProfitCall = calls.find((call) => call.source === "seller-profit");
   assert.equal(orderProfitCall.startDate, "2026-08-01");
   assert.equal(orderProfitCall.endDate, "2026-08-07");
-  assert.equal(sellerProfitCall.startDate, "2026-08-01");
-  assert.equal(sellerProfitCall.endDate, "2026-08-07");
+  assert.equal(sellerProfitCall.startDate, "2026-08");
+  assert.equal(sellerProfitCall.endDate, "2026-08");
 });
 
 test("monthly report splits a cross-month date range at natural month boundaries", async () => {
@@ -132,9 +132,14 @@ test("monthly report splits a cross-month date range at natural month boundaries
   );
 
   const orderProfitCalls = calls.filter((call) => call.source !== "seller-profit");
+  const sellerProfitCalls = calls.filter((call) => call.source === "seller-profit");
   assert.deepEqual(orderProfitCalls.map(({ startDate, endDate }) => ({ startDate, endDate })), [
     { startDate: "2026-07-20", endDate: "2026-07-31" },
     { startDate: "2026-08-01", endDate: "2026-08-07" },
+  ]);
+  assert.deepEqual(sellerProfitCalls.map(({ startDate, endDate }) => ({ startDate, endDate })), [
+    { startDate: "2026-07", endDate: "2026-07" },
+    { startDate: "2026-08", endDate: "2026-08" },
   ]);
 });
 
