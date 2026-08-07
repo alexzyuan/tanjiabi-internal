@@ -556,13 +556,13 @@ export function createStoreOperatingMonthlyReportFeature({
         const categoryKey = Number(row.level) === 2 ? categoryByDetail.get(String(row.key || "")) || "" : "";
         const isExpandableCategory = String(row.key || "") !== "gross-profit" && reportCategoryHasDetails(row, rowsByKey);
         const isExpanded = expandedReportCategories.has(String(row.key || ""));
-        const rowName = Number(row.level) === 1 && !String(row.name || "").endsWith("小计")
+        const rowName = Number(row.level) === 1 && String(row.key || "") !== "sales-net" && !String(row.name || "").endsWith("小计")
           ? `${row.name || "—"}小计`
           : String(row.name || "—");
         const nameCell = isExpandableCategory
           ? `<button class="store-operating-report-disclosure" type="button" data-report-category-toggle="${escapeHtml(row.key || "")}" aria-expanded="${isExpanded ? "true" : "false"}" aria-label="${escapeHtml(`${isExpanded ? "收起" : "展开"}${rowName}`)}"><span aria-hidden="true">${isExpanded ? "▾" : "▸"}</span>${escapeHtml(rowName)}</button>`
           : escapeHtml(rowName);
-        const resultRow = ["net-sales", "gross-profit", "gross-rate", "net-gross-rate", "profit"].includes(String(row.key || ""));
+        const resultRow = ["net-sales", "sales-net", "gross-profit", "gross-rate", "net-gross-rate", "profit"].includes(String(row.key || ""));
         const formatReportCell = (metric, value, groupRow) => {
           if (value === null || value === undefined || value === "") return "—";
           if (metric === "actual" && groupRow?.valueType === "text") return String(value);

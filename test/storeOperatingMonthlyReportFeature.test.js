@@ -509,6 +509,26 @@ test("monthly report renders毛利润 directly for the profit section", async ()
   assert.doesNotMatch(body, /净毛利率/);
 });
 
+test("monthly report renders sales net between platform income and expense without a disclosure", async () => {
+  const rows = [
+    { key: "overview", category: "总概", name: "总概", level: 0, children: ["platform-income", "sales-net", "platform-expense"] },
+    { key: "platform-income", category: "平台收入", name: "平台收入", level: 1, actual: 200, children: [] },
+    { key: "sales-net", category: "销售净额", name: "销售净额", level: 1, actual: 155, share: 0.775, children: [] },
+    { key: "platform-expense", category: "平台支出", name: "平台支出", level: 1, actual: 80, children: [] },
+  ];
+  const { feature, elements } = makeFeatureHarness({
+    groups: [{ currencyCode: "CNY", rows }],
+  });
+
+  await feature.loadStoreOperatingMonthlyReport();
+
+  const body = elements["#store-operating-report-body"].innerHTML;
+  assert.match(body, /data-report-row-key="platform-income"[\s\S]*?data-report-row-key="sales-net"[\s\S]*?data-report-row-key="platform-expense"/);
+  assert.match(body, /data-report-row-key="sales-net"[\s\S]*?>销售净额<\/td>/);
+  assert.doesNotMatch(body, /销售净额小计/);
+  assert.doesNotMatch(body, /data-report-category-toggle="sales-net"/);
+});
+
 test("export surfaces structured server diagnostics", async () => {
   let callCount = 0;
   const { feature, elements } = makeFeatureHarness({

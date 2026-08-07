@@ -69,6 +69,8 @@ const CATEGORIES = [
   ["custom-expense", "自定义费用"],
   ["profit", "利润"],
 ];
+const SALES_NET_KEY = "sales-net";
+const SALES_NET_NAME = "销售净额";
 
 export function listStoreOperatingMonthlyReportMetricDefinitions() {
   const categoryNames = new Map(CATEGORIES);
@@ -473,6 +475,11 @@ export function buildStoreOperatingReportRows({ records, budgetByMetric = {}, cu
   const salesVolume = actualByKey.get("sales-volume");
   const netSales = rawNetSales ?? deriveFromRequiredChildren(actualByKey, ["sales-income", "sales-discount", "refunds"], ([income, discount, refunds]) => income - discount - refunds);
   actualByKey.set("net-sales", netSales);
+  actualByKey.set(SALES_NET_KEY, deriveFromRequiredChildren(
+    actualByKey,
+    ["net-sales", "buyer-shipping-fee", "refunds", "fba-inventory-compensation", "other-income"],
+    ([net, buyerShipping, refunds, inventoryCompensation, otherIncome]) => net + buyerShipping - refunds + inventoryCompensation + otherIncome,
+  ));
   actualByKey.set("average-daily-sales", periodDays > 0 && salesVolume !== null ? salesVolume / periodDays : null);
   actualByKey.set("return-cost", sumReturnCosts(records));
   actualByKey.set("net-sales-cost", deriveFromRequiredChildren(actualByKey, ["purchase-cost", "return-cost"], ([purchaseCost, returnCost]) => purchaseCost - returnCost));
@@ -547,17 +554,30 @@ export function buildStoreOperatingReportRows({ records, budgetByMetric = {}, cu
       ? toFiniteNumber(budgetByMetric["sales-profit"], "预算科目 sales-profit")
       : null,
   }, salesIncome));
+  const salesNetRow = createRow({
+    key: SALES_NET_KEY,
+    category: SALES_NET_NAME,
+    name: SALES_NET_NAME,
+    level: 1,
+    actual: actualByKey.get(SALES_NET_KEY) ?? null,
+    children: [],
+    budget: null,
+  }, salesIncome);
+  const overviewChildren = CATEGORIES.flatMap(([key]) => (
+    key === "platform-income" ? [key, SALES_NET_KEY] : [key]
+  ));
   const overview = createRow({
     key: "overview",
     category: "总概",
     name: "总概",
     level: 0,
     actual: null,
-    children: CATEGORIES.map(([key]) => key),
+    children: overviewChildren,
   }, salesIncome);
   const rows = [overview, ...categoryRows.flatMap((category) => [
     category,
     ...metricRows.filter((metric) => metric.category === category.name),
+    ...(category.key === "platform-income" ? [salesNetRow] : []),
   ])];
 
   const metricByKey = new Map(METRIC_DEFINITIONS.map((metric) => [metric.key, metric]));

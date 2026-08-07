@@ -171,7 +171,7 @@ test("monthly report exposes the five Lingxing-aligned top-level projects", () =
     currencyCode: "CNY",
   });
 
-  const levelOne = result.rows.filter((row) => row.level === 1);
+  const levelOne = result.rows.filter((row) => row.level === 1 && row.key !== "sales-net");
   assert.deepEqual(levelOne.filter((row) => row.key !== "basic-info").map((row) => row.name), [
     "平台收入",
     "平台支出",
@@ -267,6 +267,7 @@ test("monthly report uses the exact Lingxing subject and detail order from the a
     "退款量",
     "FBA库存赔偿",
     "其它收入",
+    "销售净额",
     "平台支出",
     "平台费",
     "FBA发货费",
@@ -327,6 +328,29 @@ test("monthly report maps the OrderProfit income fields returned by Lingxing", (
   assert.equal(row("buyer-shipping-fee").available, true);
   assert.equal(row("fba-inventory-compensation").available, true);
   assert.equal(row("other-income").available, true);
+});
+
+test("monthly report inserts derived sales net between platform income and expense", () => {
+  const result = buildStoreOperatingReportRows({
+    records: [{
+      amount: 200,
+      net_amount: 150,
+      shipping_cost: 20,
+      refund_amount: -30,
+      inventory_credit: 5,
+      total_other_granted: 10,
+    }],
+    currencyCode: "CNY",
+  });
+  const row = (key) => result.rows.find((item) => item.key === key);
+  const levelOneKeys = result.rows.filter((item) => item.level === 1).map((item) => item.key);
+
+  assert.equal(row("sales-net").name, "销售净额");
+  assert.equal(row("sales-net").actual, 155);
+  assert.equal(row("sales-net").share, 155 / 200);
+  assert.deepEqual(row("sales-net").children, []);
+  assert.deepEqual(levelOneKeys.slice(0, 3), ["platform-income", "sales-net", "platform-expense"]);
+  assert.deepEqual(result.rows.find((item) => item.key === "overview").children.slice(0, 3), ["platform-income", "sales-net", "platform-expense"]);
 });
 
 test("unavailable metrics expose their missing OrderProfit source fields", () => {
@@ -583,7 +607,7 @@ test("profit chain uses sales income as the percentage base and derives return c
   assert.equal(row("gross-profit").actual, 58);
   assert.deepEqual(row("profit").children, ["gross-profit", "gross-rate", "net-gross-rate"]);
   const categoryKeys = result.rows.filter((item) => item.level === 1).map((item) => item.key);
-  assert.deepEqual(categoryKeys, ["platform-income", "platform-expense", "product-cost-expense", "custom-expense", "profit"]);
+  assert.deepEqual(categoryKeys, ["platform-income", "sales-net", "platform-expense", "product-cost-expense", "custom-expense", "profit"]);
 });
 
 test("direct return-cost fields keep expense magnitudes positive", () => {
