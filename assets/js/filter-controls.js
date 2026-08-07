@@ -152,7 +152,7 @@ export function createFilterControls({
           </div>
         `;
       }
-      if (node.tagName === "OPTION" && node.value) return renderOption(node);
+      if (node.tagName === "OPTION") return renderOption(node);
       return "";
     }).join("");
     container.innerHTML = rendered || `<div class="filter-dropdown-empty">暂无可选项</div>`;

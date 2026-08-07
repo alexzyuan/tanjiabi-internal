@@ -55,6 +55,54 @@ function makeSelect(allLabel, selectedLabels) {
   };
 }
 
+function makeRenderableFilterSelect() {
+  const allOption = { tagName: "OPTION", value: "", textContent: "全部国家", selected: true };
+  const countryOption = { tagName: "OPTION", value: "美国", textContent: "美国", selected: false };
+  const label = { textContent: "" };
+  const button = {
+    querySelector(selector) {
+      return selector === ".filter-dropdown-button-label" ? label : null;
+    },
+    setAttribute() {},
+  };
+  const container = { innerHTML: "" };
+  const dropdown = {
+    classList: { contains(className) { return className === "filter-dropdown"; } },
+    innerHTML: "",
+    querySelector(selector) {
+      return {
+        ".filter-dropdown-button": button,
+        ".filter-dropdown-options": container,
+        ".filter-dropdown-menu": { hidden: true },
+      }[selector] || null;
+    },
+  };
+  const select = {
+    multiple: true,
+    options: [allOption, countryOption],
+    childNodes: [allOption, countryOption],
+    selectedOptions: [allOption],
+    classList: { add() {} },
+    nextElementSibling: null,
+    insertAdjacentElement(_position, element) {
+      this.nextElementSibling = element;
+    },
+  };
+  const controls = createFilterControls({
+    root: { createElement: () => dropdown },
+    globalObject: {},
+    bind() {},
+    closestTarget() { return null; },
+    escapeHtml: (value) => String(value),
+    normalizeCountryName: (value) => value,
+    normalizeFilterOptions: (options) => options,
+    selectedFilterValues: () => [],
+    setDisclosureGroupState() {},
+    setDisclosureState() {},
+  });
+  return { controls, container, select };
+}
+
 test("filter dropdown summary shows the all label when no value is selected", () => {
   assert.deepEqual(getFilterDropdownSummary(makeSelect("全部店铺", [])), {
     text: "全部店铺",
@@ -109,6 +157,16 @@ test("filter dropdown summary normalizes whitespace in selected labels", () => {
     accessibleText: "已选 1 项：tandanbo CA",
     title: "tandanbo CA",
   });
+});
+
+test("filter dropdown renders the all option as its first selectable checkbox", () => {
+  const { controls, container, select } = makeRenderableFilterSelect();
+
+  controls.renderFilterDropdown(select);
+
+  assert.match(container.innerHTML, /^\s*<label[^>]*>\s*<input type="checkbox" value="" checked/);
+  assert.match(container.innerHTML, /<span>全部国家<\/span>/);
+  assert.match(container.innerHTML, /<input type="checkbox" value="美国"/);
 });
 
 test("filter dropdown menu aligns to its end edge when its start edge would exceed the viewport", () => {
