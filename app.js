@@ -597,7 +597,6 @@ async function refreshDashboardFromFilters() {
   setSelectOptions,
   setText,
   syncAllOptionSelection,
-  syncCountryStoreSelection,
 }));
 
 ({
@@ -779,6 +778,7 @@ async function refreshDashboardFromFilters() {
   setSelectOptions,
   setText,
   syncAllOptionSelection,
+  syncCountryStoreSelection,
 }));
 
 ({ renderTopbarSyncStatus, syncToneClasses, updateWorldClock } = createTopbarStatusFeature({

@@ -34,6 +34,8 @@ test("store operating monthly report is a finance-owned feature with shared cont
 
   assert.match(appSource, /import \{ createStoreOperatingMonthlyReportFeature \} from "\.\/assets\/js\/features\/store-operating-monthly-report\.js/);
   assert.match(appSource, /createStoreOperatingMonthlyReportFeature\(\{/);
+  const monthlyReportFeatureCall = appSource.match(/createStoreOperatingMonthlyReportFeature\(\{[\s\S]*?\n\}\)\);/)?.[0] || "";
+  assert.match(monthlyReportFeatureCall, /syncCountryStoreSelection,/);
   assert.match(appSource, /normalizeCountryName,\n  pickSellerCountry,\n  pickSellerName,\n  refreshTable,/);
   assert.match(appSource, /view === "store-operating-monthly-report"/);
   assert.match(appSource, /loadStoreOperatingMonthlyReport\(\)/);
