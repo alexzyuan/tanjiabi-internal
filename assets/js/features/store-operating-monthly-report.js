@@ -1,4 +1,6 @@
-const MONTH_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])$/;
+import { createDateRangePicker } from "../date-range-picker.js?v=20260807-store-operating-date-range-v1";
+
+const DATE_PATTERN = /^\d{4}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
 const REPORT_FIXED_COLUMN_WIDTHS = Object.freeze({
   name: 176,
   actual: 160,
@@ -13,8 +15,20 @@ function defaultCurrentMonth() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
+function dateText(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function defaultCurrentDateRange() {
+  const now = new Date();
+  return {
+    startDate: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`,
+    endDate: dateText(now),
+  };
+}
+
 export function listInclusiveMonths(startMonth, endMonth) {
-  if (!MONTH_PATTERN.test(startMonth || "") || !MONTH_PATTERN.test(endMonth || "")) return [];
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(startMonth || "") || !/^\d{4}-(0[1-9]|1[0-2])$/.test(endMonth || "")) return [];
   const [startYear, startNumber] = startMonth.split("-").map(Number);
   const [endYear, endNumber] = endMonth.split("-").map(Number);
   const startIndex = startYear * 12 + startNumber - 1;
@@ -28,12 +42,14 @@ export function listInclusiveMonths(startMonth, endMonth) {
   });
 }
 
-export function validateMonthRange(startMonth, endMonth) {
-  if (!MONTH_PATTERN.test(startMonth || "") || !MONTH_PATTERN.test(endMonth || "")) {
-    return { ok: false, error: "请选择有效的开始月份和结束月份" };
+export function validateDateRange(startDate, endDate, today = dateText()) {
+  if (!DATE_PATTERN.test(startDate || "") || !DATE_PATTERN.test(endDate || "")) {
+    return { ok: false, error: "请选择有效的开始日期和结束日期" };
   }
-  const months = listInclusiveMonths(startMonth, endMonth);
-  if (!months.length) return { ok: false, error: "结束月份不能早于开始月份" };
+  if (endDate < startDate) return { ok: false, error: "结束日期不能早于开始日期" };
+  if (endDate > today) return { ok: false, error: "结束日期不能晚于今天" };
+  const months = listInclusiveMonths(startDate.slice(0, 7), endDate.slice(0, 7));
+  if (!months.length) return { ok: false, error: "请选择有效的开始日期和结束日期" };
   if (months.length > 12) return { ok: false, error: "统计范围最多 12 个月" };
   return { ok: true, months };
 }
@@ -76,11 +92,12 @@ export function createStoreOperatingMonthlyReportFeature({
   bind,
   bindBackdropClose,
   clickVisibleNavItem,
+  createDateRangePickerImpl = createDateRangePicker,
   downloadBlob,
   escapeHtml,
   fetchImpl = globalThis.fetch,
   formatActualMoney,
-  getCurrentMonth = defaultCurrentMonth,
+  getCurrentDateRange = defaultCurrentDateRange,
   getStoreOptions = () => [],
   historyRef = globalThis.history,
   locationRef = globalThis.location,
@@ -127,6 +144,7 @@ export function createStoreOperatingMonthlyReportFeature({
   let rowVisibility = { hiddenMetricIds: new Set(), metrics: [], loaded: false };
   let rowVisibilityDraft = null;
   const reportSortState = { key: "", direction: "asc" };
+  let reportDateRangePicker = null;
 
   function query(selector) {
     return root?.querySelector?.(selector) || null;
@@ -134,8 +152,8 @@ export function createStoreOperatingMonthlyReportFeature({
 
   function readFilters() {
     return {
-      startMonth: String(query("#store-operating-report-start-month")?.value || "").trim(),
-      endMonth: String(query("#store-operating-report-end-month")?.value || "").trim(),
+      startDate: String(query("#store-operating-report-start-date")?.value || "").trim(),
+      endDate: String(query("#store-operating-report-end-date")?.value || "").trim(),
       stores: selectedFilterValues(query("#store-operating-report-store")),
       countries: selectedFilterValues(query("#store-operating-report-country")),
       currencyCode: String(query("#store-operating-report-currency")?.value || "CNY").trim().toUpperCase() || "CNY",
@@ -144,8 +162,8 @@ export function createStoreOperatingMonthlyReportFeature({
 
   function buildReportQuery(filters = readFilters()) {
     const params = new URLSearchParams();
-    params.set("startMonth", filters.startMonth);
-    params.set("endMonth", filters.endMonth);
+    params.set("startDate", filters.startDate);
+    params.set("endDate", filters.endDate);
     params.set("currencyCode", filters.currencyCode || "CNY");
     filters.stores.forEach((value) => params.append("stores", value));
     filters.countries.forEach((value) => params.append("countries", value));
@@ -160,8 +178,8 @@ export function createStoreOperatingMonthlyReportFeature({
 
   function syncReportUrl(filters) {
     const params = new URLSearchParams();
-    params.set("startMonth", filters.startMonth);
-    params.set("endMonth", filters.endMonth);
+    params.set("startDate", filters.startDate);
+    params.set("endDate", filters.endDate);
     params.set("currencyCode", filters.currencyCode || "CNY");
     filters.stores.forEach((value) => params.append("stores", value));
     filters.countries.forEach((value) => params.append("countries", value));
@@ -228,12 +246,12 @@ export function createStoreOperatingMonthlyReportFeature({
     initialUrlStores = params.getAll("stores").filter(Boolean);
     initialUrlCountries = params.getAll("countries").filter(Boolean);
     initialUrlCurrencyCode = String(params.get("currencyCode") || "").trim().toUpperCase();
-    const startMonth = params.get("startMonth");
-    const endMonth = params.get("endMonth");
-    const startInput = query("#store-operating-report-start-month");
-    const endInput = query("#store-operating-report-end-month");
-    if (startInput && MONTH_PATTERN.test(startMonth || "")) startInput.value = startMonth;
-    if (endInput && MONTH_PATTERN.test(endMonth || "")) endInput.value = endMonth;
+    const startDate = params.get("startDate");
+    const endDate = params.get("endDate");
+    const startInput = query("#store-operating-report-start-date");
+    const endInput = query("#store-operating-report-end-date");
+    if (startInput && DATE_PATTERN.test(startDate || "")) startInput.value = startDate;
+    if (endInput && DATE_PATTERN.test(endDate || "")) endInput.value = endDate;
     const currencySelect = query("#store-operating-report-currency");
     if (currencySelect && ["CNY", "ORIGINAL"].includes(initialUrlCurrencyCode)) {
       currencySelect.value = initialUrlCurrencyCode;
@@ -242,14 +260,15 @@ export function createStoreOperatingMonthlyReportFeature({
   }
 
   function initializeStoreOperatingMonthlyReportDefaults() {
-    const currentMonth = getCurrentMonth();
-    const startInput = query("#store-operating-report-start-month");
-    const endInput = query("#store-operating-report-end-month");
-    if (startInput && !startInput.value) startInput.value = currentMonth;
-    if (endInput && !endInput.value) endInput.value = currentMonth;
+    const defaultRange = getCurrentDateRange();
+    const startInput = query("#store-operating-report-start-date");
+    const endInput = query("#store-operating-report-end-date");
+    if (startInput && !startInput.value) startInput.value = defaultRange.startDate;
+    if (endInput && !endInput.value) endInput.value = defaultRange.endDate;
     const currencySelect = query("#store-operating-report-currency");
     if (currencySelect && !currencySelect.value) currencySelect.value = "CNY";
     initializeFromLocation();
+    reportDateRangePicker?.refresh?.();
     refreshStoreOptions();
   }
 
@@ -682,7 +701,7 @@ export function createStoreOperatingMonthlyReportFeature({
     const generatedAt = String(data.meta.generatedAt || "").replace("T", " ").slice(0, 19) || "时间未知";
     setText(
       "#store-operating-report-meta",
-      `${filters.startMonth} 至 ${filters.endMonth} · ${storeText} · ${countryText} · ${currencyText} · 更新于 ${generatedAt}`,
+      `${filters.startDate} 至 ${filters.endDate} · ${storeText} · ${countryText} · ${currencyText} · 更新于 ${generatedAt}`,
       root,
     );
     const missingText = data.meta.missingExchangeRateCount
@@ -734,7 +753,7 @@ export function createStoreOperatingMonthlyReportFeature({
       void loadStoreOperatingMonthlyReportRowVisibility();
     }
     const filters = readFilters();
-    const validation = validateMonthRange(filters.startMonth, filters.endMonth);
+    const validation = validateDateRange(filters.startDate, filters.endDate);
     if (!validation.ok) {
       invalidateActiveReportLoad();
       setText("#store-operating-report-status", validation.error, root);
@@ -774,9 +793,9 @@ export function createStoreOperatingMonthlyReportFeature({
     }
   }
 
-  function handleMonthChange() {
+  function handleDateRangeChange() {
     const filters = readFilters();
-    const validation = validateMonthRange(filters.startMonth, filters.endMonth);
+    const validation = validateDateRange(filters.startDate, filters.endDate);
     if (!validation.ok) {
       invalidateActiveReportLoad();
       setText("#store-operating-report-status", validation.error, root);
@@ -809,11 +828,12 @@ export function createStoreOperatingMonthlyReportFeature({
   }
 
   function resetStoreOperatingMonthlyReport() {
-    const month = getCurrentMonth();
-    const startInput = query("#store-operating-report-start-month");
-    const endInput = query("#store-operating-report-end-month");
-    if (startInput) startInput.value = month;
-    if (endInput) endInput.value = month;
+    const range = getCurrentDateRange();
+    const startInput = query("#store-operating-report-start-date");
+    const endInput = query("#store-operating-report-end-date");
+    if (startInput) startInput.value = range.startDate;
+    if (endInput) endInput.value = range.endDate;
+    reportDateRangePicker?.refresh?.();
     selectValues(query("#store-operating-report-country"), []);
     selectValues(query("#store-operating-report-store"), []);
     const currencySelect = query("#store-operating-report-currency");
@@ -824,7 +844,7 @@ export function createStoreOperatingMonthlyReportFeature({
 
   function openBudgetTargets() {
     const filters = readFilters();
-    const validation = validateMonthRange(filters.startMonth, filters.endMonth);
+    const validation = validateDateRange(filters.startDate, filters.endDate);
     if (!validation.ok) {
       setText("#store-operating-report-status", validation.error, root);
       return;
@@ -843,7 +863,7 @@ export function createStoreOperatingMonthlyReportFeature({
     const disposition = response.headers?.get?.("content-disposition") || "";
     const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
     if (encoded) return decodeURIComponent(encoded);
-    return `店铺经营月报-${filters.startMonth}至${filters.endMonth}.xlsx`;
+    return `店铺经营月报-${filters.startDate}至${filters.endDate}.xlsx`;
   }
 
   async function readExportError(response) {
@@ -881,8 +901,18 @@ export function createStoreOperatingMonthlyReportFeature({
   }
 
   function setupStoreOperatingMonthlyReport() {
-    bind(root, "#store-operating-report-start-month", "change", handleMonthChange);
-    bind(root, "#store-operating-report-end-month", "change", handleMonthChange);
+    // The picker normalizes an empty range to today. Seed this view's defaults first.
+    initializeStoreOperatingMonthlyReportDefaults();
+    reportDateRangePicker = createDateRangePickerImpl({
+      root,
+      triggerSelector: "#store-operating-report-date-range-button",
+      popoverSelector: "#store-operating-report-date-range-popover",
+      startInputSelector: "#store-operating-report-start-date",
+      endInputSelector: "#store-operating-report-end-date",
+      maxCalendarMonths: 12,
+      onChange: handleDateRangeChange,
+    });
+    reportDateRangePicker.setup?.();
     bind(root, "#store-operating-report-country", "change", handleCountryChange);
     bind(root, "#store-operating-report-store", "change", handleStoreChange);
     bind(root, "#store-operating-report-currency", "change", handleCurrencyChange);
@@ -908,7 +938,7 @@ export function createStoreOperatingMonthlyReportFeature({
     exportStoreOperatingMonthlyReport,
     handleCountryChange,
     handleCurrencyChange,
-    handleMonthChange,
+    handleDateRangeChange,
     handleStoreChange,
     initializeStoreOperatingMonthlyReportDefaults,
     loadStoreOperatingMonthlyReport,

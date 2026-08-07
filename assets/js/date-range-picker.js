@@ -67,6 +67,10 @@ function minDateText(first, second) {
   return first <= second ? first : second;
 }
 
+function maxCalendarMonthEnd(startDate, maxCalendarMonths) {
+  return new Date(startDate.getFullYear(), startDate.getMonth() + maxCalendarMonths, 0);
+}
+
 export function normalizeDateRange(start, end, fallbackDate = new Date()) {
   const fallback = dateText(fallbackDate);
   const startText = parseDateText(start) ? String(start) : fallback;
@@ -224,6 +228,7 @@ export function createDateRangePicker({
   startInputSelector = "",
   endInput,
   endInputSelector = "",
+  maxCalendarMonths = 0,
   today = new Date(),
   onChange = () => {},
 } = {}) {
@@ -266,9 +271,12 @@ export function createDateRangePicker({
         end: todayText,
       };
     }
+    const maxEnd = maxCalendarMonths > 0
+      ? dateText(maxCalendarMonthEnd(startDate, maxCalendarMonths))
+      : dateText(addDays(startDate, maxRangeDays - 1));
     return {
       start: pendingStart,
-      end: minDateText(dateText(addDays(startDate, maxRangeDays - 1)), todayText),
+      end: minDateText(maxEnd, todayText),
     };
   }
 

@@ -69,8 +69,9 @@ function createDeferred() {
 }
 
 function makeFeatureHarness({
-  startMonth = "2026-06",
-  endMonth = "2026-07",
+  createDateRangePickerImpl,
+  startDate = "2026-06-01",
+  endDate = "2026-07-31",
   stores = [],
   countries = [],
   groups,
@@ -81,8 +82,8 @@ function makeFeatureHarness({
   ],
 } = {}) {
   const elements = {
-    "#store-operating-report-start-month": makeElement(startMonth),
-    "#store-operating-report-end-month": makeElement(endMonth),
+    "#store-operating-report-start-date": makeElement(startDate),
+    "#store-operating-report-end-date": makeElement(endDate),
     "#store-operating-report-store": makeElement(),
     "#store-operating-report-country": makeElement(),
     "#store-operating-report-currency": makeElement(""),
@@ -117,6 +118,7 @@ function makeFeatureHarness({
     clickVisibleNavItem(target) {
       navTargets.push(target);
     },
+    createDateRangePickerImpl,
     downloadBlob() {},
     escapeHtml: (value) => String(value ?? ""),
     fetchImpl: fetchImpl || (async (url) => {
@@ -135,7 +137,7 @@ function makeFeatureHarness({
       return makeReportResponse();
     }),
     formatActualMoney: (value) => String(value),
-    getCurrentMonth: () => "2026-08",
+    getCurrentDateRange: () => ({ startDate: "2026-08-01", endDate: "2026-08-07" }),
     getStoreOptions: () => storeOptions,
     historyRef: history,
     locationRef: location,
@@ -183,6 +185,25 @@ test("seller aliases are normalized through the shared shop identity helpers", (
   );
 });
 
+test("monthly report seeds its current-month range before mounting the shared date picker", () => {
+  const pickerOptions = [];
+  const { feature, elements } = makeFeatureHarness({
+    startDate: "",
+    endDate: "",
+    createDateRangePickerImpl(options) {
+      pickerOptions.push(options);
+      return { setup() {} };
+    },
+  });
+
+  feature.setupStoreOperatingMonthlyReport();
+
+  assert.equal(elements["#store-operating-report-start-date"].value, "2026-08-01");
+  assert.equal(elements["#store-operating-report-end-date"].value, "2026-08-07");
+  assert.equal(pickerOptions.length, 1);
+  assert.equal(pickerOptions[0].maxCalendarMonths, 12);
+});
+
 test("the feature requires the managed table refresher dependency", () => {
   assert.throws(() => createStoreOperatingMonthlyReportFeature({
     root: { querySelector() { return null; } },
@@ -202,26 +223,41 @@ test("the feature requires the managed table refresher dependency", () => {
   }), /requires refreshTable/);
 });
 
-test("valid month edits auto-refresh and invalid 13-month edits do not request", async () => {
+test("valid date ranges request exact dates and invalid 13-month date ranges do not request", async () => {
   const { feature, requests, elements } = makeFeatureHarness({
-    startMonth: "2026-06",
-    endMonth: "2026-07",
+    startDate: "2026-06-01",
+    endDate: "2026-07-31",
     stores: ["A"],
     countries: ["美国"],
   });
 
   await feature.loadStoreOperatingMonthlyReport();
   assert.match(requests[0], /currencyCode=CNY/);
-  assert.match(requests[0], /startMonth=2026-06/);
-  assert.match(requests[0], /endMonth=2026-07/);
+  assert.match(requests[0], /startDate=2026-06-01/);
+  assert.match(requests[0], /endDate=2026-07-31/);
   assert.match(requests[0], /stores=A/);
   assert.match(requests[0], /countries=%E7%BE%8E%E5%9B%BD/);
 
-  elements["#store-operating-report-end-month"].value = "2027-07";
-  await feature.handleMonthChange();
+  elements["#store-operating-report-start-date"].value = "2025-07-01";
+  elements["#store-operating-report-end-date"].value = "2026-08-07";
+  await feature.handleDateRangeChange();
 
   assert.match(elements["#store-operating-report-status"].textContent, /最多 12 个月/);
   assert.equal(requests.length, 1);
+});
+
+test("date range edits send exact startDate and endDate to the report API", async () => {
+  const { feature, elements, requests } = makeFeatureHarness();
+  elements["#store-operating-report-start-date"] = makeElement("2026-08-01");
+  elements["#store-operating-report-end-date"] = makeElement("2026-08-07");
+  delete elements["#store-operating-report-start-month"];
+  delete elements["#store-operating-report-end-month"];
+
+  await feature.loadStoreOperatingMonthlyReport();
+
+  assert.match(requests[0], /startDate=2026-08-01/);
+  assert.match(requests[0], /endDate=2026-08-07/);
+  assert.doesNotMatch(requests[0], /startMonth=/);
 });
 
 test("currency filter defaults to CNY and explicit ORIGINAL selection is sent to the report API", async () => {
@@ -239,8 +275,8 @@ test("currency filter defaults to CNY and explicit ORIGINAL selection is sent to
 
 test("budget action carries the active scope to the budget view", () => {
   const { feature, location, navTargets } = makeFeatureHarness({
-    startMonth: "2026-06",
-    endMonth: "2026-07",
+    startDate: "2026-06-01",
+    endDate: "2026-07-31",
     stores: ["A"],
     countries: ["美国"],
   });
@@ -277,7 +313,7 @@ test("successful rendering refreshes the shared managed table and writes filter 
 
   assert.deepEqual(refreshes, [elements["#store-operating-report-table"]]);
   assert.doesNotMatch(location.search, /view=store-operating-monthly-report/);
-  assert.match(location.search, /startMonth=2026-06/);
+  assert.match(location.search, /startDate=2026-06-01/);
   assert.match(location.search, /stores=A/);
   assert.match(elements["#store-operating-report-head"].innerHTML, /data-column-key="group-0-actual"[^>]*data-column-kind="number"[^>]*data-column-profile="money-rate"/);
   assert.match(elements["#store-operating-report-head"].innerHTML, /data-column-key="group-0-budget"[^>]*data-column-kind="number"[^>]*data-column-profile="money-rate"/);
@@ -572,8 +608,8 @@ test("report load surfaces structured server diagnostics", async () => {
 test("a stale month response cannot replace the newer report DOM, URL, or status", async () => {
   const pending = [];
   const { feature, elements, location } = makeFeatureHarness({
-    startMonth: "2026-06",
-    endMonth: "2026-06",
+    startDate: "2026-06-01",
+    endDate: "2026-06-30",
     fetchImpl: (url) => {
       const deferred = createDeferred();
       pending.push({ url: String(url), deferred });
@@ -582,8 +618,8 @@ test("a stale month response cannot replace the newer report DOM, URL, or status
   });
 
   const oldRequest = feature.loadStoreOperatingMonthlyReport();
-  elements["#store-operating-report-end-month"].value = "2026-07";
-  const newRequest = feature.handleMonthChange();
+  elements["#store-operating-report-end-date"].value = "2026-07-31";
+  const newRequest = feature.handleDateRangeChange();
 
   assert.equal(pending.length, 2);
   pending[1].deferred.resolve(makeReportResponse({ name: "新月份数据" }));
@@ -593,7 +629,7 @@ test("a stale month response cannot replace the newer report DOM, URL, or status
 
   assert.match(elements["#store-operating-report-body"].innerHTML, /新月份数据/);
   assert.doesNotMatch(elements["#store-operating-report-body"].innerHTML, /旧月份数据/);
-  assert.match(location.search, /endMonth=2026-07/);
+  assert.match(location.search, /endDate=2026-07-31/);
   assert.equal(elements["#store-operating-report-status"].textContent, "预算已匹配 1 条");
 });
 

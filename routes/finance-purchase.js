@@ -27,13 +27,23 @@ export function createFinancePurchaseRoutes(deps = {}) {
     status: url.searchParams.get("status") || "Open",
   });
 
-  const monthlyReportFilters = (url) => ({
-    startMonth: url.searchParams.get("startMonth") || "",
-    endMonth: url.searchParams.get("endMonth") || "",
-    stores: url.searchParams.getAll("stores").filter(Boolean),
-    countries: url.searchParams.getAll("countries").filter(Boolean),
-    currencyCode: url.searchParams.get("currencyCode") || "CNY",
-  });
+  const monthlyReportFilters = (url) => {
+    const startDate = url.searchParams.get("startDate") || "";
+    const endDate = url.searchParams.get("endDate") || "";
+    const filters = {
+      stores: url.searchParams.getAll("stores").filter(Boolean),
+      countries: url.searchParams.getAll("countries").filter(Boolean),
+      currencyCode: url.searchParams.get("currencyCode") || "CNY",
+    };
+    if (startDate || endDate) {
+      return { ...filters, startDate, endDate };
+    }
+    return {
+      ...filters,
+      startMonth: url.searchParams.get("startMonth") || "",
+      endMonth: url.searchParams.get("endMonth") || "",
+    };
+  };
 
   return [
     {

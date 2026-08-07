@@ -13,6 +13,7 @@ import {
 } from "./storeOperatingMonthlyReportMapper.js";
 
 const MONTH_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])$/;
+const DATE_PATTERN = /^\d{4}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
 
 function uniqueText(values, label) {
   if (!Array.isArray(values)) throw reportInputError(`${label}必须是数组`);
@@ -49,6 +50,34 @@ function monthBounds(month) {
   return {
     startDate: `${month}-01`,
     endDate: `${month}-${String(lastDay).padStart(2, "0")}`,
+  };
+}
+
+function parseDate(value) {
+  const text = String(value || "").trim();
+  if (!DATE_PATTERN.test(text)) return null;
+  const [year, month, day] = text.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day ? date : null;
+}
+
+function dateText(date) {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+}
+
+function monthFromDate(value) {
+  return String(value).slice(0, 7);
+}
+
+function monthRangeForDates(startDate, endDate) {
+  return listInclusiveMonths(monthFromDate(startDate), monthFromDate(endDate));
+}
+
+function monthRequestBounds(month, startDate, endDate) {
+  const full = monthBounds(month);
+  return {
+    startDate: month === monthFromDate(startDate) ? startDate : full.startDate,
+    endDate: month === monthFromDate(endDate) ? endDate : full.endDate,
   };
 }
 
@@ -213,16 +242,32 @@ function requireBudgetRows(budget) {
 }
 
 export function normalizeStoreOperatingMonthlyReportFilters({
+  startDate,
+  endDate,
   startMonth,
   endMonth,
   stores = [],
   countries = [],
   currencyCode = "CNY",
+  today = new Date(),
 } = {}) {
-  if (!MONTH_PATTERN.test(startMonth || "") || !MONTH_PATTERN.test(endMonth || "")) {
-    throw reportInputError("请选择开始月份和结束月份");
+  const normalizedStartDate = String(startDate || "").trim();
+  const normalizedEndDate = String(endDate || "").trim();
+  const hasDateRange = Boolean(normalizedStartDate || normalizedEndDate);
+  if (hasDateRange && (!parseDate(normalizedStartDate) || !parseDate(normalizedEndDate))) {
+    throw reportInputError("请选择有效的开始日期和结束日期");
   }
-  const months = listInclusiveMonths(startMonth, endMonth);
+  if (!hasDateRange && (!MONTH_PATTERN.test(startMonth || "") || !MONTH_PATTERN.test(endMonth || ""))) {
+    throw reportInputError("请选择开始日期和结束日期");
+  }
+  const effectiveStartDate = hasDateRange ? normalizedStartDate : monthBounds(startMonth).startDate;
+  const effectiveEndDate = hasDateRange ? normalizedEndDate : monthBounds(endMonth).endDate;
+  if (effectiveEndDate < effectiveStartDate) throw reportInputError("结束日期不能早于开始日期");
+  const todayDate = today instanceof Date ? today : new Date(today);
+  if (Number.isNaN(todayDate.getTime())) throw reportInputError("当前日期无效，无法校验统计范围");
+  const todayText = dateText(new Date(Date.UTC(todayDate.getFullYear(), todayDate.getMonth(), todayDate.getDate())));
+  if (effectiveEndDate > todayText) throw reportInputError("结束日期不能晚于今天");
+  const months = monthRangeForDates(effectiveStartDate, effectiveEndDate);
   if (!months.length) throw reportInputError("结束月份不能早于开始月份");
   if (months.length > 12) throw reportInputError("统计范围最多 12 个月");
   const normalizedCurrencyCode = String(currencyCode || "CNY").trim().toUpperCase();
@@ -230,8 +275,10 @@ export function normalizeStoreOperatingMonthlyReportFilters({
     throw reportInputError("币种必须是 CNY 或 ORIGINAL");
   }
   return {
-    startMonth,
-    endMonth,
+    startDate: effectiveStartDate,
+    endDate: effectiveEndDate,
+    startMonth: months[0],
+    endMonth: months.at(-1),
     months,
     stores: uniqueText(stores, "stores"),
     countries: uniqueText(countries, "countries"),
@@ -277,7 +324,7 @@ export async function getStoreOperatingMonthlyReport(filters, {
     const reportScopes = buildReportScopes(sellers, normalizedFilters);
     const recordsByMonthResults = [];
     for (const month of normalizedFilters.months) {
-      const { startDate, endDate } = monthBounds(month);
+      const { startDate, endDate } = monthRequestBounds(month, normalizedFilters.startDate, normalizedFilters.endDate);
       const request = {
         startDate,
         endDate,
@@ -305,8 +352,8 @@ export async function getStoreOperatingMonthlyReport(filters, {
         throw new Error("领星适配器缺少店铺利润自定义费用读取能力");
       }
       const sellerProfitPayload = await adapter.fetchSellerProfitReport({
-        startDate: month,
-        endDate: month,
+        startDate,
+        endDate,
         sids: sellers.map((seller) => seller.sid),
         currencyCode: currencyMode === "CNY" ? "CNY" : "ORIGINAL",
         monthlyQuery: true,
@@ -465,8 +512,8 @@ function requireStoreOperatingMonthlyReportExportResult(report) {
   if (!report.filters || typeof report.filters !== "object" || Array.isArray(report.filters)) {
     throw new Error("店铺经营月报导出数据缺少 filters 对象");
   }
-  if (!MONTH_PATTERN.test(report.filters.startMonth || "") || !MONTH_PATTERN.test(report.filters.endMonth || "")) {
-    throw new Error("店铺经营月报导出数据缺少有效月份范围");
+  if (!parseDate(report.filters.startDate) || !parseDate(report.filters.endDate)) {
+    throw new Error("店铺经营月报导出数据缺少有效日期范围");
   }
   return report;
 }
@@ -554,8 +601,8 @@ export async function exportStoreOperatingMonthlyReportXlsx(filters = {}, {
   XLSX.utils.book_append_sheet(workbook, sheet, "店铺经营月报");
   const metadataRows = [
     ["项目", "值"],
-    ["开始月份", report.filters.startMonth],
-    ["结束月份", report.filters.endMonth],
+    ["开始日期", report.filters.startDate],
+    ["结束日期", report.filters.endDate],
     ["店铺范围", report.filters.stores?.length ? report.filters.stores.join("、") : "全部店铺"],
     ["国家范围", report.filters.countries?.length ? report.filters.countries.join("、") : "全部国家"],
     ["币种模式", report.meta?.currencyMode === "CNY" ? "人民币汇总" : "原币分币种"],
@@ -573,7 +620,7 @@ export async function exportStoreOperatingMonthlyReportXlsx(filters = {}, {
   XLSX.utils.book_append_sheet(workbook, metadataSheet, "报表说明");
 
   return {
-    filename: `店铺经营月报-${report.filters.startMonth}至${report.filters.endMonth}.xlsx`,
+    filename: `店铺经营月报-${report.filters.startDate}至${report.filters.endDate}.xlsx`,
     buffer: XLSX.write(workbook, { bookType: "xlsx", type: "buffer" }),
     rowCount: rows.length,
   };
