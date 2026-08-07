@@ -104,6 +104,7 @@ function makeFeatureHarness({
   const requests = [];
   const refreshes = [];
   const optionUpdates = [];
+  const countryStoreSyncCalls = [];
   const navTargets = [];
   const location = { pathname: "/dashboard", search: "" };
   const history = {
@@ -154,9 +155,16 @@ function makeFeatureHarness({
     setText: (selector, value) => {
       if (elements[selector]) elements[selector].textContent = value;
     },
+    syncCountryStoreSelection: (options) => {
+      countryStoreSyncCalls.push(options);
+      const countries = elements["#store-operating-report-country"].selectedValues;
+      elements["#store-operating-report-store"].selectedValues = options.storeOptions
+        .filter((option) => !countries.length || countries.includes(option.country))
+        .map((option) => option.name);
+    },
     syncAllOptionSelection() {},
   });
-  return { elements, feature, location, navTargets, optionUpdates, refreshes, requests };
+  return { elements, feature, location, navTargets, optionUpdates, refreshes, requests, countryStoreSyncCalls };
 }
 
 test("seller aliases are normalized through the shared shop identity helpers", () => {
@@ -290,20 +298,25 @@ test("budget action carries the active scope to the budget view", () => {
   assert.deepEqual(navTargets, ["budget"]);
 });
 
-test("country and store edits stay local until query while country edits narrow store options", async () => {
-  const { feature, elements, optionUpdates, requests } = makeFeatureHarness();
+test("monthly report country selection delegates matching stores to shared controls", async () => {
+  const { feature, elements, requests, countryStoreSyncCalls } = makeFeatureHarness();
 
   feature.initializeStoreOperatingMonthlyReportDefaults();
   elements["#store-operating-report-country"].selectedValues = ["美国"];
   feature.handleCountryChange();
-  feature.handleStoreChange();
 
   assert.equal(requests.length, 0);
-  const lastStoreUpdate = optionUpdates.filter((item) => item.element === elements["#store-operating-report-store"]).at(-1);
-  assert.deepEqual(lastStoreUpdate.options.map((item) => item.name), ["A"]);
+  assert.equal(countryStoreSyncCalls.length, 1);
+  assert.deepEqual(countryStoreSyncCalls[0].storeOptions.map(({ name, country }) => ({ name, country })), [
+    { name: "A", country: "美国" },
+    { name: "B", country: "加拿大" },
+  ]);
+  assert.deepEqual(elements["#store-operating-report-store"].selectedValues, ["A"]);
 
   await feature.loadStoreOperatingMonthlyReport();
   assert.equal(requests.length, 1);
+  assert.match(requests[0], /stores=A/);
+  assert.match(requests[0], /countries=%E7%BE%8E%E5%9B%BD/);
 });
 
 test("successful rendering refreshes the shared managed table and writes filter state without pinning the startup view", async () => {

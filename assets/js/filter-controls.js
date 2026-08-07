@@ -213,7 +213,7 @@ export function createFilterControls({
     setSelectOptionsImpl(storeSelect, storeOptions, "全部店铺", {
       groupByCountry: true,
       countries,
-      selectAllVisible: countries.length > 0,
+      selectAllVisible: true,
     });
   }
 

@@ -111,6 +111,7 @@ export function createStoreOperatingMonthlyReportFeature({
   setSelectOptions,
   setText,
   syncAllOptionSelection,
+  syncCountryStoreSelection,
 } = {}) {
   if (typeof bind !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires bind.");
   if (typeof clickVisibleNavItem !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires clickVisibleNavItem.");
@@ -128,6 +129,7 @@ export function createStoreOperatingMonthlyReportFeature({
   if (typeof setText !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires setText.");
   if (typeof setModalOpenState !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires setModalOpenState.");
   if (typeof syncAllOptionSelection !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires syncAllOptionSelection.");
+  if (typeof syncCountryStoreSelection !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires syncCountryStoreSelection.");
 
   let storeOptions = [];
   let lastSuccessfulQuery = "";
@@ -808,8 +810,11 @@ export function createStoreOperatingMonthlyReportFeature({
 
   function handleCountryChange() {
     invalidateActiveReportLoad();
-    syncAllOptionSelection(query("#store-operating-report-country"));
-    refreshStoreOptions({ showScopeWarning: true });
+    syncCountryStoreSelection({
+      countrySelect: query("#store-operating-report-country"),
+      storeSelect: query("#store-operating-report-store"),
+      storeOptions,
+    });
     const exportButton = query("#store-operating-report-export");
     if (exportButton) exportButton.disabled = !sameQuery(buildReportQuery(), lastSuccessfulQuery);
   }

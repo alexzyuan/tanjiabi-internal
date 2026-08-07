@@ -1,7 +1,7 @@
 import TanjiaUiUtils from "./assets/js/ui-utils.js?v=20260706-frontend-refactor-v41";
 import { installDashboardLoadingFetchOverlay, loadDashboardSection } from "./assets/js/dashboard-loader.js?v=20260803-global-page-loading-v1";
 import { installDateRangeAutoRefresh } from "./assets/js/date-range-picker.js?v=20260803-date-auto-refresh-v1";
-import { createFilterControls } from "./assets/js/filter-controls.js?v=20260707-frontend-refactor-v1";
+import { createFilterControls } from "./assets/js/filter-controls.js?v=20260807-shared-country-store-filter-v1";
 import {
   createFrontShopFilters,
   getDisplayShopName,
@@ -48,7 +48,7 @@ import { createAiImageWorkflowFeature } from "./assets/js/features/ai-image-work
 import { createAdminSettingsFeature } from "./assets/js/features/admin-settings.js?v=20260706-frontend-refactor-v1";
 import { createWebhookAssistantFeature } from "./assets/js/features/webhook-assistant.js?v=20260720-webhook-assistant-v1";
 import { createBudgetTargetsFeature } from "./assets/js/features/budget-targets.js?v=20260706-frontend-refactor-v1";
-import { createStoreOperatingMonthlyReportFeature } from "./assets/js/features/store-operating-monthly-report.js?v=20260807-store-operating-date-range-v1";
+import { createStoreOperatingMonthlyReportFeature } from "./assets/js/features/store-operating-monthly-report.js?v=20260807-shared-country-store-filter-v1";
 import { createSyncCenterFeature } from "./assets/js/features/sync-center.js?v=20260706-frontend-refactor-v1";
 import { createFbaFreightFeature } from "./assets/js/features/fba-freight.js?v=20260717-shared-logistics-channels";
 import { createFbaShipmentVarianceFeature } from "./assets/js/features/fba-shipment-variance.js?v=20260803-shipment-variance-v1";
@@ -134,6 +134,7 @@ const {
   initializeFilterDropdowns,
   setSelectOptions,
   syncAllOptionSelection,
+  syncCountryStoreSelection,
 } = createFilterControls({
   root: document,
   bind,
@@ -596,6 +597,7 @@ async function refreshDashboardFromFilters() {
   setSelectOptions,
   setText,
   syncAllOptionSelection,
+  syncCountryStoreSelection,
 }));
 
 ({

@@ -260,7 +260,7 @@ test("country store selection restores all stores when no concrete country is se
   });
 
   assert.deepEqual(selectedValues(storeSelect), []);
-  assert.deepEqual(receivedConfig, { groupByCountry: true, countries: [], selectAllVisible: false });
+  assert.deepEqual(receivedConfig, { groupByCountry: true, countries: [], selectAllVisible: true });
 });
 
 test("country store selection rejects a missing store select", () => {
