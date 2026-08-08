@@ -289,7 +289,8 @@ test("shared filters and panel surfaces live outside legacy css", async () => {
 test("compact filter toolbar direct controls keep their shared compact width", async () => {
   const toolbarSource = await readFile(new URL("../assets/css/components/35-filter-toolbar.css", import.meta.url), "utf8");
 
-  assert.match(toolbarSource, /\.filter-toolbar > :is\(input, select, \.filter-dropdown\)\s*\{[\s\S]*?width:\s*150px;/);
+  assert.match(toolbarSource, /\.filter-toolbar > :is\(input, select, \.filter-dropdown\)\s*\{[\s\S]*?width:\s*150px;[\s\S]*?font-size:\s*13px;/);
+  assert.match(toolbarSource, /\.filter-toolbar > \.filter-dropdown\s*\{\s*position:\s*relative;/);
   assert.equal(toolbarSource.includes(".filter-toolbar > :where(input, select)"), false);
 });
 
@@ -338,7 +339,6 @@ test("shared filter toolbar styles live outside page css and use semantic tokens
   assert.match(componentSource, /^\.filter-toolbar\s*\{[\s\S]*column-gap:\s*8px;[\s\S]*row-gap:\s*8px;[\s\S]*border:\s*0;[\s\S]*\}/m);
   assert.match(componentSource, /^\.filter-toolbar > label\s*\{/m);
   assert.match(componentSource, /^\.filter-toolbar > label:has\(\.date-range-control\)\s*\{/m);
-  assert.match(componentSource, /^\.filter-toolbar \.date-range-control\s*\{/m);
   assert.match(componentSource, /^\.filter-toolbar input,/m);
   assert.match(componentSource, /^\.filter-toolbar > :is\(input, select, \.filter-dropdown\)\s*\{/m);
   assert.match(componentSource, /var\(--tj-content-bg\)/);

@@ -526,10 +526,10 @@ svg{width:100%;height:auto;display:block}
 .filter-toolbar{display:flex;flex-wrap:wrap;column-gap:8px;row-gap:8px;align-items:center;min-height:48px;margin-top:8px;padding:8px 10px;border:0;border-radius:var(--tj-control-radius);background:var(--tj-content-bg)}
 .filter-toolbar>label{display:inline-flex;align-items:center;flex:0 0 150px;min-width:0;font-size:0;color:var(--tj-text-body)}
 .filter-toolbar>label:has(.date-range-control){flex-basis:240px}
-.filter-toolbar .date-range-control{width:100%}
 .filter-toolbar input,.filter-toolbar select,.filter-toolbar .date-range-button{width:100%;min-width:0;height:var(--tj-control-height-compact);border:1px solid var(--tj-border-control);border-radius:var(--tj-control-radius);padding:0 var(--tj-control-padding-x);color:var(--tj-text-body);background:var(--tj-content-bg);font-size:13px}
-.filter-toolbar input::placeholder{color:var(--tj-text-muted)}
-.filter-toolbar> :is(input,select,.filter-dropdown){width:150px}
+.filter-toolbar> :is(input,select,.filter-dropdown){width:150px;font-size:13px}
+.filter-toolbar>.filter-dropdown{position:relative}
+.filter-toolbar>.filter-dropdown .filter-dropdown-button{height:var(--tj-control-height-compact)}
 .filter-toolbar>input[type="search"]{width:180px}
 .filter-toolbar> :where(button,.primary-button,.secondary-button,.ghost-button){width:auto;min-height:var(--tj-control-height-compact);height:var(--tj-control-height-compact);border-radius:var(--tj-control-radius);font-size:13px}
 body:not(.login-body) .filter-toolbar>button.primary-button{min-height:var(--tj-control-height-compact);height:var(--tj-control-height-compact);border-radius:var(--tj-control-radius)}

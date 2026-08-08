@@ -26,10 +26,6 @@
   flex-basis: 240px;
 }
 
-.filter-toolbar .date-range-control {
-  width: 100%;
-}
-
 .filter-toolbar input,
 .filter-toolbar select,
 .filter-toolbar .date-range-button {
@@ -44,12 +40,17 @@
   font-size: 13px;
 }
 
-.filter-toolbar input::placeholder {
-  color: var(--tj-text-muted);
-}
-
 .filter-toolbar > :is(input, select, .filter-dropdown) {
   width: 150px;
+  font-size: 13px;
+}
+
+.filter-toolbar > .filter-dropdown {
+  position: relative;
+}
+
+.filter-toolbar > .filter-dropdown .filter-dropdown-button {
+  height: var(--tj-control-height-compact);
 }
 
 .filter-toolbar > input[type="search"] {
