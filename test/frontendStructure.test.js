@@ -163,6 +163,7 @@ test("frontend module cache-bust versions stay aligned", async () => {
   const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
   const appSource = await readFile(new URL("../app.js", import.meta.url), "utf8");
   const dashboardLoaderSource = await readFile(new URL("../assets/js/dashboard-loader.js", import.meta.url), "utf8");
+  const stylesheetVersion = indexSource.match(/\.\/styles\.css\?v=([^\"]+)/)?.[1];
   const indexUiUtilsVersion = indexSource.match(/\.\/assets\/js\/ui-utils\.js\?v=([^"]+)/)?.[1];
   const appUiUtilsVersion = appSource.match(/\.\/assets\/js\/ui-utils\.js\?v=([^"]+)/)?.[1];
   const dashboardLoaderUiUtilsVersion = dashboardLoaderSource.match(/\.\/ui-utils\.js\?v=([^"]+)/)?.[1];
@@ -170,6 +171,7 @@ test("frontend module cache-bust versions stay aligned", async () => {
   assert.ok(indexUiUtilsVersion, "index.html should cache-bust ui-utils.js");
   assert.ok(appUiUtilsVersion, "app.js should import the same cache-busted ui-utils.js");
   assert.ok(dashboardLoaderUiUtilsVersion, "dashboard-loader.js should import the same cache-busted ui-utils.js");
+  assert.equal(stylesheetVersion, "20260808-shared-filter-clear-v1");
   assert.equal(appUiUtilsVersion, indexUiUtilsVersion);
   assert.equal(dashboardLoaderUiUtilsVersion, indexUiUtilsVersion);
 });
