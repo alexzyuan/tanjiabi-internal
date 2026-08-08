@@ -108,7 +108,9 @@ export function createAdminRoutes(deps = {}) {
       path: "/api/admin/budget/upload",
       auth: "session",
       handler: async ({ req, res }) => {
-        const upload = await saveBudgetUpload(await readJsonBody(req));
+        const payload = await readJsonBody(req);
+        payload.uploadedBy = req.user?.displayName || req.user?.nick || req.user?.username || "系统用户";
+        const upload = await saveBudgetUpload(payload);
         sendJson(res, 200, { ok: true, upload });
       },
     },

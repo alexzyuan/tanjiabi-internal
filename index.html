@@ -1689,15 +1689,7 @@
             </div>
           </section>
           <section class="filter-toolbar budget-toolbar">
-            <div class="month-multi-select">
-              <div class="month-picker-line">
-                <input id="budget-month-picker" type="month" />
-                <button class="ghost-button" id="budget-add-month-button" type="button">添加月份</button>
-              </div>
-              <div class="month-chip-list" id="budget-month-chip-list">
-                <span class="empty-chip">最多选择 12 个月</span>
-              </div>
-            </div>
+            <input id="budget-month-picker" type="month" aria-label="预算月份" />
             <select id="budget-platform-filter"><option value="">销售平台</option><option>Amazon</option><option>Tik Tok</option></select>
             <select id="budget-country-filter" multiple size="4" data-filter-clear-target="#budget-store-filter"><option value="">全部国家</option></select>
             <select id="budget-store-filter" multiple size="4"><option value="">全部店铺</option></select>
@@ -1778,8 +1770,8 @@
             <div class="modal-body">
               <div class="form-grid budget-import-fields">
                 <label>预算月份 <em>*</em><input id="budget-import-month" type="month" required /></label>
-                <label>链接负责人 <em>*</em><input id="budget-import-owner" type="text" list="budget-import-owner-options" placeholder="请选择或输入" required /></label>
-                <datalist id="budget-import-owner-options"></datalist>
+                <label>国家 <em>*</em><select id="budget-import-country" required><option value="">请选择国家</option></select></label>
+                <label>店铺 <em>*</em><select id="budget-import-store" required><option value="">请选择店铺</option></select></label>
               </div>
               <p class="budget-template-link">模板下载：<a id="budget-template-download" href="/api/admin/budget/template">下载模板</a></p>
               <label class="file-picker budget-import-file-picker">

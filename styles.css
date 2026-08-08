@@ -1079,13 +1079,6 @@ body:not(.login-body) #store-inspection-report-output.store-inspection-report-ou
 #view-budget{min-width:0}
 #view-budget .detail-panel{min-width:0}
 #view-budget .budget-target-table-wrap{max-width:100%;overflow-x:auto}
-.month-multi-select{display:grid;gap:8px}
-.month-picker-line{display:grid;grid-template-columns:minmax(130px,1fr) auto;gap:8px}
-.month-chip-list{min-height:32px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-.month-chip,.empty-chip{display:inline-flex;align-items:center;min-height:28px;padding:0 9px;border-radius:999px;font-size:13px}
-.month-chip{gap:6px;border:1px solid var(--tj-border-control);color:var(--tj-action-blue-hover);background:var(--tj-action-blue-soft)}
-.month-chip button{width:18px;height:18px;display:grid;place-items:center;padding:0;border:0;border-radius:999px;color:var(--tj-action-blue-hover);background:var(--tj-content-bg);cursor:pointer}
-.empty-chip{border:1px dashed var(--tj-border-control);color:var(--tj-text-muted);background:var(--tj-content-bg)}
 .budget-import-dialog{width:min(620px,calc(100vw - 32px));max-height:min(720px,calc(100vh - 32px));overflow:hidden;padding:0;border:0;border-radius:var(--tj-modal-radius);background:var(--tj-content-bg);box-shadow:var(--tj-shadow-modal)}
 .budget-import-dialog::backdrop{background:var(--tj-overlay-backdrop)}
 .budget-import-fields em{margin-left:var(--spectrum-spacing-50);color:var(--tj-danger);font-style:normal}

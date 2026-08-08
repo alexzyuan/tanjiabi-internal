@@ -757,9 +757,7 @@ test("selected stores render one four-metric group per store and merge rows hori
 
 test("budget targets consume report months, stores, and countries once as their initial scope", () => {
   const elements = {
-    "#budget-upload-month": makeElement(),
     "#budget-month-picker": makeElement(),
-    "#budget-month-chip-list": makeElement(),
     "#budget-store-filter": makeElement("旧筛选"),
   };
   const root = {
@@ -796,8 +794,7 @@ test("budget targets consume report months, stores, and countries once as their 
   locationRef.search = "?view=budget&budgetMonths=2026-06%2C2026-07&budgetStores=A&budgetCountries=%E7%BE%8E%E5%9B%BD";
   feature.initializeBudgetDefaults();
 
-  assert.match(elements["#budget-month-chip-list"].innerHTML, /2026年06月/);
-  assert.match(elements["#budget-month-chip-list"].innerHTML, /2026年07月/);
+  assert.equal(elements["#budget-month-picker"].value, "2026-07");
   assert.equal(elements["#budget-store-filter"].value, "A");
   assert.deepEqual(feature.getBudgetDeepLinkScope(), {
     stores: ["A"],

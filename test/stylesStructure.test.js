@@ -1040,7 +1040,8 @@ test("budget target table width rules live in the page layer", async () => {
 
   assert.match(pageSource, /^#view-budget\s*\{/m);
   assert.match(pageSource, /^#view-budget \.budget-target-table-wrap\s*\{/m);
-  assert.match(pageSource, /^\.month-chip\s*\{/m);
+  assert.doesNotMatch(pageSource, /\.month-chip\s*\{/m);
+  assert.doesNotMatch(pageSource, /\.month-multi-select\s*\{/m);
   assert.match(pageSource, /^\.budget-import-dialog\s*\{/m);
   assert.match(pageSource, /^\.budget-import-dialog::backdrop\s*\{/m);
   assert.match(pageSource, /^\.file-picker\s*\{/m);

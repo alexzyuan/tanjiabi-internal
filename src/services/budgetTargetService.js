@@ -56,10 +56,10 @@ function normalizeText(value) {
   return value == null ? "" : String(value).trim();
 }
 
-function normalizeListingOwner(value) {
-  const listingOwner = normalizeText(value);
-  if (!listingOwner) throw new Error("请先选择链接负责人");
-  return listingOwner;
+function normalizeUploader(value) {
+  const uploader = normalizeText(value);
+  if (!uploader) throw new Error("无法识别当前上传账号");
+  return uploader;
 }
 
 function normalizeHeader(value) {
@@ -416,7 +416,12 @@ function buildStoreSummaryTargets(summaryRows, fallback = {}) {
   };
 }
 
-async function parseBudgetWorkbook(filePath, fileName, storedName, selectedMonth = "", listingOwner = "") {
+async function parseBudgetWorkbook(filePath, fileName, storedName, selectedMonth = "", {
+  country = "",
+  storeName: selectedStoreName = "",
+  uploadedBy = "",
+  legacyListingOwner = "",
+} = {}) {
   let XLSX;
   try {
     const module = await import("xlsx");
@@ -496,7 +501,7 @@ async function parseBudgetWorkbook(filePath, fileName, storedName, selectedMonth
   const salesQty = sumByHeader(dataRows, headerMap, "销售数量");
   const exchangeRate = parseNumber(summaryRows[1]?.[3]) || parseNumber(dataRows.find((row) => parseNumber(row[headerMap.get("汇率")]))?.[headerMap.get("汇率")]) || 1;
   const title = summaryRows[0]?.[0];
-  const storeName = inferStoreName(fileName, title);
+  const storeName = normalizeText(selectedStoreName) || inferStoreName(fileName, title);
   const netSales = salesTarget - discountTarget - refundTarget + salesTarget * 0.0025;
   const platformFee = adBudget + couponCommission + salesTarget * 0.15 + fbaFee + storageFee;
   const profitTarget = netSales - purchaseCost - platformFee - shippingCost;
@@ -522,7 +527,8 @@ async function parseBudgetWorkbook(filePath, fileName, storedName, selectedMonth
   });
   const month = parseMonth(fileName, summaryRows, selectedMonth);
   const platform = storeName.includes("Tik Tok") ? "Tik Tok" : "Amazon";
-  const site = inferSite(storeName);
+  const countryName = normalizeText(country).replace(/站$/, "");
+  const site = countryName ? `${countryName}站` : inferSite(storeName);
   const currencyCode = findExplicitBudgetCurrencyCode(summaryRows, headers);
   const mskuRows = dataRows.map((row) => {
     const rowSalesTarget = parseNumber(readByHeader(row, headerMap, "销额($)")) || parseNumber(row[priceIndex]) * parseNumber(row[qtyIndex]);
@@ -547,7 +553,8 @@ async function parseBudgetWorkbook(filePath, fileName, storedName, selectedMonth
       storeName,
       site,
       currencyCode,
-      listingOwner: normalizeText(listingOwner),
+      uploadedBy: normalizeText(uploadedBy),
+      listingOwner: normalizeText(legacyListingOwner) || normalizeText(readByHeader(row, headerMap, "SKU负责人")),
       skuOwner: normalizeText(readByHeader(row, headerMap, "SKU负责人")),
       msku: normalizeText(readByHeader(row, headerMap, "MSKU")),
       asin: normalizeText(readByHeader(row, headerMap, "ASIN")),
@@ -578,7 +585,9 @@ async function parseBudgetWorkbook(filePath, fileName, storedName, selectedMonth
     storeName,
     site,
     currencyCode,
-    listingOwner: normalizeText(listingOwner),
+    country: countryName,
+    uploadedBy: normalizeText(uploadedBy),
+    listingOwner: normalizeText(legacyListingOwner),
     skuCount: dataRows.length,
     salesQty,
     shipmentQty,
@@ -624,7 +633,13 @@ async function readSummary(storedName) {
 
 export async function parseAndSaveBudgetUpload(upload) {
   const filePath = path.join(uploadDir, upload.storedName);
-  const summary = await parseBudgetWorkbook(filePath, upload.fileName, upload.storedName, upload.budgetMonth, upload.listingOwner);
+  const historicalSummary = await readSummary(upload.storedName);
+  const summary = await parseBudgetWorkbook(filePath, upload.fileName, upload.storedName, upload.budgetMonth, {
+    country: upload.country || historicalSummary?.country,
+    storeName: upload.storeName || historicalSummary?.storeName,
+    uploadedBy: upload.uploadedBy || historicalSummary?.uploadedBy,
+    legacyListingOwner: historicalSummary?.listingOwner,
+  });
   return saveSummary(summary);
 }
 
@@ -711,7 +726,11 @@ export async function saveBudgetUpload(payload) {
   if (!budgetMonth) {
     throw new Error("请先选择预算月份");
   }
-  const listingOwner = normalizeListingOwner(payload.listingOwner);
+  const country = normalizeText(payload.country).replace(/站$/, "");
+  if (!country) throw new Error("请先选择国家");
+  const storeName = normalizeText(payload.storeName);
+  if (!storeName) throw new Error("请先选择店铺");
+  const uploadedBy = normalizeUploader(payload.uploadedBy);
   const content = decodeBase64File(payload.base64);
 
   if (content.length === 0) {
@@ -729,11 +748,18 @@ export async function saveBudgetUpload(payload) {
     storedName,
     size: content.length,
     uploadedAt,
+    uploadedBy,
+    country,
+    storeName,
     budgetMonth,
     status: "已上传，等待解析",
   };
 
-  const summary = await parseBudgetWorkbook(filePath, upload.fileName, upload.storedName, upload.budgetMonth, listingOwner);
+  const summary = await parseBudgetWorkbook(filePath, upload.fileName, upload.storedName, upload.budgetMonth, {
+    country,
+    storeName,
+    uploadedBy,
+  });
   const replacedUploads = summary.status === "已解析" ? await replaceDuplicateBudgetUploads(summary) : [];
   const finalSummary = await saveSummary({
     ...summary,

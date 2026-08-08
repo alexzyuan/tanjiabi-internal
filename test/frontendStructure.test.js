@@ -32,7 +32,9 @@ test("budget targets use shared filters and a modal import workflow", async () =
   assert.match(budgetView, /id="budget-keyword-filter"/);
   assert.match(budgetView, /id="budget-import-button"/);
   assert.match(budgetView, /<dialog class="budget-import-dialog" id="budget-import-dialog"/);
-  assert.match(budgetView, /id="budget-import-owner"/);
+  assert.match(budgetView, /id="budget-import-country"/);
+  assert.match(budgetView, /id="budget-import-store"/);
+  assert.doesNotMatch(budgetView, /budget-import-owner/);
   assert.match(budgetView, /id="budget-template-download"/);
   assert.doesNotMatch(budgetView, /budget-upload-panel/);
   assert.match(featureCall, /selectedFilterValues,/);
@@ -41,7 +43,9 @@ test("budget targets use shared filters and a modal import workflow", async () =
   assert.match(featureSource, /function openBudgetImportDialog/);
   assert.match(featureSource, /function closeBudgetImportDialog/);
   assert.match(featureSource, /bind\(root, "#budget-import-dialog", "keydown"/);
-  assert.match(featureSource, /listingOwner/);
+  assert.match(featureSource, /budget-import-country/);
+  assert.match(featureSource, /budget-import-store/);
+  assert.doesNotMatch(featureSource, /budget-import-owner/);
 });
 
 test("store operating monthly report is a finance-owned feature with shared controls and table management", async () => {
