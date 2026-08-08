@@ -1,5 +1,6 @@
 import { mkdir, readdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { listBudgetShopCatalog } from "../data/budgetShopCatalog.js";
 
 const uploadDir = path.join(process.cwd(), "uploads", "budget-targets");
 const summaryDir = path.join(process.cwd(), "data-cache", "budget-targets");
@@ -822,7 +823,7 @@ export async function listBudgetTargets() {
   const mskuRows = rows.flatMap((row) => row.mskuRows || []);
   const totals = summarizeBudgetTargetRows(rows);
 
-  return { rows, mskuRows, totals };
+  return { rows, mskuRows, totals, shopOptions: listBudgetShopCatalog() };
 }
 
 export async function getBudgetTargetContext(range = {}) {

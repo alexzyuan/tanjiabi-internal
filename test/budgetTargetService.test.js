@@ -73,6 +73,12 @@ test("saveBudgetUpload parses a workbook and exposes aggregate budget targets", 
     assert.equal(targets.rows.length, 1);
     assert.equal(targets.mskuRows.length, 1);
     assert.equal(targets.totals.salesTarget, 200);
+    assert.deepEqual(targets.shopOptions.find((shop) => shop.storeName === "欧洲-探嘉德国店铺"), {
+      country: "德国",
+      storeName: "欧洲-探嘉德国店铺",
+      sid: 17307,
+      sourceName: "tanjia-eu-DE",
+    });
     assert.equal(context.matched, true);
     assert.equal(context.totals.profitTarget, 73.5);
   });
