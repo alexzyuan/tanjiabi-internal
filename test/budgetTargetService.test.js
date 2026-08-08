@@ -196,6 +196,37 @@ test("saveBudgetUpload replaces an existing upload for the same store and month"
   });
 });
 
+test("listBudgetTargets rejects duplicate store-month sources with their file names", async () => {
+  await withTempService(async ({ saveBudgetUpload, listBudgetTargets }, dir) => {
+    const first = await saveBudgetUpload(uploadPayload());
+    const duplicateStoredName = `duplicate-${first.storedName}`;
+    const uploadDir = path.join(dir, "uploads", "budget-targets");
+    const summaryDir = path.join(dir, "data-cache", "budget-targets");
+    const firstSummary = JSON.parse(await readFile(path.join(summaryDir, `${first.storedName}.json`), "utf8"));
+    const duplicateFileName = "探嘉美国-2026年7月预算-重复.xlsx";
+
+    await writeFile(
+      path.join(uploadDir, duplicateStoredName),
+      await readFile(path.join(uploadDir, first.storedName)),
+    );
+    await writeFile(path.join(summaryDir, `${duplicateStoredName}.json`), JSON.stringify({
+      ...firstSummary,
+      storedName: duplicateStoredName,
+      fileName: duplicateFileName,
+    }));
+
+    await assert.rejects(
+      () => listBudgetTargets(),
+      (error) => {
+        assert.match(error.message, /预算数据重复：探嘉美国 2026-07/);
+        assert.match(error.message, new RegExp(first.fileName));
+        assert.match(error.message, new RegExp(duplicateFileName));
+        return true;
+      },
+    );
+  });
+});
+
 test("budget context sums exact store-country rows for all requested months", async () => {
   await withTempService(async ({ saveBudgetUpload, getBudgetTargetContext }) => {
     await saveBudgetUpload(uploadPayload({ budgetMonth: "2026-06", salesAmount: 100 }));

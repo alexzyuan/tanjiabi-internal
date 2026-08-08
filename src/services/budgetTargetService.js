@@ -209,6 +209,30 @@ function summarizeBudgetTargetRows(rows = []) {
   return totals;
 }
 
+function assertUniqueBudgetSources(rows = []) {
+  const sourcesByStoreMonth = new Map();
+  rows
+    .filter((row) => row?.status === "已解析")
+    .forEach((row) => {
+      const storeName = normalizeText(row.storeName);
+      const month = normalizeBudgetMonth(row.month);
+      const key = `${storeName}|${month}`;
+      const sources = sourcesByStoreMonth.get(key) || [];
+      sources.push(row);
+      sourcesByStoreMonth.set(key, sources);
+    });
+
+  const duplicates = [...sourcesByStoreMonth.values()].filter((sources) => sources.length > 1);
+  if (!duplicates.length) return;
+
+  const descriptions = duplicates.map((sources) => {
+    const first = sources[0];
+    const fileNames = sources.map((source) => source.fileName || source.storedName).join("、");
+    return `${first.storeName} ${first.month} 同时存在 ${fileNames}`;
+  });
+  throw new Error(`预算数据重复：${descriptions.join("；")}`);
+}
+
 function parseMonth(fileName, summaryRows, selectedMonth = "") {
   const normalizedSelectedMonth = normalizeBudgetMonth(selectedMonth);
   if (normalizedSelectedMonth) return normalizedSelectedMonth;
@@ -735,6 +759,7 @@ export async function listBudgetUploads() {
 export async function listBudgetTargets() {
   const uploads = await listBudgetUploads();
   const rows = uploads.map((upload) => upload.summary).filter((summary) => summary && summary.status === "已解析");
+  assertUniqueBudgetSources(rows);
   const mskuRows = rows.flatMap((row) => row.mskuRows || []);
   const totals = summarizeBudgetTargetRows(rows);
 
