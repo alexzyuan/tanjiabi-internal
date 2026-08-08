@@ -464,6 +464,11 @@ export function createBudgetTargetsFeature({
     bind(root, "#budget-import-confirm", "click", uploadBudgetTemplate);
     bind(root, "#budget-import-close", "click", closeBudgetImportDialog);
     bind(root, "#budget-import-cancel", "click", closeBudgetImportDialog);
+    bind(root, "#budget-import-dialog", "keydown", (event) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      closeBudgetImportDialog();
+    });
     bind(root, "#budget-add-month-button", "click", addBudgetMonth);
     bind(root, "#budget-month-picker", "keydown", (event) => {
       if (event.key === "Enter") addBudgetMonth();

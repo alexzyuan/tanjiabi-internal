@@ -40,6 +40,7 @@ test("budget targets use shared filters and a modal import workflow", async () =
   assert.match(featureCall, /syncAllOptionSelection,/);
   assert.match(featureSource, /function openBudgetImportDialog/);
   assert.match(featureSource, /function closeBudgetImportDialog/);
+  assert.match(featureSource, /bind\(root, "#budget-import-dialog", "keydown"/);
   assert.match(featureSource, /listingOwner/);
 });
 
