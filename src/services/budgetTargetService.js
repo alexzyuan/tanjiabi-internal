@@ -56,6 +56,12 @@ function normalizeText(value) {
   return value == null ? "" : String(value).trim();
 }
 
+function normalizeListingOwner(value) {
+  const listingOwner = normalizeText(value);
+  if (!listingOwner) throw new Error("请先选择链接负责人");
+  return listingOwner;
+}
+
 function normalizeHeader(value) {
   return normalizeText(value)
     .replace(/[（）]/g, (char) => (char === "（" ? "(" : ")"))
@@ -410,7 +416,7 @@ function buildStoreSummaryTargets(summaryRows, fallback = {}) {
   };
 }
 
-async function parseBudgetWorkbook(filePath, fileName, storedName, selectedMonth = "") {
+async function parseBudgetWorkbook(filePath, fileName, storedName, selectedMonth = "", listingOwner = "") {
   let XLSX;
   try {
     const module = await import("xlsx");
@@ -541,6 +547,7 @@ async function parseBudgetWorkbook(filePath, fileName, storedName, selectedMonth
       storeName,
       site,
       currencyCode,
+      listingOwner: normalizeText(listingOwner),
       skuOwner: normalizeText(readByHeader(row, headerMap, "SKU负责人")),
       msku: normalizeText(readByHeader(row, headerMap, "MSKU")),
       asin: normalizeText(readByHeader(row, headerMap, "ASIN")),
@@ -571,6 +578,7 @@ async function parseBudgetWorkbook(filePath, fileName, storedName, selectedMonth
     storeName,
     site,
     currencyCode,
+    listingOwner: normalizeText(listingOwner),
     skuCount: dataRows.length,
     salesQty,
     shipmentQty,
@@ -616,8 +624,32 @@ async function readSummary(storedName) {
 
 export async function parseAndSaveBudgetUpload(upload) {
   const filePath = path.join(uploadDir, upload.storedName);
-  const summary = await parseBudgetWorkbook(filePath, upload.fileName, upload.storedName, upload.budgetMonth);
+  const summary = await parseBudgetWorkbook(filePath, upload.fileName, upload.storedName, upload.budgetMonth, upload.listingOwner);
   return saveSummary(summary);
+}
+
+export async function createBudgetImportTemplate() {
+  const module = await import("xlsx");
+  const XLSX = module.default || module;
+  const workbook = XLSX.utils.book_new();
+  const summaryRows = [
+    ["店铺预算报表"],
+    ["预算月份", "2026-09", "汇率", 7],
+    ["名称", "原币金额", "人民币金额", "占比"],
+    ["销售收入", 0, 0, ""],
+    ["广告费用", 0, 0, ""],
+    ["退款金额", 0, 0, ""],
+    ["商品采购成本", 0, 0, ""],
+    ["头程运费", 0, 0, ""],
+    ["营业利润", 0, 0, ""],
+  ];
+  const budgetRows = [
+    ["MSKU", "ASIN", "产品名称", "SKU负责人", "销售价($)", "销售数量", "销额($)", "广告费用($)", "退款金额($)", "FBA配送费($)", "总成本($)", "总头程费用($)", "仓储费($)", "优惠券佣金($)", "发货数量"],
+    ["示例-MSKU", "B0EXAMPLE", "示例产品", "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  ];
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(summaryRows), "汇总");
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(budgetRows), "销售预算");
+  return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
 }
 
 async function removeFileIfExists(filePath) {
@@ -679,6 +711,7 @@ export async function saveBudgetUpload(payload) {
   if (!budgetMonth) {
     throw new Error("请先选择预算月份");
   }
+  const listingOwner = normalizeListingOwner(payload.listingOwner);
   const content = decodeBase64File(payload.base64);
 
   if (content.length === 0) {
@@ -700,7 +733,7 @@ export async function saveBudgetUpload(payload) {
     status: "已上传，等待解析",
   };
 
-  const summary = await parseBudgetWorkbook(filePath, upload.fileName, upload.storedName, upload.budgetMonth);
+  const summary = await parseBudgetWorkbook(filePath, upload.fileName, upload.storedName, upload.budgetMonth, listingOwner);
   const replacedUploads = summary.status === "已解析" ? await replaceDuplicateBudgetUploads(summary) : [];
   const finalSummary = await saveSummary({
     ...summary,

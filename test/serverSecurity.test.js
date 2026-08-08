@@ -303,6 +303,13 @@ test("default-open purchase and budget routes are not blocked by role guards", a
     });
     assert.equal(uploadsResponse.status, 200);
 
+    const templateResponse = await fetch(`${server.baseUrl}/api/admin/budget/template`, {
+      headers: { cookie: result.cookie },
+    });
+    assert.equal(templateResponse.status, 200);
+    assert.match(templateResponse.headers.get("content-type") || "", /application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet/);
+    assert.match(templateResponse.headers.get("content-disposition") || "", /attachment/);
+
     const uploadResponse = await fetch(`${server.baseUrl}/api/admin/budget/upload`, {
       method: "POST",
       headers: { cookie: result.cookie, "content-type": "application/json" },

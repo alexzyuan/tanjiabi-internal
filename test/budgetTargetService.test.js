@@ -44,10 +44,11 @@ function workbookBuffer({ storeTitle = "探嘉美国店铺预算报表", msku = 
   return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
 }
 
-function uploadPayload({ budgetMonth = "2026-07", ...workbookOverrides } = {}) {
+function uploadPayload({ budgetMonth = "2026-07", listingOwner = "林芃", ...workbookOverrides } = {}) {
   return {
     fileName: "探嘉美国-2026年7月预算.xlsx",
     budgetMonth,
+    listingOwner,
     base64: workbookBuffer(workbookOverrides).toString("base64"),
   };
 }
@@ -90,6 +91,7 @@ test("parsed workbook preserves absent report budget metrics instead of synthesi
     const upload = await saveBudgetUpload({
       fileName: "探嘉美国-2026年7月预算.xlsx",
       budgetMonth: "2026-07",
+      listingOwner: "林芃",
       base64: XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }).toString("base64"),
     });
 
@@ -144,6 +146,19 @@ test("saveBudgetUpload rejects invalid month, extension, and empty file content"
       () => saveBudgetUpload({ ...uploadPayload(), base64: "" }),
       /上传文件内容为空/,
     );
+  });
+});
+
+test("saveBudgetUpload requires a listing owner and persists it to every MSKU row", async () => {
+  await withTempService(async ({ saveBudgetUpload }) => {
+    await assert.rejects(
+      () => saveBudgetUpload(uploadPayload({ listingOwner: "" })),
+      /请先选择链接负责人/,
+    );
+
+    const upload = await saveBudgetUpload(uploadPayload({ listingOwner: "林芃" }));
+    assert.equal(upload.summary.listingOwner, "林芃");
+    assert.equal(upload.summary.mskuRows[0].listingOwner, "林芃");
   });
 });
 
