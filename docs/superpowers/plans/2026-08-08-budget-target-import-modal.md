@@ -1,5 +1,7 @@
 # Budget Target Import Modal Implementation Plan
 
+> 2026-08-08 follow-up: the shipped contract uses a single month picker, requires country/store selection in the import dialog, removes dialog listing-owner input, and records the authenticated uploader as `uploadedBy`. The historical-owner compatibility rule remains unchanged.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Prevent duplicated budget sources from generating duplicate sales-review rows, and replace the budget-page upload panel with a filtered modal import workflow that persists a selected listing owner.
