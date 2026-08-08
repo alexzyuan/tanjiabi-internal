@@ -37,12 +37,6 @@ body:not(.login-body) .view > .module-hero + :is(.filters, .filter-toolbar) {
   flex: 0 0 220px;
 }
 
-.filters .front-owner-quick-filter {
-  position: relative;
-  flex: 0 0 150px;
-  min-width: 0;
-}
-
 .filters .checkbox-label {
   flex: 0 0 auto;
   gap: 8px;
@@ -93,6 +87,7 @@ body:not(.login-body) .view > .module-hero + :is(.filters, .filter-toolbar) {
   position: absolute;
   top: 1px;
   right: 1px;
+  z-index: 1;
   display: none;
   place-items: center;
   width: 28px;
@@ -100,17 +95,14 @@ body:not(.login-body) .view > .module-hero + :is(.filters, .filter-toolbar) {
   border: 0;
   color: var(--tj-text-muted);
   background: var(--tj-content-bg);
+  appearance: none;
   cursor: pointer;
   font-size: 26px;
 }
 
-.filter-dropdown--has-selection:hover .filter-dropdown-clear,
+.filter-dropdown--has-selection:is(:hover, :focus-within) .filter-dropdown-clear,
 .filter-dropdown-clear:focus-visible {
   display: grid;
-}
-
-.filter-dropdown--has-selection:hover .filter-dropdown-button::after {
-  content: none;
 }
 
 .filter-dropdown-clear:hover {

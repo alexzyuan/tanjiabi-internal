@@ -142,6 +142,15 @@ test("styles.css does not add account trigger background patches after shell loc
   );
 });
 
+test("shared filter clear control stays above the dropdown arrow for pointer and keyboard use", async () => {
+  const filterSource = await readFile(new URL("../assets/css/components/30-surfaces-and-filters.css", import.meta.url), "utf8");
+  const multiSelectSource = await readFile(new URL("../assets/css/components/32-form-controls.css", import.meta.url), "utf8");
+
+  assert.match(filterSource, /\.filter-dropdown-clear\s*\{[\s\S]*?z-index:\s*1;/);
+  assert.match(filterSource, /\.filter-dropdown--has-selection:is\(:hover, :focus-within\)\s+\.filter-dropdown-clear/);
+  assert.match(multiSelectSource, /\.filter-dropdown--has-selection:is\(:hover, :focus-within\)\s+\.filter-dropdown-button::after\s*\{\s*content:\s*none;/);
+});
+
 test("styles.css keeps brand blue behind semantic tokens", async () => {
   const source = await readFile(new URL("../styles.css", import.meta.url), "utf8");
   const normalizedSource = source.replace("--spectrum-accent-background:#1677ff;", "");

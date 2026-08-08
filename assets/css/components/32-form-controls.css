@@ -52,6 +52,10 @@
   font-size: 12px;
 }
 
+.filter-dropdown--has-selection:is(:hover, :focus-within) .filter-dropdown-button::after {
+  content: none;
+}
+
 .multi-select-menu {
   position: absolute;
   top: 44px;

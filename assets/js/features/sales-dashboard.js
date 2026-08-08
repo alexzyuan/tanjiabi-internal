@@ -1,5 +1,4 @@
 import { renderKpiProgress } from "../ui-components.js?v=20260707-ui-components-v1";
-import { FRONT_OWNER_QUICK_FILTERS } from "../front-shop-filters.js?v=20260724-sales-owner-detail-jump-v1";
 import { markDashboardLoadingRequest, startDashboardLoadingOverlay } from "../dashboard-loader.js?v=20260803-global-page-loading-v1";
 
 export function createSalesDashboardFeature({
@@ -412,10 +411,7 @@ export function createSalesDashboardFeature({
     const select = root?.querySelector?.("#front-owner-filter");
     if (!select) return;
     const selected = select.value;
-    const mergedOptions = [
-      ...FRONT_OWNER_QUICK_FILTERS.map((name) => ({ value: name, name })),
-      ...options,
-    ].reduce((items, item) => {
+    const mergedOptions = options.reduce((items, item) => {
       const value = item.value || item.name;
       if (!value || items.some((existing) => existing.value === value)) return items;
       items.push({ value, name: item.name || value });

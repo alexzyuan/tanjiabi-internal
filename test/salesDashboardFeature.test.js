@@ -155,7 +155,7 @@ test("sales dashboard feature redirects on an expired session and returns fallba
   }
 });
 
-test("sales dashboard feature keeps the three quick owner names in the owner select", () => {
+test("sales dashboard feature uses only owner options returned by the dashboard", () => {
   const ownerSelect = {
     value: "运营A",
     options: [
@@ -193,10 +193,8 @@ test("sales dashboard feature keeps the three quick owner names in the owner sel
 
     renderDashboard({ filters: { ownerOptions: [{ value: "运营A", name: "运营A" }] } });
 
-    assert.match(ownerSelect.innerHTML, /林芃/);
-    assert.match(ownerSelect.innerHTML, /熊丹轩/);
-    assert.match(ownerSelect.innerHTML, /黄超/);
     assert.match(ownerSelect.innerHTML, /运营A/);
+    assert.doesNotMatch(ownerSelect.innerHTML, /林芃|熊丹轩|黄超/);
     assert.equal(ownerSelect.value, "运营A");
   } finally {
     console.error = originalError;

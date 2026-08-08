@@ -2,6 +2,18 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+test("sales dashboard keeps a single standard owner filter", async () => {
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const filtersStart = indexSource.indexOf('<section class="filters" id="sales-global-filters"');
+  const filtersEnd = indexSource.indexOf("</section>", filtersStart);
+  const filters = indexSource.slice(filtersStart, filtersEnd);
+
+  assert.notEqual(filtersStart, -1, "sales dashboard filters are missing");
+  assert.match(filters, /id="front-owner-filter"/);
+  assert.doesNotMatch(filters, /id="front-owner-quick-filter"/);
+  assert.doesNotMatch(filters, /负责人快捷筛选/);
+});
+
 test("store operating monthly report is a finance-owned feature with shared controls and table management", async () => {
   const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
   const appSource = await readFile(new URL("../app.js", import.meta.url), "utf8");
@@ -171,7 +183,7 @@ test("frontend module cache-bust versions stay aligned", async () => {
   assert.ok(indexUiUtilsVersion, "index.html should cache-bust ui-utils.js");
   assert.ok(appUiUtilsVersion, "app.js should import the same cache-busted ui-utils.js");
   assert.ok(dashboardLoaderUiUtilsVersion, "dashboard-loader.js should import the same cache-busted ui-utils.js");
-  assert.equal(stylesheetVersion, "20260808-shared-filter-clear-v1");
+  assert.equal(stylesheetVersion, "20260808-filter-clear-visibility-v2");
   assert.equal(appUiUtilsVersion, indexUiUtilsVersion);
   assert.equal(dashboardLoaderUiUtilsVersion, indexUiUtilsVersion);
 });

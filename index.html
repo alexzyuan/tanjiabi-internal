@@ -14,7 +14,7 @@
         }
       })();
     </script>
-    <link rel="stylesheet" href="./styles.css?v=20260808-shared-filter-clear-v1" />
+    <link rel="stylesheet" href="./styles.css?v=20260808-filter-clear-visibility-v2" />
   </head>
   <body>
     <div class="app-shell">
@@ -283,27 +283,6 @@
               <option value="">全部负责人</option>
             </select>
           </label>
-          <div class="multi-select front-owner-quick-filter" id="front-owner-quick-filter">
-            <button class="filter-dropdown-button multi-select-button" type="button" aria-haspopup="listbox" aria-expanded="false">
-              <span class="filter-dropdown-button-label">负责人快捷筛选</span>
-            </button>
-            <div class="filter-dropdown-menu multi-select-menu" hidden>
-              <div class="multi-select-options" role="radiogroup" aria-label="销售负责人快捷筛选">
-                <label class="multi-select-option">
-                  <input type="radio" name="front-owner-quick-filter" value="林芃" />
-                  <span>林芃</span>
-                </label>
-                <label class="multi-select-option">
-                  <input type="radio" name="front-owner-quick-filter" value="熊丹轩" />
-                  <span>熊丹轩</span>
-                </label>
-                <label class="multi-select-option">
-                  <input type="radio" name="front-owner-quick-filter" value="黄超" />
-                  <span>黄超</span>
-                </label>
-              </div>
-            </div>
-          </div>
           <label>
             品类
             <select>
@@ -2659,6 +2638,6 @@
       });
     </script>
     <script type="module" src="./assets/js/ui-utils.js?v=20260706-frontend-refactor-v41" onerror="document.querySelector('#data-source').textContent='脚本未加载';document.querySelector('#data-source-note').textContent='ui-utils.js 请求失败，请检查服务器静态文件';"></script>
-    <script type="module" src="./app.js?v=20260803-date-auto-refresh-v1" onerror="document.querySelector('#data-source').textContent='脚本未加载';document.querySelector('#data-source-note').textContent='app.js 请求失败，请检查服务器静态文件';document.querySelector('#topbar-sync-state').textContent='脚本未加载';document.querySelector('#topbar-sync-time').textContent='app.js 失败';"></script>
+    <script type="module" src="./app.js?v=20260808-single-owner-filter-v2" onerror="document.querySelector('#data-source').textContent='脚本未加载';document.querySelector('#data-source-note').textContent='app.js 请求失败，请检查服务器静态文件';document.querySelector('#topbar-sync-state').textContent='脚本未加载';document.querySelector('#topbar-sync-time').textContent='app.js 失败';"></script>
   </body>
 </html>
