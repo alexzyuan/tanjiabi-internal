@@ -56,7 +56,8 @@ body:not(.login-body) .view > .module-hero + :is(.filters, .filter-toolbar) {
   transition: border-color 0.16s ease, box-shadow 0.16s ease;
 }
 
-.filters select.enhanced-filter-select {
+.filters select.enhanced-filter-select,
+.filter-toolbar select.enhanced-filter-select {
   position: absolute;
   width: 1px;
   height: 1px;

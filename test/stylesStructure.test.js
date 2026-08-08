@@ -253,7 +253,8 @@ test("shared filters and panel surfaces live outside legacy css", async () => {
   assert.match(componentSource, /^\.filters label:has\(\.date-range-control\)\s*\{/m);
   assert.match(componentSource, /^\.filters \.checkbox-label\s*\{/m);
   assert.match(componentSource, /^\.filters \.filter-dropdown-menu\s*\{/m);
-  assert.match(componentSource, /^\.filters select\.enhanced-filter-select\s*\{/m);
+  assert.match(componentSource, /^\.filters select\.enhanced-filter-select,/m);
+  assert.match(componentSource, /\.filter-toolbar select\.enhanced-filter-select\s*\{/m);
   assert.match(componentSource, /^\.panel\s*\{/m);
   assert.match(componentSource, /^\.panel-head\s*\{/m);
   assert.match(componentSource, /^\.form-span-2\s*\{/m);
@@ -283,6 +284,13 @@ test("shared filters and panel surfaces live outside legacy css", async () => {
   assert.equal(legacySource.includes(".table-scroll table"), false);
   assert.equal(legacySource.includes(".upload-status {"), false);
   assert.equal(legacySource.includes(".empty-state {\n  min-height:"), false);
+});
+
+test("compact filter toolbar direct controls keep their shared compact width", async () => {
+  const toolbarSource = await readFile(new URL("../assets/css/components/35-filter-toolbar.css", import.meta.url), "utf8");
+
+  assert.match(toolbarSource, /\.filter-toolbar > :is\(input, select, \.filter-dropdown\)\s*\{[\s\S]*?width:\s*150px;/);
+  assert.equal(toolbarSource.includes(".filter-toolbar > :where(input, select)"), false);
 });
 
 test("shared visual component tokens normalize controls, tables, and modals", async () => {
@@ -328,11 +336,11 @@ test("shared filter toolbar styles live outside page css and use semantic tokens
   assert.match(componentSource, /^\/\* Shared compact filter toolbar\. \*\//m);
   assert.match(componentSource, /^\.filter-toolbar\s*\{/m);
   assert.match(componentSource, /^\.filter-toolbar\s*\{[\s\S]*column-gap:\s*8px;[\s\S]*row-gap:\s*8px;[\s\S]*border:\s*0;[\s\S]*\}/m);
-  assert.match(componentSource, /^\.filter-toolbar label\s*\{/m);
-  assert.match(componentSource, /^\.filter-toolbar label:has\(\.date-range-control\)\s*\{/m);
+  assert.match(componentSource, /^\.filter-toolbar > label\s*\{/m);
+  assert.match(componentSource, /^\.filter-toolbar > label:has\(\.date-range-control\)\s*\{/m);
   assert.match(componentSource, /^\.filter-toolbar \.date-range-control\s*\{/m);
   assert.match(componentSource, /^\.filter-toolbar input,/m);
-  assert.match(componentSource, /^\.filter-toolbar > :where\(input, select\)\s*\{/m);
+  assert.match(componentSource, /^\.filter-toolbar > :is\(input, select, \.filter-dropdown\)\s*\{/m);
   assert.match(componentSource, /var\(--tj-content-bg\)/);
   assert.match(componentSource, /var\(--tj-border-control\)/);
   assert.match(componentSource, /var\(--tj-text-body\)/);

@@ -1261,6 +1261,7 @@ test("shared filter controls live outside app.js", async () => {
   assert.match(filterControlsSource, /function createFilterDropdown\(select\)/);
   assert.match(filterControlsSource, /function renderFilterDropdown\(select\)/);
   assert.match(filterControlsSource, /function initializeFilterDropdowns\(\)/);
+  assert.match(filterControlsSource, /querySelectorAll\("\.filters select\[multiple\], \.filter-toolbar select\[multiple\]"\)/);
   assert.match(filterControlsSource, /function setSelectOptions\(selectorOrElement, options = \[\]/);
   assert.match(filterControlsSource, /return \{[\s\S]*setSelectOptions[\s\S]*syncAllOptionSelection[\s\S]*\}/);
 

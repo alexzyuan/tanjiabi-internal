@@ -187,7 +187,7 @@ export function createFilterControls({
   }
 
   function initializeFilterDropdowns() {
-    root.querySelectorAll(".filters select[multiple]").forEach(renderFilterDropdown);
+    root.querySelectorAll(".filters select[multiple], .filter-toolbar select[multiple]").forEach(renderFilterDropdown);
     if (globalObject.__tanjiaFilterDropdownOutsideClickReady) return;
     globalObject.__tanjiaFilterDropdownOutsideClickReady = true;
     bindClickOutside(root, ".filter-dropdown", () => {

@@ -13,7 +13,7 @@
   background: var(--tj-content-bg);
 }
 
-.filter-toolbar label {
+.filter-toolbar > label {
   display: inline-flex;
   align-items: center;
   flex: 0 0 150px;
@@ -22,7 +22,7 @@
   color: var(--tj-text-body);
 }
 
-.filter-toolbar label:has(.date-range-control) {
+.filter-toolbar > label:has(.date-range-control) {
   flex-basis: 240px;
 }
 
@@ -48,7 +48,7 @@
   color: var(--tj-text-muted);
 }
 
-.filter-toolbar > :where(input, select) {
+.filter-toolbar > :is(input, select, .filter-dropdown) {
   width: 150px;
 }
 
