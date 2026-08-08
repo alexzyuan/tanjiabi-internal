@@ -8,20 +8,28 @@ export function createBudgetTargetsFeature({
   bind,
   closestTarget,
   escapeHtml,
+  fetchImpl = globalThis.fetch,
   fieldValue,
   formatMoney,
   formatNumber,
   formatPercent,
   getPacificDateParts,
   locationRef = globalThis.location,
+  normalizeCountryName = (value) => String(value || "").trim(),
   readFileAsBase64,
   renderTableMessage,
   setButtonBusy,
+  setSelectOptions,
   setText,
+  selectedFilterValues,
+  syncAllOptionSelection,
   trimmedFieldValue,
 } = {}) {
   if (typeof bind !== "function") throw new Error("createBudgetTargetsFeature requires bind.");
   if (typeof readFileAsBase64 !== "function") throw new Error("createBudgetTargetsFeature requires readFileAsBase64.");
+  if (typeof setSelectOptions !== "function") throw new Error("createBudgetTargetsFeature requires setSelectOptions.");
+  if (typeof selectedFilterValues !== "function") throw new Error("createBudgetTargetsFeature requires selectedFilterValues.");
+  if (typeof syncAllOptionSelection !== "function") throw new Error("createBudgetTargetsFeature requires syncAllOptionSelection.");
 
   let budgetTargetRows = [];
   let budgetMskuRows = [];
@@ -32,6 +40,43 @@ export function createBudgetTargetsFeature({
 
   function uniqueValues(values = []) {
     return [...new Set(values.map((value) => String(value || "").trim()).filter(Boolean))];
+  }
+
+  function budgetRowOwner(row = {}) {
+    return String(row.listingOwner || row.skuOwner || "").trim();
+  }
+
+  function budgetCountry(row = {}) {
+    return normalizeCountryName(row.site || row.country || "");
+  }
+
+  function refreshBudgetFilterOptions({ selectAllStores = false } = {}) {
+    const countrySelect = root?.querySelector?.("#budget-country-filter");
+    const storeSelect = root?.querySelector?.("#budget-store-filter");
+    const ownerSelect = root?.querySelector?.("#budget-listing-owner-filter");
+    if (!countrySelect || !storeSelect || !ownerSelect) return;
+
+    const allRows = [...budgetTargetRows, ...budgetMskuRows];
+    const countries = uniqueValues(allRows.map(budgetCountry)).sort((left, right) => left.localeCompare(right, "zh-CN"));
+    setSelectOptions(countrySelect, countries, "全部国家");
+    const selectedCountries = selectedFilterValues(countrySelect);
+    const storeOptions = [...new Map(budgetTargetRows
+      .map((row) => ({ name: row.storeName, label: row.storeName, country: budgetCountry(row) }))
+      .filter((row) => row.name)
+      .map((row) => [row.name, row])).values()];
+    setSelectOptions(storeSelect, storeOptions, "全部店铺", {
+      groupByCountry: true,
+      countries: selectedCountries,
+      selectAllVisible: selectAllStores,
+    });
+
+    const selectedOwner = ownerSelect.value;
+    const owners = uniqueValues(budgetMskuRows.map(budgetRowOwner)).sort((left, right) => left.localeCompare(right, "zh-CN"));
+    ownerSelect.innerHTML = `<option value="">全部链接负责人</option>${owners.map((owner) => `<option value="${escapeHtml(owner)}">${escapeHtml(owner)}</option>`).join("")}`;
+    if (owners.includes(selectedOwner)) ownerSelect.value = selectedOwner;
+
+    const datalist = root?.querySelector?.("#budget-import-owner-options");
+    if (datalist) datalist.innerHTML = owners.map((owner) => `<option value="${escapeHtml(owner)}"></option>`).join("");
   }
 
   function initializeBudgetDeepLinkScope() {
@@ -140,8 +185,9 @@ export function createBudgetTargetsFeature({
   function budgetFilterValues() {
     return {
       platform: fieldValue("#budget-platform-filter", "", root),
-      store: trimmedFieldValue("#budget-store-filter", "", root),
-      status: fieldValue("#budget-status-filter", "", root),
+      countries: selectedFilterValues("#budget-country-filter", root),
+      stores: selectedFilterValues("#budget-store-filter", root),
+      listingOwner: fieldValue("#budget-listing-owner-filter", "", root),
       keyword: trimmedFieldValue("#budget-keyword-filter", "", root),
       linkedStores: budgetDeepLinkScope.stores,
       linkedCountries: budgetDeepLinkScope.countries,
@@ -149,36 +195,38 @@ export function createBudgetTargetsFeature({
   }
 
   function getFilteredBudgetRows() {
-    const { platform, store, status, keyword, linkedStores, linkedCountries } = budgetFilterValues();
+    const { platform, countries, stores, listingOwner, keyword, linkedStores, linkedCountries } = budgetFilterValues();
     const normalizedKeyword = keyword.toLowerCase();
     const linkedCountrySet = new Set(linkedCountries.map(normalizeBudgetDeepLinkCountry));
 
     return budgetTargetRows.filter((row) => {
-      const haystack = `${row.month} ${row.platform} ${row.storeName} ${row.site} ${row.status}`.toLowerCase();
+      const haystack = `${row.month} ${row.platform} ${row.storeName} ${row.site} ${row.status} ${row.listingOwner}`.toLowerCase();
       if (selectedBudgetMonths.length && !selectedBudgetMonths.includes(row.month)) return false;
       if (platform && row.platform !== platform) return false;
-      if (store && !row.storeName.includes(store)) return false;
-      if (!store && linkedStores.length && !linkedStores.includes(row.storeName)) return false;
+      if (countries.length && !countries.includes(budgetCountry(row))) return false;
+      if (stores.length && !stores.includes(row.storeName)) return false;
+      if (!stores.length && linkedStores.length && !linkedStores.includes(row.storeName)) return false;
       if (linkedCountrySet.size && !linkedCountrySet.has(normalizeBudgetDeepLinkCountry(row.site || row.country))) return false;
-      if (status && !row.status.includes(status)) return false;
+      if (listingOwner && row.listingOwner !== listingOwner) return false;
       if (normalizedKeyword && !haystack.includes(normalizedKeyword)) return false;
       return true;
     });
   }
 
   function getFilteredBudgetMskuRows() {
-    const { platform, store, status, keyword: rawKeyword, linkedStores, linkedCountries } = budgetFilterValues();
+    const { platform, countries, stores, listingOwner, keyword: rawKeyword, linkedStores, linkedCountries } = budgetFilterValues();
     const keyword = rawKeyword.toLowerCase();
     const linkedCountrySet = new Set(linkedCountries.map(normalizeBudgetDeepLinkCountry));
 
     return budgetMskuRows.filter((row) => {
-      const haystack = `${row.month} ${row.platform} ${row.storeName} ${row.site} ${row.status} ${row.msku} ${row.asin} ${row.skuOwner}`.toLowerCase();
+      const haystack = `${row.month} ${row.platform} ${row.storeName} ${row.site} ${row.status} ${row.msku} ${row.asin} ${budgetRowOwner(row)}`.toLowerCase();
       if (selectedBudgetMonths.length && !selectedBudgetMonths.includes(row.month)) return false;
       if (platform && row.platform !== platform) return false;
-      if (store && !row.storeName.includes(store)) return false;
-      if (!store && linkedStores.length && !linkedStores.includes(row.storeName)) return false;
+      if (countries.length && !countries.includes(budgetCountry(row))) return false;
+      if (stores.length && !stores.includes(row.storeName)) return false;
+      if (!stores.length && linkedStores.length && !linkedStores.includes(row.storeName)) return false;
       if (linkedCountrySet.size && !linkedCountrySet.has(normalizeBudgetDeepLinkCountry(row.site || row.country))) return false;
-      if (status && !row.status.includes(status)) return false;
+      if (listingOwner && budgetRowOwner(row) !== listingOwner) return false;
       if (keyword && !haystack.includes(keyword)) return false;
       return true;
     });
@@ -187,6 +235,7 @@ export function createBudgetTargetsFeature({
   function renderBudgetTargets(data) {
     if ("rows" in data) budgetTargetRows = data.rows || [];
     if ("mskuRows" in data) budgetMskuRows = data.mskuRows || [];
+    refreshBudgetFilterOptions();
     const rows = getFilteredBudgetRows();
     const mskuRows = getFilteredBudgetMskuRows();
     const totals = rows.reduce(
@@ -253,7 +302,7 @@ export function createBudgetTargetsFeature({
           <td>${escapeHtml(row.storeName || "-")}</td>
           <td>${escapeHtml(row.site || "-")}</td>
           <td>${escapeHtml(row.status || "-")}</td>
-          <td>${escapeHtml(row.skuOwner || "-")}</td>
+          <td>${escapeHtml(budgetRowOwner(row) || "-")}</td>
           <td>${escapeHtml(row.msku || "-")}</td>
           <td>${escapeHtml(row.asin || "-")}</td>
           <td>${formatNumber(row.salesQty || 0)}</td>
@@ -269,7 +318,7 @@ export function createBudgetTargetsFeature({
 
   async function loadBudgetUploads() {
     try {
-      const response = await fetch("/api/admin/budget/uploads");
+      const response = await fetchImpl("/api/admin/budget/uploads");
       if (!response.ok) throw new Error(`API ${response.status}`);
       const data = await response.json();
       renderBudgetUploads(data.uploads || []);
@@ -281,7 +330,7 @@ export function createBudgetTargetsFeature({
   async function loadBudgetTargets() {
     initializeBudgetDefaults();
     try {
-      const response = await fetch("/api/budget-targets");
+      const response = await fetchImpl("/api/budget-targets");
       if (!response.ok) throw new Error(`API ${response.status}`);
       renderBudgetTargets(await response.json());
     } catch {
@@ -290,17 +339,17 @@ export function createBudgetTargetsFeature({
   }
 
   function renderBudgetFileState(file) {
-    const fileName = root?.querySelector?.("#budget-file-name");
+    const fileName = root?.querySelector?.("#budget-import-file-name");
     if (fileName) {
       fileName.innerHTML = file
         ? `<strong>${escapeHtml(file.name)}</strong><small>已选择，点击上传或重新拖拽替换文件</small>`
         : `<strong>选择预算模板</strong><small>点击选择，或拖拽 .xlsx 文件到这里后点击上传预算</small>`;
     }
-    setText("#budget-upload-status", file ? "已选择，等待上传" : "未选择文件", root);
+    setText("#budget-import-status", file ? "已选择，等待导入" : "未选择文件", root);
   }
 
   function setBudgetUploadFile(file) {
-    const input = root?.querySelector?.("#budget-file-input");
+    const input = root?.querySelector?.("#budget-import-file-input");
     if (!input || !file) return;
     const transfer = new DataTransfer();
     transfer.items.add(file);
@@ -309,64 +358,88 @@ export function createBudgetTargetsFeature({
   }
 
   async function uploadBudgetTemplate() {
-    const input = root?.querySelector?.("#budget-file-input");
-    const monthInput = root?.querySelector?.("#budget-upload-month");
-    const button = root?.querySelector?.("#budget-upload-button");
-    const status = root?.querySelector?.("#budget-upload-status");
+    const input = root?.querySelector?.("#budget-import-file-input");
+    const monthInput = root?.querySelector?.("#budget-import-month");
+    const ownerInput = root?.querySelector?.("#budget-import-owner");
+    const button = root?.querySelector?.("#budget-import-confirm");
+    const status = root?.querySelector?.("#budget-import-status");
     const file = input?.files?.[0];
     const budgetMonth = monthInput?.value || "";
+    const listingOwner = String(ownerInput?.value || "").trim();
 
     if (!budgetMonth) {
-      setText("#budget-upload-status", "请先选择预算月份", root);
+      setText("#budget-import-status", "请先选择预算月份", root);
+      return;
+    }
+
+    if (!listingOwner) {
+      setText("#budget-import-status", "请先选择链接负责人", root);
       return;
     }
 
     if (!file) {
-      setText("#budget-upload-status", "请先选择 .xlsx 文件", root);
+      setText("#budget-import-status", "请先选择 .xlsx 文件", root);
       return;
     }
 
     if (!file.name.toLowerCase().endsWith(".xlsx")) {
-      setText("#budget-upload-status", "只支持 .xlsx 预算模板", root);
+      setText("#budget-import-status", "只支持 .xlsx 预算模板", root);
       return;
     }
 
-    const restoreButton = setButtonBusy(button, "上传中", "上传预算", { disable: false });
-    if (status) status.textContent = "正在上传";
+    const restoreButton = setButtonBusy(button, "导入中", "确认导入", { disable: false });
+    if (status) status.textContent = "正在导入";
 
     try {
       const base64 = await readFileAsBase64(file);
-      const response = await fetch("/api/admin/budget/upload", {
+      const response = await fetchImpl("/api/admin/budget/upload", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ fileName: file.name, base64, budgetMonth }),
+        body: JSON.stringify({ fileName: file.name, base64, budgetMonth, listingOwner }),
       });
-      if (!response.ok) throw new Error(`API ${response.status}`);
-      const result = await response.json();
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || result.message || `API ${response.status}`);
       if (input) input.value = "";
       renderBudgetFileState(null);
-      setText("#budget-upload-status", result.upload?.replacedCount ? "已覆盖旧预算" : "上传成功", root);
+      setText("#budget-import-status", result.upload?.replacedCount ? "已覆盖旧预算" : "导入成功", root);
       await loadBudgetUploads();
       await loadBudgetTargets();
-    } catch {
-      setText("#budget-upload-status", "上传失败，请确认正在访问服务器地址", root);
+      closeBudgetImportDialog();
+    } catch (error) {
+      setText("#budget-import-status", error.message || "导入失败", root);
     } finally {
       restoreButton();
     }
   }
 
+  function openBudgetImportDialog() {
+    const dialog = root?.querySelector?.("#budget-import-dialog");
+    if (!dialog) return;
+    if (!dialog.open) dialog.showModal();
+    root?.querySelector?.("#budget-import-month")?.focus();
+  }
+
+  function closeBudgetImportDialog() {
+    const dialog = root?.querySelector?.("#budget-import-dialog");
+    if (dialog?.open) dialog.close();
+  }
+
   function resetBudgetFilters() {
     const monthInput = root?.querySelector?.("#budget-month-picker");
     const platformInput = root?.querySelector?.("#budget-platform-filter");
+    const countryInput = root?.querySelector?.("#budget-country-filter");
     const storeInput = root?.querySelector?.("#budget-store-filter");
-    const statusInput = root?.querySelector?.("#budget-status-filter");
+    const ownerInput = root?.querySelector?.("#budget-listing-owner-filter");
     const keywordInput = root?.querySelector?.("#budget-keyword-filter");
     selectedBudgetMonths = [];
     budgetDeepLinkScope = { stores: [], countries: [] };
     if (monthInput) monthInput.value = "";
     if (platformInput) platformInput.value = "";
-    if (storeInput) storeInput.value = "";
-    if (statusInput) statusInput.value = "";
+    [countryInput, storeInput].forEach((select) => {
+      if (!select) return;
+      [...select.options].forEach((option) => { option.selected = option.value === ""; });
+    });
+    if (ownerInput) ownerInput.value = "";
     if (keywordInput) keywordInput.value = "";
     renderBudgetMonthChips();
     renderBudgetTargets({ rows: budgetTargetRows });
@@ -379,7 +452,7 @@ export function createBudgetTargetsFeature({
 
   function initializeBudgetDefaults() {
     initializeBudgetDeepLinkScope();
-    const uploadMonthInput = root?.querySelector?.("#budget-upload-month");
+    const uploadMonthInput = root?.querySelector?.("#budget-import-month");
     if (uploadMonthInput && !uploadMonthInput.value) uploadMonthInput.value = defaultBudgetUploadMonth();
     const budgetMonthPicker = root?.querySelector?.("#budget-month-picker");
     if (budgetMonthPicker && !budgetMonthPicker.value) budgetMonthPicker.value = defaultBudgetUploadMonth();
@@ -387,7 +460,10 @@ export function createBudgetTargetsFeature({
   }
 
   function setupBudgetTargets() {
-    bind(root, "#budget-upload-button", "click", uploadBudgetTemplate);
+    bind(root, "#budget-import-button", "click", openBudgetImportDialog);
+    bind(root, "#budget-import-confirm", "click", uploadBudgetTemplate);
+    bind(root, "#budget-import-close", "click", closeBudgetImportDialog);
+    bind(root, "#budget-import-cancel", "click", closeBudgetImportDialog);
     bind(root, "#budget-add-month-button", "click", addBudgetMonth);
     bind(root, "#budget-month-picker", "keydown", (event) => {
       if (event.key === "Enter") addBudgetMonth();
@@ -398,28 +474,38 @@ export function createBudgetTargetsFeature({
       renderBudgetTargets({ rows: budgetTargetRows });
     });
     bind(root, "#budget-reset-button", "click", resetBudgetFilters);
-    bind(root, "#budget-file-input", "change", (event) => {
+    bind(root, "#budget-country-filter", "change", () => {
+      syncAllOptionSelection(root?.querySelector?.("#budget-country-filter"));
+      refreshBudgetFilterOptions({ selectAllStores: true });
+      renderBudgetTargets({ rows: budgetTargetRows });
+    });
+    bind(root, "#budget-store-filter", "change", () => {
+      syncAllOptionSelection(root?.querySelector?.("#budget-store-filter"));
+      renderBudgetTargets({ rows: budgetTargetRows });
+    });
+    bind(root, "#budget-listing-owner-filter", "change", () => renderBudgetTargets({ rows: budgetTargetRows }));
+    bind(root, "#budget-import-file-input", "change", (event) => {
       const file = event.target.files?.[0];
       renderBudgetFileState(file);
     });
-    bind(root, ".file-picker", "dragover", (event) => {
+    bind(root, ".budget-import-file-picker", "dragover", (event) => {
       event.preventDefault();
       const budgetFilePicker = event.currentTarget;
       budgetFilePicker.classList.add("is-dragging");
-      setText("#budget-upload-status", "松开即可上传预算文件", root);
+      setText("#budget-import-status", "松开即可导入预算文件", root);
     });
-    bind(root, ".file-picker", "dragleave", (event) => {
+    bind(root, ".budget-import-file-picker", "dragleave", (event) => {
       const budgetFilePicker = event.currentTarget;
       budgetFilePicker.classList.remove("is-dragging");
     });
-    bind(root, ".file-picker", "drop", async (event) => {
+    bind(root, ".budget-import-file-picker", "drop", async (event) => {
       event.preventDefault();
       const budgetFilePicker = event.currentTarget;
       budgetFilePicker.classList.remove("is-dragging");
       const file = event.dataTransfer?.files?.[0];
       if (!file) return;
       setBudgetUploadFile(file);
-      setText("#budget-upload-status", "已拖入文件，点击右侧“上传预算”完成上传", root);
+      setText("#budget-import-status", "已拖入文件，点击“确认导入”完成上传", root);
     });
   }
 
@@ -428,6 +514,8 @@ export function createBudgetTargetsFeature({
     initializeBudgetDefaults,
     loadBudgetTargets,
     loadBudgetUploads,
+    openBudgetImportDialog,
+    closeBudgetImportDialog,
     renderBudgetMonthChips,
     renderBudgetTargets,
     setupBudgetTargets,
