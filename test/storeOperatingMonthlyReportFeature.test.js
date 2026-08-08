@@ -785,7 +785,10 @@ test("budget targets consume report months, stores, and countries once as their 
     readFileAsBase64: async () => "",
     renderTableMessage() {},
     setButtonBusy: () => () => {},
+    selectedFilterValues() { return []; },
+    setSelectOptions() {},
     setText() {},
+    syncAllOptionSelection() {},
     trimmedFieldValue: (selector) => String(root.querySelector(selector)?.value || "").trim(),
   });
 

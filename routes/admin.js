@@ -1,6 +1,7 @@
 export function createAdminRoutes(deps = {}) {
   const {
     config,
+    contentDispositionAttachment,
     readJsonBody,
     sendJson,
     listAuthUsers,
@@ -13,11 +14,26 @@ export function createAdminRoutes(deps = {}) {
     listBudgetUploads,
     listBudgetTargets,
     saveBudgetUpload,
+    createBudgetImportTemplate,
     createKnowledgeDocument,
     deleteKnowledgeDocument,
   } = deps;
 
   return [
+    {
+      method: "GET",
+      path: "/api/admin/budget/template",
+      auth: "session",
+      handler: async ({ res }) => {
+        const buffer = await createBudgetImportTemplate();
+        res.writeHead(200, {
+          "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "content-disposition": contentDispositionAttachment("预算目标导入模板.xlsx"),
+          "cache-control": "no-store",
+        });
+        res.end(buffer);
+      },
+    },
     {
       method: "GET",
       path: "/api/admin/accounts",

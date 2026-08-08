@@ -3,7 +3,6 @@
   min-width: 0;
 }
 
-#view-budget .budget-upload-box,
 #view-budget .detail-panel {
   min-width: 0;
 }
@@ -68,42 +67,31 @@
   background: var(--tj-content-bg);
 }
 
-.budget-upload-panel {
-  margin-top: 10px;
-}
-
-.budget-upload-box {
-  display: grid;
-  grid-template-columns: 170px minmax(220px, 1fr) auto minmax(120px, auto);
-  gap: 12px;
-  align-items: center;
-  padding: 12px 14px;
-  border: 1px solid var(--tj-border-subtle);
-  border-radius: 8px;
+.budget-import-dialog {
+  width: min(620px, calc(100vw - 32px));
+  max-height: min(720px, calc(100vh - 32px));
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  border-radius: var(--tj-modal-radius);
   background: var(--tj-content-bg);
+  box-shadow: var(--tj-shadow-modal);
 }
 
-.budget-upload-month {
-  display: grid;
-  gap: 4px;
+.budget-import-dialog::backdrop {
+  background: var(--tj-overlay-backdrop);
+}
+
+.budget-import-fields em {
+  margin-left: var(--spectrum-spacing-50);
+  color: var(--tj-danger);
+  font-style: normal;
+}
+
+.budget-template-link {
+  margin: 0;
   color: var(--tj-text-muted);
   font-size: 13px;
-}
-
-.budget-upload-month span::before {
-  content: "* ";
-  color: var(--tj-danger);
-  font-weight: 800;
-}
-
-.budget-upload-month input {
-  width: 100%;
-  height: 42px;
-  border: 1px solid var(--tj-border-control);
-  border-radius: 8px;
-  padding: 0 10px;
-  color: var(--tj-text-body);
-  background: var(--tj-content-bg);
 }
 
 .file-picker {
@@ -145,8 +133,14 @@
   display: none;
 }
 
-@media (max-width: 900px) {
-  #view-budget .budget-upload-box {
+@media (max-width: 720px) {
+  .budget-import-dialog {
+    inset: 12px;
+    width: auto;
+    max-height: none;
+  }
+
+  .budget-import-fields.form-grid {
     grid-template-columns: 1fr;
   }
 }

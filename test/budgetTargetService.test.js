@@ -44,10 +44,11 @@ function workbookBuffer({ storeTitle = "探嘉美国店铺预算报表", msku = 
   return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
 }
 
-function uploadPayload({ budgetMonth = "2026-07", ...workbookOverrides } = {}) {
+function uploadPayload({ budgetMonth = "2026-07", listingOwner = "林芃", ...workbookOverrides } = {}) {
   return {
     fileName: "探嘉美国-2026年7月预算.xlsx",
     budgetMonth,
+    listingOwner,
     base64: workbookBuffer(workbookOverrides).toString("base64"),
   };
 }
@@ -90,6 +91,7 @@ test("parsed workbook preserves absent report budget metrics instead of synthesi
     const upload = await saveBudgetUpload({
       fileName: "探嘉美国-2026年7月预算.xlsx",
       budgetMonth: "2026-07",
+      listingOwner: "林芃",
       base64: XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }).toString("base64"),
     });
 
@@ -147,6 +149,19 @@ test("saveBudgetUpload rejects invalid month, extension, and empty file content"
   });
 });
 
+test("saveBudgetUpload requires a listing owner and persists it to every MSKU row", async () => {
+  await withTempService(async ({ saveBudgetUpload }) => {
+    await assert.rejects(
+      () => saveBudgetUpload(uploadPayload({ listingOwner: "" })),
+      /请先选择链接负责人/,
+    );
+
+    const upload = await saveBudgetUpload(uploadPayload({ listingOwner: "林芃" }));
+    assert.equal(upload.summary.listingOwner, "林芃");
+    assert.equal(upload.summary.mskuRows[0].listingOwner, "林芃");
+  });
+});
+
 test("listBudgetUploads ignores AppleDouble files and empty upload directories", async () => {
   await withTempService(async ({ listBudgetUploads }, dir) => {
     assert.deepEqual(await listBudgetUploads(), []);
@@ -193,6 +208,37 @@ test("saveBudgetUpload replaces an existing upload for the same store and month"
     assert.equal(targets.rows.length, 1);
     assert.equal(targets.rows[0].salesTarget, 300);
     assert.equal(targets.mskuRows[0].msku, "JM-DGC-RED");
+  });
+});
+
+test("listBudgetTargets rejects duplicate store-month sources with their file names", async () => {
+  await withTempService(async ({ saveBudgetUpload, listBudgetTargets }, dir) => {
+    const first = await saveBudgetUpload(uploadPayload());
+    const duplicateStoredName = `duplicate-${first.storedName}`;
+    const uploadDir = path.join(dir, "uploads", "budget-targets");
+    const summaryDir = path.join(dir, "data-cache", "budget-targets");
+    const firstSummary = JSON.parse(await readFile(path.join(summaryDir, `${first.storedName}.json`), "utf8"));
+    const duplicateFileName = "探嘉美国-2026年7月预算-重复.xlsx";
+
+    await writeFile(
+      path.join(uploadDir, duplicateStoredName),
+      await readFile(path.join(uploadDir, first.storedName)),
+    );
+    await writeFile(path.join(summaryDir, `${duplicateStoredName}.json`), JSON.stringify({
+      ...firstSummary,
+      storedName: duplicateStoredName,
+      fileName: duplicateFileName,
+    }));
+
+    await assert.rejects(
+      () => listBudgetTargets(),
+      (error) => {
+        assert.match(error.message, /预算数据重复：探嘉美国 2026-07/);
+        assert.match(error.message, new RegExp(first.fileName));
+        assert.match(error.message, new RegExp(duplicateFileName));
+        return true;
+      },
+    );
   });
 });
 

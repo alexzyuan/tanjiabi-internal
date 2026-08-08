@@ -47,7 +47,7 @@ import { createKnowledgeLibraryFeature } from "./assets/js/features/knowledge-li
 import { createAiImageWorkflowFeature } from "./assets/js/features/ai-image-workflow.js?v=20260706-frontend-refactor-v1";
 import { createAdminSettingsFeature } from "./assets/js/features/admin-settings.js?v=20260706-frontend-refactor-v1";
 import { createWebhookAssistantFeature } from "./assets/js/features/webhook-assistant.js?v=20260720-webhook-assistant-v1";
-import { createBudgetTargetsFeature } from "./assets/js/features/budget-targets.js?v=20260706-frontend-refactor-v1";
+import { createBudgetTargetsFeature } from "./assets/js/features/budget-targets.js?v=20260808-budget-import-modal-v1";
 import { createStoreOperatingMonthlyReportFeature } from "./assets/js/features/store-operating-monthly-report.js?v=20260807-shared-country-store-filter-v1";
 import { createSyncCenterFeature } from "./assets/js/features/sync-center.js?v=20260706-frontend-refactor-v1";
 import { createFbaFreightFeature } from "./assets/js/features/fba-freight.js?v=20260717-shared-logistics-channels";
@@ -743,10 +743,14 @@ async function refreshDashboardFromFilters() {
   formatPercent,
   getPacificDateParts,
   locationRef: location,
+  normalizeCountryName,
   renderTableMessage,
   readFileAsBase64,
+  selectedFilterValues,
   setButtonBusy,
+  setSelectOptions,
   setText,
+  syncAllOptionSelection,
   trimmedFieldValue,
 }));
 

@@ -1699,31 +1699,14 @@
               </div>
             </div>
             <select id="budget-platform-filter"><option value="">销售平台</option><option>Amazon</option><option>Tik Tok</option></select>
-            <input id="budget-store-filter" type="search" placeholder="销售店铺" />
-            <select id="budget-status-filter"><option value="">状态</option><option value="已解析">已解析</option><option value="等待解析">等待解析</option></select>
+            <select id="budget-country-filter" multiple size="4" data-filter-clear-target="#budget-store-filter"><option value="">全部国家</option></select>
+            <select id="budget-store-filter" multiple size="4"><option value="">全部店铺</option></select>
+            <select id="budget-listing-owner-filter"><option value="">全部链接负责人</option></select>
             <input id="budget-keyword-filter" type="search" placeholder="关键词" />
             <button class="primary-button" id="budget-query-button" type="button">查询</button>
             <button class="ghost-button" id="budget-reset-button" type="button">重置</button>
+            <button class="primary-button" id="budget-import-button" type="button">导入预算</button>
           </section>
-          <article class="panel budget-upload-panel">
-            <div class="panel-head">
-              <h2>预算目标上传</h2>
-              <span>支持上传月度预算模板 .xlsx，自动汇总到店铺维度</span>
-            </div>
-            <div class="budget-upload-box">
-              <label class="budget-upload-month">
-                <span>预算月份</span>
-                <input id="budget-upload-month" type="month" />
-              </label>
-              <label class="file-picker">
-                <input id="budget-file-input" type="file" accept=".xlsx" />
-                <span id="budget-file-name"><strong>选择预算模板</strong><small>点击选择，或拖拽 .xlsx 文件到这里后点击上传预算</small></span>
-              </label>
-              <button class="primary-button" id="budget-upload-button" type="button">上传预算</button>
-              <span class="upload-status" id="budget-upload-status">未选择文件</span>
-            </div>
-            <div class="config-list budget-upload-list" id="budget-upload-list"></div>
-          </article>
           <section class="module-grid budget-summary-grid">
             <article class="metric-tile"><span>预算店铺</span><strong id="budget-store-count">0</strong><small>已解析模板</small></article>
             <article class="metric-tile"><span>销售目标</span><strong id="budget-sales-total">0</strong><small>店铺维度汇总</small></article>
@@ -1787,6 +1770,29 @@
               </table>
             </div>
           </article>
+          <dialog class="budget-import-dialog" id="budget-import-dialog" aria-labelledby="budget-import-title">
+            <div class="modal-head">
+              <h2 id="budget-import-title">导入预算</h2>
+              <button class="modal-close-button" id="budget-import-close" type="button" aria-label="关闭导入预算">×</button>
+            </div>
+            <div class="modal-body">
+              <div class="form-grid budget-import-fields">
+                <label>预算月份 <em>*</em><input id="budget-import-month" type="month" required /></label>
+                <label>链接负责人 <em>*</em><input id="budget-import-owner" type="text" list="budget-import-owner-options" placeholder="请选择或输入" required /></label>
+                <datalist id="budget-import-owner-options"></datalist>
+              </div>
+              <p class="budget-template-link">模板下载：<a id="budget-template-download" href="/api/admin/budget/template">下载模板</a></p>
+              <label class="file-picker budget-import-file-picker">
+                <input id="budget-import-file-input" type="file" accept=".xlsx" />
+                <span id="budget-import-file-name"><strong>选择导入文件</strong><small>拖拽或点击选择 .xlsx 文件</small></span>
+              </label>
+              <output class="upload-status" id="budget-import-status" role="status">未选择文件</output>
+            </div>
+            <div class="modal-foot">
+              <button class="ghost-button" id="budget-import-cancel" type="button">取消</button>
+              <button class="primary-button" id="budget-import-confirm" type="button">确认导入</button>
+            </div>
+          </dialog>
         </section>
 
         <section class="view" id="view-ai-image-workflow">
