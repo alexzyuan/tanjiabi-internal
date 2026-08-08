@@ -1033,7 +1033,8 @@ test("budget target table width rules live in the page layer", async () => {
   assert.match(pageSource, /^#view-budget\s*\{/m);
   assert.match(pageSource, /^#view-budget \.budget-target-table-wrap\s*\{/m);
   assert.match(pageSource, /^\.month-chip\s*\{/m);
-  assert.match(pageSource, /^\.budget-upload-box\s*\{/m);
+  assert.match(pageSource, /^\.budget-import-dialog\s*\{/m);
+  assert.match(pageSource, /^\.budget-import-dialog::backdrop\s*\{/m);
   assert.match(pageSource, /^\.file-picker\s*\{/m);
   assert.match(pageSource, /^\.file-picker\.is-dragging\s*\{/m);
   assert.match(pageSource, /overflow-x:\s*auto/);
@@ -1046,7 +1047,7 @@ test("budget target table width rules live in the page layer", async () => {
   assert.equal(/^\.budget-toolbar\s*\{/m.test(pageSource), false);
   assert.equal(legacySource.includes(".budget-toolbar {"), false);
   assert.equal(legacySource.includes(".month-chip {"), false);
-  assert.equal(legacySource.includes(".budget-upload-box {"), false);
+  assert.equal(legacySource.includes(".budget-import-dialog {"), false);
   assert.equal(legacySource.includes(".file-picker {"), false);
   assert.equal(legacySource.includes(".file-picker.is-dragging"), false);
   assert.equal(pageSource.includes(".upload-status {"), false);
