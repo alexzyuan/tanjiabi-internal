@@ -16,7 +16,7 @@
 
 ## 数据流
 
-前端将 `budgetMonth`、`listingOwner`、文件名和 Base64 文件内容提交至现有预算上传 API。链接负责人建议值从既有预算明细的 `listingOwner` 和历史 `skuOwner` 去重而来，但控件允许输入新的明确姓名。`saveBudgetUpload()` 验证负责人为非空文本，再传给工作簿解析器。解析器将该负责人写入上传摘要和每条 `mskuRows` 的 `listingOwner` 字段；Excel 自带 `SKU负责人` 原样保留，不被覆盖。
+前端将 `budgetMonth`、`listingOwner`、文件名和 Base64 文件内容提交至现有预算上传 API。链接负责人建议值从既有预算明细的 `listingOwner` 和历史 `skuOwner` 去重而来，但控件允许输入新的明确姓名。`saveBudgetUpload()` 验证负责人为非空文本，再传给工作簿解析器。解析器将该负责人写入上传摘要和每条 `mskuRows` 的 `listingOwner` 字段；Excel 自带 `SKU负责人` 原样保留，不被覆盖。该字段只要求新导入提供；历史预算保持可读，负责人筛选回退到其原有 `skuOwner`，不得猜测或回填新的负责人。
 
 模板下载由受会话保护的预算 API 动态生成 `.xlsx`。模板包含解析器支持的标准摘要页和销售预算明细页、必填表头以及一行示例；不依赖生产上传目录中的历史文件。
 

@@ -89,7 +89,7 @@ Expected: new assertions fail because the upload payload has no owner validation
 
 - [ ] **Step 3: Implement the bounded backend behavior**
 
-In `budgetTargetService.js`, add `normalizeListingOwner(value)` that trims and throws for empty input. Pass the normalized value from `saveBudgetUpload()` into `parseBudgetWorkbook()`; add it to the returned summary and each MSKU row. Bump `BUDGET_SUMMARY_SCHEMA_VERSION` so historical summaries are reparsed without inventing an owner. Export `createBudgetImportTemplate()` which uses `xlsx` to generate the canonical `汇总` and `销售预算` sheets with parser-recognized headers and one sample row.
+In `budgetTargetService.js`, add `normalizeListingOwner(value)` that trims and throws for empty input. Pass the normalized value from `saveBudgetUpload()` into `parseBudgetWorkbook()`; add it to the returned summary and each MSKU row. Do not bump `BUDGET_SUMMARY_SCHEMA_VERSION`: historical summaries remain readable without an invented owner, and their owner filters use their existing `skuOwner`. Export `createBudgetImportTemplate()` which uses `xlsx` to generate the canonical `汇总` and `销售预算` sheets with parser-recognized headers and one sample row.
 
 In `server.js`, pass `createBudgetImportTemplate` to `createAdminRoutes`. In `routes/admin.js`, add a session-authenticated GET route that writes the XLSX buffer using the existing attachment helper and a fixed `预算目标导入模板.xlsx` filename.
 
