@@ -3,6 +3,24 @@ export function normalizeBudgetDeepLinkCountry(value) {
   return country === "澳大利亚" ? "澳洲" : country;
 }
 
+export function mergeBudgetShopOptions(shopOptions = [], budgetRows = [], normalizeCountry = normalizeBudgetDeepLinkCountry) {
+  const allOptions = [...shopOptions, ...budgetRows.map((row) => ({
+    country: normalizeCountry(row.country || row.site || ""),
+    storeName: String(row.storeName || row.store || "").trim(),
+  }))];
+  return [...new Map(allOptions
+    .map((shop) => ({
+      ...shop,
+      country: normalizeCountry(shop.country || ""),
+      storeName: String(shop.storeName || "").trim(),
+    }))
+    .filter((shop) => shop.country && shop.storeName)
+    .map((shop) => [`${shop.country}\u0000${shop.storeName}`, shop]))
+    .values()]
+    .sort((left, right) => left.country.localeCompare(right.country, "zh-CN")
+      || left.storeName.localeCompare(right.storeName, "zh-CN"));
+}
+
 export function createBudgetTargetsFeature({
   root = globalThis.document,
   bind,
@@ -33,6 +51,7 @@ export function createBudgetTargetsFeature({
 
   let budgetTargetRows = [];
   let budgetMskuRows = [];
+  let budgetShopOptions = [];
   let selectedBudgetMonths = [];
   let budgetDeepLinkInitialized = false;
   let consumedBudgetDeepLinkSearch = "";
@@ -47,7 +66,15 @@ export function createBudgetTargetsFeature({
   }
 
   function budgetCountry(row = {}) {
-    return normalizeCountryName(row.site || row.country || "");
+    return normalizeBudgetDeepLinkCountry(normalizeCountryName(row.country || row.site || ""));
+  }
+
+  function availableBudgetShops() {
+    return mergeBudgetShopOptions(
+      budgetShopOptions,
+      [...budgetTargetRows, ...budgetMskuRows],
+      (country) => normalizeBudgetDeepLinkCountry(normalizeCountryName(country)),
+    );
   }
 
   function refreshBudgetFilterOptions({ selectAllStores = false } = {}) {
@@ -57,13 +84,15 @@ export function createBudgetTargetsFeature({
     if (!countrySelect || !storeSelect || !ownerSelect) return;
 
     const allRows = [...budgetTargetRows, ...budgetMskuRows];
-    const countries = uniqueValues(allRows.map(budgetCountry)).sort((left, right) => left.localeCompare(right, "zh-CN"));
+    const availableShops = availableBudgetShops();
+    const countries = uniqueValues(availableShops.map((shop) => shop.country)).sort((left, right) => left.localeCompare(right, "zh-CN"));
     setSelectOptions(countrySelect, countries, "全部国家");
     const selectedCountries = selectedFilterValues(countrySelect);
-    const storeOptions = [...new Map(budgetTargetRows
-      .map((row) => ({ name: row.storeName, label: row.storeName, country: budgetCountry(row) }))
-      .filter((row) => row.name)
-      .map((row) => [row.name, row])).values()];
+    const storeOptions = availableShops.map((shop) => ({
+      name: shop.storeName,
+      label: shop.storeName,
+      country: shop.country,
+    }));
     setSelectOptions(storeSelect, storeOptions, "全部店铺", {
       groupByCountry: true,
       countries: selectedCountries,
@@ -75,22 +104,22 @@ export function createBudgetTargetsFeature({
     ownerSelect.innerHTML = `<option value="">全部链接负责人</option>${owners.map((owner) => `<option value="${escapeHtml(owner)}">${escapeHtml(owner)}</option>`).join("")}`;
     if (owners.includes(selectedOwner)) ownerSelect.value = selectedOwner;
 
-    refreshBudgetImportOptions(allRows);
+    refreshBudgetImportOptions(availableShops);
   }
 
-  function refreshBudgetImportOptions(allRows = [...budgetTargetRows, ...budgetMskuRows]) {
+  function refreshBudgetImportOptions(shops = availableBudgetShops()) {
     const countrySelect = root?.querySelector?.("#budget-import-country");
     const storeSelect = root?.querySelector?.("#budget-import-store");
     if (!countrySelect || !storeSelect) return;
-    const countries = uniqueValues(allRows.map(budgetCountry)).sort((left, right) => left.localeCompare(right, "zh-CN"));
+    const countries = uniqueValues(shops.map((shop) => shop.country)).sort((left, right) => left.localeCompare(right, "zh-CN"));
     const previousCountry = countrySelect.value;
     const previousStore = storeSelect.value;
     countrySelect.innerHTML = `<option value="">请选择国家</option>${countries.map((country) => `<option value="${escapeHtml(country)}">${escapeHtml(country)}</option>`).join("")}`;
     countrySelect.value = countries.includes(previousCountry) ? previousCountry : "";
     const selectedCountry = countrySelect.value;
-    const stores = uniqueValues(allRows
-      .filter((row) => !selectedCountry || budgetCountry(row) === selectedCountry)
-      .map((row) => row.storeName))
+    const stores = uniqueValues(shops
+      .filter((shop) => !selectedCountry || shop.country === selectedCountry)
+      .map((shop) => shop.storeName))
       .sort((left, right) => left.localeCompare(right, "zh-CN"));
     storeSelect.innerHTML = `<option value="">请选择店铺</option>${stores.map((store) => `<option value="${escapeHtml(store)}">${escapeHtml(store)}</option>`).join("")}`;
     storeSelect.value = stores.includes(previousStore) ? previousStore : "";
@@ -225,6 +254,7 @@ export function createBudgetTargetsFeature({
   function renderBudgetTargets(data) {
     if ("rows" in data) budgetTargetRows = data.rows || [];
     if ("mskuRows" in data) budgetMskuRows = data.mskuRows || [];
+    if ("shopOptions" in data) budgetShopOptions = Array.isArray(data.shopOptions) ? data.shopOptions : [];
     refreshBudgetFilterOptions();
     const rows = getFilteredBudgetRows();
     const mskuRows = getFilteredBudgetMskuRows();
@@ -324,7 +354,7 @@ export function createBudgetTargetsFeature({
       if (!response.ok) throw new Error(`API ${response.status}`);
       renderBudgetTargets(await response.json());
     } catch {
-      renderBudgetTargets({ rows: [], totals: {} });
+      renderBudgetTargets({ rows: [], mskuRows: [], totals: {}, shopOptions: [] });
     }
   }
 
@@ -491,8 +521,10 @@ export function createBudgetTargetsFeature({
       const country = root?.querySelector?.("#budget-import-country")?.value || "";
       const storeSelect = root?.querySelector?.("#budget-import-store");
       if (!storeSelect) return;
-      const allRows = [...budgetTargetRows, ...budgetMskuRows];
-      const stores = uniqueValues(allRows.filter((row) => !country || budgetCountry(row) === country).map((row) => row.storeName)).sort((left, right) => left.localeCompare(right, "zh-CN"));
+      const stores = uniqueValues(availableBudgetShops()
+        .filter((shop) => !country || shop.country === country)
+        .map((shop) => shop.storeName))
+        .sort((left, right) => left.localeCompare(right, "zh-CN"));
       storeSelect.innerHTML = `<option value="">请选择店铺</option>${stores.map((store) => `<option value="${escapeHtml(store)}">${escapeHtml(store)}</option>`).join("")}`;
     });
     bind(root, "#budget-listing-owner-filter", "change", () => renderBudgetTargets({ rows: budgetTargetRows }));

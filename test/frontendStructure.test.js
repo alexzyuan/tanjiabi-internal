@@ -45,6 +45,8 @@ test("budget targets use shared filters and a modal import workflow", async () =
   assert.match(featureSource, /bind\(root, "#budget-import-dialog", "keydown"/);
   assert.match(featureSource, /budget-import-country/);
   assert.match(featureSource, /budget-import-store/);
+  assert.match(featureSource, /budgetShopOptions\s*=\s*Array\.isArray\(data\.shopOptions\)/);
+  assert.match(featureSource, /function availableBudgetShops\(/);
   assert.doesNotMatch(featureSource, /budget-import-owner/);
 });
 
