@@ -240,6 +240,7 @@ export function createSalesDashboardFeature({
   function mskuRateToneClass(key, value) {
     const number = Number(value || 0);
     const rules = {
+      refundRate30d: { orange: 3.5, red: 6 },
       refundRate: { orange: 3.5, red: 6 },
       adFeeRate: { orange: 15, red: 20 },
       promotionDiscountRate: { orange: 3, red: 4 },
@@ -257,6 +258,7 @@ export function createSalesDashboardFeature({
   }
 
   function mskuRateCell(key, value) {
+    if (key === "refundRate30d" && (value === null || value === undefined)) return "<td>—</td>";
     return `<td class="${mskuRateToneClass(key, value)}">${formatActualMoney(value || 0)}%</td>`;
   }
 
@@ -278,6 +280,7 @@ export function createSalesDashboardFeature({
           <td>${formatActualMoney(row.orderProfit || 0)}</td>
           <td>${formatActualMoney(row.averageProfit || 0)}</td>
           ${mskuRateCell("grossRate", row.grossRate)}
+          ${mskuRateCell("refundRate30d", row.refundRate30d)}
           ${mskuRateCell("refundRate", row.refundRate)}
           ${mskuRateCell("adFeeRate", row.adFeeRate)}
           ${mskuRateCell("promotionDiscountRate", row.promotionDiscountRate)}
@@ -288,7 +291,7 @@ export function createSalesDashboardFeature({
           ${mskuRateCell("firstLegCostRate", row.firstLegCostRate)}
         </tr>
       `).join("")
-      : `<tr><td colspan="18">当前筛选周期暂无 MSKU 明细。</td></tr>`;
+      : `<tr><td colspan="19">当前筛选周期暂无 MSKU 明细。</td></tr>`;
   }
 
   function normalizeSiteCells(cells) {

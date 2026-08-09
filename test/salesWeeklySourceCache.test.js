@@ -7,7 +7,7 @@ import { importFresh } from "./helpers/moduleImport.js";
 
 function salesWeeklySourceCacheKey() {
   return JSON.stringify({
-    version: "sales-weekly-source-v1",
+    version: "sales-weekly-source-v2",
     startDate: "2026-07-01",
     endDate: "2026-07-23",
     currencyCode: "ORIGINAL",
@@ -45,7 +45,7 @@ test("sales weekly source cache reuses the same base data across different listi
     const cacheKey = salesWeeklySourceCacheKey();
     const source = {
       cacheScope: {
-        version: "sales-weekly-source-v1",
+        version: "sales-weekly-source-v2",
         startDate: "2026-07-01",
         endDate: "2026-07-23",
         currencyCode: "ORIGINAL",
@@ -84,6 +84,26 @@ test("sales weekly source cache reuses the same base data across different listi
           totalSalesRefunds: 4,
         },
       ],
+      recent30OrderProfitRecords: [
+        {
+          sid: 1,
+          country: "AU",
+          countryCode: "AU",
+          storeName: "探嘉澳洲",
+          msku: "MSKU-1",
+          totalSalesAmount: 400,
+          totalSalesRefunds: 12,
+        },
+        {
+          sid: 2,
+          country: "AU",
+          countryCode: "AU",
+          storeName: "坦蛋伯澳洲",
+          msku: "MSKU-2",
+          totalSalesAmount: 500,
+          totalSalesRefunds: 25,
+        },
+      ],
       dailyProfitRecords: [],
       inventoryRecords: [],
       listingOwnerRows: [
@@ -93,7 +113,15 @@ test("sales weekly source cache reuses the same base data across different listi
       budgetTargets: { rows: [], totals: {} },
       range: { startDate: "2026-07-01", endDate: "2026-07-23" },
       currencyCode: "ORIGINAL",
-      raw: {},
+      raw: {
+        recent30: {
+          startDate: "2026-06-25",
+          endDate: "2026-07-23",
+          cacheState: "hit",
+          cacheUpdatedAt: "2026-07-23 10:00:00",
+          recordCount: 2,
+        },
+      },
       updatedAt: "2026-07-23 10:00:00",
     };
 
@@ -120,6 +148,15 @@ test("sales weekly source cache reuses the same base data across different listi
     assert.equal(xiong.cacheHit, true);
     assert.equal(salesLinPeng, "100");
     assert.equal(salesXiong, "200");
+    assert.equal(linPeng.detailRows[0].refundRate30d, 3);
+    assert.equal(xiong.detailRows[0].refundRate30d, 5);
+    assert.deepEqual(linPeng.meta.recent30, {
+      startDate: "2026-06-25",
+      endDate: "2026-07-23",
+      cacheState: "hit",
+      cacheUpdatedAt: "2026-07-23 10:00:00",
+      recordCount: 2,
+    });
     assert.match(linPeng.meta.syncStatus, /1\s*条/);
     assert.match(xiong.meta.syncStatus, /1\s*条/);
   });

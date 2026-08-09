@@ -53,7 +53,7 @@ function salesWeeklySourceScope(filters = {}) {
   const endDate = filters.endDate || defaultRange.endDate;
   const sids = Array.isArray(filters.sids) ? uniqueNumbers(filters.sids).sort((a, b) => a - b) : [];
   return {
-    version: "sales-weekly-source-v1",
+    version: "sales-weekly-source-v2",
     startDate,
     endDate,
     currencyCode: normalizedCurrencyCode(filters),
@@ -104,6 +104,7 @@ function mapSalesWeeklySourceToDashboard(source = {}, filters = {}) {
     sellers: source.sellers || [],
     sellerProfitRecords: source.sellerProfitRecords || [],
     orderProfitRecords: source.orderProfitRecords || [],
+    recent30OrderProfitRecords: source.recent30OrderProfitRecords || [],
     dailyProfitRecords: source.dailyProfitRecords || [],
     inventoryRecords: source.inventoryRecords || [],
     listingOwnerRows: source.listingOwnerRows || [],
@@ -117,6 +118,7 @@ function mapSalesWeeklySourceToDashboard(source = {}, filters = {}) {
       ...(source.raw || {}),
       cacheState: source.raw?.cacheState || "hit",
       cacheUpdatedAt: source.cacheUpdatedAt || source.updatedAt || "",
+      recent30: source.raw?.recent30 || null,
     },
     budgetTargets: source.budgetTargets || {},
   });
@@ -161,6 +163,7 @@ async function fetchSalesWeeklySource(filters = {}) {
     sellers: data.sellers || [],
     sellerProfitRecords: data.sellerProfitRecords || [],
     orderProfitRecords: data.orderProfitRecords || [],
+    recent30OrderProfitRecords: data.recent30OrderProfitRecords || [],
     dailyProfitRecords: data.dailyProfitRecords || [],
     inventoryRecords: data.inventoryRecords || [],
     listingOwnerRows,

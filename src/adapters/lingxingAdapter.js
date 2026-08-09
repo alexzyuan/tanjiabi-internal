@@ -1,6 +1,6 @@
 import { getConfig } from "../config/index.js";
 import { getDefaultWeekRange, listDateRange } from "../utils/dateRange.js";
-import { withLingxingDateContract } from "../utils/lingxingDateRange.js";
+import { addDaysToDateText, withLingxingDateContract } from "../utils/lingxingDateRange.js";
 import {
   readOrderProfitCache,
   readProfitReportCache,
@@ -1627,6 +1627,10 @@ export class LingxingAdapter {
       startDate: filters.startDate || defaultRange.startDate,
       endDate: filters.endDate || defaultRange.endDate,
     };
+    const recent30Range = {
+      startDate: addDaysToDateText(range.endDate, -29),
+      endDate: range.endDate,
+    };
     const currencyCode = filters.currencyCode || "CNY";
     const activeSids = sellerList
       .filter((seller) => !seller.status || seller.status === 1)
@@ -1643,14 +1647,24 @@ export class LingxingAdapter {
     let sourceWarning = "";
     let inventoryWarning = "";
 
-    const orderProfitResult = await this.fetchMskuOrderProfitCached({
-      startDate: range.startDate,
-      endDate: range.endDate,
-      sids: selectedSids,
-      currencyCode,
-      sellerList,
-      reportDate: range.startDate === range.endDate ? range.startDate : range.endDate,
-    });
+    const [orderProfitResult, recent30OrderProfitResult] = await Promise.all([
+      this.fetchMskuOrderProfitCached({
+        startDate: range.startDate,
+        endDate: range.endDate,
+        sids: selectedSids,
+        currencyCode,
+        sellerList,
+        reportDate: range.startDate === range.endDate ? range.startDate : range.endDate,
+      }),
+      this.fetchMskuOrderProfitCached({
+        startDate: recent30Range.startDate,
+        endDate: recent30Range.endDate,
+        sids: selectedSids,
+        currencyCode,
+        sellerList,
+        reportDate: recent30Range.endDate,
+      }),
+    ]);
     orderProfitRecords = orderProfitResult.records;
     cacheState = orderProfitResult.cacheState;
     cacheUpdatedAt = orderProfitResult.cacheUpdatedAt;
@@ -1666,6 +1680,7 @@ export class LingxingAdapter {
       sellers: sellerList,
       sellerProfitRecords: [],
       orderProfitRecords,
+      recent30OrderProfitRecords: recent30OrderProfitResult.records,
       dailyProfitRecords: orderProfitRecords,
       inventoryRecords,
       currencyCode,
@@ -1675,6 +1690,13 @@ export class LingxingAdapter {
         sourceName: "订单利润",
         cacheState,
         cacheUpdatedAt,
+        recent30: {
+          startDate: recent30Range.startDate,
+          endDate: recent30Range.endDate,
+          cacheState: recent30OrderProfitResult.cacheState,
+          cacheUpdatedAt: recent30OrderProfitResult.cacheUpdatedAt,
+          recordCount: recent30OrderProfitResult.records.length,
+        },
         sourceWarning,
         inventoryWarning,
       },
