@@ -361,24 +361,12 @@ export async function getSalesWeeklyDashboard(filters = {}) {
         cacheHit: false,
       };
     } catch (error) {
-      if (cachedDashboard) {
-        logSalesWeeklyTiming("live-failed-cache-fallback", startedAt, {
-          defaultCacheEligible,
-          cacheKey: sourceCacheKey,
-          error: error.message,
-        });
-        return normalizeCachedDashboard(
-          cachedDashboard,
-          syncState,
-          `已显示最近同步缓存；实时接口暂不可用：${error.message}`,
-        );
-      }
-      logSalesWeeklyTiming("live-failed-empty", startedAt, {
+      logSalesWeeklyTiming("live-failed", startedAt, {
         defaultCacheEligible,
         cacheKey: sourceCacheKey,
         error: error.message,
       });
-      return emptyLingxingDashboard(syncState, `销售看板实时接口失败：${error.message}`);
+      throw error;
     }
   }
 

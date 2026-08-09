@@ -161,3 +161,23 @@ test("sales weekly source cache reuses the same base data across different listi
     assert.match(xiong.meta.syncStatus, /1\s*条/);
   });
 });
+
+test("sales weekly dashboard fails instead of falling back to a legacy dashboard when live OrderProfit loading fails", async () => {
+  await withTempLingxingProvider(async (projectRoot) => {
+    const cacheStore = await importFresh(projectRoot, "src/utils/cacheStore.js");
+    await cacheStore.saveSalesDashboardCache({
+      meta: { source: "领星 ERP", updatedAt: "2026-08-09 10:00:00" },
+      detailRows: [{ msku: "LEGACY-MSKU", refundRate: 5 }],
+    });
+    const { getSalesWeeklyDashboard } = await importFresh(projectRoot, "src/services/dashboardService.js");
+
+    await assert.rejects(
+      getSalesWeeklyDashboard({
+        startDate: "2026-08-01",
+        endDate: "2026-08-09",
+        currencyCode: "CNY",
+      }),
+      /LINGXING_BASE_URL/,
+    );
+  });
+});
