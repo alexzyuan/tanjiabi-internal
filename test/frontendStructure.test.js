@@ -26,6 +26,9 @@ test("budget targets use shared filters and a modal import workflow", async () =
   assert.notEqual(viewStart, -1, "budget view is missing");
   assert.match(budgetView, /id="budget-month-picker"/);
   assert.match(budgetView, /id="budget-platform-filter"/);
+  assert.match(budgetView, /<option value="Amazon">亚马逊<\/option>/);
+  assert.match(budgetView, /<option value="Walmart">沃尔玛<\/option>/);
+  assert.doesNotMatch(budgetView, /Tik Tok/);
   assert.match(budgetView, /id="budget-country-filter"[^>]*multiple/);
   assert.match(budgetView, /id="budget-store-filter"[^>]*multiple/);
   assert.match(budgetView, /id="budget-listing-owner-filter"/);
