@@ -3,6 +3,22 @@ export function normalizeBudgetDeepLinkCountry(value) {
   return country === "澳大利亚" ? "澳洲" : country;
 }
 
+const budgetCountries = ["德国", "美国", "加拿大", "澳洲"];
+const budgetListingOwners = ["林芃", "熊丹轩"];
+
+export function listBudgetCountries() {
+  return budgetCountries.slice();
+}
+
+export function listBudgetListingOwners() {
+  return budgetListingOwners.slice();
+}
+
+export function filterBudgetRowsByCountryScope(rows = [], countries = [], normalizeCountry = normalizeBudgetDeepLinkCountry) {
+  const scope = new Set((countries.length ? countries : budgetCountries).map(normalizeCountry));
+  return rows.filter((row) => scope.has(normalizeCountry(row.country || row.site || "")));
+}
+
 export function mergeBudgetShopOptions(shopOptions = [], budgetRows = [], normalizeCountry = normalizeBudgetDeepLinkCountry) {
   const allOptions = [...shopOptions, ...budgetRows.map((row) => ({
     country: normalizeCountry(row.country || row.site || ""),
@@ -65,14 +81,10 @@ export function createBudgetTargetsFeature({
     return String(row.listingOwner || row.skuOwner || "").trim();
   }
 
-  function budgetCountry(row = {}) {
-    return normalizeBudgetDeepLinkCountry(normalizeCountryName(row.country || row.site || ""));
-  }
-
   function availableBudgetShops() {
     return mergeBudgetShopOptions(
       budgetShopOptions,
-      [...budgetTargetRows, ...budgetMskuRows],
+      [],
       (country) => normalizeBudgetDeepLinkCountry(normalizeCountryName(country)),
     );
   }
@@ -83,10 +95,8 @@ export function createBudgetTargetsFeature({
     const ownerSelect = root?.querySelector?.("#budget-listing-owner-filter");
     if (!countrySelect || !storeSelect || !ownerSelect) return;
 
-    const allRows = [...budgetTargetRows, ...budgetMskuRows];
     const availableShops = availableBudgetShops();
-    const countries = uniqueValues(availableShops.map((shop) => shop.country)).sort((left, right) => left.localeCompare(right, "zh-CN"));
-    setSelectOptions(countrySelect, countries, "全部国家");
+    setSelectOptions(countrySelect, listBudgetCountries(), "全部国家");
     const selectedCountries = selectedFilterValues(countrySelect);
     const storeOptions = availableShops.map((shop) => ({
       name: shop.storeName,
@@ -100,7 +110,7 @@ export function createBudgetTargetsFeature({
     });
 
     const selectedOwner = ownerSelect.value;
-    const owners = uniqueValues(budgetMskuRows.map(budgetRowOwner)).sort((left, right) => left.localeCompare(right, "zh-CN"));
+    const owners = listBudgetListingOwners();
     ownerSelect.innerHTML = `<option value="">全部链接负责人</option>${owners.map((owner) => `<option value="${escapeHtml(owner)}">${escapeHtml(owner)}</option>`).join("")}`;
     if (owners.includes(selectedOwner)) ownerSelect.value = selectedOwner;
 
@@ -216,13 +226,14 @@ export function createBudgetTargetsFeature({
   function getFilteredBudgetRows() {
     const { platform, countries, stores, listingOwner, keyword, linkedStores, linkedCountries } = budgetFilterValues();
     const normalizedKeyword = keyword.toLowerCase();
-    const linkedCountrySet = new Set(linkedCountries.map(normalizeBudgetDeepLinkCountry));
+    const linkedCountrySet = new Set(linkedCountries
+      .map((country) => normalizeBudgetDeepLinkCountry(normalizeCountryName(country)))
+      .filter((country) => budgetCountries.includes(country)));
 
-    return budgetTargetRows.filter((row) => {
+    return filterBudgetRowsByCountryScope(budgetTargetRows, countries, (country) => normalizeBudgetDeepLinkCountry(normalizeCountryName(country))).filter((row) => {
       const haystack = `${row.month} ${row.platform} ${row.storeName} ${row.site} ${row.status} ${row.listingOwner}`.toLowerCase();
       if (selectedBudgetMonths.length && !selectedBudgetMonths.includes(row.month)) return false;
       if (platform && row.platform !== platform) return false;
-      if (countries.length && !countries.includes(budgetCountry(row))) return false;
       if (stores.length && !stores.includes(row.storeName)) return false;
       if (!stores.length && linkedStores.length && !linkedStores.includes(row.storeName)) return false;
       if (linkedCountrySet.size && !linkedCountrySet.has(normalizeBudgetDeepLinkCountry(row.site || row.country))) return false;
@@ -235,13 +246,14 @@ export function createBudgetTargetsFeature({
   function getFilteredBudgetMskuRows() {
     const { platform, countries, stores, listingOwner, keyword: rawKeyword, linkedStores, linkedCountries } = budgetFilterValues();
     const keyword = rawKeyword.toLowerCase();
-    const linkedCountrySet = new Set(linkedCountries.map(normalizeBudgetDeepLinkCountry));
+    const linkedCountrySet = new Set(linkedCountries
+      .map((country) => normalizeBudgetDeepLinkCountry(normalizeCountryName(country)))
+      .filter((country) => budgetCountries.includes(country)));
 
-    return budgetMskuRows.filter((row) => {
+    return filterBudgetRowsByCountryScope(budgetMskuRows, countries, (country) => normalizeBudgetDeepLinkCountry(normalizeCountryName(country))).filter((row) => {
       const haystack = `${row.month} ${row.platform} ${row.storeName} ${row.site} ${row.status} ${row.msku} ${row.asin} ${budgetRowOwner(row)}`.toLowerCase();
       if (selectedBudgetMonths.length && !selectedBudgetMonths.includes(row.month)) return false;
       if (platform && row.platform !== platform) return false;
-      if (countries.length && !countries.includes(budgetCountry(row))) return false;
       if (stores.length && !stores.includes(row.storeName)) return false;
       if (!stores.length && linkedStores.length && !linkedStores.includes(row.storeName)) return false;
       if (linkedCountrySet.size && !linkedCountrySet.has(normalizeBudgetDeepLinkCountry(row.site || row.country))) return false;
