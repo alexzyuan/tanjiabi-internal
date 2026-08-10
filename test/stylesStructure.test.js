@@ -914,6 +914,29 @@ test("sales dashboard overview styles live in the page layer and use semantic to
   });
 });
 
+test("sales review achievement tones override the shared table cell color", async () => {
+  const pageSource = await readFile(new URL("../assets/css/pages/22-sales-dashboard.css", import.meta.url), "utf8");
+  ["warning", "danger", "info"].forEach((tone) => {
+    assert.match(
+      pageSource,
+      new RegExp(`table\\.data-table td\\.msku-achievement-${tone}\\s*\\{`),
+      `achievement ${tone} tone must have enough specificity to override table.data-table td`,
+    );
+  });
+});
+
+test("sales filter time progress keeps its text inside the status box", async () => {
+  const pageSource = await readFile(new URL("../assets/css/pages/22-sales-dashboard.css", import.meta.url), "utf8");
+  const statusBox = pageSource.match(/^\.sales-filter-time-progress\s*\{([\s\S]*?)^\}/m)?.[1] || "";
+  assert.match(statusBox, /min-width:\s*142px/);
+  assert.match(statusBox, /max-width:\s*142px/);
+  assert.match(statusBox, /overflow:\s*hidden/);
+  assert.match(statusBox, /white-space:\s*nowrap/);
+  assert.match(statusBox, /var\(--tj-action-blue\)/);
+  assert.match(pageSource, /^\.sales-filter-time-progress :is\(span, strong\)\s*\{([\s\S]*?)overflow:\s*hidden/m);
+  assert.match(pageSource, /^\.sales-filter-time-progress :is\(span, strong\)\s*\{([\s\S]*?)text-overflow:\s*ellipsis/m);
+});
+
 test("sales review detail table declares stable table and column semantics", async () => {
   const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
   const tableMatch = indexSource.match(/<table\b[^>]*id="sales-review-detail-table"[^>]*>([\s\S]*?)<\/table>/);
@@ -931,12 +954,26 @@ test("sales review detail table declares stable table and column semantics", asy
   assert.match(headers[1], /\bdata-column-profile="identifier"/);
   assert.match(headers[2], /\bdata-column-profile="name"/);
   assert.match(tableMatch[0], /\bdata-column-key="averageProfit"[\s\S]*?平均利润/);
-  assert.match(tableMatch[0], /\bdata-column-key="refundRate30d"[\s\S]*?30d 退款率[\s\S]*?\bdata-column-key="refundRate"/);
+  assert.match(tableMatch[0], /\bdata-column-key="refundRate30d"[\s\S]*?30d退款[\s\S]*?\bdata-column-key="refundRate"/);
+  assert.match(tableMatch[0], /\bdata-column-key="adFeeRate"[\s\S]*?>广告</);
+  assert.match(tableMatch[0], /\bdata-column-key="promotionDiscountRate"[\s\S]*?>折扣</);
+  assert.match(tableMatch[0], /\bdata-column-key="storageFeeRate"[\s\S]*?>仓储</);
+  assert.match(tableMatch[0], /\bdata-column-key="platformFeeRate"[\s\S]*?>平台</);
+  assert.match(tableMatch[0], /\bdata-column-key="purchaseCostRate"[\s\S]*?>采购</);
+  assert.match(tableMatch[0], /\bdata-column-key="firstLegCostRate"[\s\S]*?>头程</);
   assert.match(tableMatch[0], /\bdata-column-key="fbaDeliveryFeeRate"[\s\S]*?FBA占比/);
   assert.doesNotMatch(tableMatch[0], /FBA发货费占比/);
   headers.slice(3).forEach((attributes, index) => {
     assert.match(attributes, /\bdata-column-kind="number"/, `numeric header ${index + 4} should be marked as number`);
   });
+});
+
+test("sales review achievement state styles use page-level semantic tokens", async () => {
+  const pageSource = await readFile(new URL("../assets/css/pages/22-sales-dashboard.css", import.meta.url), "utf8");
+
+  assert.match(pageSource, /\.msku-achievement-warning\s*\{[\s\S]*?var\(--tj-warning\)/);
+  assert.match(pageSource, /\.msku-achievement-danger\s*\{[\s\S]*?var\(--tj-danger\)/);
+  assert.match(pageSource, /\.msku-achievement-info\s*\{[\s\S]*?var\(--tj-action-blue\)/);
 });
 
 test("store inspection dashboard styles live in the page layer and use semantic tokens", async () => {

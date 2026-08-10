@@ -1,6 +1,19 @@
 import { renderKpiProgress } from "../ui-components.js?v=20260707-ui-components-v1";
 import { markDashboardLoadingRequest, startDashboardLoadingOverlay } from "../dashboard-loader.js?v=20260803-global-page-loading-v1";
 
+export function getQuantityAchievementTone(quantityAchievement, timeProgress) {
+  if (quantityAchievement === null || quantityAchievement === undefined || quantityAchievement === ""
+    || timeProgress === null || timeProgress === undefined || timeProgress === "") return "";
+  const achievement = Number(quantityAchievement);
+  const progress = Number(timeProgress);
+  if (!Number.isFinite(achievement) || !Number.isFinite(progress)) return "";
+  const difference = achievement - progress;
+  if (difference < -5) return "msku-achievement-danger";
+  if (difference < 0) return "msku-achievement-warning";
+  if (difference > 15) return "msku-achievement-info";
+  return "";
+}
+
 export function createSalesDashboardFeature({
   root = globalThis.document,
   bind,
@@ -76,6 +89,7 @@ export function createSalesDashboardFeature({
   let mskuDetailRows = [];
   let mskuDetailStoreFilter = "";
   let mskuDetailSort = { key: "budgetQuantity", direction: "desc" };
+  let salesTimeProgress = null;
 
   function asArray(value, fallback = []) {
     return Array.isArray(value) ? value : fallback;
@@ -262,6 +276,19 @@ export function createSalesDashboardFeature({
     return `<td class="${mskuRateToneClass(key, value)}">${formatActualMoney(value || 0)}%</td>`;
   }
 
+  function dashboardTimeProgress(kpis = []) {
+    const item = kpis.map(normalizeKpi).find((kpi) => kpi?.title === "时间进度");
+    const rawValue = String(item?.value ?? "").replace("%", "").trim();
+    if (!rawValue) return null;
+    const value = Number(rawValue);
+    return Number.isFinite(value) ? value : null;
+  }
+
+  function quantityAchievementCell(value) {
+    const tone = getQuantityAchievementTone(value, salesTimeProgress);
+    return `<td${tone ? ` class="${tone}"` : ""}>${formatActualMoney(value || 0)}%</td>`;
+  }
+
   function renderMskuDetailTable() {
     const detailTable = root?.querySelector?.("#detail-table");
     if (!detailTable) return;
@@ -276,7 +303,7 @@ export function createSalesDashboardFeature({
           <td>${formatActualMoney(row.budgetQuantity || 0)}</td>
           <td>${formatActualMoney(row.actualQuantity || 0)}</td>
           <td>${formatActualMoney(row.fbaInventory || 0)}</td>
-          <td>${formatActualMoney(row.quantityAchievement || 0)}%</td>
+          ${quantityAchievementCell(row.quantityAchievement)}
           <td>${formatActualMoney(row.orderProfit || 0)}</td>
           <td>${formatActualMoney(row.averageProfit || 0)}</td>
           ${mskuRateCell("grossRate", row.grossRate)}
@@ -338,6 +365,8 @@ export function createSalesDashboardFeature({
         .join("");
     }
 
+    salesTimeProgress = dashboardTimeProgress(data.kpis || []);
+    setText("#front-time-progress", salesTimeProgress === null ? "-" : `${formatActualMoney(salesTimeProgress)}%`, root);
     const detailTable = root?.querySelector?.("#detail-table");
     const detailRows = (data.detailRows || []).filter((row) => row && !Array.isArray(row) && typeof row === "object");
     if (detailTable) {

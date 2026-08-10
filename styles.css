@@ -865,6 +865,13 @@ body:not(.login-body) .home-quick-empty{grid-column:1 / -1;min-height:70px;displ
 @media(max-width:900px){body:not(.login-body) .home-hero{flex-direction:column;align-items:stretch}
 body:not(.login-body) .home-sync-pill{min-width:0;width:100%}
 }
+.sales-filter-time-progress{display:grid;flex:0 0 142px;width:142px;min-width:142px;max-width:142px;height:var(--tj-control-height-compact);overflow:hidden;place-content:center;gap:1px;box-sizing:border-box;padding:3px var(--tj-control-padding-x);border:1px solid var(--tj-border-control);border-radius:var(--tj-control-radius);color:var(--tj-action-blue);background:var(--tj-action-blue-soft);text-align:center;white-space:nowrap}
+.sales-filter-time-progress :is(span,strong){display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sales-filter-time-progress span{color:var(--tj-text-muted);font-size:11px;font-weight:700;line-height:1}
+.sales-filter-time-progress strong{color:var(--tj-action-blue);font-size:15px;font-weight:850;line-height:1}
+table.data-table td.msku-achievement-warning{color:var(--tj-warning);font-weight:700}
+table.data-table td.msku-achievement-danger{color:var(--tj-danger);font-weight:700}
+table.data-table td.msku-achievement-info{color:var(--tj-action-blue);font-weight:700}
 #sales-global-filters[hidden]{display:none !important}
 body:not(.sales-view) #sales-global-filters{display:none !important}
 body.sales-view #view-sales .insight-row{display:none !important}

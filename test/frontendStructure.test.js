@@ -14,6 +14,20 @@ test("sales dashboard keeps a single standard owner filter", async () => {
   assert.doesNotMatch(filters, /负责人快捷筛选/);
 });
 
+test("sales dashboard places time progress between date range and currency filters", async () => {
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const filtersStart = indexSource.indexOf('<section class="filters" id="sales-global-filters"');
+  const filtersEnd = indexSource.indexOf("</section>", filtersStart);
+  const filters = indexSource.slice(filtersStart, filtersEnd);
+
+  const dateIndex = filters.indexOf('id="front-date-range-button"');
+  const progressIndex = filters.indexOf('id="front-time-progress"');
+  const currencyIndex = filters.indexOf('id="front-currency-filter"');
+
+  assert.notEqual(progressIndex, -1, "sales dashboard filter time progress is missing");
+  assert.ok(dateIndex < progressIndex && progressIndex < currencyIndex, "time progress must sit between date and currency filters");
+});
+
 test("budget targets use shared filters and a modal import workflow", async () => {
   const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
   const appSource = await readFile(new URL("../app.js", import.meta.url), "utf8");
@@ -643,7 +657,7 @@ test("app.js starts using shared dashboard section loader", async () => {
   assert.match(appSource, /import \{ createSupplierDetailFeature \} from "\.\/assets\/js\/features\/supplier-detail\.js/);
   assert.match(appSource, /import \{ createPayablesDashboardFeature \} from "\.\/assets\/js\/features\/payables-dashboard\.js/);
   assert.match(appSource, /import \{ createReviewRatingFeature \} from "\.\/assets\/js\/features\/review-rating\.js/);
-  assert.match(appSource, /import \{ createSalesDashboardFeature \} from "\.\/assets\/js\/features\/sales-dashboard\.js/);
+  assert.match(appSource, /import \{ createSalesDashboardFeature \} from "\.\/assets\/js\/features\/sales-dashboard\.js\?v=20260810-achievement-tone-v1"/);
   assert.match(appSource, /import \{ createSalesForecastFeature \} from "\.\/assets\/js\/features\/sales-forecast\.js/);
   assert.match(appSource, /import \{ createSidebarShellFeature \} from "\.\/assets\/js\/features\/sidebar-shell\.js/);
   assert.match(appSource, /import \{ createBreadcrumbShellFeature \} from "\.\/assets\/js\/features\/breadcrumb-shell\.js/);

@@ -58,7 +58,7 @@ import { createFbaAutomationFeature } from "./assets/js/features/fba-automation.
 import { createFbaTaskFormFeature } from "./assets/js/features/fba-task-form.js?v=20260707-frontend-refactor-v1";
 import { createFreightRatesFeature } from "./assets/js/features/freight-rates.js?v=20260724-freight-rate-au-xys";
 import { createSalesForecastFeature } from "./assets/js/features/sales-forecast.js?v=20260713-sales-forecast-locator-v2";
-import { createSalesDashboardFeature } from "./assets/js/features/sales-dashboard.js?v=20260808-single-owner-filter-v2";
+import { createSalesDashboardFeature } from "./assets/js/features/sales-dashboard.js?v=20260810-achievement-tone-v1";
 import { createSidebarShellFeature } from "./assets/js/features/sidebar-shell.js?v=20260707-frontend-refactor-v1";
 import { createTopbarStatusFeature } from "./assets/js/features/topbar-status.js?v=20260707-frontend-refactor-v1";
 import { createBreadcrumbShellFeature } from "./assets/js/features/breadcrumb-shell.js?v=20260707-frontend-refactor-v1";

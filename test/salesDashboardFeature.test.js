@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createSalesDashboardFeature } from "../assets/js/features/sales-dashboard.js";
+import { createSalesDashboardFeature, getQuantityAchievementTone } from "../assets/js/features/sales-dashboard.js";
 
 function createFeature(overrides = {}) {
   return createSalesDashboardFeature({
@@ -11,6 +11,15 @@ function createFeature(overrides = {}) {
     ...overrides,
   });
 }
+
+test("sales review quantity achievement classifies progress gaps and material lead", () => {
+  assert.equal(getQuantityAchievementTone(75, 80), "msku-achievement-warning");
+  assert.equal(getQuantityAchievementTone(74.99, 80), "msku-achievement-danger");
+  assert.equal(getQuantityAchievementTone(80, 80), "");
+  assert.equal(getQuantityAchievementTone(95, 80), "");
+  assert.equal(getQuantityAchievementTone(95.01, 80), "msku-achievement-info");
+  assert.equal(getQuantityAchievementTone(75, null), "");
+});
 
 test("sales dashboard feature loads the sales weekly endpoint with the dashboard query", async () => {
   const requests = [];
@@ -201,6 +210,39 @@ test("sales dashboard feature uses only owner options returned by the dashboard"
   }
 });
 
+test("sales dashboard feature shows KPI time progress in the filter toolbar", () => {
+  const timeProgress = { textContent: "" };
+  const root = {
+    querySelector(selector) {
+      return selector === "#front-time-progress" ? timeProgress : null;
+    },
+  };
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    const { renderDashboard } = createSalesDashboardFeature({
+      root,
+      bind: () => null,
+      bindAll: () => [],
+      buildDashboardQuery: () => "",
+      canAccessFinance: () => false,
+      formatActualMoney: (value) => String(value),
+      getCurrentAuthUser: () => null,
+      setText(selector, value) {
+        if (selector === "#front-time-progress") timeProgress.textContent = value;
+      },
+    });
+
+    renderDashboard({ kpis: [{ title: "时间进度", value: "29.03%" }] });
+    assert.equal(timeProgress.textContent, "29.03%");
+
+    renderDashboard({ kpis: [] });
+    assert.equal(timeProgress.textContent, "-");
+  } finally {
+    console.error = originalError;
+  }
+});
+
 test("sales dashboard feature filters MSKU detail rows by current listing owner", () => {
   const ownerSelect = {
     value: "熊丹轩",
@@ -248,16 +290,18 @@ test("sales dashboard feature filters MSKU detail rows by current listing owner"
     });
 
     renderDashboard({
+      kpis: [{ title: "时间进度", value: "80%" }],
       filters: { ownerOptions: [{ value: "林芃", name: "林芃" }, { value: "熊丹轩", name: "熊丹轩" }] },
       detailRows: [
         { budgetStoreName: "探嘉美国", msku: "MSKU-LP", listingOwner: "林芃", productName: "林芃产品", budgetQuantity: 1 },
-        { budgetStoreName: "探嘉加拿大", msku: "MSKU-XDX", listingOwner: "熊丹轩", productName: "熊丹轩产品", budgetQuantity: 2, refundRate30d: 3, refundRate: 5 },
+        { budgetStoreName: "探嘉加拿大", msku: "MSKU-XDX", listingOwner: "熊丹轩", productName: "熊丹轩产品", budgetQuantity: 2, quantityAchievement: 74, refundRate30d: 3, refundRate: 5 },
       ],
     });
 
     assert.equal(status.textContent, "随销售看板同步加载 · 1 条预算 MSKU");
     assert.match(detailTable.innerHTML, /MSKU-XDX/);
     assert.doesNotMatch(detailTable.innerHTML, /MSKU-LP/);
+    assert.match(detailTable.innerHTML, /<td class="msku-achievement-danger">74%<\/td>/);
     assert.notEqual(detailTable.innerHTML.indexOf("3%"), -1);
     assert.ok(detailTable.innerHTML.indexOf("3%") < detailTable.innerHTML.indexOf("5%"));
     assert.match(storeTabs.innerHTML, /探嘉加拿大/);
