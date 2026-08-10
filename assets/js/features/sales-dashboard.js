@@ -89,6 +89,7 @@ export function createSalesDashboardFeature({
   let mskuDetailRows = [];
   let mskuDetailStoreFilter = "";
   let mskuDetailSort = { key: "budgetQuantity", direction: "desc" };
+  let salesTimeProgress = null;
 
   function asArray(value, fallback = []) {
     return Array.isArray(value) ? value : fallback;
@@ -275,6 +276,17 @@ export function createSalesDashboardFeature({
     return `<td class="${mskuRateToneClass(key, value)}">${formatActualMoney(value || 0)}%</td>`;
   }
 
+  function dashboardTimeProgress(kpis = []) {
+    const item = kpis.map(normalizeKpi).find((kpi) => kpi?.title === "时间进度");
+    const value = Number(String(item?.value || "").replace("%", ""));
+    return Number.isFinite(value) ? value : null;
+  }
+
+  function quantityAchievementCell(value) {
+    const tone = getQuantityAchievementTone(value, salesTimeProgress);
+    return `<td${tone ? ` class="${tone}"` : ""}>${formatActualMoney(value || 0)}%</td>`;
+  }
+
   function renderMskuDetailTable() {
     const detailTable = root?.querySelector?.("#detail-table");
     if (!detailTable) return;
@@ -289,7 +301,7 @@ export function createSalesDashboardFeature({
           <td>${formatActualMoney(row.budgetQuantity || 0)}</td>
           <td>${formatActualMoney(row.actualQuantity || 0)}</td>
           <td>${formatActualMoney(row.fbaInventory || 0)}</td>
-          <td>${formatActualMoney(row.quantityAchievement || 0)}%</td>
+          ${quantityAchievementCell(row.quantityAchievement)}
           <td>${formatActualMoney(row.orderProfit || 0)}</td>
           <td>${formatActualMoney(row.averageProfit || 0)}</td>
           ${mskuRateCell("grossRate", row.grossRate)}
@@ -351,6 +363,7 @@ export function createSalesDashboardFeature({
         .join("");
     }
 
+    salesTimeProgress = dashboardTimeProgress(data.kpis || []);
     const detailTable = root?.querySelector?.("#detail-table");
     const detailRows = (data.detailRows || []).filter((row) => row && !Array.isArray(row) && typeof row === "object");
     if (detailTable) {
