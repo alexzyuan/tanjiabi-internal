@@ -1,17 +1,16 @@
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
-import { filterCoreSellers, getLingxingAdapter } from "../adapters/lingxingAdapter.js";
+import { getLingxingAdapter } from "../adapters/lingxingAdapter.js";
 import { createPerformanceMetrics } from "../utils/performanceMetrics.js";
 import {
   fetchLingxingListingsBySidMskus,
   fetchLingxingProductRecords,
 } from "./lingxingCatalogLookupService.js";
 import {
-  readLingxingSellersCache,
   readSharedProductCatalogCache,
-  saveLingxingSellersCache,
   saveSharedProductCatalogCache,
 } from "../utils/cacheStore.js";
+import { getSellerDirectory } from "./sellerDirectoryService.js";
 
 const PRODUCT_CATALOG_CACHE_VERSION = "shared-product-catalog-v3";
 const PRODUCT_CATALOG_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -728,30 +727,22 @@ async function fetchProductRecords(adapter, rows = [], listingItems = [], { stri
 export async function getSharedSellers({
   adapter = getLingxingAdapter(),
   forceRefresh = false,
-  readCache = readLingxingSellersCache,
-  saveCache = saveLingxingSellersCache,
+  readCache,
+  saveCache,
+  logger,
+  nowText,
 } = {}) {
-  if (!forceRefresh) {
-    const cached = await readCache();
-    const sellers = filterCoreSellers(cached?.sellers || []);
-    if (sellers.length) {
-      return {
-        sellers,
-        updatedAt: cached?.updatedAt || "",
-        cacheHit: true,
-        source: "lingxing-sellers-cache",
-      };
-    }
-  }
-
-  const payload = await adapter.fetchSellers();
-  const sellers = filterCoreSellers(payload?.data || []);
-  if (sellers.length) await saveCache(sellers);
+  const options = { adapter, forceRefresh };
+  if (readCache) options.readCache = readCache;
+  if (saveCache) options.saveCache = saveCache;
+  if (logger) options.logger = logger;
+  if (nowText) options.nowText = nowText;
+  const { sellers, meta } = await getSellerDirectory(options);
   return {
     sellers,
-    updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
-    cacheHit: false,
-    source: "lingxing-api",
+    updatedAt: meta.updatedAt,
+    cacheHit: meta.cacheHit,
+    source: meta.source,
   };
 }
 
