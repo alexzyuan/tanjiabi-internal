@@ -1,6 +1,19 @@
 import { renderKpiProgress } from "../ui-components.js?v=20260707-ui-components-v1";
 import { markDashboardLoadingRequest, startDashboardLoadingOverlay } from "../dashboard-loader.js?v=20260803-global-page-loading-v1";
 
+export function getQuantityAchievementTone(quantityAchievement, timeProgress) {
+  if (quantityAchievement === null || quantityAchievement === undefined || quantityAchievement === ""
+    || timeProgress === null || timeProgress === undefined || timeProgress === "") return "";
+  const achievement = Number(quantityAchievement);
+  const progress = Number(timeProgress);
+  if (!Number.isFinite(achievement) || !Number.isFinite(progress)) return "";
+  const difference = achievement - progress;
+  if (difference < -5) return "msku-achievement-danger";
+  if (difference < 0) return "msku-achievement-warning";
+  if (difference > 15) return "msku-achievement-info";
+  return "";
+}
+
 export function createSalesDashboardFeature({
   root = globalThis.document,
   bind,

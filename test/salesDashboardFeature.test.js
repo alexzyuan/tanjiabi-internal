@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createSalesDashboardFeature } from "../assets/js/features/sales-dashboard.js";
+import { createSalesDashboardFeature, getQuantityAchievementTone } from "../assets/js/features/sales-dashboard.js";
 
 function createFeature(overrides = {}) {
   return createSalesDashboardFeature({
@@ -11,6 +11,15 @@ function createFeature(overrides = {}) {
     ...overrides,
   });
 }
+
+test("sales review quantity achievement classifies progress gaps and material lead", () => {
+  assert.equal(getQuantityAchievementTone(75, 80), "msku-achievement-warning");
+  assert.equal(getQuantityAchievementTone(74.99, 80), "msku-achievement-danger");
+  assert.equal(getQuantityAchievementTone(80, 80), "");
+  assert.equal(getQuantityAchievementTone(95, 80), "");
+  assert.equal(getQuantityAchievementTone(95.01, 80), "msku-achievement-info");
+  assert.equal(getQuantityAchievementTone(75, null), "");
+});
 
 test("sales dashboard feature loads the sales weekly endpoint with the dashboard query", async () => {
   const requests = [];
