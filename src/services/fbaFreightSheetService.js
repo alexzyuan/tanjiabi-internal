@@ -4,7 +4,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getLingxingAdapter } from "../adapters/lingxingAdapter.js";
 import { requireFbaAddressProfile } from "../data/fbaAddressBook.js";
-import { findLingxingShop, lingxingShopMap } from "../data/lingxingShopMap.js";
 import {
   applySharedProductCatalogToRows,
   getSharedProductCatalogMap,
@@ -88,9 +87,6 @@ function recordList(payload) {
 
 function buildSellersBySid(extraSellers = []) {
   const map = new Map();
-  for (const shop of lingxingShopMap) {
-    map.set(Number(shop.sid), shop);
-  }
   for (const seller of extraSellers || []) {
     const sid = Number(seller?.sid);
     if (!sid) continue;
@@ -154,7 +150,14 @@ export function normalizeFbaFreightShipments(payload, { sellersBySid = null, sel
   const sellerMap = sellersBySid || buildSellersBySid(sellers);
   return recordList(payload).map((row) => {
     const sid = Number(row.sid || 0);
-    const seller = sellerMap.get(sid) || findLingxingShop(sid) || {};
+    if (!sellerMap.has(sid)) {
+      console.error("[fba-freight] shipment row seller SID is absent from runtime directory", {
+        sid: sid || null,
+        shipmentId: firstText(row.shipment_id, row.shipmentId, row.shipmentConfirmationId, row.sta_shipment_id),
+      });
+      throw new Error(`FBA 货件返回未映射店铺 SID：${sid || "缺失"}`);
+    }
+    const seller = sellerMap.get(sid);
     const items = (Array.isArray(row.item_list) ? row.item_list : row.itemList || []).map(normalizeItem);
     const firstImageItem = items.find((item) => item.imageUrl) || {};
     const shipmentId = firstText(row.shipment_id, row.shipmentId, row.shipmentConfirmationId, row.sta_shipment_id);
@@ -812,7 +815,7 @@ export function normalizeFbaFreightFilters(filters = {}) {
   return {
     startDate,
     endDate,
-    sids: sids.length ? sids : lingxingShopMap.map((shop) => Number(shop.sid)).filter(Boolean),
+    sids,
     shipmentId: firstText(filters.shipmentId, filters.shipment_id),
     shipmentStatus: firstText(filters.shipmentStatus, filters.shipment_status),
     offset: Math.max(0, Number(filters.offset || 0) || 0),

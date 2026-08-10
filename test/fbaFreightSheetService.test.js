@@ -10,6 +10,7 @@ import {
   convertFbaFreightShipmentsToForwarderTemplate,
   fbaFreightSheetTestUtils,
   listFbaForwarderTemplates,
+  normalizeFbaFreightFilters,
   normalizeFbaFreightShipments,
 } from "../src/services/fbaFreightSheetService.js";
 
@@ -108,9 +109,37 @@ test("normalizeFbaFreightShipments preserves Lingxing close time for downstream 
         item_list: [],
       }],
     },
+  }, {
+    sellersBySid: new Map([[8708, { sid: 8708, name: "xiamentanjia-US", country: "美国" }]]),
   });
 
   assert.equal(rows[0].closedAt, "2026-08-01 12:00:00");
+});
+
+test("normalizeFbaFreightFilters leaves seller scope empty until the runtime directory is resolved", () => {
+  const filters = normalizeFbaFreightFilters({
+    startDate: "2026-07-01",
+    endDate: "2026-07-11",
+  });
+
+  assert.deepEqual(filters.sids, []);
+});
+
+test("buildSellersBySid does not seed static shop identities", () => {
+  assert.deepEqual([...fbaFreightSheetTestUtils.buildSellersBySid().keys()], []);
+});
+
+test("normalizeFbaFreightShipments rejects rows whose SID is absent from the injected runtime directory", () => {
+  assert.throws(
+    () => normalizeFbaFreightShipments({
+      data: {
+        list: [{ sid: 17307, shipment_id: "FBA-UNKNOWN-SELLER", item_list: [] }],
+      },
+    }, {
+      sellersBySid: new Map([[8708, { sid: 8708, name: "xiamentanjia-US", country: "美国" }]]),
+    }),
+    /17307/,
+  );
 });
 
 test("buildLingxingShipmentParams keeps the visible UI end date for the adapter boundary", () => {
@@ -182,6 +211,8 @@ test("applyProductCatalogToFbaFreightShipments fills product images by sid and m
         item_list: [{ msku: "JM-DGC-BLUE", sku: "TJ-DGC-BLUE", quantity_shipped: 3 }],
       }],
     },
+  }, {
+    sellersBySid: new Map([[8708, { sid: 8708, name: "xiamentanjia-US", country: "美国" }]]),
   });
   const catalogMap = new Map([
     ["sid:8708:msku:jm-dgc-blue", { sid: 8708, msku: "JM-DGC-BLUE", internalSku: "TJ001", imageUrl: "https://img.example.com/catalog-blue.jpg", productName: "Catalog Blue", model: "SB-2" }],
