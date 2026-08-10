@@ -931,12 +931,26 @@ test("sales review detail table declares stable table and column semantics", asy
   assert.match(headers[1], /\bdata-column-profile="identifier"/);
   assert.match(headers[2], /\bdata-column-profile="name"/);
   assert.match(tableMatch[0], /\bdata-column-key="averageProfit"[\s\S]*?平均利润/);
-  assert.match(tableMatch[0], /\bdata-column-key="refundRate30d"[\s\S]*?30d 退款率[\s\S]*?\bdata-column-key="refundRate"/);
+  assert.match(tableMatch[0], /\bdata-column-key="refundRate30d"[\s\S]*?30d退款[\s\S]*?\bdata-column-key="refundRate"/);
+  assert.match(tableMatch[0], /\bdata-column-key="adFeeRate"[\s\S]*?>广告</);
+  assert.match(tableMatch[0], /\bdata-column-key="promotionDiscountRate"[\s\S]*?>折扣</);
+  assert.match(tableMatch[0], /\bdata-column-key="storageFeeRate"[\s\S]*?>仓储</);
+  assert.match(tableMatch[0], /\bdata-column-key="platformFeeRate"[\s\S]*?>平台</);
+  assert.match(tableMatch[0], /\bdata-column-key="purchaseCostRate"[\s\S]*?>采购</);
+  assert.match(tableMatch[0], /\bdata-column-key="firstLegCostRate"[\s\S]*?>头程</);
   assert.match(tableMatch[0], /\bdata-column-key="fbaDeliveryFeeRate"[\s\S]*?FBA占比/);
   assert.doesNotMatch(tableMatch[0], /FBA发货费占比/);
   headers.slice(3).forEach((attributes, index) => {
     assert.match(attributes, /\bdata-column-kind="number"/, `numeric header ${index + 4} should be marked as number`);
   });
+});
+
+test("sales review achievement state styles use page-level semantic tokens", async () => {
+  const pageSource = await readFile(new URL("../assets/css/pages/22-sales-dashboard.css", import.meta.url), "utf8");
+
+  assert.match(pageSource, /\.msku-achievement-warning\s*\{[\s\S]*?var\(--tj-warning\)/);
+  assert.match(pageSource, /\.msku-achievement-danger\s*\{[\s\S]*?var\(--tj-danger\)/);
+  assert.match(pageSource, /\.msku-achievement-info\s*\{[\s\S]*?var\(--tj-action-blue\)/);
 });
 
 test("store inspection dashboard styles live in the page layer and use semantic tokens", async () => {

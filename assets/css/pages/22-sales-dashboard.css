@@ -1,4 +1,19 @@
 /* Sales dashboard filter controls and overview metrics. */
+.msku-achievement-warning {
+  color: var(--tj-warning);
+  font-weight: 700;
+}
+
+.msku-achievement-danger {
+  color: var(--tj-danger);
+  font-weight: 700;
+}
+
+.msku-achievement-info {
+  color: var(--tj-action-blue);
+  font-weight: 700;
+}
+
 #sales-global-filters[hidden] {
   display: none !important;
 }
