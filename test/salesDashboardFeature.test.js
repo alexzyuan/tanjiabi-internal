@@ -210,6 +210,39 @@ test("sales dashboard feature uses only owner options returned by the dashboard"
   }
 });
 
+test("sales dashboard feature shows KPI time progress in the filter toolbar", () => {
+  const timeProgress = { textContent: "" };
+  const root = {
+    querySelector(selector) {
+      return selector === "#front-time-progress" ? timeProgress : null;
+    },
+  };
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    const { renderDashboard } = createSalesDashboardFeature({
+      root,
+      bind: () => null,
+      bindAll: () => [],
+      buildDashboardQuery: () => "",
+      canAccessFinance: () => false,
+      formatActualMoney: (value) => String(value),
+      getCurrentAuthUser: () => null,
+      setText(selector, value) {
+        if (selector === "#front-time-progress") timeProgress.textContent = value;
+      },
+    });
+
+    renderDashboard({ kpis: [{ title: "时间进度", value: "29.03%" }] });
+    assert.equal(timeProgress.textContent, "29.03%");
+
+    renderDashboard({ kpis: [] });
+    assert.equal(timeProgress.textContent, "-");
+  } finally {
+    console.error = originalError;
+  }
+});
+
 test("sales dashboard feature filters MSKU detail rows by current listing owner", () => {
   const ownerSelect = {
     value: "熊丹轩",

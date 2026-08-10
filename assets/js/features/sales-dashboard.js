@@ -278,7 +278,9 @@ export function createSalesDashboardFeature({
 
   function dashboardTimeProgress(kpis = []) {
     const item = kpis.map(normalizeKpi).find((kpi) => kpi?.title === "时间进度");
-    const value = Number(String(item?.value || "").replace("%", ""));
+    const rawValue = String(item?.value ?? "").replace("%", "").trim();
+    if (!rawValue) return null;
+    const value = Number(rawValue);
     return Number.isFinite(value) ? value : null;
   }
 
@@ -364,6 +366,7 @@ export function createSalesDashboardFeature({
     }
 
     salesTimeProgress = dashboardTimeProgress(data.kpis || []);
+    setText("#front-time-progress", salesTimeProgress === null ? "-" : `${formatActualMoney(salesTimeProgress)}%`, root);
     const detailTable = root?.querySelector?.("#detail-table");
     const detailRows = (data.detailRows || []).filter((row) => row && !Array.isArray(row) && typeof row === "object");
     if (detailTable) {
