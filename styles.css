@@ -865,9 +865,9 @@ body:not(.login-body) .home-quick-empty{grid-column:1 / -1;min-height:70px;displ
 @media(max-width:900px){body:not(.login-body) .home-hero{flex-direction:column;align-items:stretch}
 body:not(.login-body) .home-sync-pill{min-width:0;width:100%}
 }
-.msku-achievement-warning{color:var(--tj-warning);font-weight:700}
-.msku-achievement-danger{color:var(--tj-danger);font-weight:700}
-.msku-achievement-info{color:var(--tj-action-blue);font-weight:700}
+table.data-table td.msku-achievement-warning{color:var(--tj-warning);font-weight:700}
+table.data-table td.msku-achievement-danger{color:var(--tj-danger);font-weight:700}
+table.data-table td.msku-achievement-info{color:var(--tj-action-blue);font-weight:700}
 #sales-global-filters[hidden]{display:none !important}
 body:not(.sales-view) #sales-global-filters{display:none !important}
 body.sales-view #view-sales .insight-row{display:none !important}

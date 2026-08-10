@@ -914,6 +914,17 @@ test("sales dashboard overview styles live in the page layer and use semantic to
   });
 });
 
+test("sales review achievement tones override the shared table cell color", async () => {
+  const pageSource = await readFile(new URL("../assets/css/pages/22-sales-dashboard.css", import.meta.url), "utf8");
+  ["warning", "danger", "info"].forEach((tone) => {
+    assert.match(
+      pageSource,
+      new RegExp(`table\\.data-table td\\.msku-achievement-${tone}\\s*\\{`),
+      `achievement ${tone} tone must have enough specificity to override table.data-table td`,
+    );
+  });
+});
+
 test("sales review detail table declares stable table and column semantics", async () => {
   const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
   const tableMatch = indexSource.match(/<table\b[^>]*id="sales-review-detail-table"[^>]*>([\s\S]*?)<\/table>/);
