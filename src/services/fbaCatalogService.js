@@ -1,6 +1,7 @@
 import { filterCoreSellers, getLingxingAdapter } from "../adapters/lingxingAdapter.js";
 import { lingxingShopMap } from "../data/lingxingShopMap.js";
 import { getFbaAddressProfile } from "../data/fbaAddressBook.js";
+import { getSellerDirectory } from "./sellerDirectoryService.js";
 import { getFbaBoxTemplate, hasCompleteBoxSpec } from "./fbaBoxTemplateService.js";
 import {
   fetchLingxingListingRecords,
@@ -362,11 +363,41 @@ async function fetchMskusForShop(adapter, shop, { force = false, exactMsku = "" 
   return items;
 }
 
-export function getFbaShopOptions() {
-  return filterCoreSellers(lingxingShopMap).map((shop) => ({
-    ...shop,
-    addressProfile: getFbaAddressProfile(shop.name),
-  }));
+export async function getFbaShopOptions({ getDirectory = getSellerDirectory, logger = console } = {}) {
+  const directoryResult = await getDirectory();
+  if (!directoryResult || !Array.isArray(directoryResult.sellers)) {
+    throw new Error("店铺目录返回无效 sellers 列表。");
+  }
+
+  const { sellers, meta = {} } = directoryResult;
+  const shops = [];
+  const unmappedShops = [];
+
+  sellers.forEach((seller) => {
+    const addressProfile = getFbaAddressProfile(seller.name);
+    if (addressProfile) {
+      shops.push({ ...seller, addressProfile });
+      return;
+    }
+    const redactedSeller = {
+      sid: seller.sid,
+      name: seller.name,
+      country: seller.country,
+    };
+    unmappedShops.push(redactedSeller);
+    logger?.warn?.("[fba-shop-directory]", {
+      sid: redactedSeller.sid,
+      name: redactedSeller.name,
+      country: redactedSeller.country,
+      reason: "unmapped-address-profile",
+    });
+  });
+
+  return {
+    shops,
+    unmappedShops,
+    ...(meta && typeof meta === "object" ? meta : {}),
+  };
 }
 
 export async function searchFbaMskus({ sids = [], q = "", matchMode = "fuzzy", adapter = getLingxingAdapter() } = {}) {

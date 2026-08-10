@@ -42,7 +42,7 @@ export function createFbaRoutes(deps = {}) {
       method: "GET",
       path: "/api/fba/shops",
       auth: "session",
-      handler: async ({ res }) => sendJson(res, 200, { shops: getFbaShopOptions() }),
+      handler: async ({ res }) => sendJson(res, 200, await getFbaShopOptions()),
     },
     {
       method: "GET",

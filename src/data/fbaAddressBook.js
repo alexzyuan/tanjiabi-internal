@@ -44,11 +44,10 @@ export const fbaAddressProfiles = {
   },
 };
 
-export function getFbaAddressProfile(shopName = "", { strict = false } = {}) {
+export function getFbaAddressProfile(shopName = "") {
   const shop = findLingxingShop(shopName);
   const value = String(shop?.name || shopName).toLowerCase();
   if (value.startsWith("xiamentanjia")) return fbaAddressProfiles.xiamentanjia;
   if (value.startsWith("tandanbo")) return fbaAddressProfiles.tandanbo;
-  if (strict) return null;
-  return fbaAddressProfiles.tandanbo;
+  return null;
 }
