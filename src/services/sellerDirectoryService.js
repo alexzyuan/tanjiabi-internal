@@ -12,9 +12,9 @@ export class SellerDirectoryUnavailableError extends Error {
 }
 
 function firstValue(records, keys) {
-  for (const record of records) {
-    if (!record || typeof record !== "object") continue;
-    for (const key of keys) {
+  for (const key of keys) {
+    for (const record of records) {
+      if (!record || typeof record !== "object") continue;
       const value = record[key];
       if (value !== undefined && value !== null && String(value).trim() !== "") return value;
     }
@@ -29,14 +29,19 @@ function textValue(records, keys) {
 
 export function normalizeSellerRecord(record = {}) {
   const sources = [record, record.seller, record.shop, record.store, record.account];
-  const sid = Number(firstValue(sources, ["sid", "id", "seller_id_local", "sellerId", "store_id", "storeId", "seller_id"]));
+  const explicitSid = firstValue(sources, ["sid", "id", "seller_id_local", "store_id", "storeId", "seller_id"]);
+  const sellerIdAlias = textValue(sources, ["sellerId"]);
+  const sid = Number(explicitSid || sellerIdAlias);
   const name = textValue(sources, ["name", "seller_name", "sellerName", "shop_name", "shopName", "store_name", "storeName", "account_name", "accountName"]);
   if (!Number.isFinite(sid) || sid <= 0 || !name) return null;
 
   const country = textValue(sources, ["country", "country_name", "countryName", "marketplace", "marketplace_name", "marketplaceName", "region"]);
   const countryCode = textValue(sources, ["countryCode", "country_code", "marketplaceCode", "marketplace_code", "site"]).toUpperCase();
   const displayName = textValue(sources, ["displayName", "display_name", "display", "label"]) || name;
-  const sellerId = textValue(sources, ["seller_id_amazon", "amazon_seller_id", "amazonSellerId", "sellerId", "seller_id"]);
+  const sellerIdCandidate = textValue(sources, ["seller_id_amazon", "amazon_seller_id", "amazonSellerId", "sellerId", "seller_id"]);
+  const sellerId = sellerIdCandidate && (!Number.isFinite(Number(sellerIdCandidate)) || Number(sellerIdCandidate) !== sid)
+    ? sellerIdCandidate
+    : "";
   const marketplaceId = textValue(sources, ["marketplaceId", "marketplace_id"]);
   const mid = firstValue(sources, ["mid", "merchant_id", "merchantId"]);
   const status = firstValue(sources, ["status", "seller_status", "sellerStatus"]);
@@ -48,7 +53,9 @@ export function normalizeSellerRecord(record = {}) {
     countryCode,
     displayName,
     sellerId,
+    seller_id: sellerId,
     marketplaceId,
+    marketplace_id: marketplaceId,
     mid,
     status,
     raw: record,
@@ -69,6 +76,31 @@ function writeLog(logger, level, details) {
   if (typeof method === "function") method.call(logger, "[seller-directory]", details);
 }
 
+function errorDetails(error, operation) {
+  const details = {
+    operation,
+    errorName: error?.name || "Error",
+  };
+  const code = error?.code;
+  const status = error?.status || error?.statusCode || error?.response?.status;
+  const message = String(error?.message || "未知错误").slice(0, 300);
+  if (code !== undefined && code !== null && String(code).trim()) details.errorCode = String(code);
+  if (status !== undefined && status !== null && String(status).trim()) details.errorStatus = Number(status) || String(status);
+  details.errorMessage = message;
+  return details;
+}
+
+function logDirectoryError(logger, error, { source, sellerCount, operation }) {
+  writeLog(logger, "error", {
+    source,
+    cacheHit: false,
+    sellerCount,
+    endpoint: SELLER_ENDPOINT,
+    operation,
+    ...errorDetails(error, operation),
+  });
+}
+
 function defaultNowText() {
   return new Date().toLocaleString("zh-CN", { hour12: false });
 }
@@ -82,7 +114,17 @@ export async function getSellerDirectory({
   saveCache = saveLingxingSellersCache,
 } = {}) {
   if (!forceRefresh) {
-    const cached = await readCache();
+    let cached;
+    try {
+      cached = await readCache();
+    } catch (error) {
+      logDirectoryError(logger, error, {
+        source: "lingxing-sellers-cache",
+        sellerCount: 0,
+        operation: "read-cache",
+      });
+      throw error;
+    }
     const sellers = normalizeSellerRecords(cached?.sellers || []);
     if (sellers.length) {
       const meta = {
@@ -105,12 +147,10 @@ export async function getSellerDirectory({
   try {
     payload = await adapter.fetchSellers();
   } catch (error) {
-    writeLog(logger, "error", {
+    logDirectoryError(logger, error, {
       source: "lingxing-api",
-      cacheHit: false,
       sellerCount: 0,
-      endpoint: SELLER_ENDPOINT,
-      errorName: error?.name || "Error",
+      operation: "fetch",
     });
     throw error;
   }
@@ -118,17 +158,24 @@ export async function getSellerDirectory({
   const sellers = normalizeSellerRecords(payload);
   if (!sellers.length) {
     const error = new SellerDirectoryUnavailableError("领星店铺目录返回空店铺列表，无法继续加载业务店铺。");
-    writeLog(logger, "error", {
+    logDirectoryError(logger, error, {
       source: "lingxing-api",
-      cacheHit: false,
       sellerCount: 0,
-      endpoint: SELLER_ENDPOINT,
-      errorName: error.name,
+      operation: "normalize",
     });
     throw error;
   }
 
-  await saveCache(sellers);
+  try {
+    await saveCache(sellers);
+  } catch (error) {
+    logDirectoryError(logger, error, {
+      source: "lingxing-api",
+      sellerCount: sellers.length,
+      operation: "save-cache",
+    });
+    throw error;
+  }
   const meta = {
     source: "lingxing-api",
     cacheHit: false,

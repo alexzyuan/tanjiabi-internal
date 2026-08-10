@@ -27,11 +27,41 @@ test("normalizeSellerRecord accepts common aliases and preserves the source reco
     countryCode: "US",
     displayName: "探嘉美国",
     sellerId: "A1SELLER",
+    seller_id: "A1SELLER",
     marketplaceId: "ATVPDKIKX0DER",
+    marketplace_id: "ATVPDKIKX0DER",
     mid: "MID-US",
     status: 1,
     raw,
   });
+});
+
+test("normalizeSellerRecord keeps nested local SID separate from an Amazon sellerId", () => {
+  const normalized = normalizeSellerRecord({
+    sellerId: "A1AMAZONSELLER",
+    marketplaceId: "ATVPDKIKX0DER",
+    seller: { sid: "8708", name: "xiamentanjia-US" },
+  });
+
+  assert.equal(normalized.sid, 8708);
+  assert.equal(normalized.sellerId, "A1AMAZONSELLER");
+  assert.equal(normalized.seller_id, "A1AMAZONSELLER");
+  assert.equal(normalized.marketplace_id, "ATVPDKIKX0DER");
+});
+
+test("normalizeSellerRecord preserves legacy seller fields consumed by shared-data callers", () => {
+  const normalized = normalizeSellerRecord({
+    sid: 8708,
+    name: "xiamentanjia-US",
+    seller_id: "A1SELLERUS",
+    marketplace_id: "ATVPDKIKX0DER",
+  });
+
+  assert.equal(normalized.sid, 8708);
+  assert.equal(normalized.sellerId, "A1SELLERUS");
+  assert.equal(normalized.seller_id, "A1SELLERUS");
+  assert.equal(normalized.marketplaceId, "ATVPDKIKX0DER");
+  assert.equal(normalized.marketplace_id, "ATVPDKIKX0DER");
 });
 
 test("normalizeSellerRecords finds nested seller payloads and keeps the last record for a SID", () => {
@@ -138,4 +168,49 @@ test("getSellerDirectory raises an explicit error when the API returns no valid 
     }),
     (error) => error instanceof SellerDirectoryUnavailableError && /空店铺列表/.test(error.message),
   );
+});
+
+test("getSellerDirectory logs cache read failures with a safe operation summary", async () => {
+  const logs = [];
+  const cacheError = Object.assign(new Error("cache permission denied"), { code: "EACCES" });
+
+  await assert.rejects(
+    () => getSellerDirectory({
+      readCache: async () => { throw cacheError; },
+      adapter: { async fetchSellers() { throw new Error("must not fetch after a cache read failure"); } },
+      logger: { error(...args) { logs.push(args); } },
+    }),
+    (error) => error === cacheError,
+  );
+
+  assert.equal(logs[0][0], "[seller-directory]");
+  assert.deepEqual(logs[0][1], {
+    source: "lingxing-sellers-cache",
+    cacheHit: false,
+    sellerCount: 0,
+    endpoint: "/erp/sc/data/seller/lists",
+    operation: "read-cache",
+    errorName: "Error",
+    errorCode: "EACCES",
+    errorMessage: "cache permission denied",
+  });
+});
+
+test("getSellerDirectory logs cache save failures and propagates them", async () => {
+  const logs = [];
+  const saveError = Object.assign(new Error("disk full"), { code: "ENOSPC" });
+
+  await assert.rejects(
+    () => getSellerDirectory({
+      readCache: async () => ({ sellers: [] }),
+      adapter: { async fetchSellers() { return { data: [{ sid: 8708, name: "xiamentanjia-US" }] }; } },
+      saveCache: async () => { throw saveError; },
+      logger: { error(...args) { logs.push(args); } },
+    }),
+    (error) => error === saveError,
+  );
+
+  assert.equal(logs[0][1].operation, "save-cache");
+  assert.equal(logs[0][1].errorCode, "ENOSPC");
+  assert.equal(logs[0][1].sellerCount, 1);
 });
