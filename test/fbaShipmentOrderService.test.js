@@ -146,7 +146,13 @@ test("createReadySendFbaShipmentOrders loads seller mappings from Lingxing when 
     filters: { startDate: "2026-07-01", endDate: "2026-07-11", sid: "8708" },
     shipmentIds: ["FBA18QJFDCWJ"],
     warehouse: { sysWid: 1 },
-  }, { adapter });
+  }, {
+    adapter,
+    getDirectory: async () => {
+      events.push("fetch-sellers");
+      return { sellers };
+    },
+  });
 
   assert.equal(result.createdCount, 1);
   assert.equal(result.results[0].status, "created");
