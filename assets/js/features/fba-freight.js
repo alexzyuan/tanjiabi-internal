@@ -10,14 +10,12 @@ export function createFbaFreightFeature({
   createDateRangePickerImpl = createDateRangePicker,
   downloadBlob,
   escapeHtml,
-  fallbackFbaShops = [],
   fbaValue,
   fetchImpl = globalThis.fetch,
   formatDate,
   formatNumber,
   getFbaShops,
   loadFbaShops,
-  normalizeFbaShop,
   renderTableMessage,
   selectedFilterValues,
   setSelectOptions,
@@ -70,8 +68,7 @@ export function createFbaFreightFeature({
   }
 
   function fbaFreightShops() {
-    const currentShops = typeof getFbaShops === "function" ? getFbaShops() : [];
-    return currentShops.length ? currentShops : fallbackFbaShops.map(normalizeFbaShop).filter((shop) => shop.sid);
+    return typeof getFbaShops === "function" ? getFbaShops() : [];
   }
 
   function fbaFreightShopFilterOptions() {

@@ -9,7 +9,6 @@ export function createFbaTaskFormFeature({
   fieldValue,
   findSelectedFbaMskuOption,
   fbaValue,
-  getFallbackFbaShop,
   getSelectedFbaShops,
   hasCompleteFbaBoxSpec,
   loadFbaAutomationState,
@@ -228,8 +227,12 @@ export function createFbaTaskFormFeature({
   }
 
   function buildFbaPayload(overrides = {}) {
-    const selectedShops = getSelectedFbaShops();
-    const firstShop = selectedShops[0] || getFallbackFbaShop(5);
+    const selectedShops = getSelectedFbaShops() || [];
+    const firstShop = selectedShops[0];
+    const sid = Number(firstShop?.sid);
+    if (!firstShop || !String(firstShop.name || "").trim() || !Number.isInteger(sid) || sid <= 0) {
+      throw new Error("请选择有效店铺。");
+    }
     syncFbaQuantityFields();
     const boxCount = Number(fbaValue("#fba-box-count") || 0);
     const packQuantity = Number(fbaValue("#fba-pack-quantity") || 0);
@@ -239,10 +242,10 @@ export function createFbaTaskFormFeature({
     const transportationKeyword = fbaValue("#fba-transportation-keyword") || "海运";
     return {
       shopName: firstShop.name,
-      sid: Number(firstShop.sid || 11501),
+      sid,
       shop: {
         name: firstShop.name,
-        sid: Number(firstShop.sid),
+        sid,
         displayName: firstShop.displayName,
         country: firstShop.country,
       },

@@ -157,8 +157,10 @@ export function createSyncCenterFeature({
       }
       if (!response.ok) throw new Error(`API ${response.status}`);
       renderLingxingShops(await response.json());
-    } catch {
-      renderLingxingShops({ sellers: [] });
+    } catch (error) {
+      const table = query("#lingxing-shop-table");
+      if (table) renderTableMessage(table, 5, `读取失败：${error.message || error}`);
+      setText("#lingxing-shop-count", `读取失败：${error.message || error}`, root);
     }
   }
 

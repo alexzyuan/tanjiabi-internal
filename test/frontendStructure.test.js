@@ -284,6 +284,23 @@ test("FBA logistics views stay grouped under logistics metadata", async () => {
   assert.match(fbaFreightSource, /接口没有返回创建结果/);
 });
 
+test("FBA seller identity has no frontend fallback shop or address paths", async () => {
+  const sources = await Promise.all([
+    readFile(new URL("../assets/js/features/fba-shops.js", import.meta.url), "utf8"),
+    readFile(new URL("../assets/js/features/fba-freight.js", import.meta.url), "utf8"),
+    readFile(new URL("../assets/js/features/fba-shipment-order.js", import.meta.url), "utf8"),
+    readFile(new URL("../assets/js/features/fba-task-form.js", import.meta.url), "utf8"),
+    readFile(new URL("../assets/js/features/sync-center.js", import.meta.url), "utf8"),
+    readFile(new URL("../app.js", import.meta.url), "utf8"),
+  ]);
+  const source = sources.join("\n");
+
+  assert.doesNotMatch(source, /fallbackFbaShops/);
+  assert.doesNotMatch(source, /fallbackFbaAddresses/);
+  assert.doesNotMatch(source, /getFallbackFbaShop/);
+  assert.doesNotMatch(source, /sid\s*\|\|\s*11501/);
+});
+
 test("freight rates dashboard is grouped under logistics metadata", async () => {
   const breadcrumbShellSource = await readFile(new URL("../assets/js/features/breadcrumb-shell.js", import.meta.url), "utf8");
   const homeQuickLinksSource = await readFile(new URL("../assets/js/features/home-quick-links.js", import.meta.url), "utf8");

@@ -1,40 +1,3 @@
-const fallbackFbaShops = [
-  { name: "tandanbo-AU", country: "澳洲", sid: 11503, displayName: "坦蛋伯澳洲" },
-  { name: "xiamentanjia-US", country: "美国", sid: 8708, displayName: "探嘉美国" },
-  { name: "xiamentanjia-CA", country: "加拿大", sid: 8709, displayName: "探嘉加拿大" },
-  { name: "tandanbo-US", country: "美国", sid: 11500, displayName: "坦蛋伯美国" },
-  { name: "tandanbo-CA", country: "加拿大", sid: 11501, displayName: "坦蛋伯加拿大" },
-  { name: "xiamentanjia-AU", country: "澳洲", sid: 11499, displayName: "探嘉澳洲" },
-  { name: "tanjia-eu-DE", country: "德国", sid: 17307, displayName: "探嘉德国" },
-];
-
-const fallbackFbaAddresses = {
-  tandanbo: {
-    label: "坦蛋伯发货地址",
-    shipperName: "Xiamen tandanbo wangluokeji youxiangongsi",
-    companyName: "Xiamen tandanbo wangluokeji youxiangongsi",
-    addressLine1: "Room 623-40, No. 89, Anling 2nd Road",
-    addressLine2: "",
-    city: "Xiamen",
-    stateOrProvinceCode: "Fujian",
-    postalCode: "361006",
-    countryCode: "CN",
-    phoneNumber: "8615759601196",
-  },
-  xiamentanjia: {
-    label: "厦门探嘉发货地址",
-    shipperName: "Xiamen Tanjia wangluo keji youxian gongsi",
-    companyName: "Xiamen Tanjia wangluo keji youxian gongsi",
-    addressLine1: "No.1 Taiwen street",
-    addressLine2: "Room 239-9, Huli",
-    city: "Xiamen",
-    stateOrProvinceCode: "Fujian",
-    postalCode: "361006",
-    countryCode: "CN",
-    phoneNumber: "+86 13235037039",
-  },
-};
-
 export function createFbaShopsFeature({
   root = globalThis.document,
   bind,
@@ -44,8 +7,8 @@ export function createFbaShopsFeature({
   fbaValue,
   fetchImpl = globalThis.fetch,
   getDisplayShopName,
-  getFrontShopSellers = () => [],
   normalizeCountryName,
+  onDirectoryError = () => {},
   onShopChange = () => {},
   onShopListChange = () => {},
   pickSellerCountry,
@@ -56,39 +19,28 @@ export function createFbaShopsFeature({
   if (typeof fetchImpl !== "function") throw new Error("createFbaShopsFeature requires fetch.");
 
   let fbaShops = [];
-  let selectedFbaShopSids = new Set([11501]);
+  let selectedFbaShopSids = new Set();
 
   function query(selector) {
     return root?.querySelector?.(selector) || null;
   }
 
-  function getFallbackFbaAddress(shopName) {
-    return String(shopName || "").toLowerCase().startsWith("xiamentanjia") ? fallbackFbaAddresses.xiamentanjia : fallbackFbaAddresses.tandanbo;
-  }
-
-  function normalizeFbaShop(shop) {
-    const name = shop.name || pickSellerName(shop);
-    const country = normalizeCountryName(shop.country || pickSellerCountry(shop));
-    const sid = Number(shop.sid || shop.id || 0);
+  function normalizeFbaShop(shop = {}) {
+    const candidate = shop && typeof shop === "object" ? shop : {};
+    const name = String(candidate.name || pickSellerName?.(candidate) || "").trim();
+    const sid = Number(candidate.sid ?? candidate.id ?? 0);
+    if (!name || !Number.isInteger(sid) || sid <= 0) return null;
+    const country = normalizeCountryName(candidate.country || pickSellerCountry?.(candidate));
     return {
+      sid,
       name,
       country,
-      sid,
-      displayName: shop.displayName || getDisplayShopName(name, country),
-      addressProfile: shop.addressProfile || getFallbackFbaAddress(name),
+      displayName: candidate.displayName || getDisplayShopName?.(name, country) || name,
     };
   }
 
   function getFbaShops() {
     return fbaShops.slice();
-  }
-
-  function getFallbackFbaShops() {
-    return fallbackFbaShops.slice();
-  }
-
-  function getFallbackFbaShop(index = 0) {
-    return normalizeFbaShop(fallbackFbaShops[index] || fallbackFbaShops[0]);
   }
 
   function getSelectedFbaShops() {
@@ -122,7 +74,7 @@ export function createFbaShopsFeature({
   function renderFbaShopOptions() {
     const container = query("#fba-shop-options");
     if (!container) return;
-    const keyword = fbaValue("#fba-shop-search").toLowerCase();
+    const keyword = String(fbaValue("#fba-shop-search") || "").toLowerCase();
     const source = fbaShops.filter((shop) => {
       if (!keyword) return true;
       return [shop.name, shop.displayName, shop.country, shop.sid].some((field) => String(field || "").toLowerCase().includes(keyword));
@@ -140,19 +92,18 @@ export function createFbaShopsFeature({
   }
 
   function selectFbaShopSids(sids = [], { notify = false } = {}) {
-    const normalized = sids.map(Number).filter(Boolean);
-    selectedFbaShopSids = new Set(normalized);
+    const availableSids = new Set(fbaShops.map((shop) => Number(shop.sid)));
+    selectedFbaShopSids = new Set(sids.map(Number).filter((sid) => availableSids.has(sid)));
     renderFbaShopOptions();
     updateFbaShopButton();
     if (notify) onShopChange(getSelectedFbaShops());
   }
 
   function populateFbaShopSelect(sellers = []) {
-    const source = sellers.length ? sellers : fallbackFbaShops;
-    fbaShops = source.map(normalizeFbaShop).filter((shop) => shop.sid);
-    if (!fbaShops.some((shop) => selectedFbaShopSids.has(Number(shop.sid)))) {
-      selectedFbaShopSids = new Set([fbaShops[0]?.sid || 11501]);
-    }
+    if (!Array.isArray(sellers)) throw new TypeError("FBA 店铺目录必须是数组。");
+    fbaShops = sellers.map(normalizeFbaShop).filter(Boolean);
+    const availableSids = new Set(fbaShops.map((shop) => Number(shop.sid)));
+    selectedFbaShopSids = new Set([...selectedFbaShopSids].filter((sid) => availableSids.has(sid)));
     renderFbaShopOptions();
     updateFbaShopButton();
     onShopListChange(fbaShops.slice());
@@ -163,10 +114,13 @@ export function createFbaShopsFeature({
       const response = await fetchImpl("/api/fba/shops");
       if (!response.ok) throw new Error(`API ${response.status}`);
       const data = await response.json();
-      populateFbaShopSelect(data.shops || []);
-    } catch {
-      const frontShopSellers = getFrontShopSellers();
-      populateFbaShopSelect(frontShopSellers.length ? frontShopSellers : fallbackFbaShops);
+      if (!Array.isArray(data?.shops) || !data.shops.length) throw new Error("FBA 店铺目录为空。");
+      populateFbaShopSelect(data.shops);
+      if (!fbaShops.length) throw new Error("FBA 店铺目录为空。");
+    } catch (error) {
+      populateFbaShopSelect([]);
+      onDirectoryError(error);
+      throw error;
     }
   }
 
@@ -184,8 +138,6 @@ export function createFbaShopsFeature({
   }
 
   return {
-    getFallbackFbaShop,
-    getFallbackFbaShops,
     getFbaShops,
     getSelectedFbaShops,
     loadFbaShops,

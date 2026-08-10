@@ -3,7 +3,6 @@ export function createFbaShipmentOrderFeature({
   bind,
   closestTarget,
   escapeHtml,
-  fallbackFbaShops = [],
   fbaValue,
   fetchImpl,
   formatNumber,
@@ -75,7 +74,7 @@ export function createFbaShipmentOrderFeature({
   function renderShopOptions() {
     const select = root.querySelector("#fba-shipment-order-sid");
     if (!select) return;
-    const shops = typeof getFbaShops === "function" ? getFbaShops() : fallbackFbaShops;
+    const shops = typeof getFbaShops === "function" ? getFbaShops() : [];
     const current = select.value;
     select.innerHTML = `<option value="">全部核心店铺</option>${shops.map((shop) => {
       const sid = shop.sid || shop.id || "";
