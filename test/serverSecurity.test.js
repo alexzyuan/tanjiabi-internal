@@ -175,7 +175,7 @@ test("static assets use etag revalidation instead of sending unchanged bundles",
   }
 });
 
-test("route table session routes require login and remain available after authentication", async () => {
+test("route table session routes require login and seller directory failures remain visible after authentication", async () => {
   const server = await startServer();
   try {
     const sessionRoutes = ["/api/sync/status", "/api/lingxing/shops"];
@@ -192,7 +192,13 @@ test("route table session routes require login and remain available after authen
       const authenticatedResponse = await fetch(`${server.baseUrl}${path}`, {
         headers: { cookie: result.cookie },
       });
-      assert.equal(authenticatedResponse.status, 200, path);
+      if (path === "/api/lingxing/shops") {
+        assert.equal(authenticatedResponse.status, 500, path);
+        const body = await authenticatedResponse.json();
+        assert.match(body.error, /领星|店铺目录|LINGXING/);
+      } else {
+        assert.equal(authenticatedResponse.status, 200, path);
+      }
     }
   } finally {
     await server.stop();

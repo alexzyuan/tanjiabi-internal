@@ -1,10 +1,10 @@
 import { getLingxingAdapter } from "../adapters/lingxingAdapter.js";
-import { lingxingShopMap } from "../data/lingxingShopMap.js";
 import {
   applyProductCatalogToFbaFreightShipments,
   fbaFreightSheetTestUtils,
   normalizeFbaFreightShipments,
 } from "./fbaFreightSheetService.js";
+import { getSellerDirectory } from "./sellerDirectoryService.js";
 import { getSharedProductCatalogMap } from "./sharedDataService.js";
 
 const DEFAULT_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -20,24 +20,35 @@ function firstText(...values) {
   return "";
 }
 
-function records(payload) {
-  const data = payload?.data !== undefined ? payload.data : (payload || {});
-  if (Array.isArray(data)) return data;
-  return data.list || data.records || data.rows || [];
-}
-
-async function resolveSellerMappings(adapter, sellers = [], { autoLoadSellerMappings = false } = {}) {
+async function resolveSellerMappings(adapter, sellers = [], { getDirectory = getSellerDirectory } = {}) {
   if (Array.isArray(sellers) && sellers.length) return sellers;
-  if (!autoLoadSellerMappings) return [];
-  if (typeof adapter.fetchSellers !== "function") throw new Error("FBA 货件候选缺少领星店铺映射接口 fetchSellers。");
-  const payload = await adapter.fetchSellers();
-  const sellerRows = records(payload);
-  console.info("[fba-shipment-candidates] loaded seller mappings", { sellerCount: sellerRows.length });
+  if (typeof getDirectory !== "function") throw new Error("FBA 货件候选缺少运行时领星店铺目录加载器。");
+  const directory = await getDirectory({ adapter });
+  const sellerRows = Array.isArray(directory) ? directory : directory?.sellers;
+  if (!Array.isArray(sellerRows) || !sellerRows.length) {
+    throw new Error("FBA 货件候选的运行时店铺目录为空，无法继续加载货件。");
+  }
+  console.info("[fba-shipment-candidates] resolved runtime seller directory", {
+    sellerCount: sellerRows.length,
+    source: directory?.meta?.source || "injected",
+  });
   return sellerRows;
 }
 
-function uniqueNumbers(values) {
-  return [...new Set((values || []).map(Number).filter(Boolean))];
+function parseSellerSids(filters = {}) {
+  const raw = filters.sids ?? filters.sid ?? "";
+  const values = Array.isArray(raw) ? raw : String(raw).split(",");
+  const sids = [];
+  for (const value of values) {
+    const text = String(value ?? "").trim();
+    if (!text) continue;
+    const sid = Number(text);
+    if (!Number.isInteger(sid) || sid <= 0) {
+      throw new Error(`FBA 货件筛选包含无效店铺 SID：${text}`);
+    }
+    if (!sids.includes(sid)) sids.push(sid);
+  }
+  return sids;
 }
 
 function sellerSid(seller = {}) {
@@ -46,9 +57,6 @@ function sellerSid(seller = {}) {
 
 function buildSellerMap(sellers = []) {
   const map = new Map();
-  for (const shop of lingxingShopMap) {
-    if (Number(shop.sid)) map.set(Number(shop.sid), shop);
-  }
   for (const seller of sellers || []) {
     const sid = sellerSid(seller);
     if (!sid) continue;
@@ -75,13 +83,11 @@ export function normalizeFbaShipmentCandidateFilters(filters = {}) {
   const endDate = /^\d{4}-\d{2}-\d{2}$/.test(filters.endDate || filters.end_date || "")
     ? firstText(filters.endDate, filters.end_date)
     : today;
-  const sids = uniqueNumbers(String(filters.sids || filters.sid || "")
-    .split(",")
-    .map((value) => value.trim()));
+  const sids = parseSellerSids(filters);
   return {
     startDate,
     endDate,
-    sids: sids.length ? sids : lingxingShopMap.map((shop) => Number(shop.sid)).filter(Boolean),
+    sids,
     shipmentId: firstText(filters.shipmentId, filters.shipment_id),
     shipmentStatus: firstText(filters.shipmentStatus, filters.shipment_status),
     offset: Math.max(0, Number(filters.offset || 0) || 0),
@@ -160,17 +166,13 @@ async function enrichProductCatalog(adapter, shipments, {
 
 async function fetchFbaShipmentCandidates(normalizedFilters, cacheKey, {
   adapter = getLingxingAdapter(),
-  sellers = [],
-  autoLoadSellerMappings,
+  sellerMappings = [],
   now,
   productCatalogRequired = false,
   forceProductCatalogRefresh = false,
 } = {}) {
   const params = fbaFreightSheetTestUtils.buildLingxingShipmentParams(normalizedFilters);
-  const [payload, sellerMappings] = await Promise.all([
-    adapter.fetchFbaCargoShipments(params),
-    resolveSellerMappings(adapter, sellers, { autoLoadSellerMappings }),
-  ]);
+  const payload = await adapter.fetchFbaCargoShipments(params);
   const sellerMap = buildSellerMap(sellerMappings);
   const baseRows = normalizeFbaFreightShipments(payload, { sellersBySid: sellerMap })
     .map((row) => enrichShipmentWithSeller(row, sellerMap));
@@ -200,16 +202,33 @@ async function fetchFbaShipmentCandidates(normalizedFilters, cacheKey, {
 export async function getFbaShipmentCandidates(filters = {}, {
   adapter = getLingxingAdapter(),
   sellers = [],
-  autoLoadSellerMappings = false,
+  getDirectory = getSellerDirectory,
   now = Date.now(),
   ttlMs = DEFAULT_CACHE_TTL_MS,
   productCatalogRequired = false,
   forceProductCatalogRefresh = false,
 } = {}) {
-  const normalizedFilters = normalizeFbaShipmentCandidateFilters(filters);
+  const requestedFilters = normalizeFbaShipmentCandidateFilters(filters);
+  const sellerMappings = await resolveSellerMappings(adapter, sellers, { getDirectory });
+  const sellerMap = buildSellerMap(sellerMappings);
+  if (!sellerMap.size) throw new Error("FBA 货件候选的运行时店铺目录没有有效 SID，无法继续加载货件。");
+  const requestedSids = requestedFilters.sids.length
+    ? requestedFilters.sids
+    : [...sellerMap.keys()];
+  const unknownRequestedSids = requestedSids.filter((sid) => !sellerMap.has(sid));
+  if (unknownRequestedSids.length) {
+    console.error("[fba-shipment-candidates] requested seller SID is absent from runtime directory", {
+      sids: unknownRequestedSids,
+    });
+    throw new Error(`FBA 货件筛选包含未映射店铺 SID：${unknownRequestedSids.join(", ")}`);
+  }
+  const normalizedFilters = {
+    ...requestedFilters,
+    sids: requestedSids,
+  };
   const cacheKey = buildFbaShipmentCandidateCacheKey(normalizedFilters);
   const cached = candidateCache.get(cacheKey);
-  const needsSellerMappings = autoLoadSellerMappings || (Array.isArray(sellers) && sellers.length > 0);
+  const needsSellerMappings = true;
   const cachedCanSatisfy = !needsSellerMappings || rowsHaveSellerMappings(cached?.result?.rows || []);
   const requiresRefresh = normalizedFilters.forceRefresh || forceProductCatalogRefresh;
   if (!requiresRefresh && cached && now - cached.fetchedAtMs < ttlMs && cachedCanSatisfy) {
@@ -242,8 +261,7 @@ export async function getFbaShipmentCandidates(filters = {}, {
 
   const request = fetchFbaShipmentCandidates(normalizedFilters, cacheKey, {
     adapter,
-    sellers,
-    autoLoadSellerMappings,
+    sellerMappings,
     now,
     productCatalogRequired,
     forceProductCatalogRefresh,

@@ -25,15 +25,6 @@ function selectedSet(values = []) {
   return new Set((values || []).map((value) => String(value || "").trim()).filter(Boolean));
 }
 
-async function resolveSellerMappings(adapter, sellers = []) {
-  if (Array.isArray(sellers) && sellers.length) return sellers;
-  if (typeof adapter.fetchSellers !== "function") return [];
-  const payload = await adapter.fetchSellers();
-  const sellerRows = records(payload);
-  console.info("[fba-shipment-order] loaded seller mappings", { sellerCount: sellerRows.length });
-  return sellerRows;
-}
-
 function normalizeWarehouse(input = {}) {
   const sysWidValue = input.sysWid !== undefined ? input.sysWid : input.sys_wid;
   return {
@@ -188,14 +179,14 @@ export async function createReadySendFbaShipmentOrders({
 } = {}, {
   adapter = getLingxingAdapter(),
   sellers = [],
+  getDirectory,
   now = () => new Date(),
 } = {}) {
   const normalizedWarehouse = normalizeWarehouse(warehouse);
   assertWarehouse(normalizedWarehouse);
   const selected = selectedSet(shipmentIds);
   if (!selected.size) throw new Error("请选择要创建发货单的 FBA 货件。");
-  const sellerMappings = await resolveSellerMappings(adapter, sellers);
-  const candidates = await getFbaShipmentCandidates(filters, { adapter, sellers: sellerMappings });
+  const candidates = await getFbaShipmentCandidates(filters, { adapter, sellers, getDirectory });
   const rows = candidates.rows.filter((row) => selected.has(shipmentRowId(row)));
   if (!rows.length) throw new Error("当前筛选结果中没有找到选中的 FBA 货件。");
 

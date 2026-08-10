@@ -273,7 +273,7 @@ test("同一日期范围的工厂库存强制刷新会复用同一个进行中�
       return payload?.data?.list || [];
     },
     async fetchSellers() {
-      return { data: [] };
+      return { data: [{ sid: 8708, name: "xiamentanjia-US", country: "美国" }] };
     },
   };
 

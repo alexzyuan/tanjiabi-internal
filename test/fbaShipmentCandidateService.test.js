@@ -62,13 +62,66 @@ test("normalizeFbaShipmentCandidateFilters keeps existing freight filter names c
   assert.equal(filters.shipmentStatus, "SHIPPED");
 });
 
-test("normalizeFbaShipmentCandidateFilters includes the German FBA shop by default", () => {
+test("normalizeFbaShipmentCandidateFilters leaves seller scope empty until the runtime directory is resolved", () => {
   const filters = normalizeFbaShipmentCandidateFilters({
     startDate: "2026-07-01",
     endDate: "2026-07-11",
   });
 
-  assert.ok(filters.sids.includes(17307));
+  assert.deepEqual(filters.sids, []);
+});
+
+test("getFbaShipmentCandidates rejects an explicitly selected SID outside the runtime directory", async () => {
+  clearFbaShipmentCandidateCache();
+  const adapter = makeAdapter();
+
+  await assert.rejects(
+    () => getFbaShipmentCandidates({ sid: "17307" }, {
+      adapter,
+      sellers: [{ sid: 8708, name: "xiamentanjia-US" }],
+    }),
+    /17307/,
+  );
+  assert.equal(adapter.calls.length, 0);
+});
+
+test("getFbaShipmentCandidates resolves an omitted SID scope from the injected runtime directory", async () => {
+  clearFbaShipmentCandidateCache();
+  const adapter = makeAdapter();
+  const directoryCalls = [];
+
+  const result = await getFbaShipmentCandidates({
+    startDate: "2026-07-01",
+    endDate: "2026-07-11",
+  }, {
+    adapter,
+    getDirectory: async ({ adapter: directoryAdapter }) => {
+      directoryCalls.push(directoryAdapter);
+      return { sellers: [{ sid: 8708, name: "xiamentanjia-US", seller_id: "A1SELLERUS", marketplace_id: "ATVPDKIKX0DER" }] };
+    },
+  });
+
+  assert.equal(directoryCalls[0], adapter);
+  assert.deepEqual(result.filters.sids, [8708]);
+  assert.equal(adapter.calls[0].sid, "8708");
+  assert.equal(result.rows[0].sellerId, "A1SELLERUS");
+});
+
+test("getFbaShipmentCandidates rejects an API row whose SID is absent from the runtime directory", async () => {
+  clearFbaShipmentCandidateCache();
+  const adapter = makeAdapter();
+  adapter.fetchFbaCargoShipments = async () => ({
+    ...payload,
+    data: { list: [{ ...payload.data.list[0], sid: 17307 }] },
+  });
+
+  await assert.rejects(
+    () => getFbaShipmentCandidates({ sid: "8708" }, {
+      adapter,
+      sellers: [{ sid: 8708, name: "xiamentanjia-US" }],
+    }),
+    /17307/,
+  );
 });
 
 test("getFbaShipmentCandidates caches identical Lingxing shipment queries", async () => {
@@ -168,17 +221,13 @@ test("getFbaShipmentCandidates joins concurrent refreshes for the same key", asy
   assert.equal(secondResult.cache.hit, false);
 });
 
-test("getFbaShipmentCandidates reloads stale cache when seller mappings are required", async () => {
+test("getFbaShipmentCandidates reloads stale cache when runtime seller mappings are required", async () => {
   clearFbaShipmentCandidateCache();
   const events = [];
   const adapter = {
     async fetchFbaCargoShipments() {
       events.push("fetch-shipments");
       return payload;
-    },
-    async fetchSellers() {
-      events.push("fetch-sellers");
-      return { data: [{ sid: 8708, seller_id: "A1SELLERUS", marketplace_id: "ATVPDKIKX0DER" }] };
     },
     async fetchListings() {
       return { data: { list: [] } };
@@ -189,12 +238,19 @@ test("getFbaShipmentCandidates reloads stale cache when seller mappings are requ
   };
   const filters = { startDate: "2026-07-01", endDate: "2026-07-11", sid: "8708" };
 
-  const stale = await getFbaShipmentCandidates(filters, { adapter });
-  const mapped = await getFbaShipmentCandidates(filters, { adapter, autoLoadSellerMappings: true });
+  const stale = await getFbaShipmentCandidates(filters, {
+    adapter,
+    getDirectory: async () => ({ sellers: [{ sid: 8708 }] }),
+  });
+  const mapped = await getFbaShipmentCandidates(filters, {
+    adapter,
+    getDirectory: async () => ({ sellers: [{ sid: 8708, seller_id: "A1SELLERUS", marketplace_id: "ATVPDKIKX0DER" }] }),
+    forceProductCatalogRefresh: true,
+  });
 
   assert.equal(stale.rows[0].sellerId, "");
   assert.equal(mapped.cache.hit, false);
   assert.equal(mapped.rows[0].sellerId, "A1SELLERUS");
   assert.equal(mapped.rows[0].marketplaceId, "ATVPDKIKX0DER");
-  assert.deepEqual(events, ["fetch-shipments", "fetch-shipments", "fetch-sellers"]);
+  assert.deepEqual(events, ["fetch-shipments", "fetch-shipments"]);
 });

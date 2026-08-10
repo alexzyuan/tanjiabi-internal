@@ -1,9 +1,8 @@
 import { getConfig } from "../config/index.js";
-import { filterCoreSellers, getLingxingAdapter } from "../adapters/lingxingAdapter.js";
+import { getLingxingAdapter } from "../adapters/lingxingAdapter.js";
 import { mapLingxingToSalesDashboard } from "./lingxingDashboardMapper.js";
 import { SALES_WEEKLY_SOURCE_CACHE_VERSION } from "./salesWeeklySourceCache.js";
 import {
-  readLingxingSellersCache,
   saveLingxingSellersCache,
   saveSalesDashboardCache,
   saveSalesWeeklySourceCache,
@@ -16,6 +15,7 @@ import {
   ownerLookupRowsFromRecords,
 } from "./listingOwnerService.js";
 import { captureInventoryProvisionSnapshot } from "./inventoryProvisionService.js";
+import { getSellerDirectory } from "./sellerDirectoryService.js";
 import { acquireJobLock, releaseJobLock } from "../jobs/jobLock.js";
 import {
   appendSkippedSyncJob,
@@ -114,10 +114,10 @@ async function syncFromLingxing() {
 }
 
 export async function getLingxingShops() {
-  const cached = await readLingxingSellersCache();
+  const { sellers, meta } = await getSellerDirectory();
   return {
-    ...cached,
-    sellers: filterCoreSellers(cached.sellers || []),
+    sellers,
+    ...meta,
   };
 }
 

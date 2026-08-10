@@ -1,6 +1,6 @@
-import { filterCoreSellers, getLingxingAdapter } from "../adapters/lingxingAdapter.js";
-import { lingxingShopMap } from "../data/lingxingShopMap.js";
+import { getLingxingAdapter } from "../adapters/lingxingAdapter.js";
 import { getFbaAddressProfile } from "../data/fbaAddressBook.js";
+import { getSellerDirectory } from "./sellerDirectoryService.js";
 import { getFbaBoxTemplate, hasCompleteBoxSpec } from "./fbaBoxTemplateService.js";
 import {
   fetchLingxingListingRecords,
@@ -79,6 +79,55 @@ function uniqueText(values) {
     seen.add(key);
     return true;
   });
+}
+
+function normalizeRuntimeShop(seller = {}) {
+  const sid = Number(seller.sid ?? seller.seller_id_local ?? seller.store_id ?? seller.storeId ?? seller.id);
+  if (!Number.isFinite(sid) || sid <= 0) return null;
+  const name = normalizeText(
+    seller.name
+      ?? seller.seller_name
+      ?? seller.sellerName
+      ?? seller.shop_name
+      ?? seller.shopName
+      ?? seller.store_name
+      ?? seller.storeName
+      ?? seller.displayName,
+  );
+  if (!name) return null;
+  return {
+    ...seller,
+    sid,
+    name,
+    displayName: normalizeText(seller.displayName || seller.display_name) || name,
+    country: normalizeText(seller.country || seller.countryName || seller.country_name),
+    countryCode: normalizeText(seller.countryCode || seller.country_code || seller.marketplaceCode).toUpperCase(),
+  };
+}
+
+async function resolveRuntimeShops({ sids = [], adapter, getDirectory = getSellerDirectory } = {}) {
+  const directoryResult = await getDirectory({ adapter });
+  if (!directoryResult || !Array.isArray(directoryResult.sellers)) {
+    throw new Error("领星店铺目录返回无效 sellers 列表。");
+  }
+
+  const shopsBySid = new Map();
+  directoryResult.sellers.forEach((seller) => {
+    const normalized = normalizeRuntimeShop(seller);
+    if (normalized) shopsBySid.set(normalized.sid, normalized);
+  });
+  if (!shopsBySid.size) throw new Error("领星店铺目录无可用店铺。");
+
+  const requestedSids = Array.isArray(sids)
+    ? sids.map(Number).filter((sid) => Number.isFinite(sid) && sid > 0)
+    : [];
+  if (!requestedSids.length) return [...shopsBySid.values()];
+
+  const missingSids = [...new Set(requestedSids)].filter((sid) => !shopsBySid.has(sid));
+  if (missingSids.length) {
+    throw new Error(`店铺 SID ${missingSids.join(", ")} 不在运行时领星店铺目录中。`);
+  }
+  return [...new Set(requestedSids)].map((sid) => shopsBySid.get(sid));
 }
 
 function readPackQuantity(record) {
@@ -362,17 +411,62 @@ async function fetchMskusForShop(adapter, shop, { force = false, exactMsku = "" 
   return items;
 }
 
-export function getFbaShopOptions() {
-  return filterCoreSellers(lingxingShopMap).map((shop) => ({
-    ...shop,
-    addressProfile: getFbaAddressProfile(shop.name),
-  }));
+export async function getFbaShopOptions({ getDirectory = getSellerDirectory, logger = console } = {}) {
+  const directoryResult = await getDirectory();
+  if (!directoryResult || !Array.isArray(directoryResult.sellers)) {
+    throw new Error("店铺目录返回无效 sellers 列表。");
+  }
+
+  const { sellers, meta = {} } = directoryResult;
+  const shops = [];
+  const unmappedShops = [];
+
+  sellers.forEach((seller) => {
+    const addressProfile = getFbaAddressProfile(seller.name);
+    if (addressProfile) {
+      shops.push({
+        sid: seller.sid,
+        name: seller.name,
+        country: seller.country,
+        countryCode: seller.countryCode || "",
+        displayName: seller.displayName || seller.name,
+        sellerId: seller.sellerId || seller.seller_id || "",
+        marketplaceId: seller.marketplaceId || seller.marketplace_id || "",
+        mid: seller.mid || "",
+        status: seller.status,
+        addressProfile,
+      });
+      return;
+    }
+    const redactedSeller = {
+      sid: seller.sid,
+      name: seller.name,
+      country: seller.country,
+    };
+    unmappedShops.push(redactedSeller);
+    logger?.warn?.("[fba-shop-directory]", {
+      sid: redactedSeller.sid,
+      name: redactedSeller.name,
+      country: redactedSeller.country,
+      reason: "unmapped-address-profile",
+    });
+  });
+
+  return {
+    shops,
+    unmappedShops,
+    ...(meta && typeof meta === "object" ? meta : {}),
+  };
 }
 
-export async function searchFbaMskus({ sids = [], q = "", matchMode = "fuzzy", adapter = getLingxingAdapter() } = {}) {
-  const coreShops = filterCoreSellers(lingxingShopMap);
-  const selectedSids = Array.isArray(sids) && sids.length ? sids.map(Number).filter(Boolean) : coreShops.map((shop) => shop.sid);
-  const shops = coreShops.filter((shop) => selectedSids.includes(Number(shop.sid)));
+export async function searchFbaMskus({
+  sids = [],
+  q = "",
+  matchMode = "fuzzy",
+  adapter = getLingxingAdapter(),
+  getDirectory = getSellerDirectory,
+} = {}) {
+  const shops = await resolveRuntimeShops({ sids, adapter, getDirectory });
   const settled = await Promise.allSettled(shops.map((shop) => fetchMskusForShop(adapter, shop)));
   const errors = settled
     .map((result, index) => (result.status === "rejected" ? `${shops[index].name}: ${result.reason.message}` : ""))
@@ -391,16 +485,18 @@ export async function searchFbaMskus({ sids = [], q = "", matchMode = "fuzzy", a
   };
 }
 
-export async function resolveFbaMskuFromErp({ sid, msku } = {}) {
+export async function resolveFbaMskuFromErp({
+  sid,
+  msku,
+  adapter = getLingxingAdapter(),
+  getDirectory = getSellerDirectory,
+} = {}) {
   const normalizedSid = Number(sid);
   const normalizedMsku = normalizeMskuText(msku);
   if (!normalizedSid) throw new Error("请选择有效店铺。");
   if (!normalizedMsku) throw new Error("MSKU 不能为空。");
 
-  const shop = filterCoreSellers(lingxingShopMap).find((item) => Number(item.sid) === normalizedSid);
-  if (!shop) throw new Error(`店铺 SID ${normalizedSid} 不在领星店铺映射中。`);
-
-  const adapter = getLingxingAdapter();
+  const [shop] = await resolveRuntimeShops({ sids: [normalizedSid], adapter, getDirectory });
   const items = await fetchMskusForShop(adapter, shop, { force: true, exactMsku: msku });
   const matched = items.find((item) => normalizeMskuText(item.msku) === normalizedMsku);
   if (!matched) {
@@ -413,8 +509,16 @@ export async function resolveFbaMskuFromErp({ sid, msku } = {}) {
   return (await applyBoxTemplates([matched]))[0];
 }
 
-export async function assertFbaMskuPackMatchesErp({ sid, msku, packQuantity, boxCount, quantity } = {}) {
-  const erpItem = await resolveFbaMskuFromErp({ sid, msku });
+export async function assertFbaMskuPackMatchesErp({
+  sid,
+  msku,
+  packQuantity,
+  boxCount,
+  quantity,
+  adapter = getLingxingAdapter(),
+  getDirectory = getSellerDirectory,
+} = {}) {
+  const erpItem = await resolveFbaMskuFromErp({ sid, msku, adapter, getDirectory });
   const erpPackQuantity = Number(erpItem.packQuantity || 0);
   const providedPackQuantity = Number(packQuantity || 0);
 

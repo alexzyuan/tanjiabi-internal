@@ -301,8 +301,6 @@ let setDefaultLowInventoryFeeDate = () => {};
 let setDefaultSupplierBoardDates = () => {};
 let setupSupplierBoard = () => {};
 let setupFactoryInventory = () => {};
-let getFallbackFbaShop = () => ({});
-let getFallbackFbaShops = () => [];
 let getFbaShops = () => [];
 let getSelectedFbaShops = () => [];
 let findSelectedFbaMskuOption = () => null;
@@ -813,8 +811,6 @@ async function refreshDashboardFromFilters() {
 }));
 
 ({
-  getFallbackFbaShop,
-  getFallbackFbaShops,
   getFbaShops,
   getSelectedFbaShops,
   loadFbaShops,
@@ -834,8 +830,16 @@ async function refreshDashboardFromFilters() {
   fbaValue,
   fetchImpl: fetch.bind(window),
   getDisplayShopName,
-  getFrontShopSellers,
   normalizeCountryName,
+  onDirectoryError: (error) => {
+    const message = `店铺目录读取失败：${error?.message || error}`;
+    setText("#fba-status", message, document);
+    setText("#fba-freight-status", message, document);
+    setText("#fba-shipment-variance-status", message, document);
+    renderTableMessage(document.querySelector("#fba-warehouse-table"), 9, message);
+    renderTableMessage(document.querySelector("#fba-freight-table"), 12, message);
+    renderTableMessage(document.querySelector("#fba-shipment-variance-table"), 13, message);
+  },
   onShopChange: (...args) => handleFbaShopSelectionChange(...args),
   onShopListChange: () => {
     renderFbaFreightFilterOptions();
@@ -915,7 +919,6 @@ async function refreshDashboardFromFilters() {
   fieldValue,
   findSelectedFbaMskuOption,
   fbaValue,
-  getFallbackFbaShop,
   getSelectedFbaShops,
   hasCompleteFbaBoxSpec,
   loadFbaAutomationState,
@@ -943,14 +946,12 @@ async function refreshDashboardFromFilters() {
   closestTarget,
   downloadBlob,
   escapeHtml,
-  fallbackFbaShops: getFallbackFbaShops(),
   fbaValue,
   fetchImpl: fetch.bind(window),
   formatDate,
   formatNumber,
   getFbaShops,
   loadFbaShops,
-  normalizeFbaShop,
   renderTableMessage,
   selectedFilterValues,
   setSelectOptions,

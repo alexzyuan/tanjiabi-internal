@@ -3,8 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getLingxingAdapter } from "../adapters/lingxingAdapter.js";
-import { getFbaAddressProfile } from "../data/fbaAddressBook.js";
-import { findLingxingShop, lingxingShopMap } from "../data/lingxingShopMap.js";
+import { requireFbaAddressProfile } from "../data/fbaAddressBook.js";
 import {
   applySharedProductCatalogToRows,
   getSharedProductCatalogMap,
@@ -88,9 +87,6 @@ function recordList(payload) {
 
 function buildSellersBySid(extraSellers = []) {
   const map = new Map();
-  for (const shop of lingxingShopMap) {
-    map.set(Number(shop.sid), shop);
-  }
   for (const seller of extraSellers || []) {
     const sid = Number(seller?.sid);
     if (!sid) continue;
@@ -154,7 +150,14 @@ export function normalizeFbaFreightShipments(payload, { sellersBySid = null, sel
   const sellerMap = sellersBySid || buildSellersBySid(sellers);
   return recordList(payload).map((row) => {
     const sid = Number(row.sid || 0);
-    const seller = sellerMap.get(sid) || findLingxingShop(sid) || {};
+    if (!sellerMap.has(sid)) {
+      console.error("[fba-freight] shipment row seller SID is absent from runtime directory", {
+        sid: sid || null,
+        shipmentId: firstText(row.shipment_id, row.shipmentId, row.shipmentConfirmationId, row.sta_shipment_id),
+      });
+      throw new Error(`FBA 货件返回未映射店铺 SID：${sid || "缺失"}`);
+    }
+    const seller = sellerMap.get(sid);
     const items = (Array.isArray(row.item_list) ? row.item_list : row.itemList || []).map(normalizeItem);
     const firstImageItem = items.find((item) => item.imageUrl) || {};
     const shipmentId = firstText(row.shipment_id, row.shipmentId, row.shipmentConfirmationId, row.sta_shipment_id);
@@ -566,8 +569,7 @@ function uniqueNonEmpty(values = []) {
 function jiufangHeaderValues(shipments = []) {
   const countries = uniqueNonEmpty(shipments.map((shipment) => normalizedCountryName(shipment.country)));
   const warehouses = uniqueNonEmpty(shipments.map((shipment) => shipment.fulfillmentCenterCode));
-  const stores = uniqueNonEmpty(shipments.map((shipment) => shipment.storeName || shipment.raw?.seller || shipment.sid));
-  const profile = stores.length === 1 ? getFbaAddressProfile(stores[0]) : null;
+  const profile = requireJiufangSenderProfile(shipments);
   return {
     channelName: countries.length === 1 ? jiufangChannelForCountry(countries[0]) : "",
     country: countries.length === 1 ? countries[0] : "",
@@ -577,6 +579,19 @@ function jiufangHeaderValues(shipments = []) {
     contact: firstText(profile?.contact, profile?.contactName),
     telephone: profile?.phoneNumber || "",
   };
+}
+
+function requireJiufangSenderProfile(shipments = []) {
+  const stores = uniqueNonEmpty(shipments.map((shipment) => shipment.storeName || shipment.raw?.seller || shipment.sid));
+  const profiles = stores.map((store) => ({
+    store,
+    profile: requireFbaAddressProfile(store, { context: "九方通逊模板" }),
+  }));
+  const ownerKeys = uniqueNonEmpty(profiles.map(({ profile }) => profile.key));
+  if (ownerKeys.length > 1) {
+    throw new Error(`九方通逊模板包含多个法定发件主体，不能合并生成：${stores.join("、")}。`);
+  }
+  return profiles[0]?.profile || null;
 }
 
 function fillJiufangHeaderXml(sheetData, shipments = []) {
@@ -722,6 +737,7 @@ function fillTongpaoTemplateXml(xml, shipments, boxPayloadsByShipmentId) {
 
 export function buildFbaForwarderWorkbookBuffer(shipments = [], { templateId, boxPayloadsByShipmentId = new Map() } = {}) {
   const template = resolveFbaForwarderTemplate(templateId);
+  if (template.id === "jiufang") requireJiufangSenderProfile(shipments);
   const entries = readZipEntries(readFileSync(template.path));
   const worksheetEntry = entries.find((entry) => entry.name === template.worksheetPath);
   if (!worksheetEntry) throw new Error(`货代模板缺少工作表文件：${template.worksheetPath}`);
@@ -799,7 +815,7 @@ export function normalizeFbaFreightFilters(filters = {}) {
   return {
     startDate,
     endDate,
-    sids: sids.length ? sids : lingxingShopMap.map((shop) => Number(shop.sid)).filter(Boolean),
+    sids,
     shipmentId: firstText(filters.shipmentId, filters.shipment_id),
     shipmentStatus: firstText(filters.shipmentStatus, filters.shipment_status),
     offset: Math.max(0, Number(filters.offset || 0) || 0),

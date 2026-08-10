@@ -10,6 +10,7 @@ import {
   convertFbaFreightShipmentsToForwarderTemplate,
   fbaFreightSheetTestUtils,
   listFbaForwarderTemplates,
+  normalizeFbaFreightFilters,
   normalizeFbaFreightShipments,
 } from "../src/services/fbaFreightSheetService.js";
 
@@ -108,9 +109,37 @@ test("normalizeFbaFreightShipments preserves Lingxing close time for downstream 
         item_list: [],
       }],
     },
+  }, {
+    sellersBySid: new Map([[8708, { sid: 8708, name: "xiamentanjia-US", country: "美国" }]]),
   });
 
   assert.equal(rows[0].closedAt, "2026-08-01 12:00:00");
+});
+
+test("normalizeFbaFreightFilters leaves seller scope empty until the runtime directory is resolved", () => {
+  const filters = normalizeFbaFreightFilters({
+    startDate: "2026-07-01",
+    endDate: "2026-07-11",
+  });
+
+  assert.deepEqual(filters.sids, []);
+});
+
+test("buildSellersBySid does not seed static shop identities", () => {
+  assert.deepEqual([...fbaFreightSheetTestUtils.buildSellersBySid().keys()], []);
+});
+
+test("normalizeFbaFreightShipments rejects rows whose SID is absent from the injected runtime directory", () => {
+  assert.throws(
+    () => normalizeFbaFreightShipments({
+      data: {
+        list: [{ sid: 17307, shipment_id: "FBA-UNKNOWN-SELLER", item_list: [] }],
+      },
+    }, {
+      sellersBySid: new Map([[8708, { sid: 8708, name: "xiamentanjia-US", country: "美国" }]]),
+    }),
+    /17307/,
+  );
 });
 
 test("buildLingxingShipmentParams keeps the visible UI end date for the adapter boundary", () => {
@@ -182,6 +211,8 @@ test("applyProductCatalogToFbaFreightShipments fills product images by sid and m
         item_list: [{ msku: "JM-DGC-BLUE", sku: "TJ-DGC-BLUE", quantity_shipped: 3 }],
       }],
     },
+  }, {
+    sellersBySid: new Map([[8708, { sid: 8708, name: "xiamentanjia-US", country: "美国" }]]),
   });
   const catalogMap = new Map([
     ["sid:8708:msku:jm-dgc-blue", { sid: 8708, msku: "JM-DGC-BLUE", internalSku: "TJ001", imageUrl: "https://img.example.com/catalog-blue.jpg", productName: "Catalog Blue", model: "SB-2" }],
@@ -273,6 +304,45 @@ test("buildFbaForwarderWorkbookBuffer requires an explicit forwarder template", 
     () => buildFbaForwarderWorkbookBuffer([], { templateId: "" }),
     /请选择货代模板/,
   );
+});
+
+test("buildFbaForwarderWorkbookBuffer accepts a Jiufang workbook for a regional Tanjia shop", () => {
+  const buffer = buildFbaForwarderWorkbookBuffer([{
+    sid: 17307,
+    storeName: "tanjia-eu-DE",
+    country: "德国",
+    fulfillmentCenterCode: "LEJ1",
+    items: [],
+  }], { templateId: "jiufang" });
+  const workbook = XLSX.read(buffer, { type: "buffer" });
+  const values = XLSX.utils.sheet_to_json(workbook.Sheets["下单模板"], { header: 1, defval: "" });
+
+  assert.ok(buffer.length > 0);
+  assert.equal(values[3][1], "Xiamen Tanjia wangluo keji youxian gongsi");
+});
+
+test("buildFbaForwarderWorkbookBuffer rejects Jiufang shipments owned by different legal senders", () => {
+  assert.throws(
+    () => buildFbaForwarderWorkbookBuffer([
+      { sid: 8708, storeName: "xiamentanjia-US", country: "美国", fulfillmentCenterCode: "ONT8", items: [] },
+      { sid: 11500, storeName: "tandanbo-US", country: "美国", fulfillmentCenterCode: "ONT8", items: [] },
+    ], { templateId: "jiufang" }),
+    /九方通逊模板.*多个法定发件主体.*xiamentanjia-US.*tandanbo-US/,
+  );
+});
+
+test("buildFbaForwarderWorkbookBuffer accepts multiple stores owned by one legal sender", () => {
+  const buffer = buildFbaForwarderWorkbookBuffer([
+    { sid: 8708, storeName: "xiamentanjia-US", country: "美国", fulfillmentCenterCode: "ONT8", items: [] },
+    { sid: 8709, storeName: "xiamentanjia-CA", country: "美国", fulfillmentCenterCode: "ONT8", items: [] },
+  ], { templateId: "jiufang" });
+  const workbook = XLSX.read(buffer, { type: "buffer" });
+  const values = XLSX.utils.sheet_to_json(workbook.Sheets["下单模板"], { header: 1, defval: "" });
+
+  assert.notEqual(values[3][1], "");
+  assert.notEqual(values[4][1], "");
+  assert.notEqual(values[6][1], "");
+  assert.notEqual(values[7][1], "");
 });
 
 test("buildFbaForwarderWorkbookBuffer fills Tongpao template with shipment and box data", () => {

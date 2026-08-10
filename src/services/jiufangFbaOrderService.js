@@ -136,7 +136,7 @@ function shipmentStoreName(shipment = {}) {
 
 function resolveJiufangSenderProfile(shipment = {}, senderProfile) {
   if (senderProfile !== undefined) return senderProfile;
-  return getFbaAddressProfile(shipmentStoreName(shipment), { strict: true });
+  return getFbaAddressProfile(shipmentStoreName(shipment));
 }
 
 function amazonAddress(shipment = {}) {

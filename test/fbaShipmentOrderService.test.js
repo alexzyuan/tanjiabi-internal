@@ -146,7 +146,13 @@ test("createReadySendFbaShipmentOrders loads seller mappings from Lingxing when 
     filters: { startDate: "2026-07-01", endDate: "2026-07-11", sid: "8708" },
     shipmentIds: ["FBA18QJFDCWJ"],
     warehouse: { sysWid: 1 },
-  }, { adapter });
+  }, {
+    adapter,
+    getDirectory: async () => {
+      events.push("fetch-sellers");
+      return { sellers };
+    },
+  });
 
   assert.equal(result.createdCount, 1);
   assert.equal(result.results[0].status, "created");
@@ -208,11 +214,33 @@ test("createReadySendFbaShipmentOrders returns per-shipment failure when require
     filters: { startDate: "2026-07-01", endDate: "2026-07-11", sid: "8708" },
     shipmentIds: ["FBA-MISSING"],
     warehouse: { sysWid: 1 },
-  }, { adapter, sellers: [] });
+  }, { adapter, sellers });
 
   assert.equal(result.failedCount, 1);
   assert.equal(result.results[0].status, "failed");
   assert.match(result.results[0].error, /缺少店铺映射|缺少 FNSKU|缺少 SKU|发货数量/);
+});
+
+test("createReadySendFbaShipmentOrders propagates runtime directory failures", async () => {
+  clearFbaShipmentCandidateCache();
+  const adapter = {
+    async fetchFbaCargoShipments() {
+      throw new Error("货件接口不应在目录失败前调用");
+    },
+  };
+
+  await assert.rejects(
+    () => createReadySendFbaShipmentOrders({
+      filters: { startDate: "2026-07-01", endDate: "2026-07-11", sid: "8708" },
+      shipmentIds: ["FBA-MISSING"],
+      warehouse: { sysWid: 1 },
+    }, {
+      adapter,
+      sellers: [],
+      getDirectory: async () => { throw new Error("seller directory unavailable"); },
+    }),
+    /seller directory unavailable/,
+  );
 });
 
 test("createReadySendFbaShipmentOrders returns Lingxing error details to the row result", async () => {
