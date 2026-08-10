@@ -1,5 +1,4 @@
 import { readEnv } from "../config/index.js";
-import { findLingxingShop } from "./lingxingShopMap.js";
 
 function envText(key, fallback = "") {
   return String(readEnv(key, fallback) || "").trim();
@@ -45,10 +44,9 @@ export const fbaAddressProfiles = {
 };
 
 export function getFbaAddressProfile(shopName = "") {
-  const shop = findLingxingShop(shopName);
-  const value = String(shop?.name || shopName).toLowerCase();
-  if (value.startsWith("xiamentanjia")) return fbaAddressProfiles.xiamentanjia;
-  if (value.startsWith("tandanbo")) return fbaAddressProfiles.tandanbo;
+  const value = String(shopName || "").trim().toLowerCase();
+  if (value.includes("tandanbo") || value.includes("坦蛋伯")) return fbaAddressProfiles.tandanbo;
+  if (value.includes("tanjia") || value.includes("探嘉")) return fbaAddressProfiles.xiamentanjia;
   return null;
 }
 
@@ -56,5 +54,5 @@ export function requireFbaAddressProfile(shopName = "", { context = "FBA 物流"
   const profile = getFbaAddressProfile(shopName);
   if (profile) return profile;
   const identifier = String(shopName || "未知店铺").trim() || "未知店铺";
-  throw new Error(`${context} 无法为店铺 ${identifier} 解析已审核的法定发件主体。`);
+  throw new Error(`${context} 无法为店铺 ${identifier} 解析已配置的法定发件主体。`);
 }

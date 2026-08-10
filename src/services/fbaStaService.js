@@ -1,9 +1,9 @@
 import { getLingxingAdapter } from "../adapters/lingxingAdapter.js";
-import { findLingxingShop } from "../data/lingxingShopMap.js";
 import { requireFbaAddressProfile } from "../data/fbaAddressBook.js";
 import { sendDingTalkText } from "./dingtalkService.js";
 import { assertFbaMskuPackMatchesErp } from "./fbaCatalogService.js";
 import { hasCompleteBoxSpec, saveFbaBoxTemplate } from "./fbaBoxTemplateService.js";
+import { getSellerDirectory } from "./sellerDirectoryService.js";
 
 const terminalStatuses = new Set(["success", "failure", "local_failure"]);
 const FBA_PROBE_VERSION = "2026-05-18-delivery-dates-transport-lock";
@@ -56,19 +56,49 @@ function normalizePlanName(payload) {
   return compactPlanName(value, "");
 }
 
-function normalizeStaPayload(payload) {
-  const shop = findLingxingShop(payload.shopName || payload.sid);
-  const sid = Number(payload.sid || shop?.sid);
-  if (!sid) throw new Error("sid 不能为空，请选择领星店铺或传入 sid。");
-  const profile = requireFbaAddressProfile(shop?.name || payload.shopName || sid, { context: "FBA STA" });
+function sameSellerName(value, seller) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) return true;
+  return [seller.name, seller.displayName]
+    .some((candidate) => String(candidate || "").trim().toLowerCase() === normalized);
+}
+
+export async function resolveCanonicalStaSeller(input = {}, { getDirectory = getSellerDirectory } = {}) {
+  const sid = Number(input.sid);
+  if (!Number.isInteger(sid) || sid <= 0) throw new Error("sid 不能为空，请选择领星运行时店铺。");
+
+  const directory = await getDirectory();
+  const seller = (directory?.sellers || []).find((item) => Number(item?.sid) === sid);
+  if (!seller) throw new Error(`SID ${sid} 不存在于运行时领星店铺目录。`);
+
+  const suppliedName = String(input.shopName || input.name || "").trim();
+  if (!sameSellerName(suppliedName, seller)) {
+    throw new Error(`SID ${sid} 的传入店铺名 ${suppliedName} 与运行时领星店铺目录 ${seller.name} 不一致。`);
+  }
+
+  const profile = requireFbaAddressProfile(seller.name, { context: "FBA STA" });
+  return {
+    sid,
+    name: seller.name,
+    displayName: seller.displayName || seller.name,
+    country: seller.country || "",
+    countryCode: seller.countryCode || "",
+    legalSenderKey: profile.key,
+  };
+}
+
+async function normalizeStaPayload(payload) {
+  const shop = await resolveCanonicalStaSeller(payload);
+  const profile = requireFbaAddressProfile(shop.name, { context: "FBA STA" });
   const address = payload.useBrandAddress === false ? payload : profile;
   const planName = normalizePlanName(payload);
 
   return {
-    sid,
+    sid: shop.sid,
     name: planName,
-    shopName: shop?.name || payload.shopName || String(sid),
-    displayName: shop?.displayName || payload.shopName || String(sid),
+    shopName: shop.name,
+    displayName: shop.displayName,
+    country: shop.country,
     shipperName: requireText(address, "shipperName"),
     addressLine1: requireText(address, "addressLine1"),
     addressLine2: address.addressLine2 || "",
@@ -551,8 +581,8 @@ function isUsShop(request) {
   const shopText = [
     request.shopName,
     request.displayName,
+    request.country,
     request.countryCode,
-    findLingxingShop(request.shopName || request.sid)?.country,
   ].map((item) => String(item || "").trim().toLowerCase()).join(" ");
   return /\b(us|usa)\b/.test(shopText) || /-us\b/.test(shopText) || shopText.includes("美国");
 }
@@ -670,7 +700,7 @@ function buildNotice({ request, createResult, generateResult, warehouses, displa
 }
 
 export async function runSingleStaWarehouseProbe(payload) {
-  const request = normalizeStaPayload(payload);
+  const request = await normalizeStaPayload(payload);
   const erpMatch = await assertFbaMskuPackMatchesErp({
     sid: request.sid,
     msku: request.inboundPlanItems?.[0]?.msku,
@@ -823,7 +853,7 @@ export async function runSingleStaWarehouseProbe(payload) {
         sid: request.sid,
         shopName: request.shopName,
         displayName: request.displayName,
-        country: findLingxingShop(request.shopName || request.sid)?.country || "",
+        country: request.country,
         planName: request.planName,
         msku: request.inboundPlanItems?.[0]?.msku || "",
         quantity: request.inboundPlanItems?.[0]?.quantity || 0,
@@ -901,7 +931,7 @@ export async function runStaWarehouseProbe(payload) {
           sid: shop.sid,
           shopName: shop.name,
           displayName: shop.displayName || shop.name,
-          country: findLingxingShop(shop.name || shop.sid)?.country || "",
+          country: shop.country || "",
           planName: payload.planName || "",
           msku: payload.inboundPlanItems?.[0]?.msku || "",
           quantity: payload.inboundPlanItems?.[0]?.quantity || 0,

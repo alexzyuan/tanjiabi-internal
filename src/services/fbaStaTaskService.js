@@ -2,10 +2,9 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
-import { findLingxingShop } from "../data/lingxingShopMap.js";
 import { requireFbaAddressProfile } from "../data/fbaAddressBook.js";
 import { readJsonFileWithRecovery } from "../utils/jsonFile.js";
-import { runSingleStaWarehouseProbe } from "./fbaStaService.js";
+import { resolveCanonicalStaSeller, runSingleStaWarehouseProbe } from "./fbaStaService.js";
 import { assertFbaMskuPackMatchesErp } from "./fbaCatalogService.js";
 import { hasCompleteBoxSpec, normalizeBoxSpec, saveFbaBoxTemplate } from "./fbaBoxTemplateService.js";
 
@@ -281,20 +280,19 @@ function isWithinTaskWindow(task, date = new Date()) {
     && parts.hour < Number(task.endHour ?? 19);
 }
 
-function normalizeShop(input) {
-  const shop = findLingxingShop(input?.name || input?.shopName || input?.sid);
-  const sid = Number(input?.sid || shop?.sid);
-  if (!sid) throw new Error("请选择有效店铺。");
+export async function normalizeFbaStaTaskShop(input, options = {}) {
+  const seller = await resolveCanonicalStaSeller(input, options);
   return {
-    sid,
-    name: shop?.name || input?.name || input?.shopName || String(sid),
-    displayName: shop?.displayName || input?.displayName || shop?.name || String(sid),
-    country: shop?.country || input?.country || "",
+    sid: seller.sid,
+    name: seller.name,
+    displayName: seller.displayName,
+    country: seller.country,
+    legalSenderKey: seller.legalSenderKey,
   };
 }
 
 async function normalizeTaskInput(payload, shopInput, automation) {
-  const shop = normalizeShop(shopInput);
+  const shop = await normalizeFbaStaTaskShop(shopInput);
   const targetWarehouseCode = String(payload.targetWarehouseCode || "").trim().toUpperCase();
   const msku = String(payload.msku || payload.inboundPlanItems?.[0]?.msku || "").trim();
   const quantity = Number(payload.quantity || payload.inboundPlanItems?.[0]?.quantity || 0);

@@ -306,17 +306,19 @@ test("buildFbaForwarderWorkbookBuffer requires an explicit forwarder template", 
   );
 });
 
-test("buildFbaForwarderWorkbookBuffer rejects a Jiufang workbook without an approved legal sender", () => {
-  assert.throws(
-    () => buildFbaForwarderWorkbookBuffer([{
-      sid: 17307,
-      storeName: "tanjia-eu-DE",
-      country: "德国",
-      fulfillmentCenterCode: "LEJ1",
-      items: [],
-    }], { templateId: "jiufang" }),
-    /九方通逊模板.*tanjia-eu-DE.*法定发件主体/,
-  );
+test("buildFbaForwarderWorkbookBuffer accepts a Jiufang workbook for a regional Tanjia shop", () => {
+  const buffer = buildFbaForwarderWorkbookBuffer([{
+    sid: 17307,
+    storeName: "tanjia-eu-DE",
+    country: "德国",
+    fulfillmentCenterCode: "LEJ1",
+    items: [],
+  }], { templateId: "jiufang" });
+  const workbook = XLSX.read(buffer, { type: "buffer" });
+  const values = XLSX.utils.sheet_to_json(workbook.Sheets["下单模板"], { header: 1, defval: "" });
+
+  assert.ok(buffer.length > 0);
+  assert.equal(values[3][1], "Xiamen Tanjia wangluo keji youxian gongsi");
 });
 
 test("buildFbaForwarderWorkbookBuffer rejects Jiufang shipments owned by different legal senders", () => {

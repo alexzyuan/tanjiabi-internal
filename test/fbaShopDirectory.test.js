@@ -5,18 +5,20 @@ import { createFbaRoutes } from "../routes/fba.js";
 import { getFbaAddressProfile, requireFbaAddressProfile } from "../src/data/fbaAddressBook.js";
 import { getFbaShopOptions } from "../src/services/fbaCatalogService.js";
 
-test("getFbaAddressProfile is strict and resolves only approved owner prefixes", () => {
+test("getFbaAddressProfile resolves legal senders by case-insensitive brand markers", () => {
   assert.equal(getFbaAddressProfile("unknown-store"), null);
-  assert.equal(getFbaAddressProfile("tanjia-eu-DE"), null);
-  assert.equal(getFbaAddressProfile("tanjia-eu-UK"), null);
+  assert.equal(getFbaAddressProfile("tanjia-eu-DE")?.key, "xiamentanjia");
+  assert.equal(getFbaAddressProfile("EU-TANJIA-UK")?.key, "xiamentanjia");
   assert.equal(getFbaAddressProfile("xiamentanjia-US")?.key, "xiamentanjia");
+  assert.equal(getFbaAddressProfile("探嘉加拿大")?.key, "xiamentanjia");
   assert.equal(getFbaAddressProfile("tandanbo-US")?.key, "tandanbo");
+  assert.equal(getFbaAddressProfile("坦蛋伯澳洲")?.key, "tandanbo");
 });
 
-test("requireFbaAddressProfile fails with the workflow and unresolved shop identity", () => {
+test("requireFbaAddressProfile fails with the workflow and unknown brand", () => {
   assert.throws(
-    () => requireFbaAddressProfile("tanjia-eu-DE", { context: "FBA STA" }),
-    /FBA STA.*tanjia-eu-DE.*法定发件主体/,
+    () => requireFbaAddressProfile("unknown-store", { context: "FBA STA" }),
+    /FBA STA.*unknown-store.*法定发件主体/,
   );
 });
 
@@ -44,15 +46,15 @@ test("getFbaShopOptions uses only runtime sellers and redacts unmapped identitie
   });
 
   assert.equal(directoryCalls, 1);
-  assert.deepEqual(result.shops.map(({ sid }) => sid), [8708, 11500]);
+  assert.deepEqual(result.shops.map(({ sid }) => sid), [8708, 11500, 17305]);
   assert.equal(result.shops.some((shop) => shop.sid === 11501), false);
   assert.equal(result.shops.some((shop) => shop.sid === 17307), false);
   assert.equal(result.shops[0].addressProfile.key, "xiamentanjia");
   assert.equal(Object.hasOwn(result.shops[0], "raw"), false);
   assert.equal(JSON.stringify(result.shops).includes("must-not-return"), false);
   assert.equal(result.shops[1].addressProfile.key, "tandanbo");
+  assert.equal(result.shops[2].addressProfile.key, "xiamentanjia");
   assert.deepEqual(result.unmappedShops, [
-    { sid: 17305, name: "tanjia-eu-UK", country: "英国" },
     { sid: 19999, name: "unknown-store", country: "未知" },
   ]);
   assert.deepEqual({
@@ -64,7 +66,7 @@ test("getFbaShopOptions uses only runtime sellers and redacts unmapped identitie
     cacheHit: false,
     updatedAt: "2026-08-10 12:00:00",
   });
-  assert.equal(warnings.length, 2);
+  assert.equal(warnings.length, 1);
   assert.equal(warnings.every(([prefix]) => prefix === "[fba-shop-directory]"), true);
   assert.equal(JSON.stringify(warnings).includes("must-not-log"), false);
 });
