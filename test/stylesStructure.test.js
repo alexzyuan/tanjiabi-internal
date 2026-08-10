@@ -925,6 +925,18 @@ test("sales review achievement tones override the shared table cell color", asyn
   });
 });
 
+test("sales filter time progress keeps its text inside the status box", async () => {
+  const pageSource = await readFile(new URL("../assets/css/pages/22-sales-dashboard.css", import.meta.url), "utf8");
+  const statusBox = pageSource.match(/^\.sales-filter-time-progress\s*\{([\s\S]*?)^\}/m)?.[1] || "";
+  assert.match(statusBox, /min-width:\s*142px/);
+  assert.match(statusBox, /max-width:\s*142px/);
+  assert.match(statusBox, /overflow:\s*hidden/);
+  assert.match(statusBox, /white-space:\s*nowrap/);
+  assert.match(statusBox, /var\(--tj-action-blue\)/);
+  assert.match(pageSource, /^\.sales-filter-time-progress :is\(span, strong\)\s*\{([\s\S]*?)overflow:\s*hidden/m);
+  assert.match(pageSource, /^\.sales-filter-time-progress :is\(span, strong\)\s*\{([\s\S]*?)text-overflow:\s*ellipsis/m);
+});
+
 test("sales review detail table declares stable table and column semantics", async () => {
   const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
   const tableMatch = indexSource.match(/<table\b[^>]*id="sales-review-detail-table"[^>]*>([\s\S]*?)<\/table>/);
