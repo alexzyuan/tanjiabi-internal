@@ -581,8 +581,15 @@ function jiufangHeaderValues(shipments = []) {
 
 function requireJiufangSenderProfile(shipments = []) {
   const stores = uniqueNonEmpty(shipments.map((shipment) => shipment.storeName || shipment.raw?.seller || shipment.sid));
-  if (stores.length !== 1) return null;
-  return requireFbaAddressProfile(stores[0], { context: "九方通逊模板" });
+  const profiles = stores.map((store) => ({
+    store,
+    profile: requireFbaAddressProfile(store, { context: "九方通逊模板" }),
+  }));
+  const ownerKeys = uniqueNonEmpty(profiles.map(({ profile }) => profile.key));
+  if (ownerKeys.length > 1) {
+    throw new Error(`九方通逊模板包含多个法定发件主体，不能合并生成：${stores.join("、")}。`);
+  }
+  return profiles[0]?.profile || null;
 }
 
 function fillJiufangHeaderXml(sheetData, shipments = []) {

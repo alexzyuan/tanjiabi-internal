@@ -288,6 +288,25 @@ test("buildFbaForwarderWorkbookBuffer rejects a Jiufang workbook without an appr
   );
 });
 
+test("buildFbaForwarderWorkbookBuffer rejects Jiufang shipments owned by different legal senders", () => {
+  assert.throws(
+    () => buildFbaForwarderWorkbookBuffer([
+      { sid: 8708, storeName: "xiamentanjia-US", country: "美国", fulfillmentCenterCode: "ONT8", items: [] },
+      { sid: 11500, storeName: "tandanbo-US", country: "美国", fulfillmentCenterCode: "ONT8", items: [] },
+    ], { templateId: "jiufang" }),
+    /九方通逊模板.*多个法定发件主体.*xiamentanjia-US.*tandanbo-US/,
+  );
+});
+
+test("buildFbaForwarderWorkbookBuffer accepts multiple stores owned by one legal sender", () => {
+  const buffer = buildFbaForwarderWorkbookBuffer([
+    { sid: 8708, storeName: "xiamentanjia-US", country: "美国", fulfillmentCenterCode: "ONT8", items: [] },
+    { sid: 8709, storeName: "xiamentanjia-CA", country: "美国", fulfillmentCenterCode: "ONT8", items: [] },
+  ], { templateId: "jiufang" });
+
+  assert.equal(Buffer.isBuffer(buffer), true);
+});
+
 test("buildFbaForwarderWorkbookBuffer fills Tongpao template with shipment and box data", () => {
   const rows = normalizeFbaFreightShipments(shipmentPayload, {
     sellersBySid: new Map([[8708, { sid: 8708, name: "xiamentanjia-US", country: "美国" }]]),
