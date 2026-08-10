@@ -269,6 +269,9 @@ test("FBA logistics views stay grouped under logistics metadata", async () => {
   assert.match(indexSource, /data-view="fba-freight"[\s\S]*<span class="nav-label">FBA货件处理<\/span>/);
   assert.equal(indexSource.includes('data-view="fba-shipment-order"'), false);
   assert.match(indexSource, /id="fba-freight-warehouse"/);
+  assert.match(indexSource, /id="fba-freight-country"/);
+  assert.match(indexSource, /id="fba-freight-search"[^>]*aria-label="搜索货件"/);
+  assert.match(indexSource, /class="fba-freight-search-scope"[^>]*>货件单号/);
   assert.equal(indexSource.includes('id="fba-freight-create-order"'), false);
   assert.equal(appSource.includes("createFbaShipmentOrderFeature"), false);
   assert.equal(appSource.includes("loadFbaShipmentOrderInitial"), false);

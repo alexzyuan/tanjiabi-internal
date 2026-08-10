@@ -5,6 +5,7 @@ const fallbackFbaShops = [
   { name: "tandanbo-US", country: "美国", sid: 11500, displayName: "坦蛋伯美国" },
   { name: "tandanbo-CA", country: "加拿大", sid: 11501, displayName: "坦蛋伯加拿大" },
   { name: "xiamentanjia-AU", country: "澳洲", sid: 11499, displayName: "探嘉澳洲" },
+  { name: "tanjia-eu-DE", country: "德国", sid: 17307, displayName: "探嘉德国" },
 ];
 
 const fallbackFbaAddresses = {

@@ -524,10 +524,12 @@ svg{width:100%;height:auto;display:block}
 .sort-button:focus-visible{outline:0;box-shadow:var(--tj-focus-ring)}
 .image-placeholder{display:grid;place-items:center;color:var(--tj-text-muted);background:var(--tj-surface-muted)}
 .filter-toolbar{display:flex;flex-wrap:wrap;column-gap:8px;row-gap:8px;align-items:center;min-height:48px;margin-top:8px;padding:8px 10px;border:0;border-radius:var(--tj-control-radius);background:var(--tj-content-bg)}
-.filter-toolbar>label{display:inline-flex;align-items:center;flex:0 0 150px;min-width:0;font-size:0;color:var(--tj-text-body)}
+.filter-toolbar> :is(label,input,select,.filter-dropdown,[role="search"]){display:inline-flex;align-items:center;flex:0 0 150px;min-width:0;font-size:0;color:var(--tj-text-body)}
 .filter-toolbar>label:has(.date-range-control){flex-basis:240px}
+.filter-toolbar>[role="search"]{height:var(--tj-control-height-compact);border:1px solid var(--tj-border-control);border-radius:var(--tj-control-radius);color:var(--tj-text-body);background:var(--tj-content-bg)}
+.filter-toolbar>[role="search"]:focus-within{border-color:var(--tj-action-blue);box-shadow:var(--tj-focus-ring)}
 .filter-toolbar input,.filter-toolbar select,.filter-toolbar .date-range-button{width:100%;min-width:0;height:var(--tj-control-height-compact);border:1px solid var(--tj-border-control);border-radius:var(--tj-control-radius);padding:0 var(--tj-control-padding-x);color:var(--tj-text-body);background:var(--tj-content-bg);font-size:13px}
-.filter-toolbar> :is(input,select,.filter-dropdown){width:150px;font-size:13px}
+.filter-toolbar> :is(input,select,.filter-dropdown,[role="search"]){width:150px;font-size:13px}
 .filter-toolbar>.filter-dropdown{position:relative}
 .filter-toolbar>.filter-dropdown .filter-dropdown-button{height:var(--tj-control-height-compact)}
 .filter-toolbar>input[type="search"]{width:180px}
@@ -1097,6 +1099,13 @@ body:not(.login-body) #store-inspection-report-output.store-inspection-report-ou
 #view-fba-freight .fba-freight-table .table-actions{display:flex;gap:8px;align-items:center}
 #view-fba-freight .fba-freight-summary{grid-template-columns:repeat(auto-fill,minmax(var(--tj-kpi-card-min-width),var(--tj-kpi-card-width)));justify-content:start}
 #view-fba-freight .fba-freight-summary .metric-tile{min-width:0}
+#view-fba-freight .fba-freight-search-control{display:grid;grid-template-columns:104px minmax(0,1fr) var(--tj-control-height-compact);flex:0 1 280px;min-width:220px;overflow:hidden}
+#view-fba-freight .fba-freight-search-scope{display:flex;align-items:center;min-width:0;padding:0 var(--tj-control-padding-x);border-right:1px solid var(--tj-border-subtle);color:var(--tj-text-body);font-size:13px}
+#view-fba-freight .fba-freight-search-control input{width:100%;min-width:0;height:100%;border:0;border-radius:0;box-shadow:none}
+#view-fba-freight .fba-freight-search-button{display:grid;width:var(--tj-control-height-compact);height:var(--tj-control-height-compact);place-items:center;border:0;border-left:1px solid var(--tj-border-subtle);border-radius:0;color:var(--tj-text-muted);background:var(--tj-content-bg);cursor:pointer}
+#view-fba-freight .fba-freight-search-button:hover{color:var(--tj-action-blue);background:var(--tj-action-blue-soft)}
+#view-fba-freight .fba-freight-search-button:focus-visible{position:relative;z-index:1;outline:0;box-shadow:inset 0 0 0 2px var(--tj-action-blue)}
+#view-fba-freight .fba-freight-search-button svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:2}
 #view-fba-freight .fba-freight-product-image-frame,#view-fba-freight .fba-freight-image-placeholder{display:inline-grid;width:44px;height:44px;place-items:center}
 #view-fba-freight .fba-freight-product-image{width:44px;height:44px;object-fit:contain;border:1px solid var(--tj-border-subtle);border-radius:var(--spectrum-control-radius);background:var(--tj-content-bg)}
 #view-fba-freight .fba-freight-detail-dialog{width:min(1080px,96vw);max-height:92vh;display:grid;grid-template-rows:auto 1fr;overflow:hidden;border-radius:var(--tj-panel-radius);background:var(--tj-content-bg);box-shadow:var(--tj-shadow-modal)}
@@ -1120,6 +1129,7 @@ body:not(.login-body) #store-inspection-report-output.store-inspection-report-ou
 #view-fba-freight .panel-head>span,#fba-freight-status{min-width:0;max-width:min(640px,100%);overflow-wrap:anywhere;white-space:normal;text-align:right}
 @media(max-width:760px){#view-fba-freight .fba-freight-panel .panel-head{display:grid;grid-template-columns:1fr;align-items:start;gap:8px}
 #view-fba-freight .fba-freight-panel .panel-head h2,#view-fba-freight .fba-freight-panel .panel-head span{min-width:0;overflow-wrap:anywhere}
+#view-fba-freight .fba-freight-search-control{flex-basis:100%;min-width:0}
 }
 .fba-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;margin-top:12px}
 .fba-automation-panel,.fba-result-panel,.fba-task-board-panel{margin-top:10px}

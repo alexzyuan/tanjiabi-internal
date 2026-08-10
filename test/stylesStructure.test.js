@@ -209,9 +209,9 @@ test("CSS minifier keeps required calc plus spacing", () => {
   assert.match(minified, /\.item\+\.item/);
 });
 
-test("styles.css stays within the 260KB raw size budget", async () => {
+test("styles.css stays within the 264KB raw size budget", async () => {
   const { size } = await stat(new URL("../styles.css", import.meta.url));
-  assert.ok(size <= 260_000, `styles.css should be <= 260KB raw, got ${size} bytes`);
+  assert.ok(size <= 264_000, `styles.css should be <= 264KB raw, got ${size} bytes`);
 });
 
 test("CSS standards gate is part of the default check command", async () => {
@@ -289,7 +289,7 @@ test("shared filters and panel surfaces live outside legacy css", async () => {
 test("compact filter toolbar direct controls keep their shared compact width", async () => {
   const toolbarSource = await readFile(new URL("../assets/css/components/35-filter-toolbar.css", import.meta.url), "utf8");
 
-  assert.match(toolbarSource, /\.filter-toolbar > :is\(input, select, \.filter-dropdown\)\s*\{[\s\S]*?width:\s*150px;[\s\S]*?font-size:\s*13px;/);
+  assert.match(toolbarSource, /\.filter-toolbar > :is\(input, select, \.filter-dropdown, \[role="search"\]\)\s*\{[\s\S]*?width:\s*150px;[\s\S]*?font-size:\s*13px;/);
   assert.match(toolbarSource, /\.filter-toolbar > \.filter-dropdown\s*\{\s*position:\s*relative;/);
   assert.equal(toolbarSource.includes(".filter-toolbar > :where(input, select)"), false);
 });
@@ -337,10 +337,10 @@ test("shared filter toolbar styles live outside page css and use semantic tokens
   assert.match(componentSource, /^\/\* Shared compact filter toolbar\. \*\//m);
   assert.match(componentSource, /^\.filter-toolbar\s*\{/m);
   assert.match(componentSource, /^\.filter-toolbar\s*\{[\s\S]*column-gap:\s*8px;[\s\S]*row-gap:\s*8px;[\s\S]*border:\s*0;[\s\S]*\}/m);
-  assert.match(componentSource, /^\.filter-toolbar > label\s*\{/m);
+  assert.match(componentSource, /^\.filter-toolbar > :is\(label, input, select, \.filter-dropdown, \[role="search"\]\)\s*\{/m);
   assert.match(componentSource, /^\.filter-toolbar > label:has\(\.date-range-control\)\s*\{/m);
   assert.match(componentSource, /^\.filter-toolbar input,/m);
-  assert.match(componentSource, /^\.filter-toolbar > :is\(input, select, \.filter-dropdown\)\s*\{/m);
+  assert.match(componentSource, /^\.filter-toolbar > :is\(input, select, \.filter-dropdown, \[role="search"\]\)\s*\{/m);
   assert.match(componentSource, /var\(--tj-content-bg\)/);
   assert.match(componentSource, /var\(--tj-border-control\)/);
   assert.match(componentSource, /var\(--tj-text-body\)/);

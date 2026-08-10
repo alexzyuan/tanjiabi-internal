@@ -13,7 +13,7 @@
   background: var(--tj-content-bg);
 }
 
-.filter-toolbar > label {
+.filter-toolbar > :is(label, input, select, .filter-dropdown, [role="search"]) {
   display: inline-flex;
   align-items: center;
   flex: 0 0 150px;
@@ -24,6 +24,19 @@
 
 .filter-toolbar > label:has(.date-range-control) {
   flex-basis: 240px;
+}
+
+.filter-toolbar > [role="search"] {
+  height: var(--tj-control-height-compact);
+  border: 1px solid var(--tj-border-control);
+  border-radius: var(--tj-control-radius);
+  color: var(--tj-text-body);
+  background: var(--tj-content-bg);
+}
+
+.filter-toolbar > [role="search"]:focus-within {
+  border-color: var(--tj-action-blue);
+  box-shadow: var(--tj-focus-ring);
 }
 
 .filter-toolbar input,
@@ -40,7 +53,7 @@
   font-size: 13px;
 }
 
-.filter-toolbar > :is(input, select, .filter-dropdown) {
+.filter-toolbar > :is(input, select, .filter-dropdown, [role="search"]) {
   width: 150px;
   font-size: 13px;
 }

@@ -8,6 +8,7 @@ export const lingxingShopMap = [
   { name: "tandanbo-MX", country: "墨西哥", sid: 11502, displayName: "坦蛋伯墨西哥" },
   { name: "tandanbo-BR", country: "巴西", sid: 14527, displayName: "坦蛋伯巴西" },
   { name: "xiamentanjia-AU", country: "澳洲", sid: 11499, displayName: "探嘉澳洲" },
+  { name: "tanjia-eu-DE", country: "德国", sid: 17307, displayName: "探嘉德国" },
 ];
 
 export function findLingxingShop(identifier) {

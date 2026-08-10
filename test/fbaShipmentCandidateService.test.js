@@ -62,6 +62,15 @@ test("normalizeFbaShipmentCandidateFilters keeps existing freight filter names c
   assert.equal(filters.shipmentStatus, "SHIPPED");
 });
 
+test("normalizeFbaShipmentCandidateFilters includes the German FBA shop by default", () => {
+  const filters = normalizeFbaShipmentCandidateFilters({
+    startDate: "2026-07-01",
+    endDate: "2026-07-11",
+  });
+
+  assert.ok(filters.sids.includes(17307));
+});
+
 test("getFbaShipmentCandidates caches identical Lingxing shipment queries", async () => {
   clearFbaShipmentCandidateCache();
   const adapter = makeAdapter();

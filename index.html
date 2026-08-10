@@ -2065,14 +2065,20 @@
                   <div class="date-range-popover date-range-picker__popover" id="fba-freight-date-range-popover" hidden></div>
                 </div>
               </label>
-              <label>店铺
-                <select id="fba-freight-sid">
-                  <option value="">全部核心店铺</option>
-                </select>
-              </label>
-              <label>货件单号<input id="fba-freight-shipment-id" placeholder="支持精确搜索" /></label>
-              <label>货件状态
-                <select id="fba-freight-status-filter">
+              <select id="fba-freight-country" aria-label="国家" data-filter-clear-target="#fba-freight-sid" multiple size="4">
+                <option value="">全部国家</option>
+              </select>
+              <select id="fba-freight-sid" aria-label="店铺" multiple size="6">
+                <option value="">全部店铺</option>
+              </select>
+              <div class="fba-freight-search-control" role="search">
+                <span class="fba-freight-search-scope" aria-hidden="true">货件单号</span>
+                <input id="fba-freight-shipment-id" type="search" aria-label="货件单号" placeholder="输入货件单号" />
+                <button id="fba-freight-search" class="fba-freight-search-button" type="button" aria-label="搜索货件" title="搜索货件">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4.5 4.5"></path></svg>
+                </button>
+              </div>
+              <select id="fba-freight-status-filter" aria-label="货件状态">
                   <option value="">全部状态</option>
                   <option value="WORKING">WORKING</option>
                   <option value="READY_TO_SHIP">READY_TO_SHIP</option>
@@ -2083,13 +2089,10 @@
                   <option value="RECEIVING">RECEIVING</option>
                   <option value="CLOSED">CLOSED</option>
                   <option value="CANCELLED">CANCELLED</option>
-                </select>
-              </label>
-              <label>发货仓库
-                <select id="fba-freight-warehouse">
+              </select>
+              <select id="fba-freight-warehouse" aria-label="发货仓库">
                   <option value="">请选择发货仓库</option>
-                </select>
-              </label>
+              </select>
               <button class="secondary-button" id="fba-freight-refresh" data-date-range-auto-refresh type="button">读取货件</button>
               <button class="secondary-button" id="fba-freight-export" type="button">生成表格</button>
               <button class="primary-button" id="fba-freight-batch-convert" type="button">批量转表格</button>

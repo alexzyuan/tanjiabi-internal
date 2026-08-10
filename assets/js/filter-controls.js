@@ -104,6 +104,7 @@ export function createFilterControls({
     const allOption = [...select.options].find((option) => option.value === "");
     if (allOption) allOption.selected = ![...select.options].some((option) => option.value && option.selected);
     updateFilterDropdownButton(select);
+    renderFilterDropdown(select);
     select.dispatchEvent(new Event("change", { bubbles: true }));
   }
 

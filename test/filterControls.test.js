@@ -375,3 +375,56 @@ test("country store selection rejects a missing store select", () => {
     storeOptions: [],
   }), /requires a store select/);
 });
+
+test("filter dropdown rerenders checked options after a selection changes", () => {
+  const labels = { "": "全部国家", DE: "德国" };
+  const options = [
+    { tagName: "OPTION", value: "", selected: true, get textContent() { return labels[this.value]; } },
+    { tagName: "OPTION", value: "DE", selected: false, get textContent() { return labels[this.value]; } },
+  ];
+  const label = { textContent: "" };
+  const button = {
+    querySelector(selector) {
+      return selector === ".filter-dropdown-button-label" ? label : null;
+    },
+    setAttribute() {},
+  };
+  const container = { innerHTML: "" };
+  const dropdown = {
+    classList: { contains: () => true, toggle() {} },
+    querySelector(selector) {
+      return {
+        ".filter-dropdown-button": button,
+        ".filter-dropdown-options": container,
+      }[selector] || null;
+    },
+  };
+  const select = {
+    multiple: true,
+    options,
+    childNodes: options,
+    get selectedOptions() {
+      return options.filter((option) => option.selected);
+    },
+    classList: { add() {} },
+    nextElementSibling: dropdown,
+    dispatchEvent() {},
+  };
+  const controls = createFilterControls({
+    root: { createElement: () => dropdown },
+    globalObject: {},
+    escapeHtml: (value) => String(value),
+    bind: () => {},
+    setDisclosureState: () => {},
+    setDisclosureGroupState: () => {},
+  });
+
+  controls.renderFilterDropdown(select);
+  assert.match(container.innerHTML, /value="" checked/);
+  assert.doesNotMatch(container.innerHTML, /value="DE" checked/);
+
+  controls.handleFilterDropdownOptionChange(select, { value: "DE", checked: true });
+
+  assert.doesNotMatch(container.innerHTML, /value="" checked/);
+  assert.match(container.innerHTML, /value="DE" checked/);
+});

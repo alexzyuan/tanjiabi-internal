@@ -22,6 +22,68 @@
   min-width: 0;
 }
 
+#view-fba-freight .fba-freight-search-control {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr) var(--tj-control-height-compact);
+  flex: 0 1 280px;
+  min-width: 220px;
+  overflow: hidden;
+}
+
+#view-fba-freight .fba-freight-search-scope {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 0 var(--tj-control-padding-x);
+  border-right: 1px solid var(--tj-border-subtle);
+  color: var(--tj-text-body);
+  font-size: 13px;
+}
+
+#view-fba-freight .fba-freight-search-control input {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+#view-fba-freight .fba-freight-search-button {
+  display: grid;
+  width: var(--tj-control-height-compact);
+  height: var(--tj-control-height-compact);
+  place-items: center;
+  border: 0;
+  border-left: 1px solid var(--tj-border-subtle);
+  border-radius: 0;
+  color: var(--tj-text-muted);
+  background: var(--tj-content-bg);
+  cursor: pointer;
+}
+
+#view-fba-freight .fba-freight-search-button:hover {
+  color: var(--tj-action-blue);
+  background: var(--tj-action-blue-soft);
+}
+
+#view-fba-freight .fba-freight-search-button:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 0;
+  box-shadow: inset 0 0 0 2px var(--tj-action-blue);
+}
+
+#view-fba-freight .fba-freight-search-button svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
 #view-fba-freight .fba-freight-product-image-frame,
 #view-fba-freight .fba-freight-image-placeholder {
   display: inline-grid;
@@ -187,5 +249,10 @@
   #view-fba-freight .fba-freight-panel .panel-head span {
     min-width: 0;
     overflow-wrap: anywhere;
+  }
+
+  #view-fba-freight .fba-freight-search-control {
+    flex-basis: 100%;
+    min-width: 0;
   }
 }

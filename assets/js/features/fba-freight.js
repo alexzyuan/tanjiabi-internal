@@ -19,11 +19,17 @@ export function createFbaFreightFeature({
   loadFbaShops,
   normalizeFbaShop,
   renderTableMessage,
+  selectedFilterValues,
+  setSelectOptions,
   setModalOpenState,
   setText,
+  syncCountryStoreSelection,
 } = {}) {
   if (typeof bind !== "function") throw new Error("createFbaFreightFeature requires bind.");
   if (typeof fetchImpl !== "function") throw new Error("createFbaFreightFeature requires fetch.");
+  if (typeof selectedFilterValues !== "function") throw new Error("createFbaFreightFeature requires selectedFilterValues.");
+  if (typeof setSelectOptions !== "function") throw new Error("createFbaFreightFeature requires setSelectOptions.");
+  if (typeof syncCountryStoreSelection !== "function") throw new Error("createFbaFreightFeature requires syncCountryStoreSelection.");
 
   let fbaFreightRows = [];
   let fbaFreightLoaded = false;
@@ -63,28 +69,48 @@ export function createFbaFreightFeature({
     fbaFreightDateRangePicker?.refresh?.();
   }
 
-  function renderFbaFreightShopOptions() {
-    const select = query("#fba-freight-sid");
-    if (!select) return;
-    const previous = select.value;
+  function fbaFreightShops() {
     const currentShops = typeof getFbaShops === "function" ? getFbaShops() : [];
-    const options = currentShops.length ? currentShops : fallbackFbaShops.map(normalizeFbaShop).filter((shop) => shop.sid);
-    select.innerHTML = `<option value="">全部店铺</option>${options
-      .map((shop) => `<option value="${escapeHtml(shop.sid)}">${escapeHtml(shop.name)} · ${escapeHtml(shop.country)}</option>`)
-      .join("")}`;
-    if (previous && [...select.options].some((option) => option.value === previous)) select.value = previous;
+    return currentShops.length ? currentShops : fallbackFbaShops.map(normalizeFbaShop).filter((shop) => shop.sid);
+  }
+
+  function fbaFreightShopFilterOptions() {
+    return fbaFreightShops().map((shop) => ({
+      value: String(shop.sid),
+      label: shop.name,
+      country: shop.country,
+    }));
+  }
+
+  function renderFbaFreightCountryOptions() {
+    const countries = [...new Set(fbaFreightShops().map((shop) => String(shop.country || "").trim()).filter(Boolean))]
+      .sort((left, right) => left.localeCompare(right, "zh-CN"));
+    setSelectOptions("#fba-freight-country", countries, "全部国家");
+  }
+
+  function renderFbaFreightShopOptions({ selectAllVisible = false } = {}) {
+    setSelectOptions("#fba-freight-sid", fbaFreightShopFilterOptions(), "全部店铺", {
+      groupByCountry: true,
+      countries: selectedFilterValues("#fba-freight-country", root),
+      selectAllVisible,
+    });
+  }
+
+  function renderFbaFreightFilterOptions() {
+    renderFbaFreightCountryOptions();
+    renderFbaFreightShopOptions();
   }
 
   function buildFbaFreightQuery({ forceRefresh = false } = {}) {
     const params = new URLSearchParams();
     const startDate = fbaValue("#fba-freight-start-date");
     const endDate = fbaValue("#fba-freight-end-date");
-    const sid = fbaValue("#fba-freight-sid");
+    const sids = selectedFilterValues("#fba-freight-sid", root);
     const shipmentId = fbaValue("#fba-freight-shipment-id");
     const status = fbaValue("#fba-freight-status-filter");
     if (startDate) params.set("startDate", startDate);
     if (endDate) params.set("endDate", endDate);
-    if (sid) params.set("sids", sid);
+    if (sids.length) params.set("sids", sids.join(","));
     if (shipmentId) params.set("shipmentId", shipmentId);
     if (status) params.set("shipmentStatus", status);
     if (forceRefresh) params.set("forceRefresh", "true");
@@ -263,7 +289,7 @@ export function createFbaFreightFeature({
       console.error("[fba-freight] load shipment order warehouses failed", { error: warehouseResult.reason?.message || String(warehouseResult.reason) });
       setFbaFreightStatus(`发货仓库读取失败：${warehouseResult.reason?.message || warehouseResult.reason}`);
     }
-    renderFbaFreightShopOptions();
+    renderFbaFreightFilterOptions();
     if (!fbaFreightLoaded) await loadFbaFreightShipments();
     else renderFbaFreightRows();
   }
@@ -840,6 +866,19 @@ export function createFbaFreightFeature({
     });
     fbaFreightDateRangePicker.setup?.();
     bind(root, "#fba-freight-refresh", "click", () => loadFbaFreightShipments({ forceRefresh: true }));
+    bind(root, "#fba-freight-search", "click", () => loadFbaFreightShipments());
+    bind(root, "#fba-freight-shipment-id", "keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      return loadFbaFreightShipments();
+    });
+    bind(root, "#fba-freight-country", "change", () => {
+      syncCountryStoreSelection({
+        countrySelect: query("#fba-freight-country"),
+        storeSelect: query("#fba-freight-sid"),
+        storeOptions: fbaFreightShopFilterOptions(),
+      });
+    });
     bind(root, "#fba-freight-export", "click", exportFbaFreightWorkbook);
     bind(root, "#fba-freight-warehouse", "change", updateFbaFreightSelectionState);
     bind(root, "#fba-freight-jiufang-channel", "change", () => {
@@ -895,6 +934,7 @@ export function createFbaFreightFeature({
 
   return {
     loadFbaFreightInitial,
+    renderFbaFreightFilterOptions,
     loadFbaFreightShipments,
     renderFbaFreightShopOptions,
     setupFbaFreight,
