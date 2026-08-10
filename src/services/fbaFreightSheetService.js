@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getLingxingAdapter } from "../adapters/lingxingAdapter.js";
-import { getFbaAddressProfile, requireFbaAddressProfile } from "../data/fbaAddressBook.js";
+import { requireFbaAddressProfile } from "../data/fbaAddressBook.js";
 import { findLingxingShop, lingxingShopMap } from "../data/lingxingShopMap.js";
 import {
   applySharedProductCatalogToRows,
@@ -566,8 +566,7 @@ function uniqueNonEmpty(values = []) {
 function jiufangHeaderValues(shipments = []) {
   const countries = uniqueNonEmpty(shipments.map((shipment) => normalizedCountryName(shipment.country)));
   const warehouses = uniqueNonEmpty(shipments.map((shipment) => shipment.fulfillmentCenterCode));
-  const stores = uniqueNonEmpty(shipments.map((shipment) => shipment.storeName || shipment.raw?.seller || shipment.sid));
-  const profile = stores.length === 1 ? getFbaAddressProfile(stores[0]) : null;
+  const profile = requireJiufangSenderProfile(shipments);
   return {
     channelName: countries.length === 1 ? jiufangChannelForCountry(countries[0]) : "",
     country: countries.length === 1 ? countries[0] : "",

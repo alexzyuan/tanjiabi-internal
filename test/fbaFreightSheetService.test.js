@@ -303,8 +303,13 @@ test("buildFbaForwarderWorkbookBuffer accepts multiple stores owned by one legal
     { sid: 8708, storeName: "xiamentanjia-US", country: "美国", fulfillmentCenterCode: "ONT8", items: [] },
     { sid: 8709, storeName: "xiamentanjia-CA", country: "美国", fulfillmentCenterCode: "ONT8", items: [] },
   ], { templateId: "jiufang" });
+  const workbook = XLSX.read(buffer, { type: "buffer" });
+  const values = XLSX.utils.sheet_to_json(workbook.Sheets["下单模板"], { header: 1, defval: "" });
 
-  assert.equal(Buffer.isBuffer(buffer), true);
+  assert.notEqual(values[3][1], "");
+  assert.notEqual(values[4][1], "");
+  assert.notEqual(values[6][1], "");
+  assert.notEqual(values[7][1], "");
 });
 
 test("buildFbaForwarderWorkbookBuffer fills Tongpao template with shipment and box data", () => {
