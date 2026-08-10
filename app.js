@@ -1,7 +1,7 @@
 import TanjiaUiUtils from "./assets/js/ui-utils.js?v=20260706-frontend-refactor-v41";
 import { installDashboardLoadingFetchOverlay, loadDashboardSection } from "./assets/js/dashboard-loader.js?v=20260803-global-page-loading-v1";
 import { installDateRangeAutoRefresh } from "./assets/js/date-range-picker.js?v=20260803-date-auto-refresh-v1";
-import { createFilterControls } from "./assets/js/filter-controls.js?v=20260707-frontend-refactor-v1";
+import { createFilterControls } from "./assets/js/filter-controls.js?v=20260810-shared-country-store-filter-v4";
 import {
   createFrontShopFilters,
   getDisplayShopName,
@@ -134,6 +134,7 @@ const {
   initializeFilterDropdowns,
   setSelectOptions,
   syncAllOptionSelection,
+  syncCountryStoreSelection,
 } = createFilterControls({
   root: document,
   bind,
@@ -258,7 +259,7 @@ let openSupplierDetailModal = () => {};
 let renderPayableDetail = () => {};
 let renderSyncStatus = () => {};
 let renderSalesForecastHeader = () => {};
-let renderFbaFreightShopOptions = () => {};
+let renderFbaFreightFilterOptions = () => {};
 let renderHomeQuickLinks = () => {};
 let renderStoreInspectionPreview = () => {};
 let renderStoreInspectionRecords = () => {};
@@ -831,7 +832,7 @@ async function refreshDashboardFromFilters() {
   normalizeCountryName,
   onShopChange: (...args) => handleFbaShopSelectionChange(...args),
   onShopListChange: () => {
-    renderFbaFreightShopOptions();
+    renderFbaFreightFilterOptions();
   },
   pickSellerCountry,
   pickSellerName,
@@ -928,7 +929,7 @@ async function refreshDashboardFromFilters() {
   updateFbaShopButton,
 }));
 
-({ loadFbaFreightInitial, renderFbaFreightShopOptions, setupFbaFreight } = createFbaFreightFeature({
+({ loadFbaFreightInitial, renderFbaFreightFilterOptions, setupFbaFreight } = createFbaFreightFeature({
   root: document,
   bind,
   bindBackdropClose,
@@ -945,8 +946,11 @@ async function refreshDashboardFromFilters() {
   loadFbaShops,
   normalizeFbaShop,
   renderTableMessage,
+  selectedFilterValues,
+  setSelectOptions,
   setModalOpenState,
   setText,
+  syncCountryStoreSelection,
 }));
 
 ({ loadFbaShipmentVarianceInitial, setupFbaShipmentVariance } = createFbaShipmentVarianceFeature({

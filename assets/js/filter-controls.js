@@ -57,9 +57,10 @@ export function createFilterControls({
   }
 
   function updateFilterDropdownButton(select) {
-    const button = select?.nextElementSibling?.classList?.contains("filter-dropdown")
-      ? select.nextElementSibling.querySelector(".filter-dropdown-button")
+    const dropdown = select?.nextElementSibling?.classList?.contains("filter-dropdown")
+      ? select.nextElementSibling
       : null;
+    const button = dropdown?.querySelector(".filter-dropdown-button");
     if (!button) return;
     const label = button.querySelector(".filter-dropdown-button-label");
     if (!label) throw new Error("Filter dropdown button is missing its label span");
@@ -67,6 +68,26 @@ export function createFilterControls({
     label.textContent = summary.text;
     button.setAttribute("aria-label", summary.accessibleText);
     button.setAttribute("title", summary.title);
+    dropdown.classList?.toggle?.("filter-dropdown--has-selection", selectedFilterLabels(select).length > 0);
+  }
+
+  function resetFilterDropdownSelection(select) {
+    if (!select?.multiple) throw new Error("resetFilterDropdownSelection requires a multiple select.");
+    [...select.options].forEach((option) => {
+      option.selected = option.value === "";
+    });
+    if (select.nextElementSibling?.classList?.contains("filter-dropdown")) renderFilterDropdown(select);
+  }
+
+  function clearFilterDropdownSelection(select) {
+    resetFilterDropdownSelection(select);
+    const linkedSelector = String(select.dataset?.filterClearTarget || "").trim();
+    if (linkedSelector) {
+      const linkedSelect = root.querySelector(linkedSelector);
+      if (!linkedSelect) throw new Error(`Filter clear target was not found: ${linkedSelector}`);
+      resetFilterDropdownSelection(linkedSelect);
+    }
+    select.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
   function handleFilterDropdownOptionChange(select, input) {
@@ -83,6 +104,7 @@ export function createFilterControls({
     const allOption = [...select.options].find((option) => option.value === "");
     if (allOption) allOption.selected = ![...select.options].some((option) => option.value && option.selected);
     updateFilterDropdownButton(select);
+    renderFilterDropdown(select);
     select.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
@@ -93,6 +115,7 @@ export function createFilterControls({
     dropdown.className = "filter-dropdown";
     dropdown.innerHTML = `
       <button class="filter-dropdown-button multi-select-button" type="button" aria-haspopup="listbox" aria-expanded="false"><span class="filter-dropdown-button-label"></span></button>
+      <button class="filter-dropdown-clear" type="button" aria-label="清除已选项" title="清除已选项"><span aria-hidden="true">&#215;</span></button>
       <div class="filter-dropdown-menu multi-select-menu" hidden>
         <div class="filter-dropdown-options multi-select-options" role="listbox" aria-multiselectable="true"></div>
       </div>
@@ -118,6 +141,11 @@ export function createFilterControls({
       event.preventDefault();
       setDisclosureState(menu, event.currentTarget, false);
       event.currentTarget.focus?.();
+    });
+    bind(dropdown, ".filter-dropdown-clear", "click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      clearFilterDropdownSelection(select);
     });
     bind(dropdown, ".filter-dropdown-options", "change", (event) => {
       const input = closestTarget(event, "input[type='checkbox']");
@@ -152,7 +180,7 @@ export function createFilterControls({
           </div>
         `;
       }
-      if (node.tagName === "OPTION" && node.value) return renderOption(node);
+      if (node.tagName === "OPTION") return renderOption(node);
       return "";
     }).join("");
     container.innerHTML = rendered || `<div class="filter-dropdown-empty">暂无可选项</div>`;
@@ -160,7 +188,7 @@ export function createFilterControls({
   }
 
   function initializeFilterDropdowns() {
-    root.querySelectorAll(".filters select[multiple]").forEach(renderFilterDropdown);
+    root.querySelectorAll(".filters select[multiple], .filter-toolbar select[multiple]").forEach(renderFilterDropdown);
     if (globalObject.__tanjiaFilterDropdownOutsideClickReady) return;
     globalObject.__tanjiaFilterDropdownOutsideClickReady = true;
     bindClickOutside(root, ".filter-dropdown", () => {
@@ -202,14 +230,32 @@ export function createFilterControls({
     renderFilterDropdown(select);
   }
 
+  function syncCountryStoreSelection({ countrySelect, storeSelect, storeOptions = [], setSelectOptionsImpl = setSelectOptions } = {}) {
+    if (!countrySelect) throw new Error("syncCountryStoreSelection requires a country select.");
+    if (!storeSelect) throw new Error("syncCountryStoreSelection requires a store select.");
+    if (!Array.isArray(storeOptions)) throw new Error("syncCountryStoreSelection requires storeOptions to be an array.");
+    if (typeof setSelectOptionsImpl !== "function") throw new Error("syncCountryStoreSelection requires a setSelectOptions implementation.");
+
+    syncAllOptionSelection(countrySelect);
+    const countries = selectedFilterValues(countrySelect);
+    setSelectOptionsImpl(storeSelect, storeOptions, "全部店铺", {
+      groupByCountry: true,
+      countries,
+      selectAllVisible: true,
+    });
+  }
+
   return {
     createFilterDropdown,
+    clearFilterDropdownSelection,
     handleFilterDropdownOptionChange,
     initializeFilterDropdowns,
     renderFilterDropdown,
+    resetFilterDropdownSelection,
     selectedFilterLabels,
     setSelectOptions,
     syncAllOptionSelection,
+    syncCountryStoreSelection,
     updateFilterDropdownButton,
   };
 }

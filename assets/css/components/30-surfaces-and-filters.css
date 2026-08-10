@@ -62,7 +62,7 @@ body:not(.login-body) .view > .module-hero + :is(.filters, .filter-toolbar) {
   transition: border-color 0.16s ease, box-shadow 0.16s ease;
 }
 
-.filters select.enhanced-filter-select {
+.enhanced-filter-select {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -83,6 +83,37 @@ body:not(.login-body) .view > .module-hero + :is(.filters, .filter-toolbar) {
   position: relative;
   width: 100%;
   min-width: 0;
+}
+
+.filter-dropdown-clear {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  z-index: 1;
+  display: none;
+  place-items: center;
+  width: 28px;
+  height: calc(var(--tj-control-height-compact) - 2px);
+  border: 0;
+  color: var(--tj-text-muted);
+  background: var(--tj-content-bg);
+  appearance: none;
+  cursor: pointer;
+  font-size: 20px;
+}
+
+.filter-dropdown--has-selection:is(:hover, :focus-within) .filter-dropdown-clear,
+.filter-dropdown-clear:focus-visible {
+  display: grid;
+}
+
+.filter-dropdown-clear:hover {
+  color: var(--tj-text-body);
+}
+
+.filter-dropdown-clear:focus-visible {
+  outline: 0;
+  box-shadow: var(--tj-focus-ring);
 }
 
 .filters .date-range-control {

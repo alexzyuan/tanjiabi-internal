@@ -3,6 +3,17 @@ import test from "node:test";
 
 import { createFbaFreightFeature } from "../assets/js/features/fba-freight.js";
 
+function sharedFbaFilterDeps(elements) {
+  return {
+    selectedFilterValues(selector) {
+      const value = String(elements[selector]?.value || "").trim();
+      return value ? value.split(",").map((item) => item.trim()).filter(Boolean) : [];
+    },
+    setSelectOptions() {},
+    syncCountryStoreSelection() {},
+  };
+}
+
 function createFeature(overrides = {}) {
   const elements = {
     "#fba-freight-refresh": { disabled: false },
@@ -37,8 +48,14 @@ function createFeature(overrides = {}) {
     renderTableMessage: (table, _cols, message) => {
       table.innerHTML = message;
     },
+    selectedFilterValues: sharedFbaFilterDeps(elements).selectedFilterValues,
+    setSelectOptions: (selector, options, allLabel) => {
+      const select = elements[selector];
+      if (select) select.innerHTML = `<option value="">${allLabel}</option>${options.map((option) => `<option value="${option.value || option}">${option.label || option}</option>`).join("")}`;
+    },
     setModalOpenState: () => {},
     setText: () => {},
+    syncCountryStoreSelection: () => {},
     ...overrides,
   });
   return { bindCalls, elements, feature };
@@ -68,6 +85,81 @@ test("FBA freight refresh button forces API refresh and stays disabled while loa
   releaseFetch();
   await Promise.all([first, second]);
   assert.equal(elements["#fba-freight-refresh"].disabled, false);
+});
+
+test("FBA freight country filter limits shop choices to the selected country", () => {
+  const elements = {
+    "#fba-freight-country": { value: "德国" },
+    "#fba-freight-sid": { value: "", innerHTML: "" },
+  };
+  const setSelectOptionsCalls = [];
+  const feature = createFbaFreightFeature({
+    root: {
+      querySelector(selector) {
+        return elements[selector] || null;
+      },
+      querySelectorAll() {
+        return [];
+      },
+    },
+    bind: () => {},
+    bindBackdropClose: () => {},
+    cachedSalesImageUrl: () => "",
+    closestTarget: () => null,
+    downloadBlob: () => {},
+    escapeHtml: (value) => String(value ?? ""),
+    fbaValue: (selector) => elements[selector]?.value || "",
+    fetchImpl: async () => ({ ok: true, json: async () => ({ rows: [] }) }),
+    formatDate: () => "2026-07-14",
+    formatNumber: (value) => String(value),
+    getFbaShops: () => [
+      { sid: 8708, name: "xiamentanjia-US", country: "美国" },
+      { sid: 17307, name: "tanjia-eu-DE", country: "德国" },
+    ],
+    loadFbaShops: async () => {},
+    normalizeFbaShop: (shop) => shop,
+    renderTableMessage: () => {},
+    selectedFilterValues: () => ["德国"],
+    setSelectOptions: (...args) => setSelectOptionsCalls.push(args),
+    setModalOpenState: () => {},
+    setText: () => {},
+    syncCountryStoreSelection: () => {},
+  });
+
+  feature.renderFbaFreightShopOptions();
+
+  const shopOptionsCall = setSelectOptionsCalls.find(([selector]) => selector === "#fba-freight-sid");
+  assert.equal(shopOptionsCall[3].groupByCountry, true);
+  assert.deepEqual(shopOptionsCall[3].countries, ["德国"]);
+  assert.deepEqual(shopOptionsCall[1].map((option) => option.label), ["xiamentanjia-US", "tanjia-eu-DE"]);
+});
+
+test("FBA freight search submits the current shipment number by click and Enter", async () => {
+  const requestedUrls = [];
+  const { bindCalls, elements, feature } = createFeature({
+    fetchImpl: async (url) => {
+      requestedUrls.push(String(url));
+      return { ok: true, json: async () => ({ rows: [] }) };
+    },
+  });
+  elements["#fba-freight-sid"] = { value: "17307" };
+  elements["#fba-freight-shipment-id"] = { value: "FBA-DE-001" };
+  elements["#fba-freight-search"] = { disabled: false };
+
+  feature.setupFbaFreight();
+  const searchHandler = bindCalls.find(([, selector, eventName]) => selector === "#fba-freight-search" && eventName === "click")?.[3];
+  const inputHandler = bindCalls.find(([, selector, eventName]) => selector === "#fba-freight-shipment-id" && eventName === "keydown")?.[3];
+
+  assert.equal(typeof searchHandler, "function");
+  assert.equal(typeof inputHandler, "function");
+  await searchHandler();
+  await inputHandler({ key: "Enter", preventDefault() {} });
+
+  assert.equal(requestedUrls.length, 2);
+  requestedUrls.forEach((url) => {
+    assert.match(url, /sids=17307/);
+    assert.match(url, /shipmentId=FBA-DE-001/);
+  });
 });
 
 test("FBA freight wires shared date range picker to existing date inputs", () => {
@@ -161,6 +253,7 @@ test("FBA freight row Jiufang button opens country channel picker before dry-run
   const bindCalls = [];
   const modalStates = [];
   const feature = createFbaFreightFeature({
+    ...sharedFbaFilterDeps(elements),
     root,
     bind: (...args) => bindCalls.push(args),
     bindBackdropClose: () => {},
@@ -250,6 +343,7 @@ test("FBA freight Jiufang precheck shows missing fields and blocks create", asyn
   };
   const bindCalls = [];
   const feature = createFbaFreightFeature({
+    ...sharedFbaFilterDeps(elements),
     root,
     bind: (...args) => bindCalls.push(args),
     bindBackdropClose: () => {},
@@ -325,6 +419,7 @@ test("FBA freight Jiufang confirm automatically prechecks before creating order"
   };
   const bindCalls = [];
   const feature = createFbaFreightFeature({
+    ...sharedFbaFilterDeps(elements),
     root,
     bind: (...args) => bindCalls.push(args),
     bindBackdropClose: () => {},
@@ -403,6 +498,7 @@ test("FBA freight Jiufang create success stays in modal and shows order number",
   const bindCalls = [];
   const modalStates = [];
   const feature = createFbaFreightFeature({
+    ...sharedFbaFilterDeps(elements),
     root,
     bind: (...args) => bindCalls.push(args),
     bindBackdropClose: () => {},
@@ -511,6 +607,7 @@ test("FBA freight Jiufang create success converts modal to close-only success st
   const bindCalls = [];
   const modalStates = [];
   const feature = createFbaFreightFeature({
+    ...sharedFbaFilterDeps(elements),
     root,
     bind: (...args) => bindCalls.push(args),
     bindBackdropClose: () => {},
