@@ -51,3 +51,10 @@ export function getFbaAddressProfile(shopName = "") {
   if (value.startsWith("tandanbo")) return fbaAddressProfiles.tandanbo;
   return null;
 }
+
+export function requireFbaAddressProfile(shopName = "", { context = "FBA 物流" } = {}) {
+  const profile = getFbaAddressProfile(shopName);
+  if (profile) return profile;
+  const identifier = String(shopName || "未知店铺").trim() || "未知店铺";
+  throw new Error(`${context} 无法为店铺 ${identifier} 解析已审核的法定发件主体。`);
+}

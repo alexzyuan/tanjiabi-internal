@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import { findLingxingShop } from "../data/lingxingShopMap.js";
-import { getFbaAddressProfile } from "../data/fbaAddressBook.js";
+import { requireFbaAddressProfile } from "../data/fbaAddressBook.js";
 import { readJsonFileWithRecovery } from "../utils/jsonFile.js";
 import { runSingleStaWarehouseProbe } from "./fbaStaService.js";
 import { assertFbaMskuPackMatchesErp } from "./fbaCatalogService.js";
@@ -376,7 +376,7 @@ async function normalizeTaskInput(payload, shopInput, automation) {
 }
 
 function buildTaskProbePayload(task) {
-  const profile = getFbaAddressProfile(task.shop.name);
+  const profile = requireFbaAddressProfile(task.shop.name || task.shop.sid, { context: "FBA STA 定时任务" });
   return {
     sid: task.shop.sid,
     shopName: task.shop.name,

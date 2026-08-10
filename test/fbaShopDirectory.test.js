@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createFbaRoutes } from "../routes/fba.js";
-import { getFbaAddressProfile } from "../src/data/fbaAddressBook.js";
+import { getFbaAddressProfile, requireFbaAddressProfile } from "../src/data/fbaAddressBook.js";
 import { getFbaShopOptions } from "../src/services/fbaCatalogService.js";
 
 test("getFbaAddressProfile is strict and resolves only approved owner prefixes", () => {
@@ -13,6 +13,13 @@ test("getFbaAddressProfile is strict and resolves only approved owner prefixes",
   assert.equal(getFbaAddressProfile("tandanbo-US")?.key, "tandanbo");
 });
 
+test("requireFbaAddressProfile fails with the workflow and unresolved shop identity", () => {
+  assert.throws(
+    () => requireFbaAddressProfile("tanjia-eu-DE", { context: "FBA STA" }),
+    /FBA STA.*tanjia-eu-DE.*法定发件主体/,
+  );
+});
+
 test("getFbaShopOptions uses only runtime sellers and redacts unmapped identities", async () => {
   const warnings = [];
   let directoryCalls = 0;
@@ -21,7 +28,7 @@ test("getFbaShopOptions uses only runtime sellers and redacts unmapped identitie
       directoryCalls += 1;
       return {
         sellers: [
-          { sid: 8708, name: "xiamentanjia-US", country: "美国", displayName: "探嘉美国" },
+          { sid: 8708, name: "xiamentanjia-US", country: "美国", displayName: "探嘉美国", raw: { internalNote: "must-not-return" } },
           { sid: 11500, name: "tandanbo-US", country: "美国", displayName: "坦蛋伯美国" },
           { sid: 17305, name: "tanjia-eu-UK", country: "英国", displayName: "探嘉英国" },
           { sid: 19999, name: "unknown-store", country: "未知", displayName: "未知店铺", raw: { token: "must-not-log" } },
@@ -41,6 +48,8 @@ test("getFbaShopOptions uses only runtime sellers and redacts unmapped identitie
   assert.equal(result.shops.some((shop) => shop.sid === 11501), false);
   assert.equal(result.shops.some((shop) => shop.sid === 17307), false);
   assert.equal(result.shops[0].addressProfile.key, "xiamentanjia");
+  assert.equal(Object.hasOwn(result.shops[0], "raw"), false);
+  assert.equal(JSON.stringify(result.shops).includes("must-not-return"), false);
   assert.equal(result.shops[1].addressProfile.key, "tandanbo");
   assert.deepEqual(result.unmappedShops, [
     { sid: 17305, name: "tanjia-eu-UK", country: "英国" },

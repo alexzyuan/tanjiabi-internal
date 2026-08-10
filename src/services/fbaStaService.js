@@ -1,6 +1,6 @@
 import { getLingxingAdapter } from "../adapters/lingxingAdapter.js";
 import { findLingxingShop } from "../data/lingxingShopMap.js";
-import { getFbaAddressProfile } from "../data/fbaAddressBook.js";
+import { requireFbaAddressProfile } from "../data/fbaAddressBook.js";
 import { sendDingTalkText } from "./dingtalkService.js";
 import { assertFbaMskuPackMatchesErp } from "./fbaCatalogService.js";
 import { hasCompleteBoxSpec, saveFbaBoxTemplate } from "./fbaBoxTemplateService.js";
@@ -60,7 +60,7 @@ function normalizeStaPayload(payload) {
   const shop = findLingxingShop(payload.shopName || payload.sid);
   const sid = Number(payload.sid || shop?.sid);
   if (!sid) throw new Error("sid 不能为空，请选择领星店铺或传入 sid。");
-  const profile = getFbaAddressProfile(shop?.name || payload.shopName);
+  const profile = requireFbaAddressProfile(shop?.name || payload.shopName || sid, { context: "FBA STA" });
   const address = payload.useBrandAddress === false ? payload : profile;
   const planName = normalizePlanName(payload);
 

@@ -376,7 +376,18 @@ export async function getFbaShopOptions({ getDirectory = getSellerDirectory, log
   sellers.forEach((seller) => {
     const addressProfile = getFbaAddressProfile(seller.name);
     if (addressProfile) {
-      shops.push({ ...seller, addressProfile });
+      shops.push({
+        sid: seller.sid,
+        name: seller.name,
+        country: seller.country,
+        countryCode: seller.countryCode || "",
+        displayName: seller.displayName || seller.name,
+        sellerId: seller.sellerId || seller.seller_id || "",
+        marketplaceId: seller.marketplaceId || seller.marketplace_id || "",
+        mid: seller.mid || "",
+        status: seller.status,
+        addressProfile,
+      });
       return;
     }
     const redactedSeller = {

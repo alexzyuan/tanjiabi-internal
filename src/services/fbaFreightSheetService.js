@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getLingxingAdapter } from "../adapters/lingxingAdapter.js";
-import { getFbaAddressProfile } from "../data/fbaAddressBook.js";
+import { getFbaAddressProfile, requireFbaAddressProfile } from "../data/fbaAddressBook.js";
 import { findLingxingShop, lingxingShopMap } from "../data/lingxingShopMap.js";
 import {
   applySharedProductCatalogToRows,
@@ -579,6 +579,12 @@ function jiufangHeaderValues(shipments = []) {
   };
 }
 
+function requireJiufangSenderProfile(shipments = []) {
+  const stores = uniqueNonEmpty(shipments.map((shipment) => shipment.storeName || shipment.raw?.seller || shipment.sid));
+  if (stores.length !== 1) return null;
+  return requireFbaAddressProfile(stores[0], { context: "九方通逊模板" });
+}
+
 function fillJiufangHeaderXml(sheetData, shipments = []) {
   const values = jiufangHeaderValues(shipments);
   let next = sheetData;
@@ -722,6 +728,7 @@ function fillTongpaoTemplateXml(xml, shipments, boxPayloadsByShipmentId) {
 
 export function buildFbaForwarderWorkbookBuffer(shipments = [], { templateId, boxPayloadsByShipmentId = new Map() } = {}) {
   const template = resolveFbaForwarderTemplate(templateId);
+  if (template.id === "jiufang") requireJiufangSenderProfile(shipments);
   const entries = readZipEntries(readFileSync(template.path));
   const worksheetEntry = entries.find((entry) => entry.name === template.worksheetPath);
   if (!worksheetEntry) throw new Error(`货代模板缺少工作表文件：${template.worksheetPath}`);

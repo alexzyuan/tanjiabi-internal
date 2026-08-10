@@ -275,6 +275,19 @@ test("buildFbaForwarderWorkbookBuffer requires an explicit forwarder template", 
   );
 });
 
+test("buildFbaForwarderWorkbookBuffer rejects a Jiufang workbook without an approved legal sender", () => {
+  assert.throws(
+    () => buildFbaForwarderWorkbookBuffer([{
+      sid: 17307,
+      storeName: "tanjia-eu-DE",
+      country: "德国",
+      fulfillmentCenterCode: "LEJ1",
+      items: [],
+    }], { templateId: "jiufang" }),
+    /九方通逊模板.*tanjia-eu-DE.*法定发件主体/,
+  );
+});
+
 test("buildFbaForwarderWorkbookBuffer fills Tongpao template with shipment and box data", () => {
   const rows = normalizeFbaFreightShipments(shipmentPayload, {
     sellersBySid: new Map([[8708, { sid: 8708, name: "xiamentanjia-US", country: "美国" }]]),
