@@ -223,3 +223,54 @@ test("sales weekly source cache contract rejects a 30-day range that does not en
     reasons: ["raw.recent30 date range does not match the requested end date"],
   });
 });
+
+test("sales weekly source cache migrates a valid v2 snapshot to the current contract", async () => {
+  const projectRoot = process.cwd();
+  const { migrateSalesWeeklySourceCache } = await importFresh(projectRoot, "src/services/salesWeeklySourceCache.js");
+  const expectedScope = JSON.parse(salesWeeklySourceCacheKey());
+  const source = {
+    cacheScope: { ...expectedScope, version: "sales-weekly-source-v2" },
+    recent30OrderProfitRecords: [{ msku: "MSKU-1", totalSalesAmount: 100, totalSalesRefunds: 3 }],
+    raw: {
+      recent30: {
+        startDate: "2026-06-24",
+        endDate: "2026-07-23",
+        recordCount: 1,
+      },
+    },
+  };
+
+  const result = migrateSalesWeeklySourceCache(source, expectedScope);
+
+  assert.equal(result.migratedFrom, "sales-weekly-source-v2");
+  assert.equal(result.data.cacheScope.version, "sales-weekly-source-v3");
+  assert.deepEqual(result.data.recent30OrderProfitRecords, source.recent30OrderProfitRecords);
+});
+
+test("sales weekly source cache does not migrate an invalid v2 snapshot", async () => {
+  const projectRoot = process.cwd();
+  const { migrateSalesWeeklySourceCache } = await importFresh(projectRoot, "src/services/salesWeeklySourceCache.js");
+  const expectedScope = JSON.parse(salesWeeklySourceCacheKey());
+
+  assert.equal(migrateSalesWeeklySourceCache({
+    cacheScope: { ...expectedScope, version: "sales-weekly-source-v2" },
+    recent30OrderProfitRecords: [],
+    raw: { recent30: { startDate: "2026-06-23", endDate: "2026-07-23", recordCount: 0 } },
+  }, expectedScope), null);
+});
+
+test("sales weekly dashboard cache contract rejects legacy rows without 30-day refund values", async () => {
+  const projectRoot = process.cwd();
+  const { validateSalesWeeklyDashboardCache } = await importFresh(projectRoot, "src/services/dashboardService.js");
+
+  assert.deepEqual(validateSalesWeeklyDashboardCache({
+    detailRows: [{ msku: "MSKU-1", refundRate: 4 }, { msku: "MSKU-2", refundRate30d: null }],
+  }), {
+    ok: false,
+    reasons: ["1 detail rows are missing refundRate30d"],
+  });
+  assert.deepEqual(validateSalesWeeklyDashboardCache({ detailRows: [{ refundRate30d: null }] }), {
+    ok: true,
+    reasons: [],
+  });
+});

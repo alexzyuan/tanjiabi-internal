@@ -12,7 +12,11 @@ import {
 import { filterCoreSellers, getLingxingAdapter } from "../adapters/lingxingAdapter.js";
 import { buildBudgetMskuDetailRows, mapLingxingToSalesDashboard } from "./lingxingDashboardMapper.js";
 import { getDefaultWeekRange } from "../utils/dateRange.js";
-import { SALES_WEEKLY_SOURCE_CACHE_VERSION, validateSalesWeeklySourceCache } from "./salesWeeklySourceCache.js";
+import {
+  migrateSalesWeeklySourceCache,
+  SALES_WEEKLY_SOURCE_CACHE_VERSION,
+  validateSalesWeeklySourceCache,
+} from "./salesWeeklySourceCache.js";
 import { getBudgetTargetContext } from "./budgetTargetService.js";
 import {
   fetchListingOwnerRows,
@@ -64,8 +68,24 @@ function salesWeeklySourceScope(filters = {}) {
 
 export { validateSalesWeeklySourceCache };
 
+export function validateSalesWeeklyDashboardCache(dashboard) {
+  const detailRows = dashboard?.detailRows;
+  if (!Array.isArray(detailRows)) return { ok: false, reasons: ["detailRows must be an array"] };
+  const missingRefundRate30d = detailRows.filter(
+    (row) => !row || !Object.prototype.hasOwnProperty.call(row, "refundRate30d"),
+  ).length;
+  if (missingRefundRate30d > 0) {
+    return { ok: false, reasons: [`${missingRefundRate30d} detail rows are missing refundRate30d`] };
+  }
+  return { ok: true, reasons: [] };
+}
+
 function salesWeeklySourceCacheKey(filters = {}) {
   return JSON.stringify(salesWeeklySourceScope(filters));
+}
+
+function salesWeeklySourceCacheKeyForVersion(filters = {}, version) {
+  return JSON.stringify({ ...salesWeeklySourceScope(filters), version });
 }
 
 function sourceFiltersFromCacheScope(scope = {}) {
@@ -309,6 +329,30 @@ export async function getSalesWeeklyDashboard(filters = {}) {
     });
   }
 
+  if (!cachedSource?.data) {
+    const legacyCacheKey = salesWeeklySourceCacheKeyForVersion(filters, "sales-weekly-source-v2");
+    try {
+      const legacySource = await readSalesWeeklySourceCache(legacyCacheKey);
+      const migration = migrateSalesWeeklySourceCache(legacySource?.data, salesWeeklySourceScope(filters));
+      if (migration) {
+        await saveSalesWeeklySourceCache(sourceCacheKey, migration.data);
+        cachedSource = {
+          ...legacySource,
+          data: migration.data,
+        };
+        console.warn("[sales-weekly] migrated validated legacy source cache", {
+          cacheKey: sourceCacheKey,
+          migratedFrom: migration.migratedFrom,
+        });
+      }
+    } catch (error) {
+      console.error("[sales-weekly] legacy source cache migration failed", {
+        cacheKey: legacyCacheKey,
+        error: error.message,
+      });
+    }
+  }
+
   if (cachedSource?.data) {
     const validation = validateSalesWeeklySourceCache(cachedSource.data, salesWeeklySourceScope(filters));
     if (!validation.ok) {
@@ -339,6 +383,16 @@ export async function getSalesWeeklyDashboard(filters = {}) {
     console.error("[sales-weekly] legacy cache read failed", {
       error: error.message,
     });
+  }
+
+  if (cachedDashboard) {
+    const validation = validateSalesWeeklyDashboardCache(cachedDashboard);
+    if (!validation.ok) {
+      console.error("[sales-weekly] legacy dashboard cache contract rejected", {
+        reasons: validation.reasons,
+      });
+      cachedDashboard = null;
+    }
   }
 
   if (syncState.provider === "lingxing" && cachedDashboard && defaultCacheEligible) {

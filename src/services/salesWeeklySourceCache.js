@@ -1,6 +1,7 @@
 import { addDaysToDateText } from "../utils/lingxingDateRange.js";
 
 export const SALES_WEEKLY_SOURCE_CACHE_VERSION = "sales-weekly-source-v3";
+const LEGACY_SALES_WEEKLY_SOURCE_CACHE_VERSIONS = new Set(["sales-weekly-source-v2"]);
 
 export function validateSalesWeeklySourceCache(source, expectedScope) {
   const reasons = [];
@@ -31,4 +32,21 @@ export function validateSalesWeeklySourceCache(source, expectedScope) {
     }
   }
   return { ok: reasons.length === 0, reasons };
+}
+
+export function migrateSalesWeeklySourceCache(source, expectedScope) {
+  const sourceVersion = source?.cacheScope?.version;
+  if (!LEGACY_SALES_WEEKLY_SOURCE_CACHE_VERSIONS.has(sourceVersion)) return null;
+
+  const migrated = {
+    ...source,
+    cacheScope: {
+      ...source.cacheScope,
+      ...expectedScope,
+      version: SALES_WEEKLY_SOURCE_CACHE_VERSION,
+    },
+  };
+  const validation = validateSalesWeeklySourceCache(migrated, expectedScope);
+  if (!validation.ok) return null;
+  return { data: migrated, migratedFrom: sourceVersion };
 }
