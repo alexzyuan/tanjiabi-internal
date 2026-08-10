@@ -7,7 +7,7 @@ import { importFresh } from "./helpers/moduleImport.js";
 
 function salesWeeklySourceCacheKey() {
   return JSON.stringify({
-    version: "sales-weekly-source-v2",
+    version: "sales-weekly-source-v3",
     startDate: "2026-07-01",
     endDate: "2026-07-23",
     currencyCode: "ORIGINAL",
@@ -45,7 +45,7 @@ test("sales weekly source cache reuses the same base data across different listi
     const cacheKey = salesWeeklySourceCacheKey();
     const source = {
       cacheScope: {
-        version: "sales-weekly-source-v2",
+        version: "sales-weekly-source-v3",
         startDate: "2026-07-01",
         endDate: "2026-07-23",
         currencyCode: "ORIGINAL",
@@ -115,7 +115,7 @@ test("sales weekly source cache reuses the same base data across different listi
       currencyCode: "ORIGINAL",
       raw: {
         recent30: {
-          startDate: "2026-06-25",
+          startDate: "2026-06-24",
           endDate: "2026-07-23",
           cacheState: "hit",
           cacheUpdatedAt: "2026-07-23 10:00:00",
@@ -151,7 +151,7 @@ test("sales weekly source cache reuses the same base data across different listi
     assert.equal(linPeng.detailRows[0].refundRate30d, 3);
     assert.equal(xiong.detailRows[0].refundRate30d, 5);
     assert.deepEqual(linPeng.meta.recent30, {
-      startDate: "2026-06-25",
+      startDate: "2026-06-24",
       endDate: "2026-07-23",
       cacheState: "hit",
       cacheUpdatedAt: "2026-07-23 10:00:00",
@@ -179,5 +179,47 @@ test("sales weekly dashboard fails instead of falling back to a legacy dashboard
       }),
       /LINGXING_BASE_URL/,
     );
+  });
+});
+
+test("sales weekly source cache contract rejects entries without the 30-day refund data", async () => {
+  const projectRoot = process.cwd();
+  const { validateSalesWeeklySourceCache } = await importFresh(projectRoot, "src/services/dashboardService.js");
+
+  const result = validateSalesWeeklySourceCache({
+    cacheScope: JSON.parse(salesWeeklySourceCacheKey()),
+    orderProfitRecords: [],
+    raw: {},
+  }, JSON.parse(salesWeeklySourceCacheKey()));
+
+  assert.deepEqual(result, {
+    ok: false,
+    reasons: [
+      "recent30OrderProfitRecords must be an array",
+      "raw.recent30 metadata is required",
+    ],
+  });
+});
+
+test("sales weekly source cache contract rejects a 30-day range that does not end on the selected end date", async () => {
+  const projectRoot = process.cwd();
+  const { validateSalesWeeklySourceCache } = await importFresh(projectRoot, "src/services/dashboardService.js");
+  const scope = JSON.parse(salesWeeklySourceCacheKey());
+
+  const result = validateSalesWeeklySourceCache({
+    cacheScope: scope,
+    recent30OrderProfitRecords: [],
+    raw: {
+      recent30: {
+        startDate: "2026-06-24",
+        endDate: "2026-07-22",
+        recordCount: 0,
+      },
+    },
+  }, scope);
+
+  assert.deepEqual(result, {
+    ok: false,
+    reasons: ["raw.recent30 date range does not match the requested end date"],
   });
 });

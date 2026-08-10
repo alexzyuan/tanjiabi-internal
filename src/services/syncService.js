@@ -1,6 +1,7 @@
 import { getConfig } from "../config/index.js";
 import { filterCoreSellers, getLingxingAdapter } from "../adapters/lingxingAdapter.js";
 import { mapLingxingToSalesDashboard } from "./lingxingDashboardMapper.js";
+import { SALES_WEEKLY_SOURCE_CACHE_VERSION } from "./salesWeeklySourceCache.js";
 import {
   readLingxingSellersCache,
   saveLingxingSellersCache,
@@ -51,6 +52,30 @@ async function syncFromMock() {
   };
 }
 
+export function buildSalesWeeklySyncSource(data = {}, budgetTargets = {}, listingOwnerRows = []) {
+  return {
+    cacheScope: {
+      version: SALES_WEEKLY_SOURCE_CACHE_VERSION,
+      startDate: data.range?.startDate || "",
+      endDate: data.range?.endDate || "",
+      currencyCode: data.currencyCode || "CNY",
+      sids: [],
+    },
+    sellers: data.sellers || [],
+    sellerProfitRecords: data.sellerProfitRecords || [],
+    orderProfitRecords: data.orderProfitRecords || [],
+    recent30OrderProfitRecords: data.recent30OrderProfitRecords || [],
+    dailyProfitRecords: data.dailyProfitRecords || [],
+    inventoryRecords: data.inventoryRecords || [],
+    listingOwnerRows,
+    budgetTargets,
+    range: data.range,
+    currencyCode: data.currencyCode || "CNY",
+    raw: data.raw || {},
+    updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
+  };
+}
+
 async function syncFromLingxing() {
   const adapter = getLingxingAdapter();
   const data = await adapter.fetchSalesWeeklyData();
@@ -67,26 +92,7 @@ async function syncFromLingxing() {
   } catch {
     listingOwnerRows = directOwnerRows;
   }
-  const source = {
-    cacheScope: {
-      version: "sales-weekly-source-v1",
-      startDate: data.range?.startDate || "",
-      endDate: data.range?.endDate || "",
-      currencyCode: data.currencyCode || "CNY",
-      sids: [],
-    },
-    sellers: data.sellers || [],
-    sellerProfitRecords: data.sellerProfitRecords || [],
-    orderProfitRecords: data.orderProfitRecords || [],
-    dailyProfitRecords: data.dailyProfitRecords || [],
-    inventoryRecords: data.inventoryRecords || [],
-    listingOwnerRows,
-    budgetTargets,
-    range: data.range,
-    currencyCode: data.currencyCode || "CNY",
-    raw: data.raw || {},
-    updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
-  };
+  const source = buildSalesWeeklySyncSource(data, budgetTargets, listingOwnerRows);
   const dashboard = mapLingxingToSalesDashboard({ ...source, filters: {} });
   const sourceCacheKey = JSON.stringify(source.cacheScope);
   await saveSalesWeeklySourceCache(sourceCacheKey, source);

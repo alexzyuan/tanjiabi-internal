@@ -3,6 +3,8 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { getConfig, readEnv } from "../src/config/index.js";
+import { getDefaultWeekRange } from "../src/utils/dateRange.js";
 
 export const DEPLOY_INTEGRITY_VERSION = 1;
 
@@ -190,6 +192,76 @@ async function fetchText(url) {
   return text;
 }
 
+function parseJsonResponse(text, url) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`${url} 返回了无效 JSON。`);
+  }
+}
+
+function defaultSalesReviewSmokeCredentials() {
+  const localAuth = getConfig().auth.local;
+  return {
+    username: readEnv("DEPLOY_SALES_REVIEW_SMOKE_USERNAME", localAuth.username),
+    password: readEnv("DEPLOY_SALES_REVIEW_SMOKE_PASSWORD", localAuth.password),
+  };
+}
+
+export async function verifySalesReviewSmoke({
+  baseUrl,
+  credentials = defaultSalesReviewSmokeCredentials(),
+  fetchImpl = globalThis.fetch,
+  range = getDefaultWeekRange(getConfig().dashboard),
+} = {}) {
+  if (!baseUrl) throw new Error("sales-review deployment smoke requires baseUrl.");
+  if (!credentials?.username || !credentials?.password) {
+    throw new Error("销售复盘部署冒烟缺少本地登录凭据。请设置 DEPLOY_SALES_REVIEW_SMOKE_USERNAME 和 DEPLOY_SALES_REVIEW_SMOKE_PASSWORD，或 AUTH_USERNAME 和 AUTH_PASSWORD。");
+  }
+
+  const loginUrl = `${baseUrl}/api/auth/password/login`;
+  const loginResponse = await fetchImpl(loginUrl, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(credentials),
+  });
+  const loginPayload = parseJsonResponse(await loginResponse.text(), loginUrl);
+  const sessionCookie = loginResponse.headers.get("set-cookie")?.split(";")[0] || "";
+  if (!loginResponse.ok || loginPayload?.ok !== true || !sessionCookie) {
+    throw new Error(`销售复盘部署冒烟登录失败：HTTP ${loginResponse.status}`);
+  }
+
+  const query = new URLSearchParams({
+    startDate: range.startDate,
+    endDate: range.endDate,
+    currencyCode: "CNY",
+  });
+  const dashboardUrl = `${baseUrl}/api/dashboard/sales-weekly?${query.toString()}`;
+  const dashboardResponse = await fetchImpl(dashboardUrl, {
+    headers: { cookie: sessionCookie },
+  });
+  const dashboard = parseJsonResponse(await dashboardResponse.text(), dashboardUrl);
+  if (!dashboardResponse.ok) {
+    throw new Error(`销售复盘部署冒烟请求失败：HTTP ${dashboardResponse.status}`);
+  }
+  if (!Array.isArray(dashboard.detailRows)) {
+    throw new Error("销售复盘部署冒烟响应缺少 detailRows 数组。");
+  }
+  if (!dashboard.detailRows.length) {
+    throw new Error("销售复盘部署冒烟响应的 detailRows 不能为空。");
+  }
+
+  const missingContractRows = dashboard.detailRows.filter((row) => !Object.hasOwn(row || {}, "refundRate30d"));
+  if (missingContractRows.length) {
+    throw new Error(`销售复盘部署冒烟发现 ${missingContractRows.length} 条明细缺少 refundRate30d。`);
+  }
+
+  return {
+    detailRowCount: dashboard.detailRows.length,
+    unavailableCount: dashboard.detailRows.filter((row) => row.refundRate30d === null).length,
+  };
+}
+
 async function fetchJson(url) {
   const text = await fetchText(url);
   return JSON.parse(text);
@@ -228,6 +300,13 @@ export async function verifyDeployedApp({ root = process.cwd(), baseUrl }) {
     errors.push(`/api/health 返回异常：${JSON.stringify(health).slice(0, 200)}`);
   }
 
+  let salesReviewSmoke = null;
+  try {
+    salesReviewSmoke = await verifySalesReviewSmoke({ baseUrl });
+  } catch (error) {
+    errors.push(error.message);
+  }
+
   errors.push(...await verifyLocalFiles(root, manifest));
 
   const onlineIndexHtml = await fetchText(`${baseUrl}/`);
@@ -244,6 +323,7 @@ export async function verifyDeployedApp({ root = process.cwd(), baseUrl }) {
     ok: errors.length === 0,
     errors,
     health,
+    salesReviewSmoke,
     moduleCount: manifest.integrity.navigationModules.length,
     commit: manifest.commit || "",
     branch: manifest.branch || "",

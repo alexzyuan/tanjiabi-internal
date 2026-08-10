@@ -12,6 +12,7 @@ import {
 import { filterCoreSellers, getLingxingAdapter } from "../adapters/lingxingAdapter.js";
 import { buildBudgetMskuDetailRows, mapLingxingToSalesDashboard } from "./lingxingDashboardMapper.js";
 import { getDefaultWeekRange } from "../utils/dateRange.js";
+import { SALES_WEEKLY_SOURCE_CACHE_VERSION, validateSalesWeeklySourceCache } from "./salesWeeklySourceCache.js";
 import { getBudgetTargetContext } from "./budgetTargetService.js";
 import {
   fetchListingOwnerRows,
@@ -53,13 +54,15 @@ function salesWeeklySourceScope(filters = {}) {
   const endDate = filters.endDate || defaultRange.endDate;
   const sids = Array.isArray(filters.sids) ? uniqueNumbers(filters.sids).sort((a, b) => a - b) : [];
   return {
-    version: "sales-weekly-source-v2",
+    version: SALES_WEEKLY_SOURCE_CACHE_VERSION,
     startDate,
     endDate,
     currencyCode: normalizedCurrencyCode(filters),
     sids,
   };
 }
+
+export { validateSalesWeeklySourceCache };
 
 function salesWeeklySourceCacheKey(filters = {}) {
   return JSON.stringify(salesWeeklySourceScope(filters));
@@ -304,6 +307,17 @@ export async function getSalesWeeklyDashboard(filters = {}) {
       cacheKey: sourceCacheKey,
       error: error.message,
     });
+  }
+
+  if (cachedSource?.data) {
+    const validation = validateSalesWeeklySourceCache(cachedSource.data, salesWeeklySourceScope(filters));
+    if (!validation.ok) {
+      console.error("[sales-weekly] source cache contract rejected", {
+        cacheKey: sourceCacheKey,
+        reasons: validation.reasons,
+      });
+      cachedSource = null;
+    }
   }
 
   if (syncState.provider === "lingxing" && cachedSource?.data) {
