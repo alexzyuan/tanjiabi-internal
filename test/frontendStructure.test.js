@@ -2,6 +2,57 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+test("sales dashboard keeps a single standard owner filter", async () => {
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const filtersStart = indexSource.indexOf('<section class="filters" id="sales-global-filters"');
+  const filtersEnd = indexSource.indexOf("</section>", filtersStart);
+  const filters = indexSource.slice(filtersStart, filtersEnd);
+
+  assert.notEqual(filtersStart, -1, "sales dashboard filters are missing");
+  assert.match(filters, /id="front-owner-filter"/);
+  assert.doesNotMatch(filters, /id="front-owner-quick-filter"/);
+  assert.doesNotMatch(filters, /负责人快捷筛选/);
+});
+
+test("budget targets use shared filters and a modal import workflow", async () => {
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const appSource = await readFile(new URL("../app.js", import.meta.url), "utf8");
+  const featureSource = await readFile(new URL("../assets/js/features/budget-targets.js", import.meta.url), "utf8");
+  const viewStart = indexSource.indexOf('<section class="view" id="view-budget">');
+  const viewEnd = indexSource.indexOf('<section class="view" id="view-ai-image-workflow">', viewStart);
+  const budgetView = indexSource.slice(viewStart, viewEnd);
+  const featureCall = appSource.match(/createBudgetTargetsFeature\(\{[\s\S]*?\n\}\)\);/)?.[0] || "";
+
+  assert.notEqual(viewStart, -1, "budget view is missing");
+  assert.match(budgetView, /id="budget-month-picker"/);
+  assert.match(budgetView, /id="budget-platform-filter"/);
+  assert.match(budgetView, /<option value="Amazon">亚马逊<\/option>/);
+  assert.match(budgetView, /<option value="Walmart">沃尔玛<\/option>/);
+  assert.doesNotMatch(budgetView, /Tik Tok/);
+  assert.match(budgetView, /id="budget-country-filter"[^>]*multiple/);
+  assert.match(budgetView, /id="budget-store-filter"[^>]*multiple/);
+  assert.match(budgetView, /id="budget-listing-owner-filter"/);
+  assert.match(budgetView, /id="budget-keyword-filter"/);
+  assert.match(budgetView, /id="budget-import-button"/);
+  assert.match(budgetView, /<dialog class="budget-import-dialog" id="budget-import-dialog"/);
+  assert.match(budgetView, /id="budget-import-country"/);
+  assert.match(budgetView, /id="budget-import-store"/);
+  assert.doesNotMatch(budgetView, /budget-import-owner/);
+  assert.match(budgetView, /id="budget-template-download"/);
+  assert.doesNotMatch(budgetView, /budget-upload-panel/);
+  assert.match(featureCall, /selectedFilterValues,/);
+  assert.match(featureCall, /setSelectOptions,/);
+  assert.match(featureCall, /syncAllOptionSelection,/);
+  assert.match(featureSource, /function openBudgetImportDialog/);
+  assert.match(featureSource, /function closeBudgetImportDialog/);
+  assert.match(featureSource, /bind\(root, "#budget-import-dialog", "keydown"/);
+  assert.match(featureSource, /budget-import-country/);
+  assert.match(featureSource, /budget-import-store/);
+  assert.match(featureSource, /budgetShopOptions\s*=\s*Array\.isArray\(data\.shopOptions\)/);
+  assert.match(featureSource, /function availableBudgetShops\(/);
+  assert.doesNotMatch(featureSource, /budget-import-owner/);
+});
+
 test("store operating monthly report is a finance-owned feature with shared controls and table management", async () => {
   const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
   const appSource = await readFile(new URL("../app.js", import.meta.url), "utf8");
@@ -17,20 +68,26 @@ test("store operating monthly report is a finance-owned feature with shared cont
   assert.match(financeGroup, />店铺经营月报</);
   assert.match(indexSource, /id="view-store-operating-monthly-report"/);
   assert.match(indexSource, /id="store-operating-report-store" multiple/);
-  assert.match(indexSource, /id="store-operating-report-country" multiple/);
+  assert.match(indexSource, /id="store-operating-report-country"[^>]*multiple/);
+  assert.match(indexSource, /id="store-operating-report-country"[^>]*data-filter-clear-target="#store-operating-report-store"/);
   assert.match(indexSource, /id="store-operating-report-currency"[^>]*>\s*<option value="CNY" selected>人民币/);
+  assert.match(indexSource, /id="store-operating-report-row-visibility"/);
+  assert.match(indexSource, /class="modal-backdrop" id="store-operating-report-row-visibility-modal"/);
+  assert.match(indexSource, /id="store-operating-report-row-visibility-groups"/);
   assert.match(indexSource, /id="store-operating-report-table"[^>]*data-table-key="store-operating-monthly-report"/);
   assert.match(indexSource, /class="table-wrap data-table-wrap--detail store-operating-report-table-wrap"/);
   assert.match(indexSource, /class="data-table data-table--detail"[^>]*id="store-operating-report-table"/);
   assert.match(indexSource, /data-table-fixed-width="true"/);
-  assert.match(indexSource, /<th colspan="2" data-column-sortable="false">店铺信息<\/th>/);
-  assert.match(indexSource, /<th data-column-key="category" data-column-width="148" data-column-sortable="false"[^>]*>上级<\/th>/);
-  assert.match(indexSource, /<th data-column-key="name" data-column-width="176" data-column-sortable="false"[^>]*>名称<\/th>/);
+  assert.match(indexSource, /<th colspan="1" data-column-sortable="false">店铺信息<\/th>/);
+  assert.doesNotMatch(indexSource, /data-column-key="category"[^>]*>上级<\/th>/);
+  assert.match(indexSource, /<th data-column-key="name" data-column-width="176" data-column-sortable="false"[^>]*>科目<\/th>/);
   assert.match(indexSource, /<th data-column-key="group-0-actual" data-column-width="160" data-column-sortable="false" data-column-kind="number" data-column-profile="money-rate">实际完成值<\/th>/);
   assert.match(indexSource, /<th data-column-key="group-0-budget" data-column-width="160" data-column-sortable="false" data-column-kind="number" data-column-profile="money-rate">预算值<\/th>/);
 
   assert.match(appSource, /import \{ createStoreOperatingMonthlyReportFeature \} from "\.\/assets\/js\/features\/store-operating-monthly-report\.js/);
   assert.match(appSource, /createStoreOperatingMonthlyReportFeature\(\{/);
+  const monthlyReportFeatureCall = appSource.match(/createStoreOperatingMonthlyReportFeature\(\{[\s\S]*?\n\}\)\);/)?.[0] || "";
+  assert.match(monthlyReportFeatureCall, /syncCountryStoreSelection,/);
   assert.match(appSource, /normalizeCountryName,\n  pickSellerCountry,\n  pickSellerName,\n  refreshTable,/);
   assert.match(appSource, /view === "store-operating-monthly-report"/);
   assert.match(appSource, /loadStoreOperatingMonthlyReport\(\)/);
@@ -61,6 +118,8 @@ test("monthly report delegates widths to shared tooling and sorts hierarchy bloc
   assert.ok((indexSource.match(/data-column-sortable="false"/g) || []).length >= 6);
   assert.match(indexSource, /data-table-key="store-operating-monthly-report"/);
   assert.match(css, /tr\[data-report-row-level="1"\]/);
+  assert.match(css, /\.store-operating-row-visibility-groups/);
+  assert.match(css, /@media \(max-width: 720px\)/);
   assert.doesNotMatch(css, /module-hero/);
   assert.match(shellCss, /\/\* Nested module hero and breadcrumb specificity fix v1\. \*\/[\s\S]*@media \(max-width: 900px\) \{[\s\S]*\.view > \.module-hero,[\s\S]*\.view \.module-hero \{[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
   assert.match(shellCss, /body:not\(\.login-body\) \.topbar \.world-clock \{\n  display: flex;\n\}/);
@@ -103,7 +162,7 @@ test("monthly report delegates widths to shared tooling and sorts hierarchy bloc
   );
   assert.doesNotMatch(worldClockParityRule, /display:\s*flex\s*!important/);
   assert.equal(/(?:th|td):nth-child\([^)]*\)\s*\{[^}]*\b(?:width|min-width)\s*:/.test(css), false);
-  assert.equal(/\.store-operating[^,{]*\{[^}]*min-width\s*:/.test(css), false);
+  assert.equal(/(?:th|td)(?::nth-child\([^)]*\))?\s*\{[^}]*\b(?:width|min-width)\s*:/.test(css), false);
 });
 
 test("browser CSS cascade runner is pinned, bounded, and included in CI", async () => {
@@ -155,6 +214,7 @@ test("frontend module cache-bust versions stay aligned", async () => {
   const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
   const appSource = await readFile(new URL("../app.js", import.meta.url), "utf8");
   const dashboardLoaderSource = await readFile(new URL("../assets/js/dashboard-loader.js", import.meta.url), "utf8");
+  const stylesheetVersion = indexSource.match(/\.\/styles\.css\?v=([^\"]+)/)?.[1];
   const indexUiUtilsVersion = indexSource.match(/\.\/assets\/js\/ui-utils\.js\?v=([^"]+)/)?.[1];
   const appUiUtilsVersion = appSource.match(/\.\/assets\/js\/ui-utils\.js\?v=([^"]+)/)?.[1];
   const dashboardLoaderUiUtilsVersion = dashboardLoaderSource.match(/\.\/ui-utils\.js\?v=([^"]+)/)?.[1];
@@ -162,6 +222,7 @@ test("frontend module cache-bust versions stay aligned", async () => {
   assert.ok(indexUiUtilsVersion, "index.html should cache-bust ui-utils.js");
   assert.ok(appUiUtilsVersion, "app.js should import the same cache-busted ui-utils.js");
   assert.ok(dashboardLoaderUiUtilsVersion, "dashboard-loader.js should import the same cache-busted ui-utils.js");
+  assert.equal(stylesheetVersion, "20260808-filter-clear-visibility-v2");
   assert.equal(appUiUtilsVersion, indexUiUtilsVersion);
   assert.equal(dashboardLoaderUiUtilsVersion, indexUiUtilsVersion);
 });
@@ -1212,6 +1273,7 @@ test("shared filter controls live outside app.js", async () => {
   assert.match(filterControlsSource, /function createFilterDropdown\(select\)/);
   assert.match(filterControlsSource, /function renderFilterDropdown\(select\)/);
   assert.match(filterControlsSource, /function initializeFilterDropdowns\(\)/);
+  assert.match(filterControlsSource, /querySelectorAll\("\.filters select\[multiple\], \.filter-toolbar select\[multiple\]"\)/);
   assert.match(filterControlsSource, /function setSelectOptions\(selectorOrElement, options = \[\]/);
   assert.match(filterControlsSource, /return \{[\s\S]*setSelectOptions[\s\S]*syncAllOptionSelection[\s\S]*\}/);
 

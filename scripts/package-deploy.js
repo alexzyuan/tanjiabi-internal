@@ -11,7 +11,7 @@ const OUTPUT = "tanjia-bi-deploy.tar.gz";
 const DEPLOY_MANIFEST = ".deploy-manifest.json";
 const allowCssDeploy = process.env.ALLOW_CSS_DEPLOY === "1";
 const allowNonProductionDeploy = process.env.ALLOW_NON_PRODUCTION_DEPLOY === "1";
-const productionDeployBranch = process.env.PRODUCTION_DEPLOY_BRANCH || "codex/yesterday-plus-webhook";
+const productionDeployBranch = process.env.PRODUCTION_DEPLOY_BRANCH || "main";
 const confirmedDeployBranch = process.env.DEPLOY_CONFIRM_BRANCH || "";
 const args = new Set(process.argv.slice(2));
 const includeCss = args.has("--include-css") || args.has("--full");

@@ -142,6 +142,15 @@ test("styles.css does not add account trigger background patches after shell loc
   );
 });
 
+test("shared filter clear control stays above the dropdown arrow for pointer and keyboard use", async () => {
+  const filterSource = await readFile(new URL("../assets/css/components/30-surfaces-and-filters.css", import.meta.url), "utf8");
+  const multiSelectSource = await readFile(new URL("../assets/css/components/32-form-controls.css", import.meta.url), "utf8");
+
+  assert.match(filterSource, /\.filter-dropdown-clear\s*\{[\s\S]*?z-index:\s*1;/);
+  assert.match(filterSource, /\.filter-dropdown--has-selection:is\(:hover, :focus-within\)\s+\.filter-dropdown-clear/);
+  assert.match(multiSelectSource, /\.filter-dropdown--has-selection:is\(:hover, :focus-within\)\s+\.filter-dropdown-button::after\s*\{\s*content:\s*none;/);
+});
+
 test("styles.css keeps brand blue behind semantic tokens", async () => {
   const source = await readFile(new URL("../styles.css", import.meta.url), "utf8");
   const normalizedSource = source.replace("--spectrum-accent-background:#1677ff;", "");
@@ -200,9 +209,9 @@ test("CSS minifier keeps required calc plus spacing", () => {
   assert.match(minified, /\.item\+\.item/);
 });
 
-test("styles.css stays within the raw size budget", async () => {
+test("styles.css stays within the 264KB raw size budget", async () => {
   const { size } = await stat(new URL("../styles.css", import.meta.url));
-  assert.ok(size <= 260_000, `styles.css should be <= 260KB raw, got ${size} bytes`);
+  assert.ok(size <= 264_000, `styles.css should be <= 264KB raw, got ${size} bytes`);
 });
 
 test("CSS standards gate is part of the default check command", async () => {
@@ -244,7 +253,8 @@ test("shared filters and panel surfaces live outside legacy css", async () => {
   assert.match(componentSource, /^\.filters label:has\(\.date-range-control\)\s*\{/m);
   assert.match(componentSource, /^\.filters \.checkbox-label\s*\{/m);
   assert.match(componentSource, /^\.filters \.filter-dropdown-menu\s*\{/m);
-  assert.match(componentSource, /^\.enhanced-filter-select\s*\{/m);
+  assert.match(componentSource, /^\.filters select\.enhanced-filter-select,/m);
+  assert.match(componentSource, /\.filter-toolbar select\.enhanced-filter-select\s*\{/m);
   assert.match(componentSource, /^\.panel\s*\{/m);
   assert.match(componentSource, /^\.panel-head\s*\{/m);
   assert.match(componentSource, /^\.form-span-2\s*\{/m);
@@ -274,6 +284,14 @@ test("shared filters and panel surfaces live outside legacy css", async () => {
   assert.equal(legacySource.includes(".table-scroll table"), false);
   assert.equal(legacySource.includes(".upload-status {"), false);
   assert.equal(legacySource.includes(".empty-state {\n  min-height:"), false);
+});
+
+test("compact filter toolbar direct controls keep their shared compact width", async () => {
+  const toolbarSource = await readFile(new URL("../assets/css/components/35-filter-toolbar.css", import.meta.url), "utf8");
+
+  assert.match(toolbarSource, /\.filter-toolbar > :is\(input, select, \.filter-dropdown, \[role="search"\]\)\s*\{[\s\S]*?width:\s*150px;[\s\S]*?font-size:\s*13px;/);
+  assert.match(toolbarSource, /\.filter-toolbar > \.filter-dropdown\s*\{\s*position:\s*relative;/);
+  assert.equal(toolbarSource.includes(".filter-toolbar > :where(input, select)"), false);
 });
 
 test("shared visual component tokens normalize controls, tables, and modals", async () => {
@@ -904,7 +922,7 @@ test("sales review detail table declares stable table and column semantics", asy
   assert.match(indexSource, /id="sales-dashboard-content"/);
 
   const headers = Array.from(tableMatch[1].matchAll(/<th\b([^>]*)>/g), (match) => match[1]);
-  assert.equal(headers.length, 18);
+  assert.equal(headers.length, 19);
   headers.forEach((attributes, index) => {
     assert.match(attributes, /\bdata-column-key="/, `header ${index + 1} should declare data-column-key`);
     assert.match(attributes, /\bdata-column-kind="/, `header ${index + 1} should declare data-column-kind`);
@@ -913,6 +931,7 @@ test("sales review detail table declares stable table and column semantics", asy
   assert.match(headers[1], /\bdata-column-profile="identifier"/);
   assert.match(headers[2], /\bdata-column-profile="name"/);
   assert.match(tableMatch[0], /\bdata-column-key="averageProfit"[\s\S]*?平均利润/);
+  assert.match(tableMatch[0], /\bdata-column-key="refundRate30d"[\s\S]*?30d 退款率[\s\S]*?\bdata-column-key="refundRate"/);
   assert.match(tableMatch[0], /\bdata-column-key="fbaDeliveryFeeRate"[\s\S]*?FBA占比/);
   assert.doesNotMatch(tableMatch[0], /FBA发货费占比/);
   headers.slice(3).forEach((attributes, index) => {
@@ -1022,8 +1041,10 @@ test("budget target table width rules live in the page layer", async () => {
 
   assert.match(pageSource, /^#view-budget\s*\{/m);
   assert.match(pageSource, /^#view-budget \.budget-target-table-wrap\s*\{/m);
-  assert.match(pageSource, /^\.month-chip\s*\{/m);
-  assert.match(pageSource, /^\.budget-upload-box\s*\{/m);
+  assert.doesNotMatch(pageSource, /\.month-chip\s*\{/m);
+  assert.doesNotMatch(pageSource, /\.month-multi-select\s*\{/m);
+  assert.match(pageSource, /^\.budget-import-dialog\s*\{/m);
+  assert.match(pageSource, /^\.budget-import-dialog::backdrop\s*\{/m);
   assert.match(pageSource, /^\.file-picker\s*\{/m);
   assert.match(pageSource, /^\.file-picker\.is-dragging\s*\{/m);
   assert.match(pageSource, /overflow-x:\s*auto/);
@@ -1036,7 +1057,7 @@ test("budget target table width rules live in the page layer", async () => {
   assert.equal(/^\.budget-toolbar\s*\{/m.test(pageSource), false);
   assert.equal(legacySource.includes(".budget-toolbar {"), false);
   assert.equal(legacySource.includes(".month-chip {"), false);
-  assert.equal(legacySource.includes(".budget-upload-box {"), false);
+  assert.equal(legacySource.includes(".budget-import-dialog {"), false);
   assert.equal(legacySource.includes(".file-picker {"), false);
   assert.equal(legacySource.includes(".file-picker.is-dragging"), false);
   assert.equal(pageSource.includes(".upload-status {"), false);

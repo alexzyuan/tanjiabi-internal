@@ -1,20 +1,34 @@
-const MONTH_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])$/;
+import { createDateRangePicker } from "../date-range-picker.js?v=20260807-store-operating-date-range-v1";
+
+const DATE_PATTERN = /^\d{4}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
 const REPORT_FIXED_COLUMN_WIDTHS = Object.freeze({
-  category: 148,
   name: 176,
   actual: 160,
   share: 104,
   budget: 160,
   achievement: 112,
 });
+const ROW_VISIBILITY_ENDPOINT = "/api/finance/store-operating-monthly-report/row-visibility";
 
 function defaultCurrentMonth() {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
+function dateText(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function defaultCurrentDateRange() {
+  const now = new Date();
+  return {
+    startDate: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`,
+    endDate: dateText(now),
+  };
+}
+
 export function listInclusiveMonths(startMonth, endMonth) {
-  if (!MONTH_PATTERN.test(startMonth || "") || !MONTH_PATTERN.test(endMonth || "")) return [];
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(startMonth || "") || !/^\d{4}-(0[1-9]|1[0-2])$/.test(endMonth || "")) return [];
   const [startYear, startNumber] = startMonth.split("-").map(Number);
   const [endYear, endNumber] = endMonth.split("-").map(Number);
   const startIndex = startYear * 12 + startNumber - 1;
@@ -28,12 +42,14 @@ export function listInclusiveMonths(startMonth, endMonth) {
   });
 }
 
-export function validateMonthRange(startMonth, endMonth) {
-  if (!MONTH_PATTERN.test(startMonth || "") || !MONTH_PATTERN.test(endMonth || "")) {
-    return { ok: false, error: "请选择有效的开始月份和结束月份" };
+export function validateDateRange(startDate, endDate, today = dateText()) {
+  if (!DATE_PATTERN.test(startDate || "") || !DATE_PATTERN.test(endDate || "")) {
+    return { ok: false, error: "请选择有效的开始日期和结束日期" };
   }
-  const months = listInclusiveMonths(startMonth, endMonth);
-  if (!months.length) return { ok: false, error: "结束月份不能早于开始月份" };
+  if (endDate < startDate) return { ok: false, error: "结束日期不能早于开始日期" };
+  if (endDate > today) return { ok: false, error: "结束日期不能晚于今天" };
+  const months = listInclusiveMonths(startDate.slice(0, 7), endDate.slice(0, 7));
+  if (!months.length) return { ok: false, error: "请选择有效的开始日期和结束日期" };
   if (months.length > 12) return { ok: false, error: "统计范围最多 12 个月" };
   return { ok: true, months };
 }
@@ -74,12 +90,14 @@ function compareReportSortValues(left, right) {
 export function createStoreOperatingMonthlyReportFeature({
   root = globalThis.document,
   bind,
+  bindBackdropClose,
   clickVisibleNavItem,
+  createDateRangePickerImpl = createDateRangePicker,
   downloadBlob,
   escapeHtml,
   fetchImpl = globalThis.fetch,
   formatActualMoney,
-  getCurrentMonth = defaultCurrentMonth,
+  getCurrentDateRange = defaultCurrentDateRange,
   getStoreOptions = () => [],
   historyRef = globalThis.history,
   locationRef = globalThis.location,
@@ -89,9 +107,11 @@ export function createStoreOperatingMonthlyReportFeature({
   refreshTable,
   selectedFilterValues,
   setButtonBusy,
+  setModalOpenState,
   setSelectOptions,
   setText,
   syncAllOptionSelection,
+  syncCountryStoreSelection,
 } = {}) {
   if (typeof bind !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires bind.");
   if (typeof clickVisibleNavItem !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires clickVisibleNavItem.");
@@ -103,10 +123,13 @@ export function createStoreOperatingMonthlyReportFeature({
   if (typeof pickSellerCountry !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires pickSellerCountry.");
   if (typeof pickSellerName !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires pickSellerName.");
   if (typeof refreshTable !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires refreshTable.");
+  if (typeof bindBackdropClose !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires bindBackdropClose.");
   if (typeof selectedFilterValues !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires selectedFilterValues.");
   if (typeof setSelectOptions !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires setSelectOptions.");
   if (typeof setText !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires setText.");
+  if (typeof setModalOpenState !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires setModalOpenState.");
   if (typeof syncAllOptionSelection !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires syncAllOptionSelection.");
+  if (typeof syncCountryStoreSelection !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires syncCountryStoreSelection.");
 
   let storeOptions = [];
   let lastSuccessfulQuery = "";
@@ -120,7 +143,10 @@ export function createStoreOperatingMonthlyReportFeature({
   const expandedReportCategories = new Set();
   let currentReportData = null;
   let currentReportFilters = null;
+  let rowVisibility = { hiddenMetricIds: new Set(), metrics: [], loaded: false };
+  let rowVisibilityDraft = null;
   const reportSortState = { key: "", direction: "asc" };
+  let reportDateRangePicker = null;
 
   function query(selector) {
     return root?.querySelector?.(selector) || null;
@@ -128,8 +154,8 @@ export function createStoreOperatingMonthlyReportFeature({
 
   function readFilters() {
     return {
-      startMonth: String(query("#store-operating-report-start-month")?.value || "").trim(),
-      endMonth: String(query("#store-operating-report-end-month")?.value || "").trim(),
+      startDate: String(query("#store-operating-report-start-date")?.value || "").trim(),
+      endDate: String(query("#store-operating-report-end-date")?.value || "").trim(),
       stores: selectedFilterValues(query("#store-operating-report-store")),
       countries: selectedFilterValues(query("#store-operating-report-country")),
       currencyCode: String(query("#store-operating-report-currency")?.value || "CNY").trim().toUpperCase() || "CNY",
@@ -138,8 +164,8 @@ export function createStoreOperatingMonthlyReportFeature({
 
   function buildReportQuery(filters = readFilters()) {
     const params = new URLSearchParams();
-    params.set("startMonth", filters.startMonth);
-    params.set("endMonth", filters.endMonth);
+    params.set("startDate", filters.startDate);
+    params.set("endDate", filters.endDate);
     params.set("currencyCode", filters.currencyCode || "CNY");
     filters.stores.forEach((value) => params.append("stores", value));
     filters.countries.forEach((value) => params.append("countries", value));
@@ -154,8 +180,8 @@ export function createStoreOperatingMonthlyReportFeature({
 
   function syncReportUrl(filters) {
     const params = new URLSearchParams();
-    params.set("startMonth", filters.startMonth);
-    params.set("endMonth", filters.endMonth);
+    params.set("startDate", filters.startDate);
+    params.set("endDate", filters.endDate);
     params.set("currencyCode", filters.currencyCode || "CNY");
     filters.stores.forEach((value) => params.append("stores", value));
     filters.countries.forEach((value) => params.append("countries", value));
@@ -222,12 +248,12 @@ export function createStoreOperatingMonthlyReportFeature({
     initialUrlStores = params.getAll("stores").filter(Boolean);
     initialUrlCountries = params.getAll("countries").filter(Boolean);
     initialUrlCurrencyCode = String(params.get("currencyCode") || "").trim().toUpperCase();
-    const startMonth = params.get("startMonth");
-    const endMonth = params.get("endMonth");
-    const startInput = query("#store-operating-report-start-month");
-    const endInput = query("#store-operating-report-end-month");
-    if (startInput && MONTH_PATTERN.test(startMonth || "")) startInput.value = startMonth;
-    if (endInput && MONTH_PATTERN.test(endMonth || "")) endInput.value = endMonth;
+    const startDate = params.get("startDate");
+    const endDate = params.get("endDate");
+    const startInput = query("#store-operating-report-start-date");
+    const endInput = query("#store-operating-report-end-date");
+    if (startInput && DATE_PATTERN.test(startDate || "")) startInput.value = startDate;
+    if (endInput && DATE_PATTERN.test(endDate || "")) endInput.value = endDate;
     const currencySelect = query("#store-operating-report-currency");
     if (currencySelect && ["CNY", "ORIGINAL"].includes(initialUrlCurrencyCode)) {
       currencySelect.value = initialUrlCurrencyCode;
@@ -236,14 +262,15 @@ export function createStoreOperatingMonthlyReportFeature({
   }
 
   function initializeStoreOperatingMonthlyReportDefaults() {
-    const currentMonth = getCurrentMonth();
-    const startInput = query("#store-operating-report-start-month");
-    const endInput = query("#store-operating-report-end-month");
-    if (startInput && !startInput.value) startInput.value = currentMonth;
-    if (endInput && !endInput.value) endInput.value = currentMonth;
+    const defaultRange = getCurrentDateRange();
+    const startInput = query("#store-operating-report-start-date");
+    const endInput = query("#store-operating-report-end-date");
+    if (startInput && !startInput.value) startInput.value = defaultRange.startDate;
+    if (endInput && !endInput.value) endInput.value = defaultRange.endDate;
     const currencySelect = query("#store-operating-report-currency");
     if (currencySelect && !currencySelect.value) currencySelect.value = "CNY";
     initializeFromLocation();
+    reportDateRangePicker?.refresh?.();
     refreshStoreOptions();
   }
 
@@ -331,12 +358,11 @@ export function createStoreOperatingMonthlyReportFeature({
     const groups = reportColumnGroups(data, filters);
     head.innerHTML = `
       <tr>
-        <th colspan="2" data-column-sortable="false">店铺信息</th>
+        <th colspan="1" data-column-sortable="false">店铺信息</th>
         ${groups.map((group) => `<th colspan="4" data-column-sortable="false" data-report-group-index="${group.index}">${escapeHtml(group.label)}</th>`).join("")}
       </tr>
       <tr>
-        <th data-column-key="category" data-column-width="${REPORT_FIXED_COLUMN_WIDTHS.category}" data-column-sortable="false" data-column-profile="name">上级</th>
-        <th data-column-key="name" data-column-width="${REPORT_FIXED_COLUMN_WIDTHS.name}" data-column-sortable="false" data-column-profile="name">名称</th>
+        <th data-column-key="name" data-column-width="${REPORT_FIXED_COLUMN_WIDTHS.name}" data-column-sortable="false" data-column-profile="name">科目</th>
         ${groups.flatMap((group) => [
           ["actual", "实际完成值"],
           ["share", "占比"],
@@ -352,11 +378,163 @@ export function createStoreOperatingMonthlyReportFeature({
     return data.groups;
   }
 
+  function normalizeRowVisibility(payload = {}) {
+    if (!Array.isArray(payload.metrics)) throw new Error("项目行配置响应缺少 metrics 数组");
+    const metrics = payload.metrics.map((metric) => ({
+      key: String(metric?.key || "").trim(),
+      name: String(metric?.name || "").trim(),
+      category: String(metric?.category || "").trim(),
+      categoryName: String(metric?.categoryName || "").trim(),
+    })).filter((metric) => metric.key && metric.name && metric.category && metric.categoryName);
+    const allowed = new Set(metrics.map((metric) => metric.key));
+    const hiddenMetricIds = Array.isArray(payload.hiddenMetricIds)
+      ? new Set(payload.hiddenMetricIds.map((key) => String(key || "").trim()).filter((key) => allowed.has(key)))
+      : new Set();
+    return { hiddenMetricIds, metrics, loaded: true };
+  }
+
+  function isVisibleReportDetail(row) {
+    return Number(row?.level) !== 2 || !rowVisibility.hiddenMetricIds.has(String(row?.key || ""));
+  }
+
+  async function loadStoreOperatingMonthlyReportRowVisibility() {
+    try {
+      const response = await fetchImpl(ROW_VISIBILITY_ENDPOINT, { cache: "no-store" });
+      rowVisibility = normalizeRowVisibility(await readApiResponse(response));
+      if (currentReportData && currentReportFilters) {
+        renderRows(currentReportData, currentReportFilters);
+        refreshTable(query("#store-operating-report-table"));
+      }
+      return rowVisibility;
+    } catch (error) {
+      rowVisibility = { hiddenMetricIds: new Set(), metrics: [], loaded: false };
+      setText("#store-operating-report-status", `项目行配置读取失败：${error?.message || String(error)}`, root);
+      console.error("[store-operating-monthly-report] row visibility load failed", error);
+      return null;
+    }
+  }
+
+  async function saveStoreOperatingMonthlyReportRowVisibility(hiddenMetricIds) {
+    const response = await fetchImpl(ROW_VISIBILITY_ENDPOINT, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ hiddenMetricIds }),
+    });
+    rowVisibility = normalizeRowVisibility(await readApiResponse(response));
+    if (currentReportData && currentReportFilters) {
+      renderRows(currentReportData, currentReportFilters);
+      refreshTable(query("#store-operating-report-table"));
+    }
+    return rowVisibility;
+  }
+
+  function rowVisibilityDraftIds() {
+    return rowVisibilityDraft instanceof Set ? rowVisibilityDraft : new Set(rowVisibility.hiddenMetricIds);
+  }
+
+  function filteredRowVisibilityMetrics() {
+    const keyword = String(query("#store-operating-report-row-visibility-search")?.value || "").trim().toLocaleLowerCase("zh-CN");
+    return rowVisibility.metrics.filter((metric) => !keyword || `${metric.name} ${metric.key}`.toLocaleLowerCase("zh-CN").includes(keyword));
+  }
+
+  function renderRowVisibilityGroups() {
+    const container = query("#store-operating-report-row-visibility-groups");
+    if (!container) return;
+    const groups = new Map();
+    filteredRowVisibilityMetrics().forEach((metric) => {
+      if (!groups.has(metric.category)) groups.set(metric.category, { name: metric.categoryName, metrics: [] });
+      groups.get(metric.category).metrics.push(metric);
+    });
+    const draft = rowVisibilityDraftIds();
+    container.innerHTML = [...groups.entries()].map(([category, group]) => `
+      <fieldset class="store-operating-row-visibility-group">
+        <div class="store-operating-row-visibility-group-head">
+          <legend>${escapeHtml(group.name)}</legend>
+          <span class="store-operating-row-visibility-group-actions">
+            <button class="text-button" type="button" data-row-visibility-action="select-category" data-row-visibility-category="${escapeHtml(category)}">全选</button>
+            <button class="text-button" type="button" data-row-visibility-action="clear-category" data-row-visibility-category="${escapeHtml(category)}">取消</button>
+          </span>
+        </div>
+        <div class="store-operating-row-visibility-items">
+          ${group.metrics.map((metric) => `<label class="store-operating-row-visibility-item"><input type="checkbox" data-row-visibility-metric="${escapeHtml(metric.key)}" ${draft.has(metric.key) ? "" : "checked"} />${escapeHtml(metric.name)}</label>`).join("")}
+        </div>
+      </fieldset>
+    `).join("") || "<p class=\"store-operating-row-visibility-empty\">未找到匹配项目。</p>";
+  }
+
+  function setRowVisibilityModalOpen(open) {
+    setModalOpenState("#store-operating-report-row-visibility-modal", open, root);
+    query("#store-operating-report-row-visibility")?.setAttribute?.("aria-expanded", String(Boolean(open)));
+  }
+
+  async function openStoreOperatingMonthlyReportRowVisibility() {
+    if (!rowVisibility.loaded) await loadStoreOperatingMonthlyReportRowVisibility();
+    if (!rowVisibility.loaded) return;
+    rowVisibilityDraft = new Set(rowVisibility.hiddenMetricIds);
+    const search = query("#store-operating-report-row-visibility-search");
+    if (search) search.value = "";
+    setText("#store-operating-report-row-visibility-status", "", root);
+    renderRowVisibilityGroups();
+    setRowVisibilityModalOpen(true);
+    search?.focus?.();
+  }
+
+  function closeStoreOperatingMonthlyReportRowVisibility() {
+    rowVisibilityDraft = null;
+    setRowVisibilityModalOpen(false);
+  }
+
+  function updateRowVisibilityDraft(category, visible) {
+    const draft = rowVisibilityDraftIds();
+    rowVisibility.metrics.filter((metric) => !category || metric.category === category).forEach((metric) => {
+      if (visible) draft.delete(metric.key);
+      else draft.add(metric.key);
+    });
+    rowVisibilityDraft = draft;
+    renderRowVisibilityGroups();
+  }
+
+  function handleRowVisibilityGroupChange(event) {
+    const input = event?.target?.closest?.("[data-row-visibility-metric]");
+    if (!input) return;
+    const draft = rowVisibilityDraftIds();
+    const key = String(input.dataset.rowVisibilityMetric || "");
+    if (input.checked) draft.delete(key);
+    else draft.add(key);
+    rowVisibilityDraft = draft;
+  }
+
+  function handleRowVisibilityActions(event) {
+    const action = event?.target?.closest?.("[data-row-visibility-action]");
+    if (!action) return;
+    const type = action.dataset.rowVisibilityAction;
+    if (type === "select-all" || type === "restore-default") updateRowVisibilityDraft("", true);
+    if (type === "clear-all") updateRowVisibilityDraft("", false);
+    if (type === "select-category") updateRowVisibilityDraft(action.dataset.rowVisibilityCategory || "", true);
+    if (type === "clear-category") updateRowVisibilityDraft(action.dataset.rowVisibilityCategory || "", false);
+  }
+
+  async function applyRowVisibilityDraft() {
+    if (!(rowVisibilityDraft instanceof Set)) return;
+    const button = query("#store-operating-report-row-visibility-apply");
+    const restoreButton = typeof setButtonBusy === "function" ? setButtonBusy(button, "保存中…", "应用") : () => {};
+    try {
+      await saveStoreOperatingMonthlyReportRowVisibility([...rowVisibilityDraft]);
+      setText("#store-operating-report-status", "项目行配置已应用。", root);
+      closeStoreOperatingMonthlyReportRowVisibility();
+    } catch (error) {
+      setText("#store-operating-report-row-visibility-status", `项目行配置保存失败：${error?.message || String(error)}`, root);
+      console.error("[store-operating-monthly-report] row visibility save failed", error);
+    } finally {
+      restoreButton();
+    }
+  }
+
   function renderRows(data, filters = readFilters()) {
     const body = query("#store-operating-report-body");
     if (!body) return;
     const groups = reportColumnGroups(data, filters);
-    const columnCount = 2 + groups.length * 4;
+    const columnCount = 1 + groups.length * 4;
     if (!groups.length) {
       body.innerHTML = `<tr><td colspan="${columnCount}">当前筛选范围暂无经营数据。</td></tr>`;
       return;
@@ -366,31 +544,46 @@ export function createStoreOperatingMonthlyReportFeature({
     });
     const rowMaps = groups.map(rowMapByKey);
     const baseRows = groups[0].rows;
-    body.innerHTML = reportBlocks(baseRows).flatMap(({ parent, rows, rowsByKey }) => {
+    body.innerHTML = reportBlocks(baseRows).flatMap(({ rows, rowsByKey }) => {
       const categoryByDetail = new Map();
       rows.filter((row) => Number(row.level) === 1).forEach((category) => {
         (Array.isArray(category.children) ? category.children : []).forEach((detailKey) => {
           categoryByDetail.set(String(detailKey), String(category.key || ""));
         });
       });
-      const visibleRows = rows.filter((row) => (
-        Number(row.level) !== 2
-        || !categoryByDetail.has(String(row.key || ""))
-        || expandedReportCategories.has(categoryByDetail.get(String(row.key || "")))
-      ));
-      const parentRowSpan = Math.max(1, visibleRows.length);
-      return visibleRows.map((row, rowIndex) => {
+      const displayRows = rows.flatMap((row) => {
+        const key = String(row.key || "");
+        if (key === "profit") {
+          const grossProfit = rowsByKey.get("gross-profit");
+          return grossProfit ? [grossProfit] : [];
+        }
+        if (["gross-profit", "gross-rate", "net-gross-rate"].includes(key)) return [];
+        return [row];
+      });
+      const visibleRows = displayRows.filter((row) => {
+        const key = String(row.key || "");
+        if (key === "gross-profit") return isVisibleReportDetail(row);
+        return Number(row.level) !== 2
+          || (
+            isVisibleReportDetail(row)
+            && (
+              !categoryByDetail.has(key)
+              || expandedReportCategories.has(categoryByDetail.get(key))
+            )
+          );
+      });
+      return visibleRows.map((row) => {
         const rowIdentity = reportRowIdentity(row, baseRows.indexOf(row));
         const categoryKey = Number(row.level) === 2 ? categoryByDetail.get(String(row.key || "")) || "" : "";
-        const isExpandableCategory = reportCategoryHasDetails(row, rowsByKey);
+        const isExpandableCategory = String(row.key || "") !== "gross-profit" && reportCategoryHasDetails(row, rowsByKey);
         const isExpanded = expandedReportCategories.has(String(row.key || ""));
-        const rowName = Number(row.level) === 1 && !String(row.name || "").endsWith("小计")
+        const rowName = Number(row.level) === 1 && String(row.key || "") !== "sales-net" && !String(row.name || "").endsWith("小计")
           ? `${row.name || "—"}小计`
           : String(row.name || "—");
         const nameCell = isExpandableCategory
           ? `<button class="store-operating-report-disclosure" type="button" data-report-category-toggle="${escapeHtml(row.key || "")}" aria-expanded="${isExpanded ? "true" : "false"}" aria-label="${escapeHtml(`${isExpanded ? "收起" : "展开"}${rowName}`)}"><span aria-hidden="true">${isExpanded ? "▾" : "▸"}</span>${escapeHtml(rowName)}</button>`
           : escapeHtml(rowName);
-        const resultRow = ["net-sales", "gross-profit", "gross-rate", "net-gross-rate", "profit"].includes(String(row.key || ""));
+        const resultRow = ["net-sales", "sales-net", "gross-profit", "gross-rate", "net-gross-rate", "profit"].includes(String(row.key || ""));
         const formatReportCell = (metric, value, groupRow) => {
           if (value === null || value === undefined || value === "") return "—";
           if (metric === "actual" && groupRow?.valueType === "text") return String(value);
@@ -406,12 +599,8 @@ export function createStoreOperatingMonthlyReportFeature({
             ["achievement", groupRow?.achievement],
           ].map(([metric, value]) => `<td data-report-group-index="${group.index}" data-report-metric="${metric}">${escapeHtml(formatReportCell(metric, value, groupRow))}</td>`);
         }).join("");
-        const parentCell = rowIndex === 0
-          ? `<td class="store-operating-report-parent" rowspan="${parentRowSpan}">${escapeHtml(parent.category || parent.name || "—")}</td>`
-          : "";
         return `
           <tr class="${resultRow ? "store-operating-report-result-row" : ""}" data-report-row-key="${escapeHtml(row.key || "")}" data-report-row-level="${Number(row.level || 0)}" data-report-parent-category="${escapeHtml(categoryKey)}">
-            ${parentCell}
             <td class="${Number(row.level) === 2 ? "store-operating-report-detail" : "store-operating-report-subtotal"}">${nameCell}</td>
             ${metricCells}
           </tr>
@@ -450,8 +639,8 @@ export function createStoreOperatingMonthlyReportFeature({
     reportSortState.key = key;
     const dynamicMatch = String(key).match(/^group-(\d+)-(actual|share|budget|achievement)$/);
     const columnIndex = dynamicMatch
-      ? 2 + Number(dynamicMatch[1]) * 4 + ["actual", "share", "budget", "achievement"].indexOf(dynamicMatch[2])
-      : { category: 0, name: 1, actual: 2, share: 3, budget: 4, achievement: 5 }[key];
+      ? 1 + Number(dynamicMatch[1]) * 4 + ["actual", "share", "budget", "achievement"].indexOf(dynamicMatch[2])
+      : { name: 0, actual: 1, share: 2, budget: 3, achievement: 4 }[key];
     if (columnIndex === undefined) return;
     const rows = Array.from(body.rows);
     const categoryRows = rows.filter((row) => row.dataset.reportRowLevel === "1");
@@ -514,7 +703,7 @@ export function createStoreOperatingMonthlyReportFeature({
     const generatedAt = String(data.meta.generatedAt || "").replace("T", " ").slice(0, 19) || "时间未知";
     setText(
       "#store-operating-report-meta",
-      `${filters.startMonth} 至 ${filters.endMonth} · ${storeText} · ${countryText} · ${currencyText} · 更新于 ${generatedAt}`,
+      `${filters.startDate} 至 ${filters.endDate} · ${storeText} · ${countryText} · ${currencyText} · 更新于 ${generatedAt}`,
       root,
     );
     const missingText = data.meta.missingExchangeRateCount
@@ -528,7 +717,11 @@ export function createStoreOperatingMonthlyReportFeature({
       : "";
     const unavailableDetails = Array.isArray(data.meta.unavailableMetricDetails) ? data.meta.unavailableMetricDetails : [];
     const customExpenseUnavailable = unavailableDetails.some((detail) => detail?.category === "custom-expense");
-    const customExpenseText = customExpenseUnavailable ? "；自定义费用未配置独立数据源" : "";
+    const customExpenseText = customExpenseUnavailable
+      ? (data.meta.customFeeSource === "/bd/profit/report/open/report/seller/list.otherFeeStr"
+        ? "；店铺利润报表未返回对应费用科目"
+        : "；自定义费用来源不可用")
+      : "";
     setText(
       "#store-operating-report-status",
       `${budgetStatusText(data.budgetStatus)}${missingText}${unavailableText}${unavailableNames}${customExpenseText}`,
@@ -558,8 +751,11 @@ export function createStoreOperatingMonthlyReportFeature({
 
   async function loadStoreOperatingMonthlyReport() {
     initializeStoreOperatingMonthlyReportDefaults();
+    if (!rowVisibility.loaded && query("#store-operating-report-row-visibility")) {
+      void loadStoreOperatingMonthlyReportRowVisibility();
+    }
     const filters = readFilters();
-    const validation = validateMonthRange(filters.startMonth, filters.endMonth);
+    const validation = validateDateRange(filters.startDate, filters.endDate);
     if (!validation.ok) {
       invalidateActiveReportLoad();
       setText("#store-operating-report-status", validation.error, root);
@@ -599,9 +795,9 @@ export function createStoreOperatingMonthlyReportFeature({
     }
   }
 
-  function handleMonthChange() {
+  function handleDateRangeChange() {
     const filters = readFilters();
-    const validation = validateMonthRange(filters.startMonth, filters.endMonth);
+    const validation = validateDateRange(filters.startDate, filters.endDate);
     if (!validation.ok) {
       invalidateActiveReportLoad();
       setText("#store-operating-report-status", validation.error, root);
@@ -614,8 +810,11 @@ export function createStoreOperatingMonthlyReportFeature({
 
   function handleCountryChange() {
     invalidateActiveReportLoad();
-    syncAllOptionSelection(query("#store-operating-report-country"));
-    refreshStoreOptions({ showScopeWarning: true });
+    syncCountryStoreSelection({
+      countrySelect: query("#store-operating-report-country"),
+      storeSelect: query("#store-operating-report-store"),
+      storeOptions,
+    });
     const exportButton = query("#store-operating-report-export");
     if (exportButton) exportButton.disabled = !sameQuery(buildReportQuery(), lastSuccessfulQuery);
   }
@@ -634,11 +833,12 @@ export function createStoreOperatingMonthlyReportFeature({
   }
 
   function resetStoreOperatingMonthlyReport() {
-    const month = getCurrentMonth();
-    const startInput = query("#store-operating-report-start-month");
-    const endInput = query("#store-operating-report-end-month");
-    if (startInput) startInput.value = month;
-    if (endInput) endInput.value = month;
+    const range = getCurrentDateRange();
+    const startInput = query("#store-operating-report-start-date");
+    const endInput = query("#store-operating-report-end-date");
+    if (startInput) startInput.value = range.startDate;
+    if (endInput) endInput.value = range.endDate;
+    reportDateRangePicker?.refresh?.();
     selectValues(query("#store-operating-report-country"), []);
     selectValues(query("#store-operating-report-store"), []);
     const currencySelect = query("#store-operating-report-currency");
@@ -649,7 +849,7 @@ export function createStoreOperatingMonthlyReportFeature({
 
   function openBudgetTargets() {
     const filters = readFilters();
-    const validation = validateMonthRange(filters.startMonth, filters.endMonth);
+    const validation = validateDateRange(filters.startDate, filters.endDate);
     if (!validation.ok) {
       setText("#store-operating-report-status", validation.error, root);
       return;
@@ -668,7 +868,7 @@ export function createStoreOperatingMonthlyReportFeature({
     const disposition = response.headers?.get?.("content-disposition") || "";
     const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
     if (encoded) return decodeURIComponent(encoded);
-    return `店铺经营月报-${filters.startMonth}至${filters.endMonth}.xlsx`;
+    return `店铺经营月报-${filters.startDate}至${filters.endDate}.xlsx`;
   }
 
   async function readExportError(response) {
@@ -706,8 +906,18 @@ export function createStoreOperatingMonthlyReportFeature({
   }
 
   function setupStoreOperatingMonthlyReport() {
-    bind(root, "#store-operating-report-start-month", "change", handleMonthChange);
-    bind(root, "#store-operating-report-end-month", "change", handleMonthChange);
+    // The picker normalizes an empty range to today. Seed this view's defaults first.
+    initializeStoreOperatingMonthlyReportDefaults();
+    reportDateRangePicker = createDateRangePickerImpl({
+      root,
+      triggerSelector: "#store-operating-report-date-range-button",
+      popoverSelector: "#store-operating-report-date-range-popover",
+      startInputSelector: "#store-operating-report-start-date",
+      endInputSelector: "#store-operating-report-end-date",
+      maxCalendarMonths: 12,
+      onChange: handleDateRangeChange,
+    });
+    reportDateRangePicker.setup?.();
     bind(root, "#store-operating-report-country", "change", handleCountryChange);
     bind(root, "#store-operating-report-store", "change", handleStoreChange);
     bind(root, "#store-operating-report-currency", "change", handleCurrencyChange);
@@ -716,16 +926,31 @@ export function createStoreOperatingMonthlyReportFeature({
     bind(root, "#store-operating-report-export", "click", exportStoreOperatingMonthlyReport);
     bind(root, "#store-operating-report-budget", "click", openBudgetTargets);
     bind(root, "#store-operating-report-body", "click", toggleReportCategory);
+    bind(root, "#store-operating-report-row-visibility", "click", openStoreOperatingMonthlyReportRowVisibility);
+    bind(root, "#store-operating-report-row-visibility-close", "click", closeStoreOperatingMonthlyReportRowVisibility);
+    bind(root, "#store-operating-report-row-visibility-cancel", "click", closeStoreOperatingMonthlyReportRowVisibility);
+    bind(root, "#store-operating-report-row-visibility-apply", "click", applyRowVisibilityDraft);
+    bind(root, "#store-operating-report-row-visibility-search", "input", renderRowVisibilityGroups);
+    bind(root, "#store-operating-report-row-visibility-groups", "change", handleRowVisibilityGroupChange);
+    bind(root, "#store-operating-report-row-visibility-modal", "click", handleRowVisibilityActions);
+    bind(root, "#store-operating-report-row-visibility-modal", "keydown", (event) => {
+      if (event.key === "Escape") closeStoreOperatingMonthlyReportRowVisibility();
+    });
+    bindBackdropClose(root, "#store-operating-report-row-visibility-modal", closeStoreOperatingMonthlyReportRowVisibility);
   }
 
   return {
     exportStoreOperatingMonthlyReport,
     handleCountryChange,
     handleCurrencyChange,
-    handleMonthChange,
+    handleDateRangeChange,
     handleStoreChange,
     initializeStoreOperatingMonthlyReportDefaults,
     loadStoreOperatingMonthlyReport,
+    loadStoreOperatingMonthlyReportRowVisibility,
+    openStoreOperatingMonthlyReportRowVisibility,
+    closeStoreOperatingMonthlyReportRowVisibility,
+    saveStoreOperatingMonthlyReportRowVisibility,
     openBudgetTargets,
     readFilters,
     resetStoreOperatingMonthlyReport,

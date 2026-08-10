@@ -14,7 +14,7 @@
         }
       })();
     </script>
-    <link rel="stylesheet" href="./styles.css?v=20260706-frontend-refactor-v32" />
+    <link rel="stylesheet" href="./styles.css?v=20260808-filter-clear-visibility-v2" />
   </head>
   <body>
     <div class="app-shell">
@@ -251,7 +251,7 @@
         <section class="filters" id="sales-global-filters" aria-label="筛选条件" hidden>
           <label>
             国家
-            <select id="front-country-filter" multiple size="3">
+            <select id="front-country-filter" data-filter-clear-target="#front-shop-filter" multiple size="3">
               <option value="">全部国家</option>
             </select>
           </label>
@@ -283,27 +283,6 @@
               <option value="">全部负责人</option>
             </select>
           </label>
-          <div class="multi-select front-owner-quick-filter" id="front-owner-quick-filter">
-            <button class="filter-dropdown-button multi-select-button" type="button" aria-haspopup="listbox" aria-expanded="false">
-              <span class="filter-dropdown-button-label">负责人快捷筛选</span>
-            </button>
-            <div class="filter-dropdown-menu multi-select-menu" hidden>
-              <div class="multi-select-options" role="radiogroup" aria-label="销售负责人快捷筛选">
-                <label class="multi-select-option">
-                  <input type="radio" name="front-owner-quick-filter" value="林芃" />
-                  <span>林芃</span>
-                </label>
-                <label class="multi-select-option">
-                  <input type="radio" name="front-owner-quick-filter" value="熊丹轩" />
-                  <span>熊丹轩</span>
-                </label>
-                <label class="multi-select-option">
-                  <input type="radio" name="front-owner-quick-filter" value="黄超" />
-                  <span>黄超</span>
-                </label>
-              </div>
-            </div>
-          </div>
           <label>
             品类
             <select>
@@ -420,6 +399,7 @@
                   <th data-column-key="orderProfit" data-column-kind="number" data-column-profile="money-rate"><button class="sort-button" type="button" data-msku-sort="orderProfit">订单利润</button></th>
                   <th data-column-key="averageProfit" data-column-kind="number" data-column-profile="money-rate"><button class="sort-button" type="button" data-msku-sort="averageProfit">平均利润</button></th>
                   <th data-column-key="grossRate" data-column-kind="number" data-column-profile="money-rate"><button class="sort-button" type="button" data-msku-sort="grossRate">毛利率</button></th>
+                  <th data-column-key="refundRate30d" data-column-kind="number" data-column-profile="money-rate"><button class="sort-button" type="button" data-msku-sort="refundRate30d">30d 退款率</button></th>
                   <th data-column-key="refundRate" data-column-kind="number" data-column-profile="money-rate"><button class="sort-button" type="button" data-msku-sort="refundRate">退款率</button></th>
                   <th data-column-key="adFeeRate" data-column-kind="number" data-column-profile="money-rate"><button class="sort-button" type="button" data-msku-sort="adFeeRate">广告费率</button></th>
                   <th data-column-key="promotionDiscountRate" data-column-kind="number" data-column-profile="money-rate"><button class="sort-button" type="button" data-msku-sort="promotionDiscountRate">促销折扣占比</button></th>
@@ -788,7 +768,7 @@
             <label>日期类型<select id="cashflow-date-type"><option value="0">结算开始日</option><option value="estimatedTransferDate">预计转账日</option></select></label>
             <label>币种<select id="cashflow-currency"><option value="ORIGINAL">站点原币</option><option value="CNY">人民币 CNY</option></select></label>
             <label>状态<select id="cashflow-status"><option value="Open">待结算</option><option value="Closed">已结算</option></select></label>
-            <label>国家<select id="cashflow-country" multiple size="3"><option value="">全部国家</option></select></label>
+            <label>国家<select id="cashflow-country" data-filter-clear-target="#cashflow-store" multiple size="3"><option value="">全部国家</option></select></label>
             <label>店铺<select id="cashflow-store" multiple size="4"><option value="">全部店铺</option></select></label>
           </section>
           <section class="module-grid cashflow-metrics">
@@ -828,15 +808,15 @@
               <p id="store-operating-report-meta">等待读取经营数据。</p>
             </div>
             <div class="hero-actions">
+              <button class="ghost-button" id="store-operating-report-row-visibility" type="button" aria-haspopup="dialog" aria-expanded="false">列配置</button>
               <button class="ghost-button" id="store-operating-report-export" type="button" disabled>导出 Excel</button>
               <button class="primary-button" id="store-operating-report-budget" type="button">查看预算目标</button>
             </div>
           </section>
           <section class="filters" aria-label="店铺经营月报筛选">
-            <label>开始月份<input id="store-operating-report-start-month" type="month" /></label>
-            <label>结束月份<input id="store-operating-report-end-month" type="month" /></label>
+            <label>日期范围<div class="date-range-control"><button id="store-operating-report-date-range-button" class="date-range-button date-range-picker__trigger" type="button">选择日期范围</button><input id="store-operating-report-start-date" type="hidden" /><input id="store-operating-report-end-date" type="hidden" /><div class="date-range-popover date-range-picker__popover" id="store-operating-report-date-range-popover" hidden></div></div></label>
+            <label>国家<select id="store-operating-report-country" data-filter-clear-target="#store-operating-report-store" multiple size="3"><option value="">全部国家</option></select></label>
             <label>店铺<select id="store-operating-report-store" multiple size="4"><option value="">全部店铺</option></select></label>
-            <label>国家<select id="store-operating-report-country" multiple size="3"><option value="">全部国家</option></select></label>
             <label>币种<select id="store-operating-report-currency"><option value="CNY" selected>人民币（CNY）</option><option value="ORIGINAL">原币分币种</option></select></label>
             <button class="primary-button" id="store-operating-report-query" type="button">查询</button>
             <button class="ghost-button" id="store-operating-report-reset" type="button">重置</button>
@@ -850,22 +830,45 @@
               <table class="data-table data-table--detail" id="store-operating-report-table" data-table-key="store-operating-monthly-report" data-table-fixed-width="true">
                 <thead id="store-operating-report-head">
                   <tr>
-                    <th colspan="2" data-column-sortable="false">店铺信息</th>
+                    <th colspan="1" data-column-sortable="false">店铺信息</th>
                     <th colspan="4" data-column-sortable="false">全部店铺</th>
                   </tr>
                   <tr>
-                    <th data-column-key="category" data-column-width="148" data-column-sortable="false" data-column-profile="name">上级</th>
-                    <th data-column-key="name" data-column-width="176" data-column-sortable="false" data-column-profile="name">名称</th>
+                    <th data-column-key="name" data-column-width="176" data-column-sortable="false" data-column-profile="name">科目</th>
                     <th data-column-key="group-0-actual" data-column-width="160" data-column-sortable="false" data-column-kind="number" data-column-profile="money-rate">实际完成值</th>
                     <th data-column-key="group-0-share" data-column-width="104" data-column-sortable="false" data-column-kind="number" data-column-profile="money-rate">占比</th>
                     <th data-column-key="group-0-budget" data-column-width="160" data-column-sortable="false" data-column-kind="number" data-column-profile="money-rate">预算值</th>
                     <th data-column-key="group-0-achievement" data-column-width="112" data-column-sortable="false" data-column-kind="number" data-column-profile="money-rate">达成率</th>
                   </tr>
                 </thead>
-                <tbody id="store-operating-report-body"><tr><td colspan="6">等待查询。</td></tr></tbody>
+                <tbody id="store-operating-report-body"><tr><td colspan="5">等待查询。</td></tr></tbody>
               </table>
             </div>
           </article>
+          <div class="modal-backdrop" id="store-operating-report-row-visibility-modal" hidden>
+            <article class="store-operating-row-visibility-modal" role="dialog" aria-modal="true" aria-labelledby="store-operating-report-row-visibility-title">
+              <div class="modal-head">
+                <h2 id="store-operating-report-row-visibility-title">项目行配置</h2>
+                <button class="modal-close-button" id="store-operating-report-row-visibility-close" type="button" aria-label="关闭项目行配置">×</button>
+              </div>
+              <div class="modal-body">
+                <label class="store-operating-row-visibility-search" for="store-operating-report-row-visibility-search">搜索项目
+                  <input id="store-operating-report-row-visibility-search" type="search" autocomplete="off" placeholder="例如广告费、采购成本、软件费用" />
+                </label>
+                <div class="store-operating-row-visibility-actions" aria-label="项目行批量操作">
+                  <button class="text-button" type="button" data-row-visibility-action="select-all">全选全部</button>
+                  <button class="text-button" type="button" data-row-visibility-action="clear-all">清空全部</button>
+                  <button class="text-button" type="button" data-row-visibility-action="restore-default">恢复默认</button>
+                </div>
+                <div class="store-operating-row-visibility-groups" id="store-operating-report-row-visibility-groups"></div>
+                <p class="store-operating-row-visibility-status" id="store-operating-report-row-visibility-status" role="status" aria-live="polite"></p>
+              </div>
+              <div class="modal-foot">
+                <button class="secondary-button" id="store-operating-report-row-visibility-cancel" type="button">取消</button>
+                <button class="primary-button" id="store-operating-report-row-visibility-apply" type="button">应用</button>
+              </div>
+            </article>
+          </div>
         </section>
 
         <section class="view" id="view-payables">
@@ -1073,7 +1076,7 @@
 	            <label>统计维度<select id="supplier-board-dimension"><option value="month" selected>按月</option><option value="year">按年</option></select></label>
 	            <label><span id="supplier-board-start-label">开始月份</span><input id="supplier-board-start-date" type="text" inputmode="numeric" placeholder="2025-01" /></label>
 	            <label><span id="supplier-board-end-label">结束月份</span><input id="supplier-board-end-date" type="text" inputmode="numeric" placeholder="2025-12" /></label>
-	            <label>国家<select id="supplier-board-country" multiple size="3"><option value="">全部国家</option></select></label>
+	            <label>国家<select id="supplier-board-country" data-filter-clear-target="#supplier-board-store" multiple size="3"><option value="">全部国家</option></select></label>
 	            <label>店铺<select id="supplier-board-store" multiple size="4"><option value="">全部店铺</option></select></label>
 	            <label>供应商<input id="supplier-board-supplier" type="search" placeholder="输入供应商关键词" /></label>
 	            <label>MSKU / SKU<input id="supplier-board-keyword" type="search" placeholder="输入 MSKU、SKU、品名" /></label>
@@ -1257,7 +1260,7 @@
             </div>
           </section>
 	          <section class="filters sales-forecast-filters" aria-label="销售预估筛选">
-	            <label>国家<select id="sales-forecast-country" multiple size="3"><option value="">全部国家</option><option value="美国">美国</option><option value="加拿大">加拿大</option><option value="澳洲">澳洲</option></select></label>
+	            <label>国家<select id="sales-forecast-country" data-filter-clear-target="#sales-forecast-store" multiple size="3"><option value="">全部国家</option><option value="美国">美国</option><option value="加拿大">加拿大</option><option value="澳洲">澳洲</option></select></label>
 	            <label>店铺<select id="sales-forecast-store" multiple size="4"><option value="">全部店铺</option></select></label>
 	            <label>关键词<input id="sales-forecast-keyword" type="search" placeholder="产品 / MSKU" /></label>
 	          </section>
@@ -1305,7 +1308,7 @@
           </section>
           <section class="filters inventory-filters" aria-label="库存计提筛选">
             <label>月份<input id="inventory-provision-date" type="month" /></label>
-            <label>国家<select id="inventory-provision-country" multiple size="3"><option value="">全部国家</option></select></label>
+            <label>国家<select id="inventory-provision-country" data-filter-clear-target="#inventory-provision-store" multiple size="3"><option value="">全部国家</option></select></label>
             <label>店铺<select id="inventory-provision-store" multiple size="4"><option value="">全部店铺</option></select></label>
             <label>成本计算<select id="inventory-provision-cost-mode"><option value="purchase">采购成本</option><option value="landed">采购成本 + 单位头程费用</option></select></label>
             <label>MSKU<input id="inventory-provision-keyword" type="search" placeholder="输入 MSKU 或商品名" /></label>
@@ -1373,7 +1376,7 @@
           </section>
           <section class="filters inventory-filters" aria-label="低库存费筛选">
             <label>日期<input id="lowfee-date" type="date" /></label>
-            <label>国家<select id="lowfee-country" multiple size="3"><option value="">全部国家</option></select></label>
+            <label>国家<select id="lowfee-country" data-filter-clear-target="#lowfee-store" multiple size="3"><option value="">全部国家</option></select></label>
             <label>店铺<select id="lowfee-store" multiple size="4"><option value="">全部店铺</option></select></label>
             <label>显示范围<select id="lowfee-only-risk"><option value="1">只看预警</option><option value="0">全部MSKU</option></select></label>
             <label>FNSKU/MSKU<input id="lowfee-keyword" type="search" placeholder="输入 FNSKU、MSKU 或商品名" /></label>
@@ -1687,41 +1690,16 @@
             </div>
           </section>
           <section class="filter-toolbar budget-toolbar">
-            <div class="month-multi-select">
-              <div class="month-picker-line">
-                <input id="budget-month-picker" type="month" />
-                <button class="ghost-button" id="budget-add-month-button" type="button">添加月份</button>
-              </div>
-              <div class="month-chip-list" id="budget-month-chip-list">
-                <span class="empty-chip">最多选择 12 个月</span>
-              </div>
-            </div>
-            <select id="budget-platform-filter"><option value="">销售平台</option><option>Amazon</option><option>Tik Tok</option></select>
-            <input id="budget-store-filter" type="search" placeholder="销售店铺" />
-            <select id="budget-status-filter"><option value="">状态</option><option value="已解析">已解析</option><option value="等待解析">等待解析</option></select>
+            <input id="budget-month-picker" type="month" aria-label="预算月份" />
+            <select id="budget-platform-filter"><option value="">销售平台</option><option value="Amazon">亚马逊</option><option value="Walmart">沃尔玛</option></select>
+            <select id="budget-country-filter" multiple size="4" data-filter-clear-target="#budget-store-filter"><option value="">全部国家</option></select>
+            <select id="budget-store-filter" multiple size="4"><option value="">全部店铺</option></select>
+            <select id="budget-listing-owner-filter"><option value="">全部链接负责人</option></select>
             <input id="budget-keyword-filter" type="search" placeholder="关键词" />
             <button class="primary-button" id="budget-query-button" type="button">查询</button>
             <button class="ghost-button" id="budget-reset-button" type="button">重置</button>
+            <button class="primary-button" id="budget-import-button" type="button">导入预算</button>
           </section>
-          <article class="panel budget-upload-panel">
-            <div class="panel-head">
-              <h2>预算目标上传</h2>
-              <span>支持上传月度预算模板 .xlsx，自动汇总到店铺维度</span>
-            </div>
-            <div class="budget-upload-box">
-              <label class="budget-upload-month">
-                <span>预算月份</span>
-                <input id="budget-upload-month" type="month" />
-              </label>
-              <label class="file-picker">
-                <input id="budget-file-input" type="file" accept=".xlsx" />
-                <span id="budget-file-name"><strong>选择预算模板</strong><small>点击选择，或拖拽 .xlsx 文件到这里后点击上传预算</small></span>
-              </label>
-              <button class="primary-button" id="budget-upload-button" type="button">上传预算</button>
-              <span class="upload-status" id="budget-upload-status">未选择文件</span>
-            </div>
-            <div class="config-list budget-upload-list" id="budget-upload-list"></div>
-          </article>
           <section class="module-grid budget-summary-grid">
             <article class="metric-tile"><span>预算店铺</span><strong id="budget-store-count">0</strong><small>已解析模板</small></article>
             <article class="metric-tile"><span>销售目标</span><strong id="budget-sales-total">0</strong><small>店铺维度汇总</small></article>
@@ -1785,6 +1763,29 @@
               </table>
             </div>
           </article>
+          <dialog class="budget-import-dialog" id="budget-import-dialog" aria-labelledby="budget-import-title">
+            <div class="modal-head">
+              <h2 id="budget-import-title">导入预算</h2>
+              <button class="modal-close-button" id="budget-import-close" type="button" aria-label="关闭导入预算">×</button>
+            </div>
+            <div class="modal-body">
+              <div class="form-grid budget-import-fields">
+                <label>预算月份 <em>*</em><input id="budget-import-month" type="month" required /></label>
+                <label>国家 <em>*</em><select id="budget-import-country" required><option value="">请选择国家</option></select></label>
+                <label>店铺 <em>*</em><select id="budget-import-store" required><option value="">请选择店铺</option></select></label>
+              </div>
+              <p class="budget-template-link">模板下载：<a id="budget-template-download" href="/api/admin/budget/template">下载模板</a></p>
+              <label class="file-picker budget-import-file-picker">
+                <input id="budget-import-file-input" type="file" accept=".xlsx" />
+                <span id="budget-import-file-name"><strong>选择导入文件</strong><small>拖拽或点击选择 .xlsx 文件</small></span>
+              </label>
+              <output class="upload-status" id="budget-import-status" role="status">未选择文件</output>
+            </div>
+            <div class="modal-foot">
+              <button class="ghost-button" id="budget-import-cancel" type="button">取消</button>
+              <button class="primary-button" id="budget-import-confirm" type="button">确认导入</button>
+            </div>
+          </dialog>
         </section>
 
         <section class="view" id="view-ai-image-workflow">
@@ -1987,7 +1988,7 @@
           </section>
           <section id="slow-moving-risk-live-panel" class="slow-moving-risk-panel" role="tabpanel" aria-labelledby="slow-moving-risk-live-tab" data-slow-moving-risk-panel="live" hidden>
             <section class="filters slow-moving-risk-filters" aria-label="日常预警筛选">
-              <label>国家<select id="slow-moving-risk-country-filter" multiple size="3"><option value="">全部国家</option></select></label>
+              <label>国家<select id="slow-moving-risk-country-filter" data-filter-clear-target="#slow-moving-risk-store-filter" multiple size="3"><option value="">全部国家</option></select></label>
               <label>店铺<select id="slow-moving-risk-store-filter" multiple size="4"><option value="">全部店铺</option></select></label>
               <label>运营<select id="slow-moving-risk-owner-filter"><option value="">全部运营</option></select></label>
               <label>风险<select id="slow-moving-risk-level-filter"><option value="">全部等级</option><option value="强制处置">强制处置</option><option value="高风险">高风险</option><option value="关注">关注</option><option value="正常">正常</option></select></label>
@@ -2639,6 +2640,6 @@
       });
     </script>
     <script type="module" src="./assets/js/ui-utils.js?v=20260706-frontend-refactor-v41" onerror="document.querySelector('#data-source').textContent='脚本未加载';document.querySelector('#data-source-note').textContent='ui-utils.js 请求失败，请检查服务器静态文件';"></script>
-    <script type="module" src="./app.js?v=20260803-date-auto-refresh-v1" onerror="document.querySelector('#data-source').textContent='脚本未加载';document.querySelector('#data-source-note').textContent='app.js 请求失败，请检查服务器静态文件';document.querySelector('#topbar-sync-state').textContent='脚本未加载';document.querySelector('#topbar-sync-time').textContent='app.js 失败';"></script>
+    <script type="module" src="./app.js?v=20260808-single-owner-filter-v2" onerror="document.querySelector('#data-source').textContent='脚本未加载';document.querySelector('#data-source-note').textContent='app.js 请求失败，请检查服务器静态文件';document.querySelector('#topbar-sync-state').textContent='脚本未加载';document.querySelector('#topbar-sync-time').textContent='app.js 失败';"></script>
   </body>
 </html>

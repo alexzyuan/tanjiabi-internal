@@ -46,6 +46,23 @@ test("getSyncState exposes initial provider and interval from configuration", as
   });
 });
 
+test("buildSalesWeeklySyncSource writes the v3 cache shape with 30-day records", async () => {
+  await withTempService(async ({ buildSalesWeeklySyncSource }) => {
+    const source = buildSalesWeeklySyncSource({
+      sellers: [{ sid: 1, name: "探嘉美国" }],
+      orderProfitRecords: [{ sid: 1, msku: "MSKU-1", totalSalesAmount: 100 }],
+      recent30OrderProfitRecords: [{ sid: 1, msku: "MSKU-1", totalSalesAmount: 500, totalSalesRefunds: 10 }],
+      range: { startDate: "2026-08-01", endDate: "2026-08-09" },
+      currencyCode: "CNY",
+      raw: { recent30: { startDate: "2026-07-11", endDate: "2026-08-09", recordCount: 1 } },
+    }, { rows: [] }, []);
+
+    assert.equal(source.cacheScope.version, "sales-weekly-source-v3");
+    assert.deepEqual(source.recent30OrderProfitRecords, [{ sid: 1, msku: "MSKU-1", totalSalesAmount: 500, totalSalesRefunds: 10 }]);
+    assert.deepEqual(source.raw.recent30, { startDate: "2026-07-11", endDate: "2026-08-09", recordCount: 1 });
+  });
+});
+
 test("runManualSync completes the mock sync path and updates state timestamps", async () => {
   await withTempService(async ({ runManualSync, getSyncState, getSyncStatus }) => {
     const result = await runManualSync();

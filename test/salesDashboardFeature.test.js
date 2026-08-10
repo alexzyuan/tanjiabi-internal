@@ -155,7 +155,7 @@ test("sales dashboard feature redirects on an expired session and returns fallba
   }
 });
 
-test("sales dashboard feature keeps the three quick owner names in the owner select", () => {
+test("sales dashboard feature uses only owner options returned by the dashboard", () => {
   const ownerSelect = {
     value: "运营A",
     options: [
@@ -193,10 +193,8 @@ test("sales dashboard feature keeps the three quick owner names in the owner sel
 
     renderDashboard({ filters: { ownerOptions: [{ value: "运营A", name: "运营A" }] } });
 
-    assert.match(ownerSelect.innerHTML, /林芃/);
-    assert.match(ownerSelect.innerHTML, /熊丹轩/);
-    assert.match(ownerSelect.innerHTML, /黄超/);
     assert.match(ownerSelect.innerHTML, /运营A/);
+    assert.doesNotMatch(ownerSelect.innerHTML, /林芃|熊丹轩|黄超/);
     assert.equal(ownerSelect.value, "运营A");
   } finally {
     console.error = originalError;
@@ -253,13 +251,15 @@ test("sales dashboard feature filters MSKU detail rows by current listing owner"
       filters: { ownerOptions: [{ value: "林芃", name: "林芃" }, { value: "熊丹轩", name: "熊丹轩" }] },
       detailRows: [
         { budgetStoreName: "探嘉美国", msku: "MSKU-LP", listingOwner: "林芃", productName: "林芃产品", budgetQuantity: 1 },
-        { budgetStoreName: "探嘉加拿大", msku: "MSKU-XDX", listingOwner: "熊丹轩", productName: "熊丹轩产品", budgetQuantity: 2 },
+        { budgetStoreName: "探嘉加拿大", msku: "MSKU-XDX", listingOwner: "熊丹轩", productName: "熊丹轩产品", budgetQuantity: 2, refundRate30d: 3, refundRate: 5 },
       ],
     });
 
     assert.equal(status.textContent, "随销售看板同步加载 · 1 条预算 MSKU");
     assert.match(detailTable.innerHTML, /MSKU-XDX/);
     assert.doesNotMatch(detailTable.innerHTML, /MSKU-LP/);
+    assert.notEqual(detailTable.innerHTML.indexOf("3%"), -1);
+    assert.ok(detailTable.innerHTML.indexOf("3%") < detailTable.innerHTML.indexOf("5%"));
     assert.match(storeTabs.innerHTML, /探嘉加拿大/);
     assert.doesNotMatch(storeTabs.innerHTML, /探嘉美国/);
   } finally {

@@ -44,10 +44,13 @@ function workbookBuffer({ storeTitle = "探嘉美国店铺预算报表", msku = 
   return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
 }
 
-function uploadPayload({ budgetMonth = "2026-07", ...workbookOverrides } = {}) {
+function uploadPayload({ budgetMonth = "2026-07", country = "美国", storeName = "探嘉美国", uploadedBy = "测试用户", ...workbookOverrides } = {}) {
   return {
     fileName: "探嘉美国-2026年7月预算.xlsx",
     budgetMonth,
+    country,
+    storeName,
+    uploadedBy,
     base64: workbookBuffer(workbookOverrides).toString("base64"),
   };
 }
@@ -70,6 +73,12 @@ test("saveBudgetUpload parses a workbook and exposes aggregate budget targets", 
     assert.equal(targets.rows.length, 1);
     assert.equal(targets.mskuRows.length, 1);
     assert.equal(targets.totals.salesTarget, 200);
+    assert.deepEqual(targets.shopOptions.find((shop) => shop.storeName === "欧洲-探嘉德国店铺"), {
+      country: "德国",
+      storeName: "欧洲-探嘉德国店铺",
+      sid: 17307,
+      sourceName: "tanjia-eu-DE",
+    });
     assert.equal(context.matched, true);
     assert.equal(context.totals.profitTarget, 73.5);
   });
@@ -90,6 +99,9 @@ test("parsed workbook preserves absent report budget metrics instead of synthesi
     const upload = await saveBudgetUpload({
       fileName: "探嘉美国-2026年7月预算.xlsx",
       budgetMonth: "2026-07",
+      country: "美国",
+      storeName: "探嘉美国",
+      uploadedBy: "测试用户",
       base64: XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }).toString("base64"),
     });
 
@@ -110,9 +122,10 @@ test("parsed workbook currency reaches a single-country original-currency report
       async fetchMskuOrderProfit() {
         return { records: [{ sid: 1, currencyCode: "USD", netSalesAmount: 180, totalAdsCost: -18, totalSalesRefunds: -4, grossProfit: 60 }] };
       },
-      async fetchOtherFeeList() {
+      async fetchSellerProfitReport() {
         return { data: [] };
       },
+      normalizeSellerProfitOtherFeeRecords() { return []; },
       normalizeMskuOrderProfitRecords(records, sellers, reportDate) {
         return records.map((record) => ({ ...record, storeName: sellers[0].name, country: sellers[0].country, reportDate }));
       },
@@ -143,6 +156,15 @@ test("saveBudgetUpload rejects invalid month, extension, and empty file content"
       () => saveBudgetUpload({ ...uploadPayload(), base64: "" }),
       /上传文件内容为空/,
     );
+  });
+});
+
+test("saveBudgetUpload does not require a listing owner and persists the uploader", async () => {
+  await withTempService(async ({ saveBudgetUpload }) => {
+    const upload = await saveBudgetUpload(uploadPayload({ uploadedBy: "林芃" }));
+    assert.equal(upload.uploadedBy, "林芃");
+    assert.equal(upload.summary.uploadedBy, "林芃");
+    assert.equal(upload.summary.mskuRows[0].listingOwner, "婷婷");
   });
 });
 
@@ -192,6 +214,37 @@ test("saveBudgetUpload replaces an existing upload for the same store and month"
     assert.equal(targets.rows.length, 1);
     assert.equal(targets.rows[0].salesTarget, 300);
     assert.equal(targets.mskuRows[0].msku, "JM-DGC-RED");
+  });
+});
+
+test("listBudgetTargets rejects duplicate store-month sources with their file names", async () => {
+  await withTempService(async ({ saveBudgetUpload, listBudgetTargets }, dir) => {
+    const first = await saveBudgetUpload(uploadPayload());
+    const duplicateStoredName = `duplicate-${first.storedName}`;
+    const uploadDir = path.join(dir, "uploads", "budget-targets");
+    const summaryDir = path.join(dir, "data-cache", "budget-targets");
+    const firstSummary = JSON.parse(await readFile(path.join(summaryDir, `${first.storedName}.json`), "utf8"));
+    const duplicateFileName = "探嘉美国-2026年7月预算-重复.xlsx";
+
+    await writeFile(
+      path.join(uploadDir, duplicateStoredName),
+      await readFile(path.join(uploadDir, first.storedName)),
+    );
+    await writeFile(path.join(summaryDir, `${duplicateStoredName}.json`), JSON.stringify({
+      ...firstSummary,
+      storedName: duplicateStoredName,
+      fileName: duplicateFileName,
+    }));
+
+    await assert.rejects(
+      () => listBudgetTargets(),
+      (error) => {
+        assert.match(error.message, /预算数据重复：探嘉美国 2026-07/);
+        assert.match(error.message, new RegExp(first.fileName));
+        assert.match(error.message, new RegExp(duplicateFileName));
+        return true;
+      },
+    );
   });
 });
 

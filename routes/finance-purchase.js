@@ -8,6 +8,8 @@ export function createFinancePurchaseRoutes(deps = {}) {
     getSupplierBoardDashboard,
     getStoreOperatingMonthlyReport,
     exportStoreOperatingMonthlyReportXlsx,
+    readStoreOperatingMonthlyReportRowVisibility,
+    saveStoreOperatingMonthlyReportRowVisibility,
     runPlatformCashflowCapture,
     listSupplierDetails,
     saveSupplierDetail,
@@ -25,13 +27,23 @@ export function createFinancePurchaseRoutes(deps = {}) {
     status: url.searchParams.get("status") || "Open",
   });
 
-  const monthlyReportFilters = (url) => ({
-    startMonth: url.searchParams.get("startMonth") || "",
-    endMonth: url.searchParams.get("endMonth") || "",
-    stores: url.searchParams.getAll("stores").filter(Boolean),
-    countries: url.searchParams.getAll("countries").filter(Boolean),
-    currencyCode: url.searchParams.get("currencyCode") || "CNY",
-  });
+  const monthlyReportFilters = (url) => {
+    const startDate = url.searchParams.get("startDate") || "";
+    const endDate = url.searchParams.get("endDate") || "";
+    const filters = {
+      stores: url.searchParams.getAll("stores").filter(Boolean),
+      countries: url.searchParams.getAll("countries").filter(Boolean),
+      currencyCode: url.searchParams.get("currencyCode") || "CNY",
+    };
+    if (startDate || endDate) {
+      return { ...filters, startDate, endDate };
+    }
+    return {
+      ...filters,
+      startMonth: url.searchParams.get("startMonth") || "",
+      endMonth: url.searchParams.get("endMonth") || "",
+    };
+  };
 
   return [
     {
@@ -97,6 +109,30 @@ export function createFinancePurchaseRoutes(deps = {}) {
           "cache-control": "no-store",
         });
         res.end(result.buffer);
+      },
+    },
+    {
+      method: "GET",
+      path: "/api/finance/store-operating-monthly-report/row-visibility",
+      auth: "finance",
+      handler: async ({ req, res }) => {
+        sendJson(res, 200, {
+          ok: true,
+          ...(await readStoreOperatingMonthlyReportRowVisibility(req.user)),
+        });
+      },
+    },
+    {
+      method: "PUT",
+      path: "/api/finance/store-operating-monthly-report/row-visibility",
+      auth: "finance",
+      errorStatusCode: 400,
+      handler: async ({ req, res }) => {
+        const { hiddenMetricIds } = await readJsonBody(req);
+        sendJson(res, 200, {
+          ok: true,
+          ...(await saveStoreOperatingMonthlyReportRowVisibility(req.user, { hiddenMetricIds })),
+        });
       },
     },
     {

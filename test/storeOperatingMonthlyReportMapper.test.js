@@ -171,7 +171,7 @@ test("monthly report exposes the five Lingxing-aligned top-level projects", () =
     currencyCode: "CNY",
   });
 
-  const levelOne = result.rows.filter((row) => row.level === 1);
+  const levelOne = result.rows.filter((row) => row.level === 1 && row.key !== "sales-net");
   assert.deepEqual(levelOne.filter((row) => row.key !== "basic-info").map((row) => row.name), [
     "平台收入",
     "平台支出",
@@ -180,7 +180,7 @@ test("monthly report exposes the five Lingxing-aligned top-level projects", () =
     "利润",
   ]);
   const childrenByName = Object.fromEntries(levelOne.map((row) => [row.name, row.children]));
-  assert.deepEqual(childrenByName["平台收入"], ["sales-volume", "average-daily-sales", "multi-channel-sales-volume", "ads-sales-amount", "ads-volume", "sales-income", "net-sales", "buyer-shipping-fee", "sales-discount", "refunds", "return-volume", "refund-volume", "return-rate", "refund-rate", "fba-inventory-compensation", "other-income"]);
+  assert.deepEqual(childrenByName["平台收入"], ["sales-volume", "average-daily-sales", "multi-channel-sales-volume", "ads-sales-amount", "ads-volume", "sales-income", "net-sales", "buyer-shipping-fee", "sales-discount", "refunds", "return-volume", "refund-volume", "fba-inventory-compensation", "other-income"]);
   assert.deepEqual(childrenByName["平台支出"], ["platform-fee", "fba-delivery-fee", "other-order-fee", "storage-fee", "ad-fee", "ad-spend", "fba-international-shipping-fee", "inbound-placement-fee", "adjustment-fee", "other-platform-fee"]);
   assert.deepEqual(childrenByName["商品成本支出"], ["purchase-cost", "first-leg-cost", "other-product-cost"]);
   assert.deepEqual(childrenByName["自定义费用"], ["offsite-ad-spend", "office-expense", "office-rent", "certification-testing-fee", "office-supplies", "store-insurance-fee", "software-fee", "product-appearance-design-fee", "product-graphic-design-fee", "service-provider-fee", "office-courier-fee", "office-utility-fee", "credit-card-ad-fee", "office-telecom-fee", "sample-fee", "test-order-commission", "travel-expense", "employee-welfare-fee"]);
@@ -222,6 +222,18 @@ test("direct OrderProfit profit fields populate profit subtotals", () => {
   assert.equal(row("profit").actual, 25);
 });
 
+test("OrderProfit net gross margin is aggregated by sales amount", () => {
+  const result = buildStoreOperatingReportRows({
+    records: [
+      { totalSalesAmount: 100, net_gross_margin: 0.1 },
+      { totalSalesAmount: 900, net_gross_margin: 0.2 },
+    ],
+    currencyCode: "CNY",
+  });
+
+  assert.equal(result.rows.find((row) => row.key === "net-gross-rate").actual, 0.19);
+});
+
 test("monthly report uses the exact Lingxing subject and detail order from the approved field list", () => {
   const result = buildStoreOperatingReportRows({
     records: [{
@@ -253,10 +265,9 @@ test("monthly report uses the exact Lingxing subject and detail order from the a
     "退款金额",
     "退货量",
     "退款量",
-    "退货率",
-    "退款率",
     "FBA库存赔偿",
     "其它收入",
+    "销售净额",
     "平台支出",
     "平台费",
     "FBA发货费",
@@ -297,6 +308,49 @@ test("monthly report uses the exact Lingxing subject and detail order from the a
     "净毛利率",
   ]);
   assert.equal(result.rows.some((row) => row.key === "store-country"), false);
+});
+
+test("monthly report maps the OrderProfit income fields returned by Lingxing", () => {
+  const result = buildStoreOperatingReportRows({
+    records: [{
+      amount: 100,
+      shipping_cost: "12.5",
+      inventory_credit: "7.25",
+      total_other_granted: "3.75",
+    }],
+    currencyCode: "CNY",
+  });
+  const row = (key) => result.rows.find((item) => item.key === key);
+
+  assert.equal(row("buyer-shipping-fee").actual, 12.5);
+  assert.equal(row("fba-inventory-compensation").actual, 7.25);
+  assert.equal(row("other-income").actual, 3.75);
+  assert.equal(row("buyer-shipping-fee").available, true);
+  assert.equal(row("fba-inventory-compensation").available, true);
+  assert.equal(row("other-income").available, true);
+});
+
+test("monthly report inserts derived sales net between platform income and expense", () => {
+  const result = buildStoreOperatingReportRows({
+    records: [{
+      amount: 200,
+      net_amount: 150,
+      shipping_cost: 20,
+      refund_amount: -30,
+      inventory_credit: 5,
+      total_other_granted: 10,
+    }],
+    currencyCode: "CNY",
+  });
+  const row = (key) => result.rows.find((item) => item.key === key);
+  const levelOneKeys = result.rows.filter((item) => item.level === 1).map((item) => item.key);
+
+  assert.equal(row("sales-net").name, "销售净额");
+  assert.equal(row("sales-net").actual, 155);
+  assert.equal(row("sales-net").share, 155 / 200);
+  assert.deepEqual(row("sales-net").children, []);
+  assert.deepEqual(levelOneKeys.slice(0, 3), ["platform-income", "sales-net", "platform-expense"]);
+  assert.deepEqual(result.rows.find((item) => item.key === "overview").children.slice(0, 3), ["platform-income", "sales-net", "platform-expense"]);
 });
 
 test("unavailable metrics expose their missing OrderProfit source fields", () => {
@@ -390,6 +444,55 @@ test("custom fee detail rows map each allocated store amount instead of the top-
     { sid: 17305, amount: -115.46 },
     { sid: 17307, amount: -1568.77 },
   ]);
+  assert.deepEqual(result.unmapped, []);
+});
+
+test("custom fee type-name aliases map every approved expense subject", () => {
+  const subjects = [
+    ["办公费用", "office-expense"],
+    ["办公费用-租金", "office-rent"],
+    ["认证检测费", "certification-testing-fee"],
+    ["办公用品", "office-supplies"],
+    ["软件费用", "software-fee"],
+    ["产品外观设计费", "product-appearance-design-fee"],
+    ["产品平面设计费", "product-graphic-design-fee"],
+    ["服务商费用", "service-provider-fee"],
+    ["办公费用-快递费", "office-courier-fee"],
+    ["办公费用-水电费", "office-utility-fee"],
+    ["信用卡广告费", "credit-card-ad-fee"],
+    ["办公费用-店铺通讯费", "office-telecom-fee"],
+    ["样品费", "sample-fee"],
+    ["送测佣金（刷单）", "test-order-commission"],
+    ["差旅费", "travel-expense"],
+    ["员工福利费", "employee-welfare-fee"],
+    ["店铺保险费", "store-insurance-fee"],
+  ];
+  const result = mergeStoreOperatingCustomFeeRecords(
+    [{ sid: 7, storeName: "Store-US", country: "美国" }],
+    subjects.map(([type]) => ({ sid: 7, fee_type_name: type, fee: -1 })),
+    [{ sid: 7, name: "Store-US", country: "美国" }],
+  );
+
+  assert.deepEqual(result.unmapped, []);
+  const mapped = buildStoreOperatingReportRows({ records: result.records, currencyCode: "CNY" });
+  for (const [, key] of subjects) assert.equal(mapped.rows.find((row) => row.key === key).actual, 1);
+});
+
+test("custom fees with a valid sid never fall back to another store with the same name", () => {
+  const result = mergeStoreOperatingCustomFeeRecords(
+    [{ sid: 1, storeName: "Shared Store", country: "美国" }],
+    [{ sid: 2, storeName: "Shared Store", other_fee_type: "软件费用", fee: -12 }],
+    [{ sid: 2, name: "Shared Store", country: "加拿大" }],
+  );
+
+  assert.equal(result.records.find((record) => record.sid === 1).softwareFee, undefined);
+  assert.deepEqual(result.records.find((record) => record.sid === 2), {
+    sid: 2,
+    storeName: "Shared Store",
+    country: "加拿大",
+    currencyCode: "",
+    softwareFee: -12,
+  });
   assert.deepEqual(result.unmapped, []);
 });
 
@@ -504,7 +607,7 @@ test("profit chain uses sales income as the percentage base and derives return c
   assert.equal(row("gross-profit").actual, 58);
   assert.deepEqual(row("profit").children, ["gross-profit", "gross-rate", "net-gross-rate"]);
   const categoryKeys = result.rows.filter((item) => item.level === 1).map((item) => item.key);
-  assert.deepEqual(categoryKeys, ["platform-income", "platform-expense", "product-cost-expense", "custom-expense", "profit"]);
+  assert.deepEqual(categoryKeys, ["platform-income", "sales-net", "platform-expense", "product-cost-expense", "custom-expense", "profit"]);
 });
 
 test("direct return-cost fields keep expense magnitudes positive", () => {

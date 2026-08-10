@@ -5,7 +5,23 @@ import {
   extractNavigationModules,
   extractViewIds,
   validateFrontendIntegrity,
+  verifySalesReviewSmoke,
 } from "../scripts/deploy-integrity.js";
+
+function jsonResponse(payload, { status = 200, headers = {} } = {}) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: {
+      get(name) {
+        return headers[String(name).toLowerCase()] || null;
+      },
+    },
+    async text() {
+      return JSON.stringify(payload);
+    },
+  };
+}
 
 test("deploy integrity extracts every sidebar module from index.html", async () => {
   const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
@@ -40,4 +56,57 @@ test("deploy integrity rejects missing sidebar modules and missing view containe
   assert.equal(result.ok, false);
   assert.ok(result.errors.some((error) => error.includes("缺少导航板块：物流 / FBA货件处理")));
   assert.ok(result.errors.some((error) => error.includes("缺少页面容器：view-fba-freight")));
+});
+
+test("sales-review deployment smoke rejects detail rows without the 30d refund contract", async () => {
+  const fetchImpl = async (url) => {
+    if (url.endsWith("/api/auth/password/login")) {
+      return jsonResponse({ ok: true }, { headers: { "set-cookie": "tanjia_session=test; Path=/; HttpOnly" } });
+    }
+    return jsonResponse({ detailRows: [{ msku: "MSKU-1" }] });
+  };
+
+  await assert.rejects(
+    verifySalesReviewSmoke({
+      baseUrl: "http://127.0.0.1:4173",
+      credentials: { username: "deploy-smoke", password: "secret" },
+      fetchImpl,
+    }),
+    /refundRate30d/,
+  );
+});
+
+test("sales-review deployment smoke accepts unavailable and numeric 30d refund values", async () => {
+  const fetchImpl = async (url) => {
+    if (url.endsWith("/api/auth/password/login")) {
+      return jsonResponse({ ok: true }, { headers: { "set-cookie": "tanjia_session=test; Path=/; HttpOnly" } });
+    }
+    return jsonResponse({ detailRows: [{ msku: "MSKU-1", refundRate30d: null }, { msku: "MSKU-2", refundRate30d: 3.5 }] });
+  };
+
+  const result = await verifySalesReviewSmoke({
+    baseUrl: "http://127.0.0.1:4173",
+    credentials: { username: "deploy-smoke", password: "secret" },
+    fetchImpl,
+  });
+
+  assert.deepEqual(result, { detailRowCount: 2, unavailableCount: 1 });
+});
+
+test("sales-review deployment smoke rejects an empty detail response", async () => {
+  const fetchImpl = async (url) => {
+    if (url.endsWith("/api/auth/password/login")) {
+      return jsonResponse({ ok: true }, { headers: { "set-cookie": "tanjia_session=test; Path=/; HttpOnly" } });
+    }
+    return jsonResponse({ detailRows: [] });
+  };
+
+  await assert.rejects(
+    verifySalesReviewSmoke({
+      baseUrl: "http://127.0.0.1:4173",
+      credentials: { username: "deploy-smoke", password: "secret" },
+      fetchImpl,
+    }),
+    /detailRows 不能为空/,
+  );
 });

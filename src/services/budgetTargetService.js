@@ -1,5 +1,6 @@
 import { mkdir, readdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { listBudgetShopCatalog } from "../data/budgetShopCatalog.js";
 
 const uploadDir = path.join(process.cwd(), "uploads", "budget-targets");
 const summaryDir = path.join(process.cwd(), "data-cache", "budget-targets");
@@ -54,6 +55,12 @@ function parseOptionalNumber(value) {
 
 function normalizeText(value) {
   return value == null ? "" : String(value).trim();
+}
+
+function normalizeUploader(value) {
+  const uploader = normalizeText(value);
+  if (!uploader) throw new Error("无法识别当前上传账号");
+  return uploader;
 }
 
 function normalizeHeader(value) {
@@ -207,6 +214,30 @@ function summarizeBudgetTargetRows(rows = []) {
   totals.acosTarget = totals.salesTarget && totals.adBudget !== null ? totals.adBudget / totals.salesTarget : null;
   totals.profitRateTarget = totals.salesTarget && totals.profitTarget !== null ? totals.profitTarget / totals.salesTarget : null;
   return totals;
+}
+
+function assertUniqueBudgetSources(rows = []) {
+  const sourcesByStoreMonth = new Map();
+  rows
+    .filter((row) => row?.status === "已解析")
+    .forEach((row) => {
+      const storeName = normalizeText(row.storeName);
+      const month = normalizeBudgetMonth(row.month);
+      const key = `${storeName}|${month}`;
+      const sources = sourcesByStoreMonth.get(key) || [];
+      sources.push(row);
+      sourcesByStoreMonth.set(key, sources);
+    });
+
+  const duplicates = [...sourcesByStoreMonth.values()].filter((sources) => sources.length > 1);
+  if (!duplicates.length) return;
+
+  const descriptions = duplicates.map((sources) => {
+    const first = sources[0];
+    const fileNames = sources.map((source) => source.fileName || source.storedName).join("、");
+    return `${first.storeName} ${first.month} 同时存在 ${fileNames}`;
+  });
+  throw new Error(`预算数据重复：${descriptions.join("；")}`);
 }
 
 function parseMonth(fileName, summaryRows, selectedMonth = "") {
@@ -386,7 +417,12 @@ function buildStoreSummaryTargets(summaryRows, fallback = {}) {
   };
 }
 
-async function parseBudgetWorkbook(filePath, fileName, storedName, selectedMonth = "") {
+async function parseBudgetWorkbook(filePath, fileName, storedName, selectedMonth = "", {
+  country = "",
+  storeName: selectedStoreName = "",
+  uploadedBy = "",
+  legacyListingOwner = "",
+} = {}) {
   let XLSX;
   try {
     const module = await import("xlsx");
@@ -466,7 +502,7 @@ async function parseBudgetWorkbook(filePath, fileName, storedName, selectedMonth
   const salesQty = sumByHeader(dataRows, headerMap, "销售数量");
   const exchangeRate = parseNumber(summaryRows[1]?.[3]) || parseNumber(dataRows.find((row) => parseNumber(row[headerMap.get("汇率")]))?.[headerMap.get("汇率")]) || 1;
   const title = summaryRows[0]?.[0];
-  const storeName = inferStoreName(fileName, title);
+  const storeName = normalizeText(selectedStoreName) || inferStoreName(fileName, title);
   const netSales = salesTarget - discountTarget - refundTarget + salesTarget * 0.0025;
   const platformFee = adBudget + couponCommission + salesTarget * 0.15 + fbaFee + storageFee;
   const profitTarget = netSales - purchaseCost - platformFee - shippingCost;
@@ -492,7 +528,8 @@ async function parseBudgetWorkbook(filePath, fileName, storedName, selectedMonth
   });
   const month = parseMonth(fileName, summaryRows, selectedMonth);
   const platform = storeName.includes("Tik Tok") ? "Tik Tok" : "Amazon";
-  const site = inferSite(storeName);
+  const countryName = normalizeText(country).replace(/站$/, "");
+  const site = countryName ? `${countryName}站` : inferSite(storeName);
   const currencyCode = findExplicitBudgetCurrencyCode(summaryRows, headers);
   const mskuRows = dataRows.map((row) => {
     const rowSalesTarget = parseNumber(readByHeader(row, headerMap, "销额($)")) || parseNumber(row[priceIndex]) * parseNumber(row[qtyIndex]);
@@ -517,6 +554,8 @@ async function parseBudgetWorkbook(filePath, fileName, storedName, selectedMonth
       storeName,
       site,
       currencyCode,
+      uploadedBy: normalizeText(uploadedBy),
+      listingOwner: normalizeText(legacyListingOwner) || normalizeText(readByHeader(row, headerMap, "SKU负责人")),
       skuOwner: normalizeText(readByHeader(row, headerMap, "SKU负责人")),
       msku: normalizeText(readByHeader(row, headerMap, "MSKU")),
       asin: normalizeText(readByHeader(row, headerMap, "ASIN")),
@@ -547,6 +586,9 @@ async function parseBudgetWorkbook(filePath, fileName, storedName, selectedMonth
     storeName,
     site,
     currencyCode,
+    country: countryName,
+    uploadedBy: normalizeText(uploadedBy),
+    listingOwner: normalizeText(legacyListingOwner),
     skuCount: dataRows.length,
     salesQty,
     shipmentQty,
@@ -592,8 +634,38 @@ async function readSummary(storedName) {
 
 export async function parseAndSaveBudgetUpload(upload) {
   const filePath = path.join(uploadDir, upload.storedName);
-  const summary = await parseBudgetWorkbook(filePath, upload.fileName, upload.storedName, upload.budgetMonth);
+  const historicalSummary = await readSummary(upload.storedName);
+  const summary = await parseBudgetWorkbook(filePath, upload.fileName, upload.storedName, upload.budgetMonth, {
+    country: upload.country || historicalSummary?.country,
+    storeName: upload.storeName || historicalSummary?.storeName,
+    uploadedBy: upload.uploadedBy || historicalSummary?.uploadedBy,
+    legacyListingOwner: historicalSummary?.listingOwner,
+  });
   return saveSummary(summary);
+}
+
+export async function createBudgetImportTemplate() {
+  const module = await import("xlsx");
+  const XLSX = module.default || module;
+  const workbook = XLSX.utils.book_new();
+  const summaryRows = [
+    ["店铺预算报表"],
+    ["预算月份", "2026-09", "汇率", 7],
+    ["名称", "原币金额", "人民币金额", "占比"],
+    ["销售收入", 0, 0, ""],
+    ["广告费用", 0, 0, ""],
+    ["退款金额", 0, 0, ""],
+    ["商品采购成本", 0, 0, ""],
+    ["头程运费", 0, 0, ""],
+    ["营业利润", 0, 0, ""],
+  ];
+  const budgetRows = [
+    ["MSKU", "ASIN", "产品名称", "SKU负责人", "销售价($)", "销售数量", "销额($)", "广告费用($)", "退款金额($)", "FBA配送费($)", "总成本($)", "总头程费用($)", "仓储费($)", "优惠券佣金($)", "发货数量"],
+    ["示例-MSKU", "B0EXAMPLE", "示例产品", "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  ];
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(summaryRows), "汇总");
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(budgetRows), "销售预算");
+  return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
 }
 
 async function removeFileIfExists(filePath) {
@@ -655,6 +727,11 @@ export async function saveBudgetUpload(payload) {
   if (!budgetMonth) {
     throw new Error("请先选择预算月份");
   }
+  const country = normalizeText(payload.country).replace(/站$/, "");
+  if (!country) throw new Error("请先选择国家");
+  const storeName = normalizeText(payload.storeName);
+  if (!storeName) throw new Error("请先选择店铺");
+  const uploadedBy = normalizeUploader(payload.uploadedBy);
   const content = decodeBase64File(payload.base64);
 
   if (content.length === 0) {
@@ -672,11 +749,18 @@ export async function saveBudgetUpload(payload) {
     storedName,
     size: content.length,
     uploadedAt,
+    uploadedBy,
+    country,
+    storeName,
     budgetMonth,
     status: "已上传，等待解析",
   };
 
-  const summary = await parseBudgetWorkbook(filePath, upload.fileName, upload.storedName, upload.budgetMonth);
+  const summary = await parseBudgetWorkbook(filePath, upload.fileName, upload.storedName, upload.budgetMonth, {
+    country,
+    storeName,
+    uploadedBy,
+  });
   const replacedUploads = summary.status === "已解析" ? await replaceDuplicateBudgetUploads(summary) : [];
   const finalSummary = await saveSummary({
     ...summary,
@@ -735,10 +819,11 @@ export async function listBudgetUploads() {
 export async function listBudgetTargets() {
   const uploads = await listBudgetUploads();
   const rows = uploads.map((upload) => upload.summary).filter((summary) => summary && summary.status === "已解析");
+  assertUniqueBudgetSources(rows);
   const mskuRows = rows.flatMap((row) => row.mskuRows || []);
   const totals = summarizeBudgetTargetRows(rows);
 
-  return { rows, mskuRows, totals };
+  return { rows, mskuRows, totals, shopOptions: listBudgetShopCatalog() };
 }
 
 export async function getBudgetTargetContext(range = {}) {

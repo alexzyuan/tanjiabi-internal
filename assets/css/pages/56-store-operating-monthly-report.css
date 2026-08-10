@@ -1,7 +1,25 @@
 /* Store operating monthly report page. */
+#view-store-operating-monthly-report,
+#view-store-operating-monthly-report .detail-panel,
+#view-store-operating-monthly-report .store-operating-report-table-wrap {
+  min-width: 0;
+}
+
+#view-store-operating-monthly-report .panel-head {
+  min-width: 0;
+  align-items: flex-start;
+}
+
+#view-store-operating-monthly-report .panel-head > :is(h2, p) {
+  min-width: 0;
+}
+
 #view-store-operating-monthly-report .store-operating-report-table-wrap {
   max-width: 100%;
-  overflow-x: auto;
+  width: 100%;
+  position: relative;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 #view-store-operating-monthly-report #store-operating-report-table th {
@@ -9,6 +27,18 @@
   white-space: nowrap;
   background: var(--tj-action-blue);
   color: var(--tj-text-inverse);
+}
+
+#view-store-operating-monthly-report #store-operating-report-table thead tr:first-child th {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+}
+
+#view-store-operating-monthly-report #store-operating-report-table thead tr:nth-child(2) th {
+  position: sticky;
+  top: 38px;
+  z-index: 3;
 }
 
 .store-operating-report-result-row > td { background: var(--tj-tone-caution-row-bg); }
@@ -38,7 +68,134 @@
 }
 
 #view-store-operating-monthly-report #store-operating-report-status {
+  max-width: 100%;
+  margin: 0;
+  overflow-wrap: anywhere;
   color: var(--tj-text-muted);
   font-size: 12px;
   line-height: 1.45;
+  white-space: normal;
+}
+
+.store-operating-row-visibility-modal {
+  width: min(760px, 100%);
+  max-height: min(760px, calc(100vh - 52px));
+  overflow: hidden;
+  border: 1px solid var(--tj-border-subtle);
+  border-radius: var(--tj-modal-radius);
+  background: var(--tj-content-bg);
+  box-shadow: var(--tj-shadow-modal);
+}
+
+.store-operating-row-visibility-modal .modal-body {
+  display: grid;
+  gap: var(--spectrum-spacing-200);
+}
+
+.store-operating-row-visibility-search {
+  display: grid;
+  gap: var(--spectrum-spacing-75);
+  color: var(--tj-text-strong);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.store-operating-row-visibility-search input {
+  width: 100%;
+}
+
+.store-operating-row-visibility-actions,
+.store-operating-row-visibility-group-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spectrum-spacing-100);
+}
+
+.store-operating-row-visibility-actions {
+  padding-bottom: var(--spectrum-spacing-150);
+  border-bottom: 1px solid var(--tj-border-subtle);
+}
+
+.store-operating-row-visibility-actions .text-button:last-child {
+  margin-left: auto;
+}
+
+.store-operating-row-visibility-groups {
+  display: grid;
+  max-height: min(46vh, 460px);
+  overflow: auto;
+  border: 1px solid var(--tj-border-subtle);
+  border-radius: var(--tj-control-radius);
+}
+
+.store-operating-row-visibility-group {
+  margin: 0;
+  padding: var(--spectrum-spacing-150) var(--spectrum-spacing-200) var(--spectrum-spacing-200);
+  border: 0;
+  border-bottom: 1px solid var(--tj-border-subtle);
+}
+
+.store-operating-row-visibility-group:last-child {
+  border-bottom: 0;
+}
+
+.store-operating-row-visibility-group legend {
+  padding: 0;
+  color: var(--tj-text-strong);
+  font-weight: 700;
+}
+
+.store-operating-row-visibility-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spectrum-spacing-150);
+}
+
+.store-operating-row-visibility-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--spectrum-spacing-100) var(--spectrum-spacing-200);
+  margin-top: var(--spectrum-spacing-150);
+}
+
+.store-operating-row-visibility-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spectrum-spacing-75);
+  color: var(--tj-text-body);
+  line-height: 1.4;
+}
+
+.store-operating-row-visibility-item input {
+  flex: 0 0 auto;
+}
+
+.store-operating-row-visibility-status {
+  min-height: 1.4em;
+  margin: 0;
+  color: var(--tj-text-muted);
+  font-size: 13px;
+}
+
+@media (max-width: 720px) {
+  .store-operating-row-visibility-modal {
+    max-height: calc(100vh - 20px);
+  }
+
+  .store-operating-row-visibility-modal .modal-head,
+  .store-operating-row-visibility-modal .modal-body,
+  .store-operating-row-visibility-modal .modal-foot {
+    padding-right: var(--spectrum-spacing-150);
+    padding-left: var(--spectrum-spacing-150);
+  }
+
+  .store-operating-row-visibility-items {
+    grid-template-columns: 1fr;
+  }
+
+  .store-operating-row-visibility-actions .text-button:last-child {
+    margin-left: 0;
+  }
 }

@@ -6,15 +6,13 @@ const METRIC_DEFINITIONS = [
   { key: "ads-volume", name: "广告销量", fields: ["totalAdsSalesQuantity", "adsSalesQuantity", "ad_volume", "adVolume", "ad_qty"], category: "platform-income", magnitude: true },
   { key: "sales-income", name: "销售额", fields: ["totalSalesAmount", "salesAmount", "sales_amount", "amount"], category: "platform-income" },
   { key: "net-sales", name: "净销售额", fields: ["netSalesAmount", "net_sales_amount", "net_amount"], category: "platform-income", derived: true },
-  { key: "buyer-shipping-fee", name: "买家运费", fields: ["buyerShippingFee", "buyer_shipping_fee", "shippingFee", "shipping_fee", "buyerShipping"], category: "platform-income", magnitude: true },
+  { key: "buyer-shipping-fee", name: "买家运费", fields: ["buyerShippingFee", "buyer_shipping_fee", "shippingFee", "shipping_fee", "buyerShipping", "shipping_cost"], category: "platform-income", magnitude: true },
   { key: "sales-discount", name: "促销折扣", fields: ["promotionDiscount", "promotion_discount", "discount_amount"], category: "platform-income", magnitude: true },
   { key: "refunds", name: "退款金额", fields: ["totalSalesRefunds", "refunds", "refund_amount", "refundAmount"], category: "platform-income", magnitude: true },
   { key: "return-volume", name: "退货量", fields: ["returnQuantity", "return_quantity", "return_qty", "returnQty"], category: "platform-income", magnitude: true },
   { key: "refund-volume", name: "退款量", fields: ["refundsQuantity", "refund_quantity", "refund_qty", "refundQty"], category: "platform-income", magnitude: true },
-  { key: "return-rate", name: "退货率", fields: ["returnRate", "return_rate"], category: "platform-income", derived: true, valueType: "rate" },
-  { key: "refund-rate", name: "退款率", fields: ["refundRate", "refund_rate"], category: "platform-income", derived: true, valueType: "rate" },
-  { key: "fba-inventory-compensation", name: "FBA库存赔偿", fields: ["fbaInventoryCompensation", "fba_inventory_compensation", "inventoryCompensation", "inventory_compensation"], category: "platform-income", magnitude: true },
-  { key: "other-income", name: "其它收入", fields: ["otherIncome", "other_income", "otherIncomeAmount", "other_income_amount"], category: "platform-income" },
+  { key: "fba-inventory-compensation", name: "FBA库存赔偿", fields: ["fbaInventoryCompensation", "fba_inventory_compensation", "inventoryCompensation", "inventory_compensation", "inventory_credit"], category: "platform-income", magnitude: true },
+  { key: "other-income", name: "其它收入", fields: ["otherIncome", "other_income", "otherIncomeAmount", "other_income_amount", "total_other_granted"], category: "platform-income" },
 
   { key: "platform-fee", name: "平台费", fields: ["platformFee", "platform_fee", "selling_fee"], category: "platform-expense", magnitude: true },
   { key: "fba-delivery-fee", name: "FBA发货费", fields: ["fbaDeliveryFee", "fulfillment_fee", "fba_fulfillment_fee"], category: "platform-expense", magnitude: true },
@@ -28,7 +26,7 @@ const METRIC_DEFINITIONS = [
   { key: "other-platform-fee", name: "平台其它费", fields: ["totalPlatformOtherFee", "total_platform_other_fee", "sellingOtherFee", "selling_other_fee"], category: "platform-expense", magnitude: true },
 
   { key: "purchase-cost", name: "采购成本", fields: ["purchaseCost", "purchase_costs", "purchase_cost", "goods_cost"], category: "product-cost-expense", magnitude: true },
-  { key: "first-leg-cost", name: "头程成本", fields: ["firstLegCost", "logistics_costs", "shipping_cost"], category: "product-cost-expense", magnitude: true },
+  { key: "first-leg-cost", name: "头程成本", fields: ["firstLegCost", "logistics_costs"], category: "product-cost-expense", magnitude: true },
   { key: "other-product-cost", name: "其它成本", fields: ["otherProductCost", "other_product_cost", "otherCost", "other_cost"], category: "product-cost-expense", magnitude: true },
 
   { key: "offsite-ad-spend", name: "站外推广费", fields: ["offsiteAdSpend", "offsite_ad_spend", "offsiteAdvertisingFee", "offsite_advertising_fee", "customOrderFeePrincipal", "customOrderFeeCommission", "custom_order_fee_principal", "custom_order_fee_commission"], category: "custom-expense", magnitude: true },
@@ -71,6 +69,18 @@ const CATEGORIES = [
   ["custom-expense", "自定义费用"],
   ["profit", "利润"],
 ];
+const SALES_NET_KEY = "sales-net";
+const SALES_NET_NAME = "销售净额";
+
+export function listStoreOperatingMonthlyReportMetricDefinitions() {
+  const categoryNames = new Map(CATEGORIES);
+  return METRIC_DEFINITIONS.map(({ key, name, category }) => Object.freeze({
+    key,
+    name,
+    category,
+    categoryName: categoryNames.get(category) || category,
+  }));
+}
 
 const OTHER_FEE_TYPE_METRICS = [
   ["办公费用-租金", "office-rent"],
@@ -113,8 +123,6 @@ const DIRECT_SALES_PROFIT_FIELDS = ["profit", "profitAmount", "profit_amount", "
 const DERIVED_METRIC_DEPENDENCIES = new Map([
   ["average-daily-sales", ["sales-volume"]],
   ["net-sales", ["sales-income", "sales-discount", "refunds"]],
-  ["return-rate", ["return-volume", "sales-volume"]],
-  ["refund-rate", ["refund-volume", "sales-volume"]],
   ["gross-profit", ["net-sales", "net-sales-cost"]],
   ["gross-rate", ["gross-profit", "sales-income"]],
   ["net-gross-rate", ["sales-profit", "sales-income"]],
@@ -148,6 +156,27 @@ function metricForOtherFeeType(value) {
   const type = normalizeFeeType(value);
   if (!type) return "";
   return OTHER_FEE_TYPE_METRICS.find(([label]) => type.includes(label))?.[1] || "";
+}
+
+function readOtherFeeType(record) {
+  const value = readValue(record, [
+    "other_fee_type_name",
+    "otherFeeTypeName",
+    "fee_type_name",
+    "feeTypeName",
+    "fee_name",
+    "feeName",
+    "type_name",
+    "typeName",
+    "other_fee_type",
+    "otherFeeType",
+    "fee_type",
+    "feeType",
+  ]);
+  if (value && typeof value === "object") {
+    return readText(value, ["name", "label", "value", "title", "name_cn", "nameCn"]);
+  }
+  return isPresent(value) ? String(value).trim() : "";
 }
 
 function feeAmount(record) {
@@ -207,16 +236,17 @@ export function mergeStoreOperatingCustomFeeRecords(records = [], feeRecords = [
   const applied = [];
   expandStoreOperatingOtherFeeRecords(feeRecords).forEach((feeRecord) => {
     const sid = Number(readValue(feeRecord, ["sid", "seller_id", "sellerId", "store_id", "storeId"]));
+    const hasValidSid = Number.isFinite(sid) && sid > 0;
     const storeName = readText(feeRecord, ["storeName", "store_name", "sellerName", "seller_name"]);
-    const type = readText(feeRecord, ["other_fee_type", "otherFeeType", "fee_type", "feeType", "other_fee_type_name", "otherFeeTypeName"]);
+    const type = readOtherFeeType(feeRecord);
     const metricKey = metricForOtherFeeType(type);
     const amount = feeAmount(feeRecord);
     if (!metricKey || amount === null) {
       unmapped.push({ sid: Number.isFinite(sid) ? sid : null, storeName, type, reason: !metricKey ? "未识别费用类型" : "费用金额缺失" });
       return;
     }
-    let target = recordBySid.get(sid);
-    if (!target && storeName) target = merged.find((record) => readText(record, ["storeName", "store_name", "sellerName", "seller_name"]) === storeName);
+    let target = hasValidSid ? recordBySid.get(sid) : null;
+    if (!target && !hasValidSid && storeName) target = merged.find((record) => readText(record, ["storeName", "store_name", "sellerName", "seller_name"]) === storeName);
     if (!target) {
       const seller = sellerBySid.get(sid) || {};
       if (!seller.name && !Number.isFinite(sid) && !storeName) {
@@ -281,6 +311,24 @@ function sumCompositeFields(records, fieldGroups, magnitude = false, label = "�
     const number = toFiniteNumber(value, `订单利润字段 ${label}`);
     return sum + (magnitude ? Math.abs(number) : number);
   }, 0), 0);
+}
+
+function weightedRate(records, rateFields, weightFields, label) {
+  if (records.length === 0) return null;
+  const values = records.map((record) => ({
+    rate: readValue(record, rateFields),
+    weight: readValue(record, weightFields),
+  }));
+  if (values.some(({ rate, weight }) => !isPresent(rate) || !isPresent(weight))) return null;
+  const { weightedTotal, weightTotal } = values.reduce((totals, { rate, weight }) => {
+    const numericRate = toFiniteNumber(rate, `订单利润字段 ${label}`);
+    const numericWeight = toFiniteNumber(weight, `订单利润字段 ${weightFields[0]}`);
+    return {
+      weightedTotal: totals.weightedTotal + numericRate * numericWeight,
+      weightTotal: totals.weightTotal + numericWeight,
+    };
+  }, { weightedTotal: 0, weightTotal: 0 });
+  return weightTotal === 0 ? null : weightedTotal / weightTotal;
 }
 
 function sumReturnCosts(records) {
@@ -427,6 +475,11 @@ export function buildStoreOperatingReportRows({ records, budgetByMetric = {}, cu
   const salesVolume = actualByKey.get("sales-volume");
   const netSales = rawNetSales ?? deriveFromRequiredChildren(actualByKey, ["sales-income", "sales-discount", "refunds"], ([income, discount, refunds]) => income - discount - refunds);
   actualByKey.set("net-sales", netSales);
+  actualByKey.set(SALES_NET_KEY, deriveFromRequiredChildren(
+    actualByKey,
+    ["net-sales", "buyer-shipping-fee", "refunds", "fba-inventory-compensation", "other-income"],
+    ([net, buyerShipping, refunds, inventoryCompensation, otherIncome]) => net + buyerShipping - refunds + inventoryCompensation + otherIncome,
+  ));
   actualByKey.set("average-daily-sales", periodDays > 0 && salesVolume !== null ? salesVolume / periodDays : null);
   actualByKey.set("return-cost", sumReturnCosts(records));
   actualByKey.set("net-sales-cost", deriveFromRequiredChildren(actualByKey, ["purchase-cost", "return-cost"], ([purchaseCost, returnCost]) => purchaseCost - returnCost));
@@ -453,10 +506,14 @@ export function buildStoreOperatingReportRows({ records, budgetByMetric = {}, cu
   );
   const directSalesProfit = sumPresent(records, DIRECT_SALES_PROFIT_FIELDS, false, "profit");
   actualByKey.set("sales-profit", directSalesProfit ?? legacySalesProfit ?? newSalesProfit);
-  actualByKey.set("return-rate", ratioFromKeys(actualByKey, "return-volume", "sales-volume"));
-  actualByKey.set("refund-rate", ratioFromKeys(actualByKey, "refund-volume", "sales-volume"));
   actualByKey.set("gross-rate", ratioFromKeys(actualByKey, "gross-profit", "sales-income"));
-  actualByKey.set("net-gross-rate", ratioFromKeys(actualByKey, "sales-profit", "sales-income"));
+  const directNetGrossRate = weightedRate(
+    records,
+    ["netGrossMargin", "net_gross_margin"],
+    ["totalSalesAmount", "salesAmount", "sales_amount", "amount"],
+    "netGrossMargin",
+  );
+  actualByKey.set("net-gross-rate", directNetGrossRate ?? ratioFromKeys(actualByKey, "sales-profit", "sales-income"));
 
   const metricsByCategory = new Map(CATEGORIES.map(([key]) => [key, []]));
   const categoryNames = new Map(CATEGORIES);
@@ -497,17 +554,30 @@ export function buildStoreOperatingReportRows({ records, budgetByMetric = {}, cu
       ? toFiniteNumber(budgetByMetric["sales-profit"], "预算科目 sales-profit")
       : null,
   }, salesIncome));
+  const salesNetRow = createRow({
+    key: SALES_NET_KEY,
+    category: SALES_NET_NAME,
+    name: SALES_NET_NAME,
+    level: 1,
+    actual: actualByKey.get(SALES_NET_KEY) ?? null,
+    children: [],
+    budget: null,
+  }, salesIncome);
+  const overviewChildren = CATEGORIES.flatMap(([key]) => (
+    key === "platform-income" ? [key, SALES_NET_KEY] : [key]
+  ));
   const overview = createRow({
     key: "overview",
     category: "总概",
     name: "总概",
     level: 0,
     actual: null,
-    children: CATEGORIES.map(([key]) => key),
+    children: overviewChildren,
   }, salesIncome);
   const rows = [overview, ...categoryRows.flatMap((category) => [
     category,
     ...metricRows.filter((metric) => metric.category === category.name),
+    ...(category.key === "platform-income" ? [salesNetRow] : []),
   ])];
 
   const metricByKey = new Map(METRIC_DEFINITIONS.map((metric) => [metric.key, metric]));
@@ -521,7 +591,9 @@ export function buildStoreOperatingReportRows({ records, budgetByMetric = {}, cu
           name: row.name,
           category: metric.category,
           reason: metric.category === "custom-expense"
-            ? "订单利润 API 未返回对应字段；当前未配置自定义费用独立数据源"
+            ? (metric.key === "offsite-ad-spend"
+              ? "订单利润 API 未返回对应字段"
+              : "店铺利润报表未返回对应费用科目")
             : "订单利润 API 未返回对应字段",
           fields: metric.fields,
         };

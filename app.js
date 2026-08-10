@@ -7,7 +7,7 @@ import {
   getDisplayShopName,
   pickSellerCountry,
   pickSellerName,
-} from "./assets/js/front-shop-filters.js?v=20260724-sales-owner-detail-jump-v1";
+} from "./assets/js/front-shop-filters.js?v=20260808-single-owner-filter-v2";
 import { readFileAsBase64 } from "./assets/js/file-utils.js?v=20260707-frontend-refactor-v1";
 import { cachedSalesImageUrl, normalizedSalesImageUrl } from "./assets/js/image-url.js?v=20260707-frontend-refactor-v1";
 import { createFbaUtils } from "./assets/js/fba-utils.js?v=20260707-frontend-refactor-v1";
@@ -47,8 +47,8 @@ import { createKnowledgeLibraryFeature } from "./assets/js/features/knowledge-li
 import { createAiImageWorkflowFeature } from "./assets/js/features/ai-image-workflow.js?v=20260706-frontend-refactor-v1";
 import { createAdminSettingsFeature } from "./assets/js/features/admin-settings.js?v=20260706-frontend-refactor-v1";
 import { createWebhookAssistantFeature } from "./assets/js/features/webhook-assistant.js?v=20260720-webhook-assistant-v1";
-import { createBudgetTargetsFeature } from "./assets/js/features/budget-targets.js?v=20260706-frontend-refactor-v1";
-import { createStoreOperatingMonthlyReportFeature } from "./assets/js/features/store-operating-monthly-report.js?v=20260805-store-operating-monthly-report-currency-v4";
+import { createBudgetTargetsFeature } from "./assets/js/features/budget-targets.js?v=20260808-budget-import-modal-v2";
+import { createStoreOperatingMonthlyReportFeature } from "./assets/js/features/store-operating-monthly-report.js?v=20260807-shared-country-store-filter-v1";
 import { createSyncCenterFeature } from "./assets/js/features/sync-center.js?v=20260706-frontend-refactor-v1";
 import { createFbaFreightFeature } from "./assets/js/features/fba-freight.js?v=20260717-shared-logistics-channels";
 import { createFbaShipmentVarianceFeature } from "./assets/js/features/fba-shipment-variance.js?v=20260803-shipment-variance-v1";
@@ -58,7 +58,7 @@ import { createFbaAutomationFeature } from "./assets/js/features/fba-automation.
 import { createFbaTaskFormFeature } from "./assets/js/features/fba-task-form.js?v=20260707-frontend-refactor-v1";
 import { createFreightRatesFeature } from "./assets/js/features/freight-rates.js?v=20260724-freight-rate-au-xys";
 import { createSalesForecastFeature } from "./assets/js/features/sales-forecast.js?v=20260713-sales-forecast-locator-v2";
-import { createSalesDashboardFeature } from "./assets/js/features/sales-dashboard.js?v=20260724-sales-owner-detail-jump-v1";
+import { createSalesDashboardFeature } from "./assets/js/features/sales-dashboard.js?v=20260808-single-owner-filter-v2";
 import { createSidebarShellFeature } from "./assets/js/features/sidebar-shell.js?v=20260707-frontend-refactor-v1";
 import { createTopbarStatusFeature } from "./assets/js/features/topbar-status.js?v=20260707-frontend-refactor-v1";
 import { createBreadcrumbShellFeature } from "./assets/js/features/breadcrumb-shell.js?v=20260707-frontend-refactor-v1";
@@ -185,7 +185,6 @@ const {
 } = createFrontShopFilters({
   root: document,
   bind,
-  bindClickOutside,
   fieldValue,
   getFrontDateRange,
   normalizeCountryName,
@@ -744,10 +743,14 @@ async function refreshDashboardFromFilters() {
   formatPercent,
   getPacificDateParts,
   locationRef: location,
+  normalizeCountryName,
   renderTableMessage,
   readFileAsBase64,
+  selectedFilterValues,
   setButtonBusy,
+  setSelectOptions,
   setText,
+  syncAllOptionSelection,
   trimmedFieldValue,
 }));
 
@@ -759,6 +762,7 @@ async function refreshDashboardFromFilters() {
 } = createStoreOperatingMonthlyReportFeature({
   root: document,
   bind,
+  bindBackdropClose,
   clickVisibleNavItem,
   downloadBlob,
   escapeHtml,
@@ -773,9 +777,11 @@ async function refreshDashboardFromFilters() {
   refreshTable,
   selectedFilterValues,
   setButtonBusy,
+  setModalOpenState,
   setSelectOptions,
   setText,
   syncAllOptionSelection,
+  syncCountryStoreSelection,
 }));
 
 ({ renderTopbarSyncStatus, syncToneClasses, updateWorldClock } = createTopbarStatusFeature({

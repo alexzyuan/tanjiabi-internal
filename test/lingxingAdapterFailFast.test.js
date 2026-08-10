@@ -101,6 +101,56 @@ test("LingxingAdapter defaults sales weekly order profit currency to CNY", async
   }
 });
 
+test("LingxingAdapter loads a 30-day refund window ending on the selected sales dashboard date", async () => {
+  const projectRoot = process.cwd();
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lingxing-order-profit-recent30-"));
+  try {
+    process.chdir(tempRoot);
+    const { LingxingAdapter } = await importFresh(projectRoot, "src/adapters/lingxingAdapter.js");
+    const adapter = new LingxingAdapter({
+      baseUrl: "https://openapi.test/",
+      appKey: "1234567890abcdef",
+      appSecret: "secret",
+    });
+    const orderProfitRequests = [];
+    adapter.fetchSellers = async () => ({
+      data: [{ sid: 8708, name: "JOI MEW-US", country: "美国", status: 1 }],
+    });
+    adapter.fetchMskuOrderProfitCached = async (request) => {
+      orderProfitRequests.push(request);
+      return {
+        records: [{ sid: 8708, msku: "MSKU-1", totalSalesAmount: 100, totalSalesRefunds: 3 }],
+        cacheState: "miss",
+        cacheUpdatedAt: "",
+      };
+    };
+    adapter.fetchAllFbaInventoryDetails = async () => [];
+
+    const data = await adapter.fetchSalesWeeklyData({
+      startDate: "2026-08-01",
+      endDate: "2026-08-09",
+      currencyCode: "CNY",
+      sids: [8708],
+    });
+
+    assert.deepEqual(orderProfitRequests.map(({ startDate, endDate, sids, currencyCode }) => ({ startDate, endDate, sids, currencyCode })), [
+      { startDate: "2026-08-01", endDate: "2026-08-09", sids: [8708], currencyCode: "CNY" },
+      { startDate: "2026-07-11", endDate: "2026-08-09", sids: [8708], currencyCode: "CNY" },
+    ]);
+    assert.deepEqual(data.recent30OrderProfitRecords, [{ sid: 8708, msku: "MSKU-1", totalSalesAmount: 100, totalSalesRefunds: 3 }]);
+    assert.deepEqual(data.raw.recent30, {
+      startDate: "2026-07-11",
+      endDate: "2026-08-09",
+      cacheState: "miss",
+      cacheUpdatedAt: "",
+      recordCount: 1,
+    });
+  } finally {
+    process.chdir(projectRoot);
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
 test("shared order profit cache returns a normalized hit without calling Lingxing", async () => {
   const projectRoot = process.cwd();
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), "lingxing-order-profit-shared-hit-"));
@@ -111,7 +161,7 @@ test("shared order profit cache returns a normalized hit without calling Lingxin
     let calls = 0;
     adapter.fetchMskuOrderProfit = async () => {
       calls += 1;
-      return { data: { records: [{ sid: 8708, amount: 12, net_amount: 10 }] } };
+      return { data: { records: [{ sid: 8708, amount: 12, net_amount: 10, profit: 3 }] } };
     };
     const first = await adapter.fetchMskuOrderProfitCached({
       startDate: "2026-08-01",
@@ -133,6 +183,7 @@ test("shared order profit cache returns a normalized hit without calling Lingxin
     assert.equal(first.cacheState, "miss");
     assert.equal(second.cacheState, "hit");
     assert.equal(second.records[0].storeName, "JOI MEW-US");
+    assert.equal(second.records[0].salesProfit, 3);
   } finally {
     process.chdir(projectRoot);
     await rm(tempRoot, { recursive: true, force: true });

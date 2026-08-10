@@ -65,6 +65,7 @@ import {
   exportStoreOperatingMonthlyReportXlsx,
   getStoreOperatingMonthlyReport,
 } from "./src/services/storeOperatingMonthlyReportService.js";
+import { createStoreOperatingMonthlyReportRowVisibilityService } from "./src/services/storeOperatingMonthlyReportRowVisibilityService.js";
 import {
   deleteSupplierDetail,
   importSupplierDetails,
@@ -72,7 +73,7 @@ import {
   saveSupplierDetail,
 } from "./src/services/supplierDetailService.js";
 import { startSyncScheduler, runManualSync, getSyncState, getSyncStatus, getLingxingShops } from "./src/services/syncService.js";
-import { listBudgetTargets, listBudgetUploads, saveBudgetUpload } from "./src/services/budgetTargetService.js";
+import { createBudgetImportTemplate, listBudgetTargets, listBudgetUploads, saveBudgetUpload } from "./src/services/budgetTargetService.js";
 import { runStaWarehouseProbe } from "./src/services/fbaStaService.js";
 import { getFbaShopOptions, searchFbaMskus } from "./src/services/fbaCatalogService.js";
 import { saveFbaBoxTemplate } from "./src/services/fbaBoxTemplateService.js";
@@ -157,6 +158,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const config = getConfig();
 const slowMovingRiskSnapshotStore = createSlowMovingRiskSnapshotStore();
+const storeOperatingMonthlyReportRowVisibilityService = createStoreOperatingMonthlyReportRowVisibilityService();
 const sessionCookieName = "tanjia_session";
 const oauthStateCookieName = "tanjia_oauth_state";
 const sessionTtlMs = 12 * 60 * 60 * 1000;
@@ -829,6 +831,8 @@ const apiRoutes = createApiRoutes(buildApiRoutes({
   getSupplierBoardDashboard,
   getStoreOperatingMonthlyReport,
   exportStoreOperatingMonthlyReportXlsx,
+  readStoreOperatingMonthlyReportRowVisibility: storeOperatingMonthlyReportRowVisibilityService.read,
+  saveStoreOperatingMonthlyReportRowVisibility: storeOperatingMonthlyReportRowVisibilityService.save,
   runPlatformCashflowCapture,
   listSupplierDetails,
   saveSupplierDetail,
@@ -876,9 +880,11 @@ const apiRoutes = createApiRoutes(buildApiRoutes({
   createAuthUser,
   updateAuthUser,
   deleteAuthUser,
+  contentDispositionAttachment,
   listBudgetUploads,
   listBudgetTargets,
   saveBudgetUpload,
+  createBudgetImportTemplate,
   createKnowledgeDocument,
   deleteKnowledgeDocument,
   runManualSync,

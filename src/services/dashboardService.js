@@ -12,6 +12,11 @@ import {
 import { filterCoreSellers, getLingxingAdapter } from "../adapters/lingxingAdapter.js";
 import { buildBudgetMskuDetailRows, mapLingxingToSalesDashboard } from "./lingxingDashboardMapper.js";
 import { getDefaultWeekRange } from "../utils/dateRange.js";
+import {
+  migrateSalesWeeklySourceCache,
+  SALES_WEEKLY_SOURCE_CACHE_VERSION,
+  validateSalesWeeklySourceCache,
+} from "./salesWeeklySourceCache.js";
 import { getBudgetTargetContext } from "./budgetTargetService.js";
 import {
   fetchListingOwnerRows,
@@ -53,7 +58,7 @@ function salesWeeklySourceScope(filters = {}) {
   const endDate = filters.endDate || defaultRange.endDate;
   const sids = Array.isArray(filters.sids) ? uniqueNumbers(filters.sids).sort((a, b) => a - b) : [];
   return {
-    version: "sales-weekly-source-v1",
+    version: SALES_WEEKLY_SOURCE_CACHE_VERSION,
     startDate,
     endDate,
     currencyCode: normalizedCurrencyCode(filters),
@@ -61,8 +66,26 @@ function salesWeeklySourceScope(filters = {}) {
   };
 }
 
+export { validateSalesWeeklySourceCache };
+
+export function validateSalesWeeklyDashboardCache(dashboard) {
+  const detailRows = dashboard?.detailRows;
+  if (!Array.isArray(detailRows)) return { ok: false, reasons: ["detailRows must be an array"] };
+  const missingRefundRate30d = detailRows.filter(
+    (row) => !row || !Object.prototype.hasOwnProperty.call(row, "refundRate30d"),
+  ).length;
+  if (missingRefundRate30d > 0) {
+    return { ok: false, reasons: [`${missingRefundRate30d} detail rows are missing refundRate30d`] };
+  }
+  return { ok: true, reasons: [] };
+}
+
 function salesWeeklySourceCacheKey(filters = {}) {
   return JSON.stringify(salesWeeklySourceScope(filters));
+}
+
+function salesWeeklySourceCacheKeyForVersion(filters = {}, version) {
+  return JSON.stringify({ ...salesWeeklySourceScope(filters), version });
 }
 
 function sourceFiltersFromCacheScope(scope = {}) {
@@ -104,6 +127,7 @@ function mapSalesWeeklySourceToDashboard(source = {}, filters = {}) {
     sellers: source.sellers || [],
     sellerProfitRecords: source.sellerProfitRecords || [],
     orderProfitRecords: source.orderProfitRecords || [],
+    recent30OrderProfitRecords: source.recent30OrderProfitRecords || [],
     dailyProfitRecords: source.dailyProfitRecords || [],
     inventoryRecords: source.inventoryRecords || [],
     listingOwnerRows: source.listingOwnerRows || [],
@@ -117,6 +141,7 @@ function mapSalesWeeklySourceToDashboard(source = {}, filters = {}) {
       ...(source.raw || {}),
       cacheState: source.raw?.cacheState || "hit",
       cacheUpdatedAt: source.cacheUpdatedAt || source.updatedAt || "",
+      recent30: source.raw?.recent30 || null,
     },
     budgetTargets: source.budgetTargets || {},
   });
@@ -161,6 +186,7 @@ async function fetchSalesWeeklySource(filters = {}) {
     sellers: data.sellers || [],
     sellerProfitRecords: data.sellerProfitRecords || [],
     orderProfitRecords: data.orderProfitRecords || [],
+    recent30OrderProfitRecords: data.recent30OrderProfitRecords || [],
     dailyProfitRecords: data.dailyProfitRecords || [],
     inventoryRecords: data.inventoryRecords || [],
     listingOwnerRows,
@@ -303,6 +329,41 @@ export async function getSalesWeeklyDashboard(filters = {}) {
     });
   }
 
+  if (!cachedSource?.data) {
+    const legacyCacheKey = salesWeeklySourceCacheKeyForVersion(filters, "sales-weekly-source-v2");
+    try {
+      const legacySource = await readSalesWeeklySourceCache(legacyCacheKey);
+      const migration = migrateSalesWeeklySourceCache(legacySource?.data, salesWeeklySourceScope(filters));
+      if (migration) {
+        await saveSalesWeeklySourceCache(sourceCacheKey, migration.data);
+        cachedSource = {
+          ...legacySource,
+          data: migration.data,
+        };
+        console.warn("[sales-weekly] migrated validated legacy source cache", {
+          cacheKey: sourceCacheKey,
+          migratedFrom: migration.migratedFrom,
+        });
+      }
+    } catch (error) {
+      console.error("[sales-weekly] legacy source cache migration failed", {
+        cacheKey: legacyCacheKey,
+        error: error.message,
+      });
+    }
+  }
+
+  if (cachedSource?.data) {
+    const validation = validateSalesWeeklySourceCache(cachedSource.data, salesWeeklySourceScope(filters));
+    if (!validation.ok) {
+      console.error("[sales-weekly] source cache contract rejected", {
+        cacheKey: sourceCacheKey,
+        reasons: validation.reasons,
+      });
+      cachedSource = null;
+    }
+  }
+
   if (syncState.provider === "lingxing" && cachedSource?.data) {
     const dashboard = mapSalesWeeklySourceToDashboard(cachedSource.data, filters);
     if (defaultCacheEligible) refreshSalesWeeklySourceCacheInBackground(filters);
@@ -322,6 +383,16 @@ export async function getSalesWeeklyDashboard(filters = {}) {
     console.error("[sales-weekly] legacy cache read failed", {
       error: error.message,
     });
+  }
+
+  if (cachedDashboard) {
+    const validation = validateSalesWeeklyDashboardCache(cachedDashboard);
+    if (!validation.ok) {
+      console.error("[sales-weekly] legacy dashboard cache contract rejected", {
+        reasons: validation.reasons,
+      });
+      cachedDashboard = null;
+    }
   }
 
   if (syncState.provider === "lingxing" && cachedDashboard && defaultCacheEligible) {
@@ -358,24 +429,12 @@ export async function getSalesWeeklyDashboard(filters = {}) {
         cacheHit: false,
       };
     } catch (error) {
-      if (cachedDashboard) {
-        logSalesWeeklyTiming("live-failed-cache-fallback", startedAt, {
-          defaultCacheEligible,
-          cacheKey: sourceCacheKey,
-          error: error.message,
-        });
-        return normalizeCachedDashboard(
-          cachedDashboard,
-          syncState,
-          `已显示最近同步缓存；实时接口暂不可用：${error.message}`,
-        );
-      }
-      logSalesWeeklyTiming("live-failed-empty", startedAt, {
+      logSalesWeeklyTiming("live-failed", startedAt, {
         defaultCacheEligible,
         cacheKey: sourceCacheKey,
         error: error.message,
       });
-      return emptyLingxingDashboard(syncState, `销售看板实时接口失败：${error.message}`);
+      throw error;
     }
   }
 

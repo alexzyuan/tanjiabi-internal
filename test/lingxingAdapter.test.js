@@ -156,6 +156,41 @@ test("normalized MSKU profit keeps unsaleable returns and unit landed-cost field
   assert.equal(row.firstLegUnitCost, -1);
 });
 
+test("seller profit otherFeeStr normalizes store-level custom fee allocations", () => {
+  const adapter = new LingxingAdapter(lingxingTestConfig);
+  const records = adapter.normalizeSellerProfitOtherFeeRecords([{
+    sid: 7,
+    storeName: "Amazon-US",
+    country: "美国",
+    currencyCode: "CNY",
+    otherFeeStr: [{ otherFeeName: "办公费用-租金", otherFeeTypeId: 1, feeAllocation: -12.5 }],
+  }], [{ sid: 7, name: "Amazon-US", country: "美国" }], "2026-07");
+
+  assert.deepEqual(records, [{
+    sid: 7,
+    storeName: "Amazon-US",
+    country: "美国",
+    currencyCode: "CNY",
+    reportDate: "2026-07",
+    other_fee_type: "办公费用-租金",
+    other_fee_type_id: "1",
+    fee: -12.5,
+  }]);
+});
+
+test("normalized MSKU profit exposes the OrderProfit profit field for net gross rate", () => {
+  const adapter = new LingxingAdapter(lingxingTestConfig);
+  const [row] = adapter.normalizeMskuOrderProfitRecords([{
+    sid: 1,
+    amount: 100,
+    net_amount: 90,
+    gross_profit: 50,
+    profit: 20,
+  }], [{ sid: 1, name: "Amazon-US", country: "美国" }]);
+
+  assert.equal(row.salesProfit, 20);
+});
+
 test("filterCoreSellers includes JOI MEW Germany stores", () => {
   const sellers = filterCoreSellers([
     { name: "JOI MEW-US", country: "美国", countryCode: "US" },

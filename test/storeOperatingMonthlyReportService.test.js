@@ -28,6 +28,18 @@ function fakeAdapter({ sellers, recordsForCall, feeRecordsForCall = () => [], ca
       calls.push({ ...request, source: "seller-profit" });
       return recordsForCall(request);
     },
+    normalizeSellerProfitOtherFeeRecords(records, sellerList, reportDate) {
+      return records.flatMap((record) => (Array.isArray(record.otherFeeStr) ? record.otherFeeStr.map((fee) => ({
+        sid: record.sid,
+        storeName: record.storeName || sellerList.find((seller) => Number(seller.sid) === Number(record.sid))?.name || "",
+        country: record.country || sellerList.find((seller) => Number(seller.sid) === Number(record.sid))?.country || "",
+        currencyCode: record.currencyCode || "",
+        reportDate,
+        other_fee_type: fee.otherFeeName,
+        other_fee_type_id: fee.otherFeeTypeId,
+        fee: fee.feeAllocation,
+      })) : []));
+    },
     async fetchOtherFeeList(request) {
       return { data: feeRecordsForCall(request) };
     },
@@ -46,17 +58,22 @@ function fakeAdapter({ sellers, recordsForCall, feeRecordsForCall = () => [], ca
   };
 }
 
-test("monthly report uses OrderProfit instead of seller-dimension profit", async () => {
+test("monthly report keeps OrderProfit as its primary source and reads custom fees from seller profit otherFeeStr", async () => {
   const calls = [];
-  let sellerCalls = 0;
   const adapter = fakeAdapter({
     calls,
     sellers: [{ sid: 1, name: "Store-US", country: "美国" }],
     recordsForCall: () => [{ sid: 1, totalSalesAmount: 100, currencyCode: "CNY" }],
   });
-  adapter.fetchSellerProfitReport = async () => {
-    sellerCalls += 1;
-    throw new Error("seller source must not be called");
+  adapter.fetchSellerProfitReport = async (request) => {
+    calls.push({ ...request, source: "seller-profit" });
+    return { data: [{
+      sid: 1,
+      storeName: "Store-US",
+      country: "美国",
+      currencyCode: "CNY",
+      otherFeeStr: [{ otherFeeName: "软件费用", otherFeeTypeId: 2, feeAllocation: -8 }],
+    }] };
   };
   adapter.fetchMskuOrderProfitCached = async () => {
     calls.push({
@@ -74,27 +91,70 @@ test("monthly report uses OrderProfit instead of seller-dimension profit", async
     { adapter, getBudgetTargetContext: async () => ({ rows: [], totals: {}, matched: false }) },
   );
 
-  assert.equal(sellerCalls, 0);
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].source, "order-profit");
+  assert.equal(calls.filter((call) => call.source === "order-profit").length, 1);
+  assert.equal(calls.filter((call) => call.source === "seller-profit").length, 1);
   assert.equal(value.meta.source, "/basicOpen/finance/mreport/OrderProfit");
+  assert.equal(value.rows.find((row) => row.key === "software-fee").actual, 8);
 });
 
-test("monthly report applies nested store-level custom fee details to the matching subject row", async () => {
+test("monthly report sends exact partial-month boundaries for a date range", async () => {
+  const calls = [];
+  const adapter = fakeAdapter({
+    calls,
+    sellers: [{ sid: 1, name: "Store-US", country: "美国" }],
+    recordsForCall: () => [],
+  });
+
+  await getStoreOperatingMonthlyReport(
+    { startDate: "2026-08-01", endDate: "2026-08-07" },
+    { adapter, getBudgetTargetContext: async () => ({ rows: [], matched: false }) },
+  );
+
+  const orderProfitCall = calls.find((call) => call.source !== "seller-profit");
+  const sellerProfitCall = calls.find((call) => call.source === "seller-profit");
+  assert.equal(orderProfitCall.startDate, "2026-08-01");
+  assert.equal(orderProfitCall.endDate, "2026-08-07");
+  assert.equal(sellerProfitCall.startDate, "2026-08");
+  assert.equal(sellerProfitCall.endDate, "2026-08");
+});
+
+test("monthly report splits a cross-month date range at natural month boundaries", async () => {
+  const calls = [];
+  const adapter = fakeAdapter({
+    calls,
+    sellers: [{ sid: 1, name: "Store-US", country: "美国" }],
+    recordsForCall: () => [],
+  });
+
+  await getStoreOperatingMonthlyReport(
+    { startDate: "2026-07-20", endDate: "2026-08-07" },
+    { adapter, getBudgetTargetContext: async () => ({ rows: [], matched: false }) },
+  );
+
+  const orderProfitCalls = calls.filter((call) => call.source !== "seller-profit");
+  const sellerProfitCalls = calls.filter((call) => call.source === "seller-profit");
+  assert.deepEqual(orderProfitCalls.map(({ startDate, endDate }) => ({ startDate, endDate })), [
+    { startDate: "2026-07-20", endDate: "2026-07-31" },
+    { startDate: "2026-08-01", endDate: "2026-08-07" },
+  ]);
+  assert.deepEqual(sellerProfitCalls.map(({ startDate, endDate }) => ({ startDate, endDate })), [
+    { startDate: "2026-07", endDate: "2026-07" },
+    { startDate: "2026-08", endDate: "2026-08" },
+  ]);
+});
+
+test("monthly report applies seller profit otherFeeStr allocations to the matching subject row", async () => {
   const adapter = fakeAdapter({
     sellers: [{ sid: 7, name: "Store-US", country: "美国" }],
     recordsForCall: () => [],
-    feeRecordsForCall: () => [{
-      fee: -125.9,
-      other_fee_type: "店铺保险费",
-      currency_code: "CNY",
-      details: [{
-        fee: -125.9,
-        dimension_value: "7",
-        store_infos: [{ id: 7, name: "Store-US" }],
-      }],
-    }],
   });
+  adapter.fetchSellerProfitReport = async () => ({ data: [{
+    sid: 7,
+    storeName: "Store-US",
+    country: "美国",
+    currencyCode: "CNY",
+    otherFeeStr: [{ otherFeeName: "店铺保险费", otherFeeTypeId: 1, feeAllocation: -125.9 }],
+  }] });
   adapter.fetchMskuOrderProfitCached = async () => ({
     records: [{ sid: 7, totalSalesAmount: 100, currencyCode: "CNY" }],
   });
@@ -118,6 +178,17 @@ test("service rejects a 13-month range without changing either boundary", () => 
     /最多 12 个月/,
   );
   assert.deepEqual(input, { startMonth: "2025-01", endMonth: "2026-01" });
+});
+
+test("service rejects a future end date instead of requesting projected monthly profit", () => {
+  assert.throws(
+    () => normalizeStoreOperatingMonthlyReportFilters({
+      startDate: "2026-08-01",
+      endDate: "2026-08-31",
+      today: new Date("2026-08-07T08:00:00.000Z"),
+    }),
+    /结束日期不能晚于今天/,
+  );
 });
 
 test("monthly report defaults to CNY and accepts ORIGINAL as the explicit original-currency mode", () => {
@@ -183,8 +254,9 @@ test("service sums each requested month and uses CNY for multiple effective coun
   );
 
   assert.equal(value.meta.currencyMode, "CNY");
-  assert.deepEqual(calls.map((call) => call.currencyCode), ["CNY", "CNY"]);
-  assert.deepEqual(calls.map(({ startDate, endDate }) => ({ startDate, endDate })), [
+  const orderProfitCalls = calls.filter((call) => call.source !== "seller-profit");
+  assert.deepEqual(orderProfitCalls.map((call) => call.currencyCode), ["CNY", "CNY"]);
+  assert.deepEqual(orderProfitCalls.map(({ startDate, endDate }) => ({ startDate, endDate })), [
     { startDate: "2026-06-01", endDate: "2026-06-30" },
     { startDate: "2026-07-01", endDate: "2026-07-31" },
   ]);
@@ -217,11 +289,11 @@ test("monthly report prefers the shared cached OrderProfit adapter method", asyn
     { adapter, getBudgetTargetContext: async () => ({ rows: [], totals: {}, matched: false }) },
   );
 
-  assert.equal(rawCalls, 0);
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].currencyCode, "CNY");
-  assert.equal(calls[0].startDate, "2026-07-01");
-  assert.equal(calls[0].endDate, "2026-07-31");
+  assert.equal(rawCalls, 1);
+  const [orderProfitCall] = calls.filter((call) => call.source !== "seller-profit");
+  assert.equal(orderProfitCall.currencyCode, "CNY");
+  assert.equal(orderProfitCall.startDate, "2026-07-01");
+  assert.equal(orderProfitCall.endDate, "2026-07-31");
   assert.equal(value.meta.recordCount, 1);
 });
 
@@ -384,18 +456,18 @@ test("service accepts one and twelve months but rejects missing, invalid, and re
     { adapter, getBudgetTargetContext: budget },
   );
   assert.equal(twelveMonths.filters.months.length, 12);
-  assert.equal(calls.length, 12);
+  assert.equal(calls.filter((call) => call.source !== "seller-profit").length, 12);
   assert.throws(
     () => normalizeStoreOperatingMonthlyReportFilters({ startMonth: "2026-13", endMonth: "2026-13" }),
-    /请选择开始月份和结束月份/,
+    /请选择开始日期和结束日期/,
   );
   assert.throws(
     () => normalizeStoreOperatingMonthlyReportFilters({ startMonth: "2026-08", endMonth: "2026-07" }),
-    /结束月份不能早于开始月份/,
+    /结束日期不能早于开始日期/,
   );
   assert.throws(
     () => normalizeStoreOperatingMonthlyReportFilters({ startMonth: "", endMonth: "2026-07" }),
-    /请选择开始月份和结束月份/,
+    /请选择开始日期和结束日期/,
   );
 });
 
@@ -739,8 +811,8 @@ test("service logs trace metadata without order or budget payloads", async () =>
 
 test("monthly report export builds its workbook from the same report result and filters", async () => {
   const filters = {
-    startMonth: "2026-06",
-    endMonth: "2026-07",
+    startDate: "2026-06-01",
+    endDate: "2026-07-31",
     stores: ["Store-US"],
     countries: ["美国"],
   };
@@ -777,14 +849,14 @@ test("monthly report export builds its workbook from the same report result and 
   const rows = XLSX.utils.sheet_to_json(workbook.Sheets["店铺经营月报"], { header: 1 });
 
   assert.deepEqual(receivedFilters, filters);
-  assert.equal(result.filename, "店铺经营月报-2026-06至2026-07.xlsx");
+  assert.equal(result.filename, "店铺经营月报-2026-06-01至2026-07-31.xlsx");
   assert.deepEqual(rows[0], ["上级", "名称", "Store-US · USD", "", "", ""]);
   assert.deepEqual(rows[1], ["", "", "实际完成值", "占比", "预算值", "达成率"]);
   assert.deepEqual(rows[2], ["销售收入", "销售收入净额", 90, 1, 120, 0.75]);
   const metadata = XLSX.utils.sheet_to_json(workbook.Sheets["报表说明"], { header: 1 });
   assert.deepEqual(metadata.slice(1), [
-    ["开始月份", "2026-06"],
-    ["结束月份", "2026-07"],
+    ["开始日期", "2026-06-01"],
+    ["结束日期", "2026-07-31"],
     ["店铺范围", "Store-US"],
     ["国家范围", "美国"],
     ["币种模式", "原币分币种"],
@@ -800,10 +872,10 @@ test("monthly report export builds its workbook from the same report result and 
 test("monthly report export rejects malformed source rows instead of writing a misleading workbook", async () => {
   await assert.rejects(
     () => exportStoreOperatingMonthlyReportXlsx(
-      { startMonth: "2026-06", endMonth: "2026-07" },
+      { startDate: "2026-06-01", endDate: "2026-07-31" },
       {
         getStoreOperatingMonthlyReport: async () => ({
-          filters: { startMonth: "2026-06", endMonth: "2026-07" },
+          filters: { startDate: "2026-06-01", endDate: "2026-07-31" },
           groups: [{ currencyCode: "USD", rows: [{}] }],
         }),
       },

@@ -37,12 +37,6 @@ body:not(.login-body) .view > .module-hero + :is(.filters, .filter-toolbar) {
   flex: 0 0 220px;
 }
 
-.filters .front-owner-quick-filter {
-  position: relative;
-  flex: 0 0 150px;
-  min-width: 0;
-}
-
 .filters .checkbox-label {
   flex: 0 0 auto;
   gap: 8px;
@@ -62,7 +56,8 @@ body:not(.login-body) .view > .module-hero + :is(.filters, .filter-toolbar) {
   transition: border-color 0.16s ease, box-shadow 0.16s ease;
 }
 
-.enhanced-filter-select {
+.filters select.enhanced-filter-select,
+.filter-toolbar select.enhanced-filter-select {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -85,6 +80,10 @@ body:not(.login-body) .view > .module-hero + :is(.filters, .filter-toolbar) {
   min-width: 0;
 }
 
+.filter-dropdown--has-selection .filter-dropdown-button {
+  padding-right: calc(var(--tj-control-padding-x) + 28px);
+}
+
 .filter-dropdown-clear {
   position: absolute;
   top: 1px;
@@ -99,7 +98,7 @@ body:not(.login-body) .view > .module-hero + :is(.filters, .filter-toolbar) {
   background: var(--tj-content-bg);
   appearance: none;
   cursor: pointer;
-  font-size: 20px;
+  font-size: 26px;
 }
 
 .filter-dropdown--has-selection:is(:hover, :focus-within) .filter-dropdown-clear,

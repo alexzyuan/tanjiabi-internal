@@ -18,7 +18,12 @@ function makeElement(value = "") {
   };
 }
 
-function makeReportResponse({ name = "销售收入净额", unavailableMetricNames = [], unavailableMetricDetails = [] } = {}) {
+function makeReportResponse({
+  name = "销售收入净额",
+  unavailableMetricNames = [],
+  unavailableMetricDetails = [],
+  customFeeSource = "/bd/profit/report/open/report/seller/list.otherFeeStr",
+} = {}) {
   return {
     ok: true,
     async json() {
@@ -31,6 +36,7 @@ function makeReportResponse({ name = "销售收入净额", unavailableMetricName
           unavailableMetrics: [],
           unavailableMetricNames,
           unavailableMetricDetails,
+          customFeeSource,
           missingExchangeRateCount: 0,
         },
         groups: [{
@@ -63,8 +69,9 @@ function createDeferred() {
 }
 
 function makeFeatureHarness({
-  startMonth = "2026-06",
-  endMonth = "2026-07",
+  createDateRangePickerImpl,
+  startDate = "2026-06-01",
+  endDate = "2026-07-31",
   stores = [],
   countries = [],
   groups,
@@ -75,8 +82,8 @@ function makeFeatureHarness({
   ],
 } = {}) {
   const elements = {
-    "#store-operating-report-start-month": makeElement(startMonth),
-    "#store-operating-report-end-month": makeElement(endMonth),
+    "#store-operating-report-start-date": makeElement(startDate),
+    "#store-operating-report-end-date": makeElement(endDate),
     "#store-operating-report-store": makeElement(),
     "#store-operating-report-country": makeElement(),
     "#store-operating-report-currency": makeElement(""),
@@ -97,6 +104,7 @@ function makeFeatureHarness({
   const requests = [];
   const refreshes = [];
   const optionUpdates = [];
+  const countryStoreSyncCalls = [];
   const navTargets = [];
   const location = { pathname: "/dashboard", search: "" };
   const history = {
@@ -107,9 +115,11 @@ function makeFeatureHarness({
   const feature = createStoreOperatingMonthlyReportFeature({
     root,
     bind() {},
+    bindBackdropClose() {},
     clickVisibleNavItem(target) {
       navTargets.push(target);
     },
+    createDateRangePickerImpl,
     downloadBlob() {},
     escapeHtml: (value) => String(value ?? ""),
     fetchImpl: fetchImpl || (async (url) => {
@@ -128,7 +138,7 @@ function makeFeatureHarness({
       return makeReportResponse();
     }),
     formatActualMoney: (value) => String(value),
-    getCurrentMonth: () => "2026-08",
+    getCurrentDateRange: () => ({ startDate: "2026-08-01", endDate: "2026-08-07" }),
     getStoreOptions: () => storeOptions,
     historyRef: history,
     locationRef: location,
@@ -138,15 +148,23 @@ function makeFeatureHarness({
     pickSellerName,
     selectedFilterValues: (element) => element?.selectedValues?.slice() || [],
     setButtonBusy: () => () => {},
+    setModalOpenState() {},
     setSelectOptions: (element, options, label, config) => {
       optionUpdates.push({ element, options, label, config });
     },
     setText: (selector, value) => {
       if (elements[selector]) elements[selector].textContent = value;
     },
+    syncCountryStoreSelection: (options) => {
+      countryStoreSyncCalls.push(options);
+      const countries = elements["#store-operating-report-country"].selectedValues;
+      elements["#store-operating-report-store"].selectedValues = options.storeOptions
+        .filter((option) => !countries.length || countries.includes(option.country))
+        .map((option) => option.name);
+    },
     syncAllOptionSelection() {},
   });
-  return { elements, feature, location, navTargets, optionUpdates, refreshes, requests };
+  return { elements, feature, location, navTargets, optionUpdates, refreshes, requests, countryStoreSyncCalls };
 }
 
 test("seller aliases are normalized through the shared shop identity helpers", () => {
@@ -175,6 +193,25 @@ test("seller aliases are normalized through the shared shop identity helpers", (
   );
 });
 
+test("monthly report seeds its current-month range before mounting the shared date picker", () => {
+  const pickerOptions = [];
+  const { feature, elements } = makeFeatureHarness({
+    startDate: "",
+    endDate: "",
+    createDateRangePickerImpl(options) {
+      pickerOptions.push(options);
+      return { setup() {} };
+    },
+  });
+
+  feature.setupStoreOperatingMonthlyReport();
+
+  assert.equal(elements["#store-operating-report-start-date"].value, "2026-08-01");
+  assert.equal(elements["#store-operating-report-end-date"].value, "2026-08-07");
+  assert.equal(pickerOptions.length, 1);
+  assert.equal(pickerOptions[0].maxCalendarMonths, 12);
+});
+
 test("the feature requires the managed table refresher dependency", () => {
   assert.throws(() => createStoreOperatingMonthlyReportFeature({
     root: { querySelector() { return null; } },
@@ -194,26 +231,41 @@ test("the feature requires the managed table refresher dependency", () => {
   }), /requires refreshTable/);
 });
 
-test("valid month edits auto-refresh and invalid 13-month edits do not request", async () => {
+test("valid date ranges request exact dates and invalid 13-month date ranges do not request", async () => {
   const { feature, requests, elements } = makeFeatureHarness({
-    startMonth: "2026-06",
-    endMonth: "2026-07",
+    startDate: "2026-06-01",
+    endDate: "2026-07-31",
     stores: ["A"],
     countries: ["美国"],
   });
 
   await feature.loadStoreOperatingMonthlyReport();
   assert.match(requests[0], /currencyCode=CNY/);
-  assert.match(requests[0], /startMonth=2026-06/);
-  assert.match(requests[0], /endMonth=2026-07/);
+  assert.match(requests[0], /startDate=2026-06-01/);
+  assert.match(requests[0], /endDate=2026-07-31/);
   assert.match(requests[0], /stores=A/);
   assert.match(requests[0], /countries=%E7%BE%8E%E5%9B%BD/);
 
-  elements["#store-operating-report-end-month"].value = "2027-07";
-  await feature.handleMonthChange();
+  elements["#store-operating-report-start-date"].value = "2025-07-01";
+  elements["#store-operating-report-end-date"].value = "2026-08-07";
+  await feature.handleDateRangeChange();
 
   assert.match(elements["#store-operating-report-status"].textContent, /最多 12 个月/);
   assert.equal(requests.length, 1);
+});
+
+test("date range edits send exact startDate and endDate to the report API", async () => {
+  const { feature, elements, requests } = makeFeatureHarness();
+  elements["#store-operating-report-start-date"] = makeElement("2026-08-01");
+  elements["#store-operating-report-end-date"] = makeElement("2026-08-07");
+  delete elements["#store-operating-report-start-month"];
+  delete elements["#store-operating-report-end-month"];
+
+  await feature.loadStoreOperatingMonthlyReport();
+
+  assert.match(requests[0], /startDate=2026-08-01/);
+  assert.match(requests[0], /endDate=2026-08-07/);
+  assert.doesNotMatch(requests[0], /startMonth=/);
 });
 
 test("currency filter defaults to CNY and explicit ORIGINAL selection is sent to the report API", async () => {
@@ -231,8 +283,8 @@ test("currency filter defaults to CNY and explicit ORIGINAL selection is sent to
 
 test("budget action carries the active scope to the budget view", () => {
   const { feature, location, navTargets } = makeFeatureHarness({
-    startMonth: "2026-06",
-    endMonth: "2026-07",
+    startDate: "2026-06-01",
+    endDate: "2026-07-31",
     stores: ["A"],
     countries: ["美国"],
   });
@@ -246,20 +298,25 @@ test("budget action carries the active scope to the budget view", () => {
   assert.deepEqual(navTargets, ["budget"]);
 });
 
-test("country and store edits stay local until query while country edits narrow store options", async () => {
-  const { feature, elements, optionUpdates, requests } = makeFeatureHarness();
+test("monthly report country selection delegates matching stores to shared controls", async () => {
+  const { feature, elements, requests, countryStoreSyncCalls } = makeFeatureHarness();
 
   feature.initializeStoreOperatingMonthlyReportDefaults();
   elements["#store-operating-report-country"].selectedValues = ["美国"];
   feature.handleCountryChange();
-  feature.handleStoreChange();
 
   assert.equal(requests.length, 0);
-  const lastStoreUpdate = optionUpdates.filter((item) => item.element === elements["#store-operating-report-store"]).at(-1);
-  assert.deepEqual(lastStoreUpdate.options.map((item) => item.name), ["A"]);
+  assert.equal(countryStoreSyncCalls.length, 1);
+  assert.deepEqual(countryStoreSyncCalls[0].storeOptions.map(({ name, country }) => ({ name, country })), [
+    { name: "A", country: "美国" },
+    { name: "B", country: "加拿大" },
+  ]);
+  assert.deepEqual(elements["#store-operating-report-store"].selectedValues, ["A"]);
 
   await feature.loadStoreOperatingMonthlyReport();
   assert.equal(requests.length, 1);
+  assert.match(requests[0], /stores=A/);
+  assert.match(requests[0], /countries=%E7%BE%8E%E5%9B%BD/);
 });
 
 test("successful rendering refreshes the shared managed table and writes filter state without pinning the startup view", async () => {
@@ -269,7 +326,7 @@ test("successful rendering refreshes the shared managed table and writes filter 
 
   assert.deepEqual(refreshes, [elements["#store-operating-report-table"]]);
   assert.doesNotMatch(location.search, /view=store-operating-monthly-report/);
-  assert.match(location.search, /startMonth=2026-06/);
+  assert.match(location.search, /startDate=2026-06-01/);
   assert.match(location.search, /stores=A/);
   assert.match(elements["#store-operating-report-head"].innerHTML, /data-column-key="group-0-actual"[^>]*data-column-kind="number"[^>]*data-column-profile="money-rate"/);
   assert.match(elements["#store-operating-report-head"].innerHTML, /data-column-key="group-0-budget"[^>]*data-column-kind="number"[^>]*data-column-profile="money-rate"/);
@@ -278,7 +335,7 @@ test("successful rendering refreshes the shared managed table and writes filter 
   assert.match(elements["#store-operating-report-body"].innerHTML, /销售收入净额/);
 });
 
-test("successful rendering explains unavailable source metrics in the report status", async () => {
+test("successful rendering attributes absent custom expense subjects to the seller-profit report", async () => {
   const { feature, elements } = makeFeatureHarness({
     fetchImpl: async () => makeReportResponse({
       unavailableMetricNames: ["广告费", "FBA国际物流运费"],
@@ -289,10 +346,11 @@ test("successful rendering explains unavailable source metrics in the report sta
   await feature.loadStoreOperatingMonthlyReport();
 
   assert.match(elements["#store-operating-report-status"].textContent, /不可用科目：广告费、FBA国际物流运费/);
-  assert.match(elements["#store-operating-report-status"].textContent, /自定义费用未配置独立数据源/);
+  assert.match(elements["#store-operating-report-status"].textContent, /店铺利润报表未返回对应费用科目/);
+  assert.doesNotMatch(elements["#store-operating-report-status"].textContent, /未配置独立数据源/);
 });
 
-test("monthly report uses an 上级 column and collapses subtotal details by default", async () => {
+test("monthly report uses a single 科目 column and collapses non-profit subtotal details by default", async () => {
   const subtotal = {
     key: "revenue",
     category: "销售收入",
@@ -312,12 +370,129 @@ test("monthly report uses an 上级 column and collapses subtotal details by def
 
   await feature.loadStoreOperatingMonthlyReport();
 
-  assert.match(elements["#store-operating-report-head"].innerHTML, /data-column-key="category"[^>]*>上级<\/th>/);
-  assert.match(elements["#store-operating-report-head"].innerHTML, /data-column-key="name"[^>]*>名称<\/th>/);
+  assert.doesNotMatch(elements["#store-operating-report-head"].innerHTML, />上级<\/th>/);
+  assert.match(elements["#store-operating-report-head"].innerHTML, /data-column-key="name"[^>]*>科目<\/th>/);
   assert.match(elements["#store-operating-report-body"].innerHTML, /data-report-category-toggle="revenue"[^>]*aria-expanded="false"/);
   assert.match(elements["#store-operating-report-body"].innerHTML, /销售收入小计/);
   assert.doesNotMatch(elements["#store-operating-report-body"].innerHTML, /基础信息小计/);
   assert.doesNotMatch(elements["#store-operating-report-body"].innerHTML, /data-report-row-key="sales-income"/);
+});
+
+test("account row visibility hides configured detail rows while retaining expanded category subtotals", async () => {
+  const requests = [];
+  const groups = [{
+    currencyCode: "CNY",
+    currencyAvailable: true,
+    rows: [
+      { key: "store-a", category: "店铺", name: "A", level: 0, children: ["platform-expense"] },
+      { key: "platform-expense", category: "平台支出", name: "平台支出", level: 1, actual: 30, share: 1, budget: null, achievement: null, children: ["platform-fee", "ad-fee"] },
+      { key: "platform-fee", category: "平台支出", name: "平台费", level: 2, actual: 10, share: 1 / 3, budget: null, achievement: null },
+      { key: "ad-fee", category: "平台支出", name: "广告费", level: 2, actual: 20, share: 2 / 3, budget: null, achievement: null },
+    ],
+  }];
+  const { feature, elements } = makeFeatureHarness({
+    groups,
+    fetchImpl: async (url) => {
+      requests.push(String(url));
+      if (String(url) === "/api/finance/store-operating-monthly-report/row-visibility") {
+        return {
+          ok: true,
+          async json() {
+            return {
+              ok: true,
+              hiddenMetricIds: ["ad-fee"],
+              metrics: [{ key: "ad-fee", name: "广告费", category: "platform-expense", categoryName: "平台支出" }],
+            };
+          },
+        };
+      }
+      const response = makeReportResponse();
+      return {
+        ...response,
+        async json() {
+          const data = await response.json();
+          data.groups = groups;
+          return data;
+        },
+      };
+    },
+  });
+
+  await feature.loadStoreOperatingMonthlyReportRowVisibility();
+  await feature.loadStoreOperatingMonthlyReport();
+  feature.toggleReportCategory({
+    target: {
+      closest(selector) {
+        return selector === "[data-report-category-toggle]"
+          ? { dataset: { reportCategoryToggle: "platform-expense" }, setAttribute() {}, querySelector() { return null; } }
+          : null;
+      },
+    },
+  });
+
+  assert.ok(requests.includes("/api/finance/store-operating-monthly-report/row-visibility"));
+  assert.match(elements["#store-operating-report-body"].innerHTML, /平台支出小计/);
+  assert.match(elements["#store-operating-report-body"].innerHTML, /平台费/);
+  assert.doesNotMatch(elements["#store-operating-report-body"].innerHTML, /广告费/);
+});
+
+test("saving account row visibility sends only hidden metric ids and applies the returned setting", async () => {
+  const requests = [];
+  const groups = [{
+    currencyCode: "CNY",
+    currencyAvailable: true,
+    rows: [
+      { key: "store-a", category: "店铺", name: "A", level: 0, children: ["platform-expense"] },
+      { key: "platform-expense", category: "平台支出", name: "平台支出", level: 1, actual: 30, share: 1, budget: null, achievement: null, children: ["ad-fee"] },
+      { key: "ad-fee", category: "平台支出", name: "广告费", level: 2, actual: 30, share: 1, budget: null, achievement: null },
+    ],
+  }];
+  const { feature, elements } = makeFeatureHarness({
+    groups,
+    fetchImpl: async (url, options = {}) => {
+      requests.push({ url: String(url), options });
+      if (String(url) === "/api/finance/store-operating-monthly-report/row-visibility") {
+        return {
+          ok: true,
+          async json() {
+            return {
+              ok: true,
+              hiddenMetricIds: options.method === "PUT" ? ["ad-fee"] : [],
+              metrics: [{ key: "ad-fee", name: "广告费", category: "platform-expense", categoryName: "平台支出" }],
+            };
+          },
+        };
+      }
+      const response = makeReportResponse();
+      return {
+        ...response,
+        async json() {
+          const data = await response.json();
+          data.groups = groups;
+          return data;
+        },
+      };
+    },
+  });
+
+  await feature.loadStoreOperatingMonthlyReportRowVisibility();
+  await feature.loadStoreOperatingMonthlyReport();
+  await feature.saveStoreOperatingMonthlyReportRowVisibility(["ad-fee"]);
+  feature.toggleReportCategory({
+    target: {
+      closest(selector) {
+        return selector === "[data-report-category-toggle]"
+          ? { dataset: { reportCategoryToggle: "platform-expense" }, setAttribute() {}, querySelector() { return null; } }
+          : null;
+      },
+    },
+  });
+
+  const saveRequest = requests.find((request) => request.options.method === "PUT");
+  assert.equal(saveRequest.url, "/api/finance/store-operating-monthly-report/row-visibility");
+  assert.equal(saveRequest.options.headers["content-type"], "application/json");
+  assert.deepEqual(JSON.parse(saveRequest.options.body), { hiddenMetricIds: ["ad-fee"] });
+  assert.doesNotMatch(elements["#store-operating-report-body"].innerHTML, /广告费/);
 });
 
 test("monthly report does not render the removed basic-info block", async () => {
@@ -358,7 +533,7 @@ test("hierarchy renders collapsed subtotals and expands their detail rows", asyn
   assert.match(elements["#store-operating-report-body"].innerHTML, /data-report-category-toggle="sales-profit-category"[^>]*aria-expanded="true"/);
 });
 
-test("monthly report renders the approved profit rows as highlighted results and formats rate actuals", async () => {
+test("monthly report renders毛利润 directly for the profit section", async () => {
   const rows = [
     { key: "overview", category: "总概", name: "总概", level: 0, children: ["platform-income", "profit"] },
     { key: "platform-income", category: "平台收入", name: "平台收入", level: 1, actual: 100, children: ["net-sales"], available: true },
@@ -374,17 +549,33 @@ test("monthly report renders the approved profit rows as highlighted results and
   const body = elements["#store-operating-report-body"].innerHTML;
 
   assert.match(body, /平台收入小计/);
-  assert.match(body, /利润小计/);
-  assert.doesNotMatch(body, /净销售额/);
-  assert.doesNotMatch(body, /毛利润/);
+  assert.doesNotMatch(body, /利润小计/);
+  assert.match(body, /class="store-operating-report-result-row"[^>]*data-report-row-key="gross-profit"/);
+  assert.match(body, /毛利润/);
+  assert.match(body, /data-report-row-key="gross-profit"[\s\S]*?data-report-metric="share">/);
+  assert.doesNotMatch(body, /data-report-category-toggle="profit"/);
   assert.doesNotMatch(body, /毛利率/);
+  assert.doesNotMatch(body, /净毛利率/);
+});
 
-  feature.toggleReportCategory({ target: { closest: () => ({ dataset: { reportCategoryToggle: "profit" } }) } });
-  const expandedBody = elements["#store-operating-report-body"].innerHTML;
-  assert.match(expandedBody, /class="store-operating-report-result-row"[^>]*data-report-row-key="gross-profit"/);
-  assert.match(expandedBody, /class="store-operating-report-result-row"[^>]*data-report-row-key="gross-rate"/);
-  assert.match(expandedBody, /毛利率/);
-  assert.match(expandedBody, /data-report-row-key="gross-rate"[\s\S]*?data-report-metric="actual">80\.00%/);
+test("monthly report renders sales net between platform income and expense without a disclosure", async () => {
+  const rows = [
+    { key: "overview", category: "总概", name: "总概", level: 0, children: ["platform-income", "sales-net", "platform-expense"] },
+    { key: "platform-income", category: "平台收入", name: "平台收入", level: 1, actual: 200, children: [] },
+    { key: "sales-net", category: "销售净额", name: "销售净额", level: 1, actual: 155, share: 0.775, children: [] },
+    { key: "platform-expense", category: "平台支出", name: "平台支出", level: 1, actual: 80, children: [] },
+  ];
+  const { feature, elements } = makeFeatureHarness({
+    groups: [{ currencyCode: "CNY", rows }],
+  });
+
+  await feature.loadStoreOperatingMonthlyReport();
+
+  const body = elements["#store-operating-report-body"].innerHTML;
+  assert.match(body, /data-report-row-key="platform-income"[\s\S]*?data-report-row-key="sales-net"[\s\S]*?data-report-row-key="platform-expense"/);
+  assert.match(body, /data-report-row-key="sales-net"[\s\S]*?>销售净额<\/td>/);
+  assert.doesNotMatch(body, /销售净额小计/);
+  assert.doesNotMatch(body, /data-report-category-toggle="sales-net"/);
 });
 
 test("export surfaces structured server diagnostics", async () => {
@@ -430,8 +621,8 @@ test("report load surfaces structured server diagnostics", async () => {
 test("a stale month response cannot replace the newer report DOM, URL, or status", async () => {
   const pending = [];
   const { feature, elements, location } = makeFeatureHarness({
-    startMonth: "2026-06",
-    endMonth: "2026-06",
+    startDate: "2026-06-01",
+    endDate: "2026-06-30",
     fetchImpl: (url) => {
       const deferred = createDeferred();
       pending.push({ url: String(url), deferred });
@@ -440,8 +631,8 @@ test("a stale month response cannot replace the newer report DOM, URL, or status
   });
 
   const oldRequest = feature.loadStoreOperatingMonthlyReport();
-  elements["#store-operating-report-end-month"].value = "2026-07";
-  const newRequest = feature.handleMonthChange();
+  elements["#store-operating-report-end-date"].value = "2026-07-31";
+  const newRequest = feature.handleDateRangeChange();
 
   assert.equal(pending.length, 2);
   pending[1].deferred.resolve(makeReportResponse({ name: "新月份数据" }));
@@ -451,7 +642,7 @@ test("a stale month response cannot replace the newer report DOM, URL, or status
 
   assert.match(elements["#store-operating-report-body"].innerHTML, /新月份数据/);
   assert.doesNotMatch(elements["#store-operating-report-body"].innerHTML, /旧月份数据/);
-  assert.match(location.search, /endMonth=2026-07/);
+  assert.match(location.search, /endDate=2026-07-31/);
   assert.equal(elements["#store-operating-report-status"].textContent, "预算已匹配 1 条");
 });
 
@@ -502,7 +693,7 @@ test("failed rendering refreshes the managed table after replacing the header", 
   await feature.loadStoreOperatingMonthlyReport();
 
   assert.deepEqual(refreshes, [elements["#store-operating-report-table"]]);
-  assert.match(elements["#store-operating-report-head"].innerHTML, /data-column-key="category"/);
+  assert.match(elements["#store-operating-report-head"].innerHTML, /data-column-key="name"[^>]*>科目<\/th>/);
   assert.match(elements["#store-operating-report-body"].innerHTML, /加载失败：报告服务不可用/);
 });
 
@@ -566,9 +757,7 @@ test("selected stores render one four-metric group per store and merge rows hori
 
 test("budget targets consume report months, stores, and countries once as their initial scope", () => {
   const elements = {
-    "#budget-upload-month": makeElement(),
     "#budget-month-picker": makeElement(),
-    "#budget-month-chip-list": makeElement(),
     "#budget-store-filter": makeElement("旧筛选"),
   };
   const root = {
@@ -594,7 +783,10 @@ test("budget targets consume report months, stores, and countries once as their 
     readFileAsBase64: async () => "",
     renderTableMessage() {},
     setButtonBusy: () => () => {},
+    selectedFilterValues() { return []; },
+    setSelectOptions() {},
     setText() {},
+    syncAllOptionSelection() {},
     trimmedFieldValue: (selector) => String(root.querySelector(selector)?.value || "").trim(),
   });
 
@@ -602,8 +794,7 @@ test("budget targets consume report months, stores, and countries once as their 
   locationRef.search = "?view=budget&budgetMonths=2026-06%2C2026-07&budgetStores=A&budgetCountries=%E7%BE%8E%E5%9B%BD";
   feature.initializeBudgetDefaults();
 
-  assert.match(elements["#budget-month-chip-list"].innerHTML, /2026年06月/);
-  assert.match(elements["#budget-month-chip-list"].innerHTML, /2026年07月/);
+  assert.equal(elements["#budget-month-picker"].value, "2026-07");
   assert.equal(elements["#budget-store-filter"].value, "A");
   assert.deepEqual(feature.getBudgetDeepLinkScope(), {
     stores: ["A"],

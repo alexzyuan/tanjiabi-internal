@@ -401,6 +401,11 @@ function getRatioPercent(numerator, denominator) {
   return denominator ? Number(((numerator / denominator) * 100).toFixed(2)) : 0;
 }
 
+function getNullableRatioPercent(numerator, denominator) {
+  if (!Number.isFinite(Number(denominator)) || Number(denominator) <= 0) return null;
+  return Number(((Number(numerator) / Number(denominator)) * 100).toFixed(2));
+}
+
 function getRatePercentMetric(item, keys) {
   const rawValue = readFirst(item, keys);
   if (rawValue === "") return null;
@@ -822,11 +827,12 @@ function findFbaInventory(inventoryMap, budgetRow) {
   return 0;
 }
 
-export function buildBudgetMskuDetailRows(records = [], budgetTargets = {}, inventoryRecords = [], sellers = [], ownerRows = [], filters = {}) {
+export function buildBudgetMskuDetailRows(records = [], budgetTargets = {}, inventoryRecords = [], sellers = [], ownerRows = [], filters = {}, recent30Records = []) {
   const budgetRows = (Array.isArray(budgetTargets.rows) ? budgetTargets.rows : [])
     .flatMap((row) => row.mskuRows || [])
     .filter((row) => row?.msku);
   const actualMap = buildActualMskuMap(records);
+  const recent30ActualMap = buildActualMskuMap(recent30Records);
   const inventoryMap = buildFbaInventoryMap(inventoryRecords, sellers);
   const ownerMap = buildListingOwnerMap([
     ...normalizeInventoryOwnerRows(inventoryRecords, sellers),
@@ -836,6 +842,7 @@ export function buildBudgetMskuDetailRows(records = [], budgetTargets = {}, inve
 
   const buildDetailRow = (row, suppliedActual = null) => {
     const actual = suppliedActual || findActualMsku(actualMap, row) || {};
+    const recent30Actual = findActualMsku(recent30ActualMap, row);
     const actualQuantity = toNumber(actual.quantity);
     const sales = toNumber(actual.sales);
     const adsCost = toNumber(actual.adsCost);
@@ -864,6 +871,7 @@ export function buildBudgetMskuDetailRows(records = [], budgetTargets = {}, inve
       averageProfit: actualQuantity ? Number((orderProfit / actualQuantity).toFixed(2)) : 0,
       grossRate: getRatioPercent(orderProfit, sales),
       refundRate: getRatioPercent(toNumber(actual.refund), sales),
+      refundRate30d: recent30Actual ? getNullableRatioPercent(recent30Actual.refund, recent30Actual.sales) : null,
       adFeeRate: getRatioPercent(adsCost, sales),
       promotionDiscountRate: getRatioPercent(toNumber(actual.promotionDiscount), sales),
       storageFeeRate: preferApiRate(actual.storageFeeRate, toNumber(actual.storageFee), sales),
@@ -970,6 +978,7 @@ export function mapLingxingToSalesDashboard({
   sellers = [],
   sellerProfitRecords = [],
   orderProfitRecords = [],
+  recent30OrderProfitRecords = [],
   dailyProfitRecords = [],
   inventoryRecords = [],
   listingOwnerRows = [],
@@ -1018,6 +1027,7 @@ export function mapLingxingToSalesDashboard({
         currencyText: getCurrencyLabel(currencyCode),
         updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
         periodText: `销售周会复盘 · ${range.startDate} 至 ${range.endDate}`,
+        recent30: raw.recent30 || null,
       },
       insights: [],
       kpis: [
@@ -1087,6 +1097,7 @@ export function mapLingxingToSalesDashboard({
       currencyText: getCurrencyLabel(currencyCode),
       updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
       periodText: `销售周会复盘 · ${range.startDate} 至 ${range.endDate}`,
+      recent30: raw.recent30 || null,
     },
     insights: [],
     kpis: [
@@ -1122,6 +1133,6 @@ export function mapLingxingToSalesDashboard({
     storeData: buildStoreData(records, budgetResolver),
     profitData: buildProfitData(records, budgetResolver),
     filters: { ownerOptions },
-    detailRows: buildBudgetMskuDetailRows(records, budgetTargets, inventoryRecords, sellers, listingOwnerRows, filters),
+    detailRows: buildBudgetMskuDetailRows(records, budgetTargets, inventoryRecords, sellers, listingOwnerRows, filters, recent30OrderProfitRecords),
   };
 }

@@ -99,6 +99,72 @@ function fixtureDocument(overrides = "") {
 </html>`;
 }
 
+function reportTableFixtureDocument(overrides = "") {
+  const tableHeaders = Array.from({ length: 14 }, (_value, index) => `<th>店铺${index + 1}实际完成值</th>`).join("");
+  const tableCells = Array.from({ length: 14 }, (_value, index) => `<td>${index + 1},234.56</td>`).join("");
+  return `<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="/styles.css">
+    <style>${overrides}</style>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar"></aside>
+      <main class="dashboard">
+        <header class="topbar"></header>
+        <section id="view-store-operating-monthly-report" class="view active">
+          <article class="panel detail-panel">
+            <div class="panel-head">
+              <h2>经营损益矩阵</h2>
+              <p id="store-operating-report-status">未配置预算，办公费用、办公费用-租金、认证检测费、办公用品、软件费用、产品外观设计费、产品平面设计费、服务商费用、办公费用-快递费、办公费用-水电费、信用卡广告费、办公费用-店铺通讯费、样品费、送测佣金（刷单）、差旅费、员工福利费、净毛利率、店铺保险费字段不可用。</p>
+            </div>
+            <div id="report-table-wrap" class="table-wrap data-table-wrap--detail store-operating-report-table-wrap">
+              <table id="store-operating-report-table" class="data-table data-table--detail is-smart-width" style="--tj-table-resolved-width: 2240px">
+                <thead><tr>${tableHeaders}</tr></thead>
+                <tbody><tr>${tableCells}</tr></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>`;
+}
+
+function stickyReportTableFixtureDocument(overrides = "") {
+  const rows = Array.from({ length: 40 }, (_value, index) => `
+    <tr><td>科目 ${index + 1}</td><td>${index + 1},234.56</td><td>12.34%</td><td>—</td><td>—</td></tr>
+  `).join("");
+  return `<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="/styles.css">
+    <style>${overrides}</style>
+  </head>
+  <body>
+    <div class="app-shell">
+      <main class="dashboard">
+        <section id="view-store-operating-monthly-report" class="view active">
+          <div id="sticky-report-table-wrap" class="table-wrap data-table-wrap--detail store-operating-report-table-wrap" style="height: 220px">
+            <table id="store-operating-report-table" class="data-table data-table--detail">
+              <thead>
+                <tr><th colspan="1">店铺信息</th><th colspan="4">全部店铺</th></tr>
+                <tr><th>科目</th><th>实际完成值</th><th>占比</th><th>预算值</th><th>达成率</th></tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>`;
+}
+
 async function inspectComputedLayout(filename, overrides = "") {
   fixtures.set(`/${filename}`, fixtureDocument(overrides));
   await runBrowser(["open", `${fixtureOrigin}/${filename}`]);
@@ -107,6 +173,30 @@ async function inspectComputedLayout(filename, overrides = "") {
     "eval",
     "(el) => { const heroStyle = getComputedStyle(document.querySelector('#module-hero')); return { worldClock: getComputedStyle(el).display, heroDisplay: heroStyle.display, heroColumns: heroStyle.gridTemplateColumns, heroFlexDirection: heroStyle.flexDirection }; }",
     "#world-clock",
+  ]);
+  return parseJsonResult(result);
+}
+
+async function inspectReportTableLayout(filename, overrides = "") {
+  fixtures.set(`/${filename}`, reportTableFixtureDocument(overrides));
+  await runBrowser(["open", `${fixtureOrigin}/${filename}`]);
+  await runBrowser(["resize", "390", "844"]);
+  const result = await runBrowser([
+    "eval",
+    "(el) => { const panel = el.closest('.detail-panel'); const view = el.closest('.view'); const status = document.querySelector('#store-operating-report-status'); const statusStyle = getComputedStyle(status); return { documentWidth: document.documentElement.scrollWidth, viewportWidth: window.innerWidth, panelWidth: Math.round(panel.getBoundingClientRect().width), viewWidth: Math.round(view.getBoundingClientRect().width), wrapperWidth: Math.round(el.getBoundingClientRect().width), wrapperClientWidth: el.clientWidth, wrapperScrollWidth: el.scrollWidth, tableWidth: Math.round(el.querySelector('table').getBoundingClientRect().width), statusWidth: Math.round(status.getBoundingClientRect().width), statusMinWidth: statusStyle.minWidth, statusWhiteSpace: statusStyle.whiteSpace }; }",
+    "#report-table-wrap",
+  ]);
+  return parseJsonResult(result);
+}
+
+async function inspectStickyReportHeader(filename, overrides = "") {
+  fixtures.set(`/${filename}`, stickyReportTableFixtureDocument(overrides));
+  await runBrowser(["open", `${fixtureOrigin}/${filename}`]);
+  await runBrowser(["resize", "1440", "900"]);
+  const result = await runBrowser([
+    "eval",
+    "(el) => { el.scrollTop = 120; const rows = el.querySelectorAll('thead tr'); const wrap = el.getBoundingClientRect(); const first = rows[0].querySelector('th').getBoundingClientRect(); const second = rows[1].querySelector('th').getBoundingClientRect(); return { scrollTop: el.scrollTop, wrapperTop: Math.round(wrap.top), firstTop: Math.round(first.top), firstHeight: Math.round(first.height), secondTop: Math.round(second.top) }; }",
+    "#sticky-report-table-wrap",
   ]);
   return parseJsonResult(result);
 }
@@ -192,6 +282,24 @@ try {
   assert.equal(laterOverrides.worldClock, "block");
   assert.equal(laterOverrides.heroDisplay, "flex");
   assert.equal(laterOverrides.heroFlexDirection, "row");
+
+  const reportTable = await inspectReportTableLayout("wide-report-table.html");
+  assert.ok(
+    reportTable.documentWidth <= reportTable.viewportWidth + 2,
+    `monthly report table must not expand the document (${reportTable.documentWidth}px > ${reportTable.viewportWidth}px)`,
+  );
+  assert.ok(reportTable.panelWidth <= reportTable.viewportWidth, "monthly report panel must stay within the viewport");
+  assert.ok(reportTable.wrapperWidth <= reportTable.panelWidth, "monthly report table wrapper must stay inside its panel");
+  assert.ok(reportTable.wrapperScrollWidth > reportTable.wrapperClientWidth, "monthly report table wrapper must own horizontal scrolling for wide tables");
+  assert.ok(reportTable.tableWidth > reportTable.wrapperWidth, "wide monthly report table must remain scrollable inside its wrapper");
+  assert.ok(reportTable.statusWidth <= reportTable.panelWidth, "monthly report status text must stay inside its panel");
+  assert.equal(reportTable.statusMinWidth, "0px", "monthly report status text must be shrinkable in the panel header");
+  assert.equal(reportTable.statusWhiteSpace, "normal", "monthly report status text must wrap instead of widening the page");
+
+  const stickyHeader = await inspectStickyReportHeader("sticky-report-header.html");
+  assert.ok(stickyHeader.scrollTop > 0, "monthly report fixture must scroll vertically");
+  assert.ok(Math.abs(stickyHeader.firstTop - stickyHeader.wrapperTop) <= 1, "first monthly report header row must stick to the table wrapper top");
+  assert.equal(stickyHeader.secondTop, stickyHeader.wrapperTop + stickyHeader.firstHeight, "second monthly report header row must remain directly below the first row");
 } catch (error) {
   testError = error;
 }

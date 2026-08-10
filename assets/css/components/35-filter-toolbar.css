@@ -53,17 +53,17 @@
   font-size: 13px;
 }
 
+.filter-toolbar > :is(input, select, .filter-dropdown, [role="search"]) {
+  width: 150px;
+  font-size: 13px;
+}
+
 .filter-toolbar > .filter-dropdown {
   position: relative;
 }
 
 .filter-toolbar > .filter-dropdown .filter-dropdown-button {
   height: var(--tj-control-height-compact);
-}
-
-.filter-toolbar > :is(input, select, .filter-dropdown, [role="search"]) {
-  width: 150px;
-  font-size: 13px;
 }
 
 .filter-toolbar > input[type="search"] {

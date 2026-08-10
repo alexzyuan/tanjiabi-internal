@@ -235,6 +235,52 @@ test("date range picker requires the end date within 30 days after the selected 
   assert.deepEqual(changes, []);
 });
 
+test("date range picker accepts a cross-month range within the configured 12 calendar months", () => {
+  const trigger = createFakeElement();
+  const popover = createFakeElement();
+  const startInput = createFakeElement();
+  const endInput = createFakeElement();
+  const changes = [];
+  const picker = createDateRangePicker({
+    trigger,
+    popover,
+    startInput,
+    endInput,
+    maxCalendarMonths: 12,
+    today: new Date("2026-12-31T08:00:00Z"),
+    onChange: (range) => changes.push(range),
+  });
+
+  picker.setup();
+  picker.open();
+  popover.listeners.click(createDateClickEvent("2026-01-15"));
+  popover.listeners.click(createDateClickEvent("2026-12-31"));
+
+  assert.deepEqual(changes, [{ start: "2026-01-15", end: "2026-12-31" }]);
+});
+
+test("date range picker disables dates in the 13th calendar month", () => {
+  const trigger = createFakeElement();
+  const popover = createFakeElement();
+  const startInput = createFakeElement();
+  const endInput = createFakeElement();
+  const picker = createDateRangePicker({
+    trigger,
+    popover,
+    startInput,
+    endInput,
+    maxCalendarMonths: 12,
+    today: new Date("2027-01-31T08:00:00Z"),
+  });
+
+  picker.setup();
+  picker.open();
+  popover.listeners.click(createDateClickEvent("2026-01-15"));
+  popover.listeners.click(createDateClickEvent("2027-01-01"));
+  assert.equal(startInput.value, "2026-01-15");
+  assert.equal(endInput.value, "2026-01-15");
+});
+
 test("date range picker emits one shared completion event after a range is confirmed", () => {
   const trigger = createFakeElement();
   const popover = createFakeElement();
