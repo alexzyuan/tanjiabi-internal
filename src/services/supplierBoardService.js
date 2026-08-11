@@ -352,10 +352,30 @@ function numericProductValue(product, row, field, fallback = 0) {
 }
 
 function productForRow(row, productMap) {
-  return productMap.get(productKey(row.sku))
-    || productMap.get(listingMskuKey(row.sid, row.msku))
-    || productMap.get(productKey(row.msku))
-    || null;
+  const sid = Number(row?.sid);
+  const msku = String(row?.msku || "").trim();
+  const canonicalKey = Number.isInteger(sid) && sid > 0 && msku
+    ? listingMskuKey(sid, msku)
+    : "";
+  if (canonicalKey) return productMap.get(productKey(canonicalKey)) || null;
+
+  const storeKey = productKey(row?.storeName);
+  const countryKey = productKey(row?.country);
+  const mskuKey = productKey(msku);
+  const legacyKeys = [
+    storeKey && mskuKey ? `store:${storeKey}:msku:${mskuKey}` : "",
+    countryKey && mskuKey ? `country:${countryKey}:msku:${mskuKey}` : "",
+    row?.sku,
+    row?.internalSku,
+    row?.productId,
+    row?.skuIdentifier,
+    row?.msku,
+  ];
+  return legacyKeys
+    .map((key) => productKey(key))
+    .filter(Boolean)
+    .map((key) => productMap.get(key))
+    .find(Boolean) || null;
 }
 
 function assertCatalogRowsResolved(rows, productMap) {

@@ -52,4 +52,26 @@ Observed results:
 - Rehydration keeps quantity, sales amount, store identity, and filter scope from the cached dashboard; only product-owned fields and dependent calculations are rebuilt.
 - Packaging fields already present in Supplier Board rows (`packQuantity`, `declaredValue`, `unit`) are updated when returned by the shared catalog.
 
-Focused commit: `e42ad6c` (`feat: make supplier board catalog revision aware`); worktree clean after verification.
+Initial implementation commit: `4c07a11` (`feat: make supplier board catalog revision aware`).
+
+## Fix round 1: canonical SID + MSKU precedence
+
+### RED
+
+Command:
+
+```text
+node --test test/supplierBoardProductCatalog.test.js
+```
+
+The new duplicate-identity regression reported `7 passed, 1 failed`: two cached rows with distinct positive SID+MSKU identities but the same stale `row.sku` both resolved to P1 through the generic SKU alias instead of resolving P1/P2 canonically.
+
+### GREEN
+
+- `productForRow` now resolves `sid:<SID>:msku:<MSKU>` first for every constructible canonical identity. A missing canonical key is fail-fast and cannot fall through to an ambiguous generic alias. Store/country+MSKU and generic SKU/product aliases remain only for rows where canonical identity cannot be constructed.
+- Both live and cache-rehydrate paths use the same resolver. Supplier fixtures now provide canonical aliases explicitly, matching the shared facade contract.
+- Focused Supplier Board run: `12 passed, 0 failed`.
+- Full Node suite: `822 passed, 0 failed`.
+- `npm run check:js` and `git diff --check` passed.
+
+The final fix-round commit SHA is intentionally reported in the handoff rather than duplicated here, avoiding a self-referential report amend cycle.
