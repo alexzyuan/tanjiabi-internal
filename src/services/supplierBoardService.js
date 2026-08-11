@@ -312,8 +312,14 @@ function listingMskuKey(sid, msku) {
   return key ? `sid:${Number(sid) || 0}:msku:${key}` : "";
 }
 
-async function fetchProductMap(adapter, rows, { getSharedCatalog = getSharedProductCatalogMap } = {}) {
-  const sharedCatalog = await getSharedCatalog(adapter, rows, { feature: "supplier-board" });
+async function fetchProductMap(adapter, rows, {
+  getSharedCatalog = getSharedProductCatalogMap,
+  sellers = [],
+} = {}) {
+  const sharedCatalog = await getSharedCatalog(adapter, rows, {
+    feature: "supplier-board",
+    sellers,
+  });
   if (!sharedCatalog?.map) throw new Error("共享商品目录未返回有效索引。");
   return sharedCatalog.map;
 }
@@ -615,7 +621,7 @@ export async function getSupplierBoardDashboard(filters = {}, {
       .filter(Boolean);
     const salesResult = await fetchAllSalesRows(adapter, normalizedFilters, sellersBySid, selectedSids);
     const salesRows = salesResult.rows;
-    const productMap = await fetchProductMap(adapter, salesRows, { getSharedCatalog });
+    const productMap = await fetchProductMap(adapter, salesRows, { getSharedCatalog, sellers });
     const rows = filterRows(mergeProductAndTax(salesRows, productMap), normalizedFilters);
 
     const data = {

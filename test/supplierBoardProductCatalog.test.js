@@ -33,8 +33,9 @@ test("supplier board uses the shared catalog once and has no runtime supplier pr
     }, {
       adapter,
       sellers: [{ sid: 99150, name: "runtime-custom-store", country: "美国" }],
-      getSharedCatalog: async () => {
+      getSharedCatalog: async (_adapter, _rows, options) => {
         sharedCatalogCalls += 1;
+        assert.deepEqual(options.sellers.map((seller) => seller.sid), [99150]);
         return {
           map: new Map([["custom-sku", {
             sku: "CUSTOM-SKU",
