@@ -19,6 +19,17 @@ const refreshInFlight = new Map();
 let requestSequence = 0;
 let dependencyTokenSequence = 0;
 
+const REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/;
+const REQUEST_ID_SENSITIVE_PATTERN = /(token|secret|password|payload|raw|body)/i;
+const SAFE_ERROR_NAMES = new Set([
+  "Error",
+  "ProductCatalogUpstreamError",
+  "ProductCatalogInputError",
+  "ProductCatalogConflictError",
+]);
+const SAFE_ERROR_CODE_PATTERN = /^[A-Za-z0-9_.:-]{1,64}$/;
+const SAFE_ERROR_CODE_SENSITIVE_PATTERN = /(token|secret|password|payload|raw|body)/i;
+
 export class ProductCatalogUpstreamError extends Error {
   constructor(message, { statusCode = 502, details = null, cause } = {}) {
     super(message, { cause });
@@ -42,8 +53,13 @@ function elapsedMs(startedAtMs) {
 }
 
 function requestIdFrom(options = {}) {
-  const supplied = String(options.requestId || "").trim();
-  if (supplied) return supplied;
+  let supplied = "";
+  try {
+    supplied = String(options?.requestId || "").trim();
+  } catch {
+    supplied = "";
+  }
+  if (REQUEST_ID_PATTERN.test(supplied) && !REQUEST_ID_SENSITIVE_PATTERN.test(supplied)) return supplied;
   requestSequence += 1;
   return `catalog-${Date.now().toString(36)}-${requestSequence.toString(36)}`;
 }
@@ -60,10 +76,42 @@ function createRequestContext(options, feature, operation) {
   };
 }
 
+function normalizedStatusCode(error) {
+  const statusCode = Number(error?.statusCode);
+  return Number.isInteger(statusCode) && statusCode >= 400 && statusCode <= 599
+    ? statusCode
+    : 500;
+}
+
+function safeErrorName(error) {
+  const name = String(error?.name || "Error");
+  return SAFE_ERROR_NAMES.has(name) ? name : "Error";
+}
+
+function safeErrorCode(error) {
+  const code = String(error?.code ?? "");
+  return SAFE_ERROR_CODE_PATTERN.test(code) && !SAFE_ERROR_CODE_SENSITIVE_PATTERN.test(code) ? code : null;
+}
+
 function safeErrorMessage(error) {
-  const message = String(error?.message || "未知错误")
-    .replace(/(token|password|secret|raw|payload|appsecret|app_secret)\s*[:=][^\s,;]+/gi, "$1:[redacted]");
-  return message.slice(0, 300);
+  if (error instanceof ProductCatalogConflictError) return "商品目录冲突。";
+  if (error instanceof ProductCatalogInputError) return "商品目录输入无效。";
+  if (error instanceof ProductCatalogUpstreamError) {
+    const knownMessages = new Set([
+      "ERP Listing 查询失败。",
+      "Listing 共享目录读取失败。",
+      "ERP 产品管理查询失败。",
+      "商品目录数据库写入失败。",
+      "运行时店铺目录读取失败。",
+      "旧商品目录迁移失败。",
+      "商品目录数据库不可用。",
+      "商品目录上游失败。",
+    ]);
+    const message = String(error.message || "");
+    if (knownMessages.has(message)) return message;
+    return "商品目录上游失败。";
+  }
+  return "商品目录操作失败。";
 }
 
 function writeLog(logger, level, context, status, error = null, extra = {}) {
@@ -79,8 +127,9 @@ function writeLog(logger, level, context, status, error = null, extra = {}) {
     ...extra,
   };
   if (error) {
-    details.errorName = String(error.name || "Error").slice(0, 120);
-    details.errorCode = error.code ?? null;
+    details.statusCode = normalizedStatusCode(error);
+    details.errorName = safeErrorName(error);
+    details.errorCode = safeErrorCode(error);
     details.errorMessage = safeErrorMessage(error);
   }
   method.call(logger, "[product-catalog-service]", details);
@@ -93,9 +142,10 @@ function attachError(error, context, extra = {}) {
   const prior = error.details && typeof error.details === "object" && !Array.isArray(error.details)
     ? error.details
     : {};
+  error.statusCode = normalizedStatusCode(error);
+  error.message = safeErrorMessage(error);
   error.details = {
     ...prior,
-    requestId: prior.requestId || context.requestId,
     ...(context.migrationCompleted !== undefined && prior.migrationCompleted === undefined
       ? { migrationCompleted: context.migrationCompleted }
       : {}),
@@ -103,6 +153,7 @@ function attachError(error, context, extra = {}) {
       ? { catalogRevisionBeforeRefresh: context.catalogRevisionBeforeRefresh }
       : {}),
     ...extra,
+    requestId: context.requestId,
   };
   return error;
 }
@@ -515,7 +566,16 @@ export async function refreshProductCatalogScope(input = {}, options = {}) {
 }
 
 export function getProductCatalogRevision(options = {}) {
-  return repositoryFor(options).getRevision();
+  const context = createRequestContext(options, options.feature || "catalog", "revision");
+  try {
+    const revision = repositoryFor(options).getRevision();
+    writeLog(options.logger || console, "info", context, "success", null, { revision });
+    return revision;
+  } catch (error) {
+    const attached = attachError(error, context);
+    writeLog(options.logger || console, "error", context, "error", attached);
+    throw attached;
+  }
 }
 
 export function getProductCatalogHealth(options = {}) {

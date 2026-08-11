@@ -8,6 +8,8 @@ import { createProductCatalogRepository } from "../src/services/productCatalogRe
 import {
   closeProductCatalogRepositoryForTests,
   getProductCatalogForRows,
+  getProductCatalogRevision,
+  ProductCatalogUpstreamError,
   refreshProductCatalogScope,
 } from "../src/services/productCatalogService.js";
 
@@ -426,4 +428,95 @@ test("missing product returns 422 and alias conflict returns 409 without committ
       && Number(error.details?.conflictCount) >= 1,
   );
   assert.equal(conflict.repository.getRevision(), seedRevision);
+});
+
+test("repository read errors normalize to status 500 with request-scoped error logs", async (t) => {
+  const fixture = await createCatalogServiceFixture();
+  t.after(fixture.cleanup);
+  const repository = {
+    ...fixture.repository,
+    readScope() {
+      throw new Error("repository read unavailable");
+    },
+  };
+  await assert.rejects(
+    getProductCatalogForRows(fixture.rows, {
+      ...fixture.options,
+      repository,
+      requestId: "req-read-normalization",
+    }),
+    (error) => error.statusCode === 500
+      && error.details?.requestId === "req-read-normalization",
+  );
+  const errorLog = fixture.logEntries
+    .filter(([prefix]) => prefix === "[product-catalog-service]")
+    .map(([, details]) => details)
+    .find((details) => details.status === "error");
+  assert.equal(errorLog.statusCode, 500);
+  assert.equal(errorLog.requestId, "req-read-normalization");
+  assert.equal(errorLog.errorName, "Error");
+  assert.equal(errorLog.errorMessage, "商品目录操作失败。");
+});
+
+test("revision errors normalize to status 500 and are logged through the shared request context", async (t) => {
+  const fixture = await createCatalogServiceFixture();
+  t.after(fixture.cleanup);
+  const repository = {
+    ...fixture.repository,
+    getRevision() {
+      throw new Error("revision unavailable");
+    },
+  };
+  await assert.rejects(
+    Promise.resolve().then(() => getProductCatalogRevision({
+      ...fixture.options,
+      repository,
+      requestId: "req-revision-normalization",
+    })),
+    (error) => error.statusCode === 500
+      && error.details?.requestId === "req-revision-normalization",
+  );
+  const errorLog = fixture.logEntries
+    .filter(([prefix]) => prefix === "[product-catalog-service]")
+    .map(([, details]) => details)
+    .find((details) => details.status === "error");
+  assert.equal(errorLog.statusCode, 500);
+  assert.equal(errorLog.requestId, "req-revision-normalization");
+  assert.equal(errorLog.operation, "revision");
+  assert.equal(errorLog.errorMessage, "商品目录操作失败。");
+});
+
+test("malicious request IDs and upstream messages are fail-closed in error details and logs", async (t) => {
+  const fixture = await createCatalogServiceFixture();
+  t.after(fixture.cleanup);
+  const repository = {
+    ...fixture.repository,
+    getRevision() {
+      throw new ProductCatalogUpstreamError("token raw-secret payload body");
+    },
+  };
+  const maliciousRequestId = "token raw-secret payload body";
+  let failure;
+  await assert.rejects(
+    Promise.resolve().then(() => getProductCatalogRevision({
+      ...fixture.options,
+      repository,
+      requestId: maliciousRequestId,
+    })),
+    (error) => {
+      failure = error;
+      return error.statusCode === 502
+        && !String(error.details?.requestId).match(/token|raw-secret|payload|body/i)
+        && !JSON.stringify(error.details).match(/token|raw-secret|payload|body/i);
+    },
+  );
+  const errorLog = fixture.logEntries
+    .filter(([prefix]) => prefix === "[product-catalog-service]")
+    .map(([, details]) => details)
+    .find((details) => details.status === "error");
+  assert.ok(errorLog);
+  assert.equal(errorLog.requestId, failure.details.requestId);
+  assert.doesNotMatch(JSON.stringify(errorLog), /token|raw-secret|payload|body/i);
+  assert.doesNotMatch(JSON.stringify(failure.details), /token|raw-secret|payload|body/i);
+  assert.equal(errorLog.errorMessage, "商品目录上游失败。");
 });
