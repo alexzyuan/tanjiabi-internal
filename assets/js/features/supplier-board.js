@@ -1,5 +1,6 @@
 export function createSupplierBoardFeature({
   root = globalThis.document,
+  fetchImpl = globalThis.fetch,
   loadDashboardSection,
   bind,
   bindAll,
@@ -13,15 +14,19 @@ export function createSupplierBoardFeature({
   normalizeCountryName,
   selectedFilterValues,
   setSelectOptions,
+  setButtonBusy,
   setTableSortButtonGroupState,
   setText,
   syncAllOptionSelection,
   trimmedFieldValue,
+  logger = console,
 } = {}) {
   if (typeof loadDashboardSection !== "function") throw new Error("createSupplierBoardFeature requires loadDashboardSection.");
+  if (typeof fetchImpl !== "function") throw new Error("createSupplierBoardFeature requires fetchImpl.");
   if (typeof bind !== "function") throw new Error("createSupplierBoardFeature requires bind.");
   if (typeof bindAll !== "function") throw new Error("createSupplierBoardFeature requires bindAll.");
   if (typeof closestTarget !== "function") throw new Error("createSupplierBoardFeature requires closestTarget.");
+  if (typeof setButtonBusy !== "function") throw new Error("createSupplierBoardFeature requires setButtonBusy.");
 
   let supplierBoardData = {
     meta: { source: "领星 ERP · salesStat 销量统计", syncStatus: "等待加载" },
@@ -30,6 +35,8 @@ export function createSupplierBoardFeature({
   };
   let supplierBoardSort = { key: "", direction: "" };
   let supplierBoardStoreFilterOptions = [];
+  let supplierBoardSetupDone = false;
+  let supplierProductRefreshInFlight = null;
 
   const visibleLimit = 500;
   const numericSortKeys = new Set([
@@ -233,6 +240,120 @@ export function createSupplierBoardFeature({
       .map(({ row }) => row);
   }
 
+  function getSupplierBoardProductRefreshScope() {
+    const byIdentity = new Map();
+    let excludedCount = 0;
+    getSupplierBoardDisplayRows().slice(0, visibleLimit).forEach((row) => {
+      const sid = Number(row?.sid);
+      const msku = String(row?.msku ?? "").trim();
+      if (!Number.isSafeInteger(sid) || sid <= 0 || !msku) {
+        excludedCount += 1;
+        return;
+      }
+      const identity = `${sid}:${msku.toLowerCase()}`;
+      if (!byIdentity.has(identity)) byIdentity.set(identity, { sid, msku });
+    });
+    return { items: [...byIdentity.values()], excludedCount };
+  }
+
+  function safeProductRefreshErrorMessage(response, data) {
+    const hasSafeObject = data && typeof data === "object" && !Array.isArray(data);
+    const controlledError = hasSafeObject && typeof data.error === "string" ? data.error.trim() : "";
+    if (controlledError && controlledError.length <= 200) return controlledError;
+    const status = Number(response?.status);
+    return Number.isFinite(status) && status > 0 ? `API ${status}` : "网络请求失败";
+  }
+
+  function makeProductRefreshError(message, response = null) {
+    const error = new Error(message);
+    error.response = response;
+    error.safeMessage = message;
+    return error;
+  }
+
+  function logProductRefreshError(message, details = {}) {
+    if (typeof logger?.error !== "function") return;
+    logger.error(message, details);
+  }
+
+  function committedProductCount(data, fallback) {
+    const count = Number(data?.meta?.refreshCommittedCount);
+    return Number.isSafeInteger(count) && count >= 0 ? count : fallback;
+  }
+
+  async function refreshSupplierBoardProducts() {
+    if (supplierProductRefreshInFlight) return supplierProductRefreshInFlight;
+
+    const scope = getSupplierBoardProductRefreshScope();
+    if (!scope.items.length) {
+      setText(
+        "#supplier-board-status",
+        `当前筛选范围没有可刷新的 SID + MSKU${scope.excludedCount ? `（已排除 ${scope.excludedCount} 条无效记录）` : ""}。`,
+        root,
+      );
+      return { ok: false, reason: "empty-scope", excludedCount: scope.excludedCount };
+    }
+
+    const button = root?.querySelector?.("#supplier-board-product-refresh");
+    const restoreButton = setButtonBusy(button, "刷新中…", "刷新商品资料");
+    const operation = (async () => {
+      let response = null;
+      let data = null;
+      try {
+        response = await fetchImpl("/api/product-catalog/refresh", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ feature: "supplier-board", items: scope.items }),
+        });
+        try {
+          data = await response.json();
+        } catch {
+          throw makeProductRefreshError(safeProductRefreshErrorMessage(response, null), response);
+        }
+        if (!response?.ok || !data || typeof data !== "object" || Array.isArray(data) || data.ok !== true) {
+          throw makeProductRefreshError(safeProductRefreshErrorMessage(response, data), response);
+        }
+
+        const committedCount = committedProductCount(data, scope.items.length);
+        const reload = await loadSupplierBoard({ forceRefresh: false });
+        if (!reload?.ok) {
+          setText(
+            "#supplier-board-status",
+            `商品资料已提交 ${committedCount} 个，但看板重载失败，请稍后重试。`,
+            root,
+          );
+          logProductRefreshError("[supplier-board] product refresh committed but reload failed", {
+            committedCount,
+            reloadStatus: Number(reload?.error?.response?.status) || 0,
+            itemCount: scope.items.length,
+          });
+          return { ok: false, committed: true, data, error: reload?.error, excludedCount: scope.excludedCount };
+        }
+
+        setText("#supplier-board-status", `商品资料已刷新 ${committedCount} 个，并已重新装配当前看板。`, root);
+        return { ok: true, data, excludedCount: scope.excludedCount };
+      } catch (error) {
+        const safeMessage = error?.safeMessage || safeProductRefreshErrorMessage(response, data);
+        setText("#supplier-board-status", `商品资料刷新失败：${safeMessage}`, root);
+        logProductRefreshError("[supplier-board] product refresh failed", {
+          status: Number(response?.status) || 0,
+          itemCount: scope.items.length,
+          excludedCount: scope.excludedCount,
+          errorMessage: safeMessage,
+        });
+        return { ok: false, error: makeProductRefreshError(safeMessage, response), excludedCount: scope.excludedCount };
+      } finally {
+        restoreButton();
+      }
+    })();
+    supplierProductRefreshInFlight = operation;
+    try {
+      return await operation;
+    } finally {
+      supplierProductRefreshInFlight = null;
+    }
+  }
+
   function renderSupplierBoardSortState() {
     setTableSortButtonGroupState("#supplier-board-table button[data-supplier-sort]", "supplierSort", supplierBoardSort.key, supplierBoardSort.direction);
   }
@@ -343,7 +464,7 @@ export function createSupplierBoardFeature({
   async function loadSupplierBoard(options = {}) {
     setDefaultSupplierBoardDates();
     const forceRefresh = Boolean(options.forceRefresh);
-    await loadDashboardSection({
+    return loadDashboardSection({
       endpoint: `/api/dashboard/supplier-board?${buildSupplierBoardQuery({ forceRefresh })}`,
       buttonSelector: "#supplier-board-refresh",
       busyText: "刷新中...",
@@ -389,7 +510,10 @@ export function createSupplierBoardFeature({
   }
 
   function setupSupplierBoard() {
+    if (supplierBoardSetupDone) return;
+    supplierBoardSetupDone = true;
     bind(root, "#supplier-board-refresh", "click", () => loadSupplierBoard({ forceRefresh: true }));
+    bind(root, "#supplier-board-product-refresh", "click", refreshSupplierBoardProducts);
     bind(root, "#supplier-board-export", "click", exportSupplierBoardExcel);
     bind(root, "#supplier-board-table thead", "click", (event) => {
       const header = closestTarget(event, "th[data-supplier-sort]");
@@ -417,6 +541,7 @@ export function createSupplierBoardFeature({
     handleSupplierBoardDimensionChange,
     handleSupplierBoardStoreChange,
     loadSupplierBoard,
+    refreshSupplierBoardProducts,
     renderSupplierBoard,
     setDefaultSupplierBoardDates,
     setupSupplierBoard,
