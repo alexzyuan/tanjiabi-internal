@@ -2,6 +2,7 @@ import { getConfig } from "../config/index.js";
 import { filterCoreSellers, getLingxingAdapter } from "../adapters/lingxingAdapter.js";
 import { supplierTaxRates } from "../data/supplierTaxRates.js";
 import { getSharedProductCatalogMap, getSharedSellers } from "./sharedDataService.js";
+import { getProductCatalogRevision } from "./productCatalogService.js";
 import {
   readSupplierBoardCache,
   saveSupplierBoardCache,
@@ -315,13 +316,14 @@ function listingMskuKey(sid, msku) {
 async function fetchProductMap(adapter, rows, {
   getSharedCatalog = getSharedProductCatalogMap,
   sellers = [],
+  feature = "supplier-board",
+  strict = true,
+  allowFetchMissing = true,
 } = {}) {
-  const sharedCatalog = await getSharedCatalog(adapter, rows, {
-    feature: "supplier-board",
-    sellers,
-  });
+  const options = { feature, sellers, strict, allowFetchMissing };
+  const sharedCatalog = await getSharedCatalog(adapter, rows, options);
   if (!sharedCatalog?.map) throw new Error("共享商品目录未返回有效索引。");
-  return sharedCatalog.map;
+  return sharedCatalog;
 }
 
 function findTaxRate(supplier) {
@@ -334,15 +336,59 @@ function findTaxRate(supplier) {
   return exact || { factoryName: "", specialInvoiceTaxRate: null, ordinaryInvoiceTaxRate: null };
 }
 
-function mergeProductAndTax(rows, productMap) {
+function isReadableProductValue(value) {
+  return value !== undefined && value !== null && String(value).trim() !== "";
+}
+
+function productValue(product, row, field) {
+  if (Object.hasOwn(product || {}, field)) return product[field];
+  return row?.[field];
+}
+
+function numericProductValue(product, row, field, fallback = 0) {
+  const value = productValue(product, row, field);
+  if (value === null || value === undefined || value === "") return fallback;
+  return toNumber(value);
+}
+
+function productForRow(row, productMap) {
+  return productMap.get(productKey(row.sku))
+    || productMap.get(listingMskuKey(row.sid, row.msku))
+    || productMap.get(productKey(row.msku))
+    || null;
+}
+
+function assertCatalogRowsResolved(rows, productMap) {
+  const unresolvedCount = rows.reduce((count, row) => count + (productForRow(row, productMap) ? 0 : 1), 0);
+  if (unresolvedCount) {
+    const error = new Error(`共享商品目录无法解析 ${unresolvedCount} 条看板记录。`);
+    error.code = "SUPPLIER_BOARD_CATALOG_UNRESOLVED";
+    error.details = { unresolvedCount };
+    throw error;
+  }
+}
+
+function mergeProductAndTax(rows, productMap, {
+  requireCatalog = false,
+  replaceProductFields = false,
+} = {}) {
   return rows.map((row) => {
-    const product = productMap.get(productKey(row.sku))
-      || productMap.get(listingMskuKey(row.sid, row.msku))
-      || productMap.get(productKey(row.msku))
-      || {};
-    const supplier = product.supplier || "";
+    const product = productForRow(row, productMap) || {};
+    if (requireCatalog && !Object.keys(product).length) {
+      const error = new Error("共享商品目录无法解析看板记录。");
+      error.code = "SUPPLIER_BOARD_CATALOG_UNRESOLVED";
+      throw error;
+    }
+    const supplierValue = replaceProductFields
+      ? product?.supplier
+      : (product?.supplier || row?.supplier);
+    const supplier = isReadableProductValue(supplierValue) ? String(supplierValue) : "";
     const tax = findTaxRate(supplier);
-    const purchaseCostSubtotal = Number((Number(row.quantity || 0) * Number(product.purchasePrice || 0)).toFixed(2));
+    const purchasePriceValue = replaceProductFields
+      ? product?.purchasePrice
+      : (product?.purchasePrice ?? row?.purchasePrice);
+    const purchasePrice = numericProductValue({ purchasePrice: purchasePriceValue }, {}, "purchasePrice", 0);
+    const purchaseCostSubtotal = Number((Number(row.quantity || 0) * purchasePrice).toFixed(2));
     const ordinaryInvoicePurchaseCost = tax.ordinaryInvoiceTaxRate === null || tax.ordinaryInvoiceTaxRate === undefined
       ? null
       : purchaseCostSubtotal;
@@ -351,17 +397,36 @@ function mergeProductAndTax(rows, productMap) {
       : Number((purchaseCostSubtotal * Number(tax.ordinaryInvoiceTaxRate || 0)).toFixed(2));
     return {
       ...row,
-      productName: row.productName || product.productName || "",
-      sku: row.sku || product.sku || "",
-      model: row.model || product.model || "",
+      imageUrl: isReadableProductValue(replaceProductFields ? product?.imageUrl : (row?.imageUrl || product?.imageUrl))
+        ? String(replaceProductFields ? product.imageUrl : (row.imageUrl || product.imageUrl))
+        : "",
+      productName: isReadableProductValue(replaceProductFields ? product?.productName : (row?.productName || product?.productName))
+        ? String(replaceProductFields ? product.productName : (row.productName || product.productName))
+        : "",
+      sku: isReadableProductValue(replaceProductFields ? (product?.sku || product?.internalSku) : (row?.sku || product?.sku || product?.internalSku))
+        ? String(replaceProductFields ? (product.sku || product.internalSku) : (row.sku || product.sku || product.internalSku))
+        : "",
+      internalSku: isReadableProductValue(replaceProductFields
+        ? (product?.internalSku || product?.sku)
+        : (row?.internalSku || product?.internalSku || product?.sku || row?.sku))
+        ? String(replaceProductFields
+          ? (product.internalSku || product.sku)
+          : (row.internalSku || product.internalSku || product.sku || row.sku))
+        : "",
+      model: isReadableProductValue(replaceProductFields ? product?.model : (row?.model || product?.model))
+        ? String(replaceProductFields ? product.model : (row.model || product.model))
+        : "",
       supplier,
-      purchasePrice: product.purchasePrice || 0,
+      purchasePrice,
       purchaseCostSubtotal,
       ordinaryInvoicePurchaseCost,
       taxFactoryName: tax.factoryName,
       ordinaryInvoiceTaxRate: tax.ordinaryInvoiceTaxRate,
       ordinaryInvoiceCost,
       specialInvoiceTaxRate: tax.specialInvoiceTaxRate,
+      ...(Object.hasOwn(product, "packQuantity") ? { packQuantity: product.packQuantity } : {}),
+      ...(Object.hasOwn(product, "declaredValue") ? { declaredValue: product.declaredValue } : {}),
+      ...(Object.hasOwn(product, "unit") ? { unit: product.unit } : {}),
     };
   });
 }
@@ -579,13 +644,165 @@ function emptyPayload(filters, message) {
   };
 }
 
+function normalizedCatalogRevision(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const revision = Number(value);
+  return Number.isFinite(revision) && revision >= 0 ? revision : null;
+}
+
+function catalogRevisionFromResult(result, fallback = null) {
+  const direct = normalizedCatalogRevision(result?.revision);
+  if (direct !== null) return direct;
+  const meta = normalizedCatalogRevision(result?.meta?.revision);
+  if (meta !== null) return meta;
+  return normalizedCatalogRevision(fallback);
+}
+
+function validateCachedRows(rows) {
+  if (!Array.isArray(rows)) throw new Error("供应商看板缓存缺少有效行数据。");
+  const missingIdentityCount = rows.reduce((count, row) => {
+    const sid = Number(row?.sid);
+    const msku = String(row?.msku || "").trim();
+    return count + (Number.isInteger(sid) && sid > 0 && msku ? 0 : 1);
+  }, 0);
+  if (missingIdentityCount) {
+    const error = new Error(`供应商看板缓存缺少 ${missingIdentityCount} 个商品身份。`);
+    error.code = "SUPPLIER_BOARD_CACHE_IDENTITY_MISSING";
+    error.details = { missingIdentityCount };
+    throw error;
+  }
+}
+
+function supplierCacheTraceRequest(filters) {
+  return {
+    dimension: filters.dimension,
+    startDate: filters.startDate,
+    endDate: filters.endDate,
+    storeName: filters.storeName || "",
+    country: filters.country || "",
+  };
+}
+
+function supplierCacheTraceError(error) {
+  const rawName = String(error?.name || "Error").trim();
+  const errorName = /^(?:Error|TypeError|RangeError|SyntaxError|ProductCatalog[A-Za-z]+Error)$/.test(rawName)
+    ? rawName
+    : "Error";
+  const rawCode = String(error?.code || "").trim();
+  const errorCode = /^[A-Za-z0-9_.:-]{1,64}$/.test(rawCode) && !/(token|secret|password|payload|raw|body)/i.test(rawCode)
+    ? rawCode
+    : "";
+  return errorCode ? `${errorName}:${errorCode}` : errorName;
+}
+
+function logSupplierCacheRehydrateFailure(logger, {
+  filters,
+  cachedRevision = null,
+  currentRevision = null,
+  rowCount = 0,
+  error,
+} = {}) {
+  const method = typeof logger?.error === "function" ? logger.error.bind(logger) : console.error;
+  method("[supplier-board] cache rehydrate failed", {
+    operation: "supplier-cache-rehydrate",
+    feature: "supplier-board-cache-rehydrate",
+    request: supplierCacheTraceRequest(filters),
+    cachedRevision,
+    currentRevision,
+    rowCount: Number(rowCount || 0),
+    error: supplierCacheTraceError(error),
+  });
+}
+
+async function rehydrateSupplierBoardCache({
+  cached,
+  cacheKey,
+  filters,
+  injectedAdapter,
+  injectedSellers,
+  getSellers,
+  getSharedCatalog,
+  getCatalogRevision: readCatalogRevision,
+  saveDashboardCache,
+  logger,
+}) {
+  const cachedData = cached?.data;
+  const cachedRows = cachedData?.rows;
+  const cachedRevision = normalizedCatalogRevision(cachedData?.meta?.productCatalogRevision);
+  let currentRevision = null;
+
+  try {
+    currentRevision = normalizedCatalogRevision(await readCatalogRevision({ feature: "supplier-board-cache-rehydrate" }));
+    if (currentRevision === null) throw new Error("商品目录版本读取失败。");
+    validateCachedRows(cachedRows);
+    if (cachedRevision !== null && cachedRevision === currentRevision) {
+      return withCacheMeta(cachedData, cached);
+    }
+
+    const adapter = injectedAdapter || getLingxingAdapter();
+    const sellersResult = injectedSellers
+      ? { sellers: injectedSellers }
+      : await getSellers({ adapter });
+    const sellers = filterCoreSellers(sellersResult?.sellers || []);
+    const sellersBySid = new Map(sellers.map((seller) => [Number(seller.sid || seller.seller_id || seller.sellerId), seller]));
+    for (const row of cachedRows) {
+      if (!sellersBySid.has(Number(row.sid))) {
+        const error = new Error("供应商看板缓存商品身份不在运行时店铺目录。");
+        error.code = "SUPPLIER_BOARD_CACHE_SELLER_MISSING";
+        throw error;
+      }
+    }
+
+    const sharedCatalog = await fetchProductMap(adapter, cachedRows, {
+      getSharedCatalog,
+      sellers,
+      feature: "supplier-board-cache-rehydrate",
+      strict: true,
+      allowFetchMissing: false,
+    });
+    const productMap = sharedCatalog.map;
+    assertCatalogRowsResolved(cachedRows, productMap);
+    const catalogRevision = catalogRevisionFromResult(sharedCatalog, currentRevision);
+    if (catalogRevision === null) throw new Error("商品目录版本缺失。");
+    const rows = filterRows(mergeProductAndTax(cachedRows, productMap, {
+      requireCatalog: true,
+      replaceProductFields: true,
+    }), filters);
+    const data = {
+      ...cachedData,
+      meta: {
+        ...(cachedData?.meta || {}),
+        productCatalogRevision: catalogRevision,
+        request: filters,
+        cacheHit: false,
+        updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
+      },
+      summary: summarize(rows),
+      rows,
+    };
+    await saveDashboardCache(cacheKey, data);
+    return withCacheMeta(data, cached, "已重建服务器缓存");
+  } catch (error) {
+    logSupplierCacheRehydrateFailure(logger, {
+      filters,
+      cachedRevision,
+      currentRevision,
+      rowCount: Array.isArray(cachedRows) ? cachedRows.length : 0,
+      error,
+    });
+    throw error;
+  }
+}
+
 export async function getSupplierBoardDashboard(filters = {}, {
   adapter: injectedAdapter = null,
   sellers: injectedSellers = null,
   getSellers = getSharedSellers,
   getSharedCatalog = getSharedProductCatalogMap,
+  getCatalogRevision: readCatalogRevision = getProductCatalogRevision,
   readDashboardCache = readSupplierBoardCache,
   saveDashboardCache = saveSupplierBoardCache,
+  logger = console,
 } = {}) {
   const dateFilters = normalizeDateFilters(filters);
   const normalizedFilters = {
@@ -605,8 +822,23 @@ export async function getSupplierBoardDashboard(filters = {}, {
   }
 
   const cacheKey = stableSupplierBoardCacheKey(normalizedFilters);
-  const cached = await readDashboardCache(cacheKey, supplierBoardCacheTtl(normalizedFilters));
-  if (cached?.data) return withCacheMeta(cached.data, cached);
+  const cached = normalizedFilters.forceRefresh
+    ? null
+    : await readDashboardCache(cacheKey, supplierBoardCacheTtl(normalizedFilters));
+  if (cached?.data) {
+    return rehydrateSupplierBoardCache({
+      cached,
+      cacheKey,
+      filters: normalizedFilters,
+      injectedAdapter,
+      injectedSellers,
+      getSellers,
+      getSharedCatalog,
+      getCatalogRevision: readCatalogRevision,
+      saveDashboardCache,
+      logger,
+    });
+  }
 
   try {
     const adapter = injectedAdapter || getLingxingAdapter();
@@ -621,8 +853,23 @@ export async function getSupplierBoardDashboard(filters = {}, {
       .filter(Boolean);
     const salesResult = await fetchAllSalesRows(adapter, normalizedFilters, sellersBySid, selectedSids);
     const salesRows = salesResult.rows;
-    const productMap = await fetchProductMap(adapter, salesRows, { getSharedCatalog, sellers });
-    const rows = filterRows(mergeProductAndTax(salesRows, productMap), normalizedFilters);
+    const sharedCatalog = await fetchProductMap(adapter, salesRows, {
+      getSharedCatalog,
+      sellers,
+      feature: "supplier-board",
+      strict: true,
+    });
+    const productMap = sharedCatalog.map;
+    assertCatalogRowsResolved(salesRows, productMap);
+    let catalogRevision = catalogRevisionFromResult(sharedCatalog);
+    if (catalogRevision === null) {
+      catalogRevision = catalogRevisionFromResult(
+        sharedCatalog,
+        await readCatalogRevision({ feature: "supplier-board" }),
+      );
+    }
+    if (catalogRevision === null) throw new Error("商品目录版本缺失。");
+    const rows = filterRows(mergeProductAndTax(salesRows, productMap, { requireCatalog: true }), normalizedFilters);
 
     const data = {
       meta: {
@@ -631,6 +878,7 @@ export async function getSupplierBoardDashboard(filters = {}, {
         updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
         request: normalizedFilters,
         cacheHit: false,
+        productCatalogRevision: catalogRevision,
       },
       summary: summarize(rows),
       rows,
@@ -639,10 +887,11 @@ export async function getSupplierBoardDashboard(filters = {}, {
     await saveDashboardCache(cacheKey, data);
     return data;
   } catch (error) {
-    console.error("[supplier-board] refresh failed", {
+    const logError = typeof logger?.error === "function" ? logger.error.bind(logger) : console.error;
+    logError("[supplier-board] refresh failed", {
       filters: normalizedFilters,
       cacheKey,
-      error: error.message,
+      error: supplierCacheTraceError(error),
     });
     const data = emptyPayload(normalizedFilters, `供应商看板读取失败：${error.message}`);
     data.error = error.message;
