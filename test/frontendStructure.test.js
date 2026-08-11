@@ -1350,6 +1350,20 @@ test("auth shell centralizes role-based visibility toggles", async () => {
   assert.equal(appSource.includes("function syncPermissionVisibility"), false);
 });
 
+test("Settings navigation and mailbox configuration controls are administrator-only semantic markup", async () => {
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+
+  assert.match(indexSource, /<section class="nav-group" aria-label="设置" data-permission="admin" hidden>/);
+  assert.match(indexSource, /<section class="view" id="view-sync" data-permission="admin" hidden>/);
+  assert.match(indexSource, /id="aftersales-mail-settings-form"/);
+  assert.match(indexSource, /id="aftersales-mail-enabled" type="checkbox"/);
+  assert.match(indexSource, /id="aftersales-mail-password" type="password"/);
+  assert.match(indexSource, /id="aftersales-mail-test" type="button"/);
+  assert.match(indexSource, /id="aftersales-mail-save" type="submit"/);
+  assert.match(indexSource, /id="aftersales-mail-status" role="status" aria-live="polite"/);
+  assert.match(indexSource, /id="aftersales-mail-summary"/);
+});
+
 test("app.js centralizes FBA floating panel visibility", async () => {
   const source = await readFile(new URL("../app.js", import.meta.url), "utf8");
   const fbaShopsFeatureSource = await readFile(new URL("../assets/js/features/fba-shops.js", import.meta.url), "utf8");

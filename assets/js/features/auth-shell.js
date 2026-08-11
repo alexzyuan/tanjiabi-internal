@@ -47,7 +47,7 @@ export function createAuthShellFeature({
   }
 
   function moveToDefaultViewIfRestricted({ canEnterAdmin, canEnterFinance }) {
-    const activeAdminNav = root?.querySelector?.('.nav-item[data-view="admin"].active, .nav-item[data-permission="admin"].active');
+    const activeAdminNav = root?.querySelector?.('.nav-item[data-view="admin"].active, .nav-item[data-view="sync"].active, .nav-item[data-permission="admin"].active');
     const activeFinanceNav = root?.querySelector?.('.nav-group[data-permission="finance"] .nav-item.active');
     if ((!canEnterAdmin && activeAdminNav) || (!canEnterFinance && activeFinanceNav)) {
       root?.querySelector?.('.nav-item[data-view="home"]')?.click();
@@ -56,9 +56,11 @@ export function createAuthShellFeature({
 
   function syncPermissionVisibility({ canEnterAdmin, canEnterFinance }) {
     const adminNav = root?.querySelectorAll?.('.nav-item[data-view="admin"], .nav-item[data-permission="admin"]') || [];
+    const adminSettingsGroups = root?.querySelectorAll?.('.nav-group[data-permission="admin"], .view[data-permission="admin"]') || [];
     const financeGroups = root?.querySelectorAll?.('.nav-group[data-permission="finance"]') || [];
     const financeCards = root?.querySelectorAll?.('[data-permission-card="finance"]') || [];
     setElementsHidden(adminNav, !canEnterAdmin, root);
+    setElementsHidden(adminSettingsGroups, !canEnterAdmin, root);
     setElementsHidden(financeGroups, !canEnterFinance, root);
     setElementsHidden(financeCards, !canEnterFinance, root);
   }

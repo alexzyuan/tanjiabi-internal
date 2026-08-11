@@ -63,8 +63,8 @@ export function createAftersalesMailFeature({
     setText("#aftersales-mail-pending-count", formatNumber(stats.pendingCount || 0), root);
     setText("#aftersales-mail-replied-count", formatNumber(stats.repliedCount || 0), root);
     setText("#aftersales-mail-synced-at", meta.updatedAt || "-", root);
-    setText("#aftersales-mail-account", meta.account || "JM售后邮箱", root);
-    setText("#aftersales-mail-status", `${meta.source || "站外售后邮箱"} · ${meta.syncStatus || "等待同步"}`, root);
+    setText("#aftersales-mail-inbox-account", meta.account || "JM售后邮箱", root);
+    setText("#aftersales-mail-inbox-status", `${meta.source || "站外售后邮箱"} · ${meta.syncStatus || "等待同步"}`, root);
 
     const rows = filteredAftersalesMailRows();
     setText("#aftersales-mail-table-count", rows.length ? `共 ${rows.length} 封邮件` : "暂无匹配邮件", root);
@@ -93,7 +93,7 @@ export function createAftersalesMailFeature({
     const syncButton = root?.querySelector?.("#aftersales-mail-sync");
     const refreshButton = root?.querySelector?.("#aftersales-mail-refresh");
     const busyButtons = setElementsDisabled([syncButton, refreshButton], true, root);
-    setText("#aftersales-mail-status", sync ? "正在同步 163 邮箱" : "正在读取邮箱缓存", root);
+    setText("#aftersales-mail-inbox-status", sync ? "正在同步 163 邮箱" : "正在读取邮箱缓存", root);
     try {
       const response = await fetch(sync ? "/api/aftersales-mail/sync" : "/api/aftersales-mail/dashboard", {
         method: sync ? "POST" : "GET",

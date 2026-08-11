@@ -55,3 +55,17 @@ test("aftersales mail feature owns refresh, filter, detail, ai, reply, and statu
     ],
   );
 });
+
+test("aftersales inbox renders mailbox metadata into its dedicated status elements", () => {
+  const textUpdates = [];
+  const { feature } = createFeature({
+    setText: (selector, value) => textUpdates.push([selector, value]),
+  });
+
+  feature.renderAftersalesMailDashboard();
+
+  assert.deepEqual(textUpdates.slice(4, 6), [
+    ["#aftersales-mail-inbox-account", "JM售后邮箱"],
+    ["#aftersales-mail-inbox-status", "站外售后邮箱 · 等待同步"],
+  ]);
+});
