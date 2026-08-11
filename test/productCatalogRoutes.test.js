@@ -96,6 +96,15 @@ test("catalog refresh preserves typed body-read status instead of converting 413
   ));
 });
 
+test("catalog refresh does not relabel unexpected body-stream errors as malformed 400", async () => {
+  const { routes } = createHarness({
+    readJsonBody: async () => { throw new Error("body stream failed"); },
+  });
+  await assert.rejects(routes[0].handler({ req: {}, res: {} }), (error) => (
+    error.message === "body stream failed" && error.statusCode === undefined
+  ));
+});
+
 test("catalog error serializer preserves typed status while redacting arbitrary upstream text", () => {
   for (const statusCode of [400, 409, 422, 502, 503, 599]) {
     const response = serializeProductCatalogError(

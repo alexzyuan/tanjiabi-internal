@@ -178,7 +178,8 @@ export function createProductCatalogRoutes({
           body = await readJsonBody(req, { maxBytes: PRODUCT_CATALOG_REFRESH_MAX_BODY_BYTES });
         } catch (error) {
           if (validApiStatusCode(error?.statusCode)) throw error;
-          throw invalidRequest();
+          if (error instanceof SyntaxError || error?.name === "SyntaxError") throw invalidRequest();
+          throw error;
         }
         const input = refreshInput(body);
         const result = await refreshProductCatalogScope(input);
