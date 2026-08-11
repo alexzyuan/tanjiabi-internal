@@ -27,6 +27,8 @@ function liveListing(msku, {
   sid = 8708,
   internalSku = msku,
   productId = "101",
+  skuIdentifier = "",
+  asin = "",
   storeName = "上游别名",
   country = "上游国家",
 } = {}) {
@@ -35,6 +37,8 @@ function liveListing(msku, {
     seller_sku: msku,
     local_sku: internalSku,
     product_id: productId,
+    sku_identifier: skuIdentifier,
+    asin,
     store_name: storeName,
     country,
   };
@@ -144,6 +148,7 @@ async function createCatalogServiceFixture(options = {}) {
   let productCalls = 0;
   let requestedListingMskus = [];
   const listingGate = options.listingGate;
+  let failProducts = Boolean(options.failProducts);
   const adapter = {
     async fetchListings(params) {
       listingCalls += 1;
@@ -155,7 +160,7 @@ async function createCatalogServiceFixture(options = {}) {
     },
     async fetchLocalProductInfos(params) {
       productCalls += 1;
-      if (options.failProducts) throw new Error("产品管理不可用");
+      if (failProducts) throw new Error("产品管理不可用");
       const values = params.skus || params.sku_identifiers || params.product_ids || [];
       const rows = productRecords.filter((record) => values.some((value) => [
         record.sku,
@@ -168,7 +173,7 @@ async function createCatalogServiceFixture(options = {}) {
       return { data: { rows } };
     },
     async fetchLocalProducts() {
-      if (options.failProducts) throw new Error("产品管理不可用");
+      if (failProducts) throw new Error("产品管理不可用");
       return { data: { rows: productRecords } };
     },
   };
@@ -201,7 +206,9 @@ async function createCatalogServiceFixture(options = {}) {
     get listingCalls() { return listingCalls; },
     get productCalls() { return productCalls; },
     get requestedListingMskus() { return requestedListingMskus; },
+    get logEntries() { return logs; },
     logText() { return JSON.stringify(logs); },
+    setFailProducts(value) { failProducts = Boolean(value); },
     async waitForListingCalls(count) {
       const deadline = Date.now() + 1000;
       while (listingCalls < count && Date.now() < deadline) {
@@ -242,21 +249,50 @@ test("manual refresh validates runtime SID before upstream calls", async (t) => 
   t.after(fixture.cleanup);
   await assert.rejects(
     refreshProductCatalogScope({ feature: "supplier-board", items: [{ sid: 9999, msku: "A" }] }, fixture.options),
-    (error) => error.statusCode === 400,
+    (error) => error.statusCode === 400 && Boolean(error.details?.requestId),
   );
   assert.equal(fixture.listingCalls, 0);
+});
+
+test("invalid catalog scope preserves 400 identity error and adds a redacted request ID", async (t) => {
+  const fixture = await createCatalogServiceFixture();
+  t.after(fixture.cleanup);
+  await assert.rejects(
+    getProductCatalogForRows([{ sid: 0, msku: "A", token: "raw-secret" }], {
+      ...fixture.options,
+      requestId: "req-invalid-scope",
+    }),
+    (error) => error.statusCode === 400
+      && error.name === "ProductCatalogInputError"
+      && error.details?.requestId === "req-invalid-scope"
+      && !JSON.stringify(error.details).includes("raw-secret"),
+  );
 });
 
 test("manual refresh failure leaves old rows and revision unchanged", async (t) => {
   const fixture = await createCatalogServiceFixture({ seeded: true, failProducts: true });
   t.after(fixture.cleanup);
   const before = fixture.repository.getRevision();
+  let failure;
   await assert.rejects(
     refreshProductCatalogScope(fixture.refreshRequest, fixture.options),
-    /产品管理/,
+    (error) => {
+      failure = error;
+      return /产品管理/.test(error.message) && Boolean(error.details?.requestId);
+    },
   );
   assert.equal(fixture.repository.getRevision(), before);
   assert.equal(fixture.repository.readScope(fixture.scope)[0].product.purchasePrice, 35);
+  assert.equal(failure.details.migrationCompleted, true);
+  assert.equal(failure.details.catalogRevisionBeforeRefresh, before);
+  const errorLog = fixture.logEntries
+    .filter(([prefix]) => prefix === "[product-catalog-service]")
+    .map(([, details]) => details)
+    .find((details) => details.status === "error");
+  assert.equal(errorLog.errorName, "ProductCatalogUpstreamError");
+  assert.equal(errorLog.errorCode, null);
+  assert.equal(errorLog.operation, "manual-refresh");
+  assert.equal(typeof errorLog.errorMessage, "string");
 });
 
 test("same sorted refresh scope joins in-flight and commits once", async (t) => {
@@ -274,10 +310,49 @@ test("same sorted refresh scope joins in-flight and commits once", async (t) => 
   assert.equal(fixture.listingCalls, 1);
   assert.equal(fixture.productCalls, 1);
   assert.equal(fixture.repository.getRevision(), 1);
+  assert.equal(firstResult.records[0].listing.source, "lingxing-listing");
+  assert.equal(firstResult.meta.listingSharedXlsxCount, 0);
   assert.deepEqual(
     [firstResult.meta.joinedInFlight, secondResult.meta.joinedInFlight].sort(),
     [false, true],
   );
+});
+
+test("same feature and scope remain isolated across repository and adapter dependencies", async (t) => {
+  const gateA = deferred();
+  const gateB = deferred();
+  const firstFixture = await createCatalogServiceFixture({ listingGate: gateA });
+  const secondFixture = await createCatalogServiceFixture({ listingGate: gateB });
+  t.after(async () => {
+    await firstFixture.cleanup();
+    await secondFixture.cleanup();
+  });
+  const first = refreshProductCatalogScope(firstFixture.refreshRequest, firstFixture.options);
+  await firstFixture.waitForListingCalls(1);
+  const second = refreshProductCatalogScope(secondFixture.refreshRequest, secondFixture.options);
+  await secondFixture.waitForListingCalls(1);
+  gateA.resolve();
+  gateB.resolve();
+  const [firstResult, secondResult] = await Promise.all([first, second]);
+  assert.equal(firstFixture.listingCalls, 1);
+  assert.equal(secondFixture.listingCalls, 1);
+  assert.equal(firstFixture.repository.getRevision(), 1);
+  assert.equal(secondFixture.repository.getRevision(), 1);
+  assert.deepEqual(
+    [firstResult.meta.joinedInFlight, secondResult.meta.joinedInFlight].sort(),
+    [false, false],
+  );
+});
+
+test("failed refresh removes its in-flight entry so the same scope can retry", async (t) => {
+  const fixture = await createCatalogServiceFixture({ failProducts: true });
+  t.after(fixture.cleanup);
+  await assert.rejects(refreshProductCatalogScope(fixture.refreshRequest, fixture.options), /产品管理/);
+  fixture.setFailProducts(false);
+  const result = await refreshProductCatalogScope(fixture.refreshRequest, fixture.options);
+  assert.equal(result.ok, true);
+  assert.equal(fixture.repository.getRevision(), 1);
+  assert.equal(result.meta.joinedInFlight, false);
 });
 
 test("live explicit empty optional fields clear old values instead of merging stale values", async (t) => {
@@ -289,18 +364,30 @@ test("live explicit empty optional fields clear old values instead of merging st
 
 test("Listing shared XLSX fills only an API Listing that lacks internal SKU", async (t) => {
   const fixture = await createCatalogServiceFixture({
-    listingRecords: [liveListing("A", { internalSku: "" })],
-    productRecords: [liveProduct("X", { productId: "x-1" })],
+    listingRecords: [liveListing("A", {
+      internalSku: "",
+      productId: "api-product-1",
+      asin: "api-asin-1",
+    })],
+    productRecords: [liveProduct("X", { productId: "" })],
     listingSharedCatalogRecords: [{
       sid: 8708,
       seller_sku: "A",
       local_sku: "X",
+      product_id: "xlsx-product-1",
+      sku_identifier: "xlsx-sku-id-1",
+      asin: "xlsx-asin-1",
       store_name: "历史店铺别名",
     }],
   });
   t.after(fixture.cleanup);
   const result = await refreshProductCatalogScope(fixture.refreshRequest, fixture.options);
   assert.equal(result.records[0].internalSku, "X");
+  assert.equal(result.records[0].listing.asin, "api-asin-1");
+  assert.equal(result.records[0].listing.productId, "api-product-1");
+  assert.equal(result.records[0].listing.listingSku, "X");
+  assert.equal(result.records[0].listing.source, "listing-shared-xlsx");
+  assert.equal(result.meta.listingSharedXlsxCount, 1);
   assert.equal(fixture.repository.getRevision(), 1);
 });
 
@@ -333,7 +420,10 @@ test("missing product returns 422 and alias conflict returns 409 without committ
   const seedRevision = conflict.repository.getRevision();
   await assert.rejects(
     refreshProductCatalogScope(conflict.refreshRequest, conflict.options),
-    (error) => error.statusCode === 409,
+    (error) => error.statusCode === 409
+      && error.name === "ProductCatalogConflictError"
+      && Boolean(error.details?.requestId)
+      && Number(error.details?.conflictCount) >= 1,
   );
   assert.equal(conflict.repository.getRevision(), seedRevision);
 });
