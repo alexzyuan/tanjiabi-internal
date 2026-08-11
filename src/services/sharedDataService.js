@@ -1,13 +1,10 @@
 import { getLingxingAdapter } from "../adapters/lingxingAdapter.js";
 import { createPerformanceMetrics } from "../utils/performanceMetrics.js";
 import {
-  fetchLingxingListingsBySidMskus,
-  fetchLingxingProductRecords,
-} from "./lingxingCatalogLookupService.js";
-import {
-  readSharedProductCatalogCache,
-  saveSharedProductCatalogCache,
-} from "../utils/cacheStore.js";
+  getProductCatalogForRows,
+  getProductCatalogRevision,
+  refreshProductCatalogScope,
+} from "./productCatalogService.js";
 import { getSellerDirectory } from "./sellerDirectoryService.js";
 import {
   catalogProductToRepositoryRows,
@@ -32,12 +29,6 @@ export {
   readListingSharedCatalogRecords,
 } from "./listingSharedCatalogService.js";
 
-const PRODUCT_CATALOG_CACHE_VERSION = "shared-product-catalog-v3";
-const PRODUCT_CATALOG_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const LISTING_BATCH_SIZE = 50;
-const PRODUCT_BATCH_SIZE = 80;
-const sharedProductCatalogRefreshes = new Map();
-
 function uniqueText(values = []) {
   const seen = new Set();
   return values.map((value) => String(value || "").trim()).filter((value) => {
@@ -46,25 +37,6 @@ function uniqueText(values = []) {
     seen.add(key);
     return true;
   });
-}
-
-function chunkArray(values, size) {
-  const chunks = [];
-  for (let index = 0; index < values.length; index += size) chunks.push(values.slice(index, index + size));
-  return chunks;
-}
-
-function normalizeRecordList(payload) {
-  if (Array.isArray(payload)) return payload;
-  if (Array.isArray(payload?.data)) return payload.data;
-  const data = payload?.data || payload || {};
-  const records = data.records || data.list || data.rows || data.data || data.items || data.result || data;
-  return Array.isArray(records) ? records : [];
-}
-
-function totalCountOf(payload, recordsLength = 0) {
-  const data = payload?.data || payload || {};
-  return Number(data.total ?? data.count ?? data.totalCount ?? payload?.total ?? recordsLength) || recordsLength;
 }
 
 export function productCatalogKey(value) {
@@ -159,7 +131,13 @@ function normalizeSharedProductRecord(record = {}) {
   return normalizeCatalogProduct(record);
 }
 
-export function buildSharedProductCatalogMap({ sourceRows = [], listingRecords = [], productRecords = [] } = {}) {
+export function buildSharedProductCatalogMap({
+  sourceRows = [],
+  listingRecords = [],
+  productRecords = [],
+  catalogRecords = null,
+} = {}) {
+  if (Array.isArray(catalogRecords)) return buildCanonicalProductCatalogMap(catalogRecords, sourceRows);
   const map = new Map();
   sourceRows.forEach((row) => {
     const sid = Number(row.sid || 0);
@@ -201,108 +179,6 @@ export function buildSharedProductCatalogMap({ sourceRows = [], listingRecords =
   return map;
 }
 
-function stableProductCatalogCacheKey(rows = []) {
-  const identities = uniqueText(rows.flatMap((row) => [
-    Number(row.sid || 0) && row.msku ? listingMskuCatalogKey(row.sid, row.msku) : "",
-    row.storeName && row.msku ? listingStoreMskuCatalogKey(row.storeName, row.msku) : "",
-    row.country && row.msku ? listingCountryMskuCatalogKey(row.country, row.msku) : "",
-    row.msku,
-    row.sku,
-  ]));
-  return JSON.stringify({
-    source: "shared-product-catalog",
-    version: PRODUCT_CATALOG_CACHE_VERSION,
-    identities: identities.sort(),
-  });
-}
-
-function listingItemHasInternalSkuForRow(row = {}, item = {}) {
-  if (!item?.internalSku) return false;
-  const rowMskus = String(row.msku || "").split("/").map((value) => productCatalogKey(value)).filter(Boolean);
-  if (!rowMskus.includes(productCatalogKey(item.msku))) return false;
-  if (row.sid && item.sid && Number(row.sid) !== Number(item.sid)) return false;
-  if (row.storeName && item.storeName && productCatalogKey(row.storeName) !== productCatalogKey(item.storeName)) return false;
-  if (row.country && item.country && productCatalogKey(row.country) !== productCatalogKey(item.country)) return false;
-  return true;
-}
-
-async function fetchListingSharedCatalogItems(rows = [], apiListingItems = [], {
-  listingSharedCatalogRecords = null,
-  readListingSharedCatalog = readListingSharedCatalogRecords,
-  strict = false,
-} = {}) {
-  const missingRows = rows.filter((row) => !apiListingItems.some((item) => listingItemHasInternalSkuForRow(row, item)));
-  if (!missingRows.length) return [];
-  let sourceRecords = [];
-  try {
-    sourceRecords = Array.isArray(listingSharedCatalogRecords)
-      ? listingSharedCatalogRecords
-      : await readListingSharedCatalog();
-  } catch (error) {
-    console.error("[shared-product-catalog] Listing 共享目录读取失败", {
-      rowCount: rows.length,
-      missingRowCount: missingRows.length,
-      error: error.message,
-    });
-    if (strict) throw new Error(`Listing 共享目录读取失败：${error.message}`);
-    return [];
-  }
-  const matched = missingRows.flatMap((row) => findListingSharedCatalogMatches([row], sourceRecords).map((listing) => ({
-    ...listing,
-    sid: listing.sid || Number(row.sid || 0),
-    storeName: listing.storeName || row.storeName || "",
-    country: listing.country || row.country || "",
-  })));
-  if (matched.length) {
-    console.info("[shared-product-catalog] Listing 共享目录补充内部 SKU", {
-      requestedRows: rows.length,
-      missingRows: missingRows.length,
-      matchedRows: matched.length,
-    });
-  }
-  return matched;
-}
-
-async function fetchListingItems(adapter, rows = [], { strict = false, metrics = null } = {}) {
-  const rowsBySid = new Map();
-  rows.forEach((row) => {
-    const sid = Number(row.sid || 0);
-    const mskus = String(row.msku || "").split("/").map((item) => item.trim()).filter(Boolean);
-    if (!sid || !mskus.length) return;
-    if (!rowsBySid.has(sid)) rowsBySid.set(sid, []);
-    rowsBySid.get(sid).push(...mskus);
-  });
-
-  const items = [];
-  for (const [sid, mskus] of rowsBySid.entries()) {
-    const records = await fetchLingxingListingsBySidMskus(adapter, sid, mskus, { batchSize: LISTING_BATCH_SIZE, strict, metrics });
-    records.map((record) => normalizeSharedListingRecord(record, sid)).filter(Boolean).forEach((item) => items.push(item));
-  }
-  return items;
-}
-
-async function safeFetchProductRecords(adapter, params, fallbackParams = null, { strict = false, metrics = null } = {}) {
-  return fetchLingxingProductRecords(adapter, params, fallbackParams, { strict, metrics });
-}
-
-async function fetchProductRecords(adapter, rows = [], listingItems = [], { strict = false, metrics = null } = {}) {
-  const lookupValues = uniqueText([...rows, ...listingItems].flatMap((row) => [row.internalSku, row.sku, row.msku]));
-  const skuIdentifiers = uniqueText(listingItems.flatMap((row) => [row.skuIdentifier, row.internalSku, row.sku, row.msku]));
-  const productIds = uniqueText(listingItems.map((row) => row.productId));
-  const records = [];
-
-  for (const batch of chunkArray(lookupValues, PRODUCT_BATCH_SIZE)) {
-    records.push(...await safeFetchProductRecords(adapter, { skus: batch }, { sku_list: batch }, { strict, metrics }));
-  }
-  for (const batch of chunkArray(skuIdentifiers, PRODUCT_BATCH_SIZE)) {
-    records.push(...await safeFetchProductRecords(adapter, { sku_identifiers: batch }, { sku_identifier_list: batch }, { strict, metrics }));
-  }
-  for (const batch of chunkArray(productIds, PRODUCT_BATCH_SIZE)) {
-    records.push(...await safeFetchProductRecords(adapter, { product_ids: batch }, { product_id_list: batch }, { strict, metrics }));
-  }
-  return records;
-}
-
 export async function getSharedSellers({
   adapter = getLingxingAdapter(),
   forceRefresh = false,
@@ -334,81 +210,228 @@ export async function getCurrentFbaInventoryByMsku() {
   };
 }
 
-export async function getSharedProductCatalogMap(adapter = getLingxingAdapter(), rows = [], {
-  forceRefresh = false,
-  ttlMs = PRODUCT_CATALOG_TTL_MS,
-  strict = false,
-  listingSharedCatalogRecords = null,
-  readListingSharedCatalog = readListingSharedCatalogRecords,
-  readProductCatalogCache = readSharedProductCatalogCache,
-  saveProductCatalogCache = saveSharedProductCatalogCache,
+function canonicalRecordProduct(record = {}) {
+  const product = record?.product && typeof record.product === "object" ? record.product : {};
+  const listing = record?.listing && typeof record.listing === "object" ? record.listing : {};
+  const merged = mergeCatalogProduct({}, product);
+  const withListing = mergeCatalogProduct(merged, listing);
+  const withRecord = mergeCatalogProduct(withListing, record);
+  const internalSku = String(
+    withRecord.internalSku
+      || product.internalSku
+      || listing.internalSku
+      || record.internalSku
+      || "",
+  ).trim();
+  const msku = String(record.msku || listing.msku || "").trim();
+  const sid = Number(record.sid || listing.sid || 0);
+  const productId = String(
+    withRecord.productId
+      || product.productId
+      || listing.productId
+      || record.productId
+      || "",
+  ).trim();
+  const skuIdentifier = String(
+    withRecord.skuIdentifier
+      || product.skuIdentifier
+      || listing.skuIdentifier
+      || record.skuIdentifier
+      || "",
+  ).trim();
+  const next = {
+    ...withRecord,
+    sid,
+    msku,
+    mskuKey: String(record.mskuKey || listing.mskuKey || msku).trim().toLowerCase(),
+    internalSku,
+    internalSkuKey: internalSku ? productCatalogKey(internalSku) : "",
+    sku: String(withRecord.sku || internalSku).trim(),
+    listingSku: String(withRecord.listingSku || listing.listingSku || "").trim(),
+    productId,
+    skuIdentifier,
+    asin: String(withRecord.asin || listing.asin || product.asin || "").trim(),
+    storeName: String(record.storeName || listing.storeName || "").trim(),
+    country: String(record.country || listing.country || "").trim(),
+    countryCode: String(record.countryCode || listing.countryCode || "").trim(),
+    displayName: String(record.displayName || listing.displayName || "").trim(),
+    internalSkuSourceField: String(record.internalSkuSourceField || listing.internalSkuSourceField || "").trim(),
+    listingSkuSourceField: String(record.listingSkuSourceField || listing.listingSkuSourceField || "").trim(),
+  };
+  return next;
+}
+
+function addRequestLocalCatalogAlias(map, key, product) {
+  const normalizedKey = productCatalogKey(key);
+  if (!normalizedKey || !product) return;
+  // Aliases are request-local compatibility lookups.  The first canonical
+  // product wins when two listings share an internal SKU; SID+MSKU remains the
+  // authoritative listing identity for each row.
+  if (!map.has(normalizedKey)) map.set(normalizedKey, product);
+}
+
+function buildCanonicalProductCatalogMap(records = [], sourceRows = []) {
+  const map = new Map();
+  const recordsByIdentity = new Map();
+  const products = [];
+
+  for (const record of Array.isArray(records) ? records : []) {
+    const product = canonicalRecordProduct(record);
+    if (!product.msku || !product.sid) continue;
+    const identity = listingMskuCatalogKey(product.sid, product.msku);
+    if (identity) recordsByIdentity.set(identity, product);
+    products.push(product);
+  }
+
+  for (const product of products) {
+    const aliases = [
+      product.internalSku,
+      product.sku,
+      product.productId,
+      product.skuIdentifier,
+      // MSKU alone is retained only as a compatibility alias.  It never acts
+      // as the canonical persisted identity and never replaces a prior alias.
+      product.msku,
+      listingMskuCatalogKey(product.sid, product.msku),
+      listingStoreMskuCatalogKey(product.storeName, product.msku),
+      listingCountryMskuCatalogKey(product.country, product.msku),
+    ];
+    aliases.forEach((key) => addRequestLocalCatalogAlias(map, key, product));
+  }
+
+  for (const row of Array.isArray(sourceRows) ? sourceRows : []) {
+    const identity = listingMskuCatalogKey(row?.sid, row?.msku);
+    const product = recordsByIdentity.get(identity);
+    if (!product) continue;
+    [
+      row?.sku,
+      row?.internalSku,
+      row?.productId,
+      row?.skuIdentifier,
+      row?.msku,
+      listingStoreMskuCatalogKey(row?.storeName, row?.msku),
+      listingCountryMskuCatalogKey(row?.country, row?.msku),
+      identity,
+    ].forEach((key) => addRequestLocalCatalogAlias(map, key, product));
+  }
+  return map;
+}
+
+function buildSharedCatalogPerformance(meta, {
+  sourceRows = 0,
+  mapSize = 0,
+  recordCount = 0,
+  cacheHit = false,
 } = {}) {
   const metrics = createPerformanceMetrics("shared-product-catalog");
-  metrics.increment("sourceRows", rows.length);
-  const cacheKey = stableProductCatalogCacheKey(rows);
-  if (!forceRefresh) {
-    const cached = await metrics.measure("readCache", () => readProductCatalogCache(cacheKey, ttlMs));
-    if (cached?.data?.records) {
-      metrics.increment("cacheHit");
-      metrics.increment("outputRecords", cached.data.records.length);
-      const performance = metrics.summary();
-      console.info("[shared-product-catalog] performance", performance);
-      return {
-        map: productCatalogRecordsToMap(cached.data.records),
-        cacheHit: true,
-        updatedAt: cached.updatedAt || "",
-        status: `复用共享商品目录 ${cached.data.records.length} 个索引`,
-        performance,
-      };
+  const productFetchedCount = Number(meta?.productFetchedCount || 0);
+  // Task 5 exposes product record counts on normal lookup.  Manual-refresh
+  // metadata intentionally keeps its public shape smaller, but a successful
+  // refresh necessarily executed at least one product batch before commit.
+  const productLookupCount = productFetchedCount > 0
+    ? productFetchedCount
+    : Number(meta?.refreshRequestedCount || 0) > 0
+      ? 1
+      : 0;
+  metrics.increment("sourceRows", sourceRows);
+  metrics.increment("cacheHit", cacheHit ? 1 : 0);
+  metrics.increment("outputRecords", mapSize);
+  metrics.increment("canonicalRecords", Number(recordCount || 0));
+  metrics.increment("catalogRevision", Number(meta?.revision || 0));
+  metrics.increment("listingFetchedCount", Number(meta?.listingFetchedCount || 0));
+  metrics.increment("productFetchedCount", productFetchedCount);
+  metrics.increment("listingSharedXlsxCount", Number(meta?.listingSharedXlsxCount || 0));
+  metrics.increment("missingCount", Number(meta?.missingCount || 0));
+  metrics.increment("lingxingListingRequests", Number(meta?.listingFetchedCount || 0));
+  metrics.increment("lingxingProductInfoRequests", productLookupCount);
+  metrics.increment("joinedInFlight", Number(meta?.joinedInFlight || 0));
+  return metrics.summary();
+}
+
+function canonicalRecordsUpdatedAt(records = []) {
+  const refreshedAtMs = (Array.isArray(records) ? records : [])
+    .flatMap((record) => [
+      record?.listing?.refreshedAtMs,
+      record?.product?.refreshedAtMs,
+      record?.refreshedAtMs,
+    ])
+    .map(Number)
+    .filter((value) => Number.isFinite(value) && value > 0);
+  return refreshedAtMs.length ? new Date(Math.max(...refreshedAtMs)).toISOString() : "";
+}
+
+export async function getSharedProductCatalogMap(adapter = getLingxingAdapter(), rows = [], {
+  forceRefresh = false,
+  strict = false,
+  ...options
+} = {}) {
+  const serviceOptions = { ...options, adapter, strict, feature: options.feature || "shared-data" };
+  if (!Array.isArray(rows)) {
+    // Let Task 5 attach the typed validation error and request context instead
+    // of silently treating malformed input as an empty compatibility scope.
+    if (forceRefresh) {
+      await refreshProductCatalogScope({ feature: serviceOptions.feature, items: rows }, serviceOptions);
+    } else {
+      await getProductCatalogForRows(rows, serviceOptions);
     }
+    throw new Error("商品目录服务返回了无效输入。");
   }
-  metrics.increment("cacheHit", 0);
-
-  const refreshKey = JSON.stringify({ cacheKey, strict });
-  const inFlight = sharedProductCatalogRefreshes.get(refreshKey);
-  if (inFlight) {
-    metrics.increment("joinedInFlight");
-    const joined = await metrics.measure("joinInFlight", () => inFlight);
-    metrics.increment("outputRecords", joined.map?.size || 0);
-    const performance = metrics.summary();
-    console.info("[shared-product-catalog] performance", performance);
-    return { ...joined, performance };
-  }
-
-  const refresh = (async () => {
-    const apiListingItems = await metrics.measure("listingLookup", () => fetchListingItems(adapter, rows, { strict, metrics }));
-    metrics.increment("apiListingItems", apiListingItems.length);
-    const sharedListingItems = await metrics.measure("sharedCatalogLookup", () => fetchListingSharedCatalogItems(rows, apiListingItems, {
-      listingSharedCatalogRecords,
-      readListingSharedCatalog,
-      strict,
-    }));
-    metrics.increment("sharedListingItems", sharedListingItems.length);
-    const listingItems = [...apiListingItems, ...sharedListingItems];
-    const productRecords = await metrics.measure("productLookup", () => fetchProductRecords(adapter, rows, listingItems, { strict, metrics }));
-    metrics.increment("productRecords", productRecords.length);
-    const map = await metrics.measure("buildCatalog", async () => buildSharedProductCatalogMap({ sourceRows: rows, listingRecords: listingItems, productRecords }));
-    const records = productCatalogMapToRecords(map);
-    metrics.increment("outputRecords", records.length);
-    await metrics.measure("writeCache", () => saveProductCatalogCache(cacheKey, { records }));
-    const performance = metrics.summary();
-    console.info("[shared-product-catalog] performance", performance);
+  const sourceRows = rows;
+  if (!sourceRows.length) {
+    const revision = getProductCatalogRevision(serviceOptions);
+    const performance = buildSharedCatalogPerformance({ revision, source: "sqlite" }, {
+      sourceRows: 0,
+      mapSize: 0,
+      recordCount: 0,
+      cacheHit: true,
+    });
     return {
-      map,
-      cacheHit: false,
-      updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
-      status: `刷新共享商品目录 ${records.length} 个索引`,
+      map: new Map(),
+      cacheHit: true,
+      updatedAt: "",
+      status: "共享商品目录无数据",
+      revision,
+      meta: { revision, source: "sqlite", missingCount: 0 },
       performance,
     };
-  })();
-  sharedProductCatalogRefreshes.set(refreshKey, refresh);
-  try {
-    return await refresh;
-  } finally {
-    if (sharedProductCatalogRefreshes.get(refreshKey) === refresh) {
-      sharedProductCatalogRefreshes.delete(refreshKey);
-    }
   }
+  const lookup = forceRefresh
+    ? await refreshProductCatalogScope({ feature: serviceOptions.feature, items: sourceRows }, serviceOptions)
+    : await getProductCatalogForRows(sourceRows, serviceOptions);
+  const records = Array.isArray(lookup.records) ? lookup.records : [];
+  const map = buildCanonicalProductCatalogMap(records, sourceRows);
+  const meta = lookup.meta || {};
+  const cacheHit = !forceRefresh
+    && meta.source === "sqlite"
+    && Number(meta.listingFetchedCount || 0) === 0
+    && Number(meta.productFetchedCount || 0) === 0;
+  const performance = buildSharedCatalogPerformance(meta, {
+    sourceRows: sourceRows.length,
+    mapSize: map.size,
+    recordCount: records.length,
+    cacheHit,
+  });
+  const updatedAt = String(meta.cacheUpdatedAt || canonicalRecordsUpdatedAt(records) || "").trim();
+  const status = cacheHit
+    ? `复用共享商品目录 ${records.length} 个索引`
+    : `刷新共享商品目录 ${records.length} 个索引`;
+  console.info("[shared-product-catalog] performance", {
+    revision: Number(meta.revision || 0),
+    cacheHit,
+    sourceRows: sourceRows.length,
+    outputRecords: map.size,
+    listingFetchedCount: Number(meta.listingFetchedCount || 0),
+    productFetchedCount: Number(meta.productFetchedCount || 0),
+  });
+  return {
+    map,
+    cacheHit,
+    updatedAt,
+    status,
+    revision: Number(meta.revision || 0),
+    meta,
+    performance,
+  };
 }
 
 function sameCode(left, right) {

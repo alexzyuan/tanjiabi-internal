@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
+import { createProductCatalogRepository } from "../src/services/productCatalogRepository.js";
+import { closeProductCatalogRepositoryForTests } from "../src/services/productCatalogService.js";
 import {
   clearFbaShipmentCandidateCache,
   getFbaShipmentCandidates,
@@ -38,12 +43,54 @@ function makeAdapter() {
       return payload;
     },
     async fetchListings() {
-      return { data: { list: [] } };
+      return {
+        data: {
+          list: [{
+            sid: 8708,
+            seller_sku: "JM-DGC-BLUE",
+            local_sku: "TJ-DGC-BLUE",
+          }],
+        },
+      };
     },
     async fetchLocalProductInfos() {
-      return { data: [] };
+      return {
+        data: [{
+          sku: "TJ-DGC-BLUE",
+          product_name: "灯光船蓝色",
+        }],
+      };
     },
   };
+}
+
+function seedCatalog(repository) {
+  repository.upsertCatalog({
+    operation: "fba-candidate-test-seed",
+    products: [{
+      internalSkuKey: "tj-dgc-blue",
+      internalSku: "TJ-DGC-BLUE",
+      productName: "灯光船蓝色",
+      imageUrl: "https://img.example.com/blue.jpg",
+      source: "test-seed",
+      sourceUpdatedAtMs: 1720000000000,
+      refreshedAtMs: 1720000000000,
+    }],
+    aliases: [],
+    listings: [{
+      sid: 8708,
+      msku: "JM-DGC-BLUE",
+      mskuKey: "jm-dgc-blue",
+      internalSkuKey: "tj-dgc-blue",
+      internalSku: "TJ-DGC-BLUE",
+      listingSku: "TJ-DGC-BLUE",
+      storeName: "xiamentanjia-US",
+      country: "美国",
+      source: "test-seed",
+      sourceUpdatedAtMs: 1720000000000,
+      refreshedAtMs: 1720000000000,
+    }],
+  });
 }
 
 test("normalizeFbaShipmentCandidateFilters keeps existing freight filter names compatible", () => {
@@ -180,6 +227,51 @@ test("getFbaShipmentCandidates refreshes cached rows when the product catalog is
 
   assert.equal(adapter.calls.length, 2);
   assert.equal(refreshed.cache.hit, false);
+});
+
+test("getFbaShipmentCandidates reuses a seeded SQLite catalog without Listing or product calls", async (t) => {
+  clearFbaShipmentCandidateCache();
+  const directory = await mkdtemp(path.join(os.tmpdir(), "fba-candidate-catalog-test-"));
+  const databasePath = path.join(directory, "product-catalog-v1.sqlite");
+  const repository = createProductCatalogRepository({ databasePath, now: () => 1720000000000 });
+  seedCatalog(repository);
+  repository.close();
+  const previousDatabasePath = process.env.PRODUCT_CATALOG_DATABASE_PATH;
+  process.env.PRODUCT_CATALOG_DATABASE_PATH = databasePath;
+  await closeProductCatalogRepositoryForTests();
+  t.after(async () => {
+    await closeProductCatalogRepositoryForTests();
+    if (previousDatabasePath === undefined) delete process.env.PRODUCT_CATALOG_DATABASE_PATH;
+    else process.env.PRODUCT_CATALOG_DATABASE_PATH = previousDatabasePath;
+    await rm(directory, { recursive: true, force: true });
+  });
+
+  let listingCalls = 0;
+  let productCalls = 0;
+  const adapter = {
+    async fetchFbaCargoShipments() { return payload; },
+    async fetchListings() {
+      listingCalls += 1;
+      throw new Error("seeded catalog should avoid Listing");
+    },
+    async fetchLocalProductInfos() {
+      productCalls += 1;
+      throw new Error("seeded catalog should avoid product management");
+    },
+  };
+  const result = await getFbaShipmentCandidates({
+    startDate: "2026-07-01",
+    endDate: "2026-07-11",
+    sid: "8708",
+  }, {
+    adapter,
+    sellers: [{ sid: 8708, seller_id: "A1SELLERUS", marketplace_id: "ATVPDKIKX0DER" }],
+    productCatalogRequired: true,
+  });
+
+  assert.equal(result.rows[0].items[0].internalSku, "TJ-DGC-BLUE");
+  assert.equal(listingCalls, 0);
+  assert.equal(productCalls, 0);
 });
 
 test("getFbaShipmentCandidates joins concurrent refreshes for the same key", async () => {

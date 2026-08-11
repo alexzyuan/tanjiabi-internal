@@ -232,20 +232,24 @@ export async function readSupplierBoardCache(key, ttlMs = Infinity) {
   return readNamedCache(supplierBoardDir, key, ttlMs);
 }
 
+/** @deprecated Product catalog callers must use the SQLite repository. Kept only for rollback tooling. */
 export async function saveSupplierBoardProductMapCache(key, data) {
   await saveNamedCache(supplierBoardProductDir, key, data);
   await cleanupCacheDir(supplierBoardProductDir, supplierBoardProductCachePolicy);
 }
 
+/** @deprecated Legacy supplier product-map reader retained for migration observation. */
 export async function readSupplierBoardProductMapCache(key, ttlMs = 7 * 24 * 60 * 60 * 1000) {
   return readNamedCache(supplierBoardProductDir, key, ttlMs);
 }
 
+/** @deprecated Product catalog callers must use the SQLite repository. Kept only for rollback tooling. */
 export async function saveSharedProductCatalogCache(key, data) {
   await saveNamedCache(sharedProductCatalogDir, key, data);
   await cleanupCacheDir(sharedProductCatalogDir, sharedProductCatalogCachePolicy);
 }
 
+/** @deprecated Legacy shared product-map reader retained for migration observation. */
 export async function readSharedProductCatalogCache(key, ttlMs = 7 * 24 * 60 * 60 * 1000) {
   return readNamedCache(sharedProductCatalogDir, key, ttlMs);
 }
