@@ -74,3 +74,70 @@ test("sales forecast manual daily store fails fast on corrupted JSON", async () 
     await rm(tempRoot, { recursive: true, force: true });
   }
 });
+
+test("sales forecast available-days index keeps same MSKU values separate by seller", async () => {
+  const projectRoot = process.cwd();
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "sales-forecast-available-days-"));
+  try {
+    process.chdir(tempRoot);
+    await mkdir("data-cache", { recursive: true });
+    await writeFile(path.join("data-cache", "sales-forecast-dashboard-cache.json"), JSON.stringify({
+      version: "sales-forecast-v2-strict-sid-fba",
+      cachedAt: Date.now(),
+      updatedAt: "2026/8/11 10:00:00",
+      rows: [
+        { sid: 101, msku: "MD-LEGBLUE", fbaAvailableDays: 28.5 },
+        { sid: 102, msku: "md-legblue", fbaAvailableDays: 73 },
+        { sid: 103, msku: "NO-DAYS", fbaAvailableDays: null },
+      ],
+    }), "utf8");
+
+    const { getSalesForecastAvailableDaysBySellerMsku } = await importSalesForecastService(projectRoot);
+    const result = await getSalesForecastAvailableDaysBySellerMsku();
+
+    assert.equal(result.map.get("101|md-legblue"), 28.5);
+    assert.equal(result.map.get("102|md-legblue"), 73);
+    assert.equal(result.map.has("103|no-days"), false);
+    assert.equal(result.map.size, 2);
+    assert.equal(result.cacheHit, true);
+    assert.equal(result.updatedAt, "2026/8/11 10:00:00");
+  } finally {
+    process.chdir(projectRoot);
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("sales forecast available-days index reports an empty cache without inventing a zero", async () => {
+  const projectRoot = process.cwd();
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "sales-forecast-available-days-empty-"));
+  try {
+    process.chdir(tempRoot);
+    await mkdir("data-cache", { recursive: true });
+
+    const { getSalesForecastAvailableDaysBySellerMsku } = await importSalesForecastService(projectRoot);
+    const result = await getSalesForecastAvailableDaysBySellerMsku();
+
+    assert.equal(result.map.size, 0);
+    assert.equal(result.cacheHit, false);
+    assert.match(result.status, /暂无可售天数数据/);
+  } finally {
+    process.chdir(projectRoot);
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("sales forecast available-days index surfaces corrupted cache reads", async () => {
+  const projectRoot = process.cwd();
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "sales-forecast-available-days-corrupt-"));
+  try {
+    process.chdir(tempRoot);
+    await mkdir("data-cache", { recursive: true });
+    await writeFile(path.join("data-cache", "sales-forecast-dashboard-cache.json"), "{broken", "utf8");
+
+    const { getSalesForecastAvailableDaysBySellerMsku } = await importSalesForecastService(projectRoot);
+    await assert.rejects(getSalesForecastAvailableDaysBySellerMsku(), /JSON parse failed|Unexpected token/);
+  } finally {
+    process.chdir(projectRoot);
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
