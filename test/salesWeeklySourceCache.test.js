@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -162,6 +162,49 @@ test("sales weekly source cache reuses the same base data across different listi
   });
 });
 
+test("sales review available days matches the sales forecast cache by exact seller and MSKU", async () => {
+  await withTempLingxingProvider(async (projectRoot) => {
+    await mkdir("data-cache", { recursive: true });
+    await writeFile(path.join("data-cache", "sales-forecast-dashboard-cache.json"), JSON.stringify({
+      version: "sales-forecast-v2-strict-sid-fba",
+      cachedAt: Date.now(),
+      updatedAt: "2026/8/11 10:00:00",
+      rows: [
+        { sid: 101, msku: "MSKU-SHARED", fbaAvailableDays: 28.5 },
+        { sid: 102, msku: "msku-shared", fbaAvailableDays: 73 },
+      ],
+    }), "utf8");
+    const { enrichSalesReviewAvailableDays } = await importFresh(projectRoot, "src/services/dashboardService.js");
+
+    const dashboard = await enrichSalesReviewAvailableDays({
+      detailRows: [
+        { sid: 101, msku: "MSKU-SHARED" },
+        { sid: 102, msku: "MSKU-SHARED" },
+        { sid: 103, msku: "MSKU-SHARED" },
+      ],
+      meta: { source: "领星 ERP" },
+    }, {
+      getAvailableDays: async () => ({
+        map: new Map([
+          ["101|msku-shared", 28.5],
+          ["102|msku-shared", 73],
+        ]),
+        updatedAt: "2026/8/11 10:00:00",
+        cacheHit: true,
+      }),
+    });
+
+    assert.deepEqual(dashboard.detailRows.map((row) => row.fbaAvailableDays), [28.5, 73, null]);
+    assert.deepEqual(dashboard.meta.availableDays, {
+      source: "sales-forecast-cache",
+      updatedAt: "2026/8/11 10:00:00",
+      matchedCount: 2,
+      missingCount: 1,
+      cacheHit: true,
+    });
+  });
+});
+
 test("sales weekly dashboard fails instead of falling back to a legacy dashboard when live OrderProfit loading fails", async () => {
   await withTempLingxingProvider(async (projectRoot) => {
     const cacheStore = await importFresh(projectRoot, "src/utils/cacheStore.js");
@@ -198,6 +241,20 @@ test("sales weekly source cache contract rejects entries without the 30-day refu
       "recent30OrderProfitRecords must be an array",
       "raw.recent30 metadata is required",
     ],
+  });
+});
+
+test("sales weekly dashboard cache contract rejects detail rows without available days", async () => {
+  const projectRoot = process.cwd();
+  const { validateSalesWeeklyDashboardCache } = await importFresh(projectRoot, "src/services/dashboardService.js");
+
+  const result = validateSalesWeeklyDashboardCache({
+    detailRows: [{ msku: "MSKU-1", refundRate30d: 3 }],
+  });
+
+  assert.deepEqual(result, {
+    ok: false,
+    reasons: ["1 detail rows are missing fbaAvailableDays"],
   });
 });
 
@@ -269,7 +326,7 @@ test("sales weekly dashboard cache contract rejects legacy rows without 30-day r
     ok: false,
     reasons: ["1 detail rows are missing refundRate30d"],
   });
-  assert.deepEqual(validateSalesWeeklyDashboardCache({ detailRows: [{ refundRate30d: null }] }), {
+  assert.deepEqual(validateSalesWeeklyDashboardCache({ detailRows: [{ refundRate30d: null, fbaAvailableDays: null }] }), {
     ok: true,
     reasons: [],
   });

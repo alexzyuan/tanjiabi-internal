@@ -29,6 +29,8 @@ test("MSKU detail computes 30d refund rate from aggregated store and MSKU record
 
   assert.equal(rows[0].refundRate, 6.67);
   assert.equal(rows[0].refundRate30d, 3);
+  assert.equal(rows[0].sid, 1);
+  assert.equal(rows[0].fbaAvailableDays, null);
 });
 
 test("MSKU detail keeps 30d refund rate unavailable when 30d sales are zero", () => {

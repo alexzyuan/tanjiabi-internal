@@ -859,6 +859,7 @@ export function buildBudgetMskuDetailRows(records = [], budgetTargets = {}, inve
     });
 
     return {
+      sid: Number(actual.sid || resolveBudgetRowSid(row)) || null,
       budgetStoreName: row.storeName || "-",
       msku: row.msku || "-",
       listingOwner,
@@ -866,6 +867,7 @@ export function buildBudgetMskuDetailRows(records = [], budgetTargets = {}, inve
       budgetQuantity: Number(budgetQuantity.toFixed(2)),
       actualQuantity: Number(actualQuantity.toFixed(2)),
       fbaInventory: Number(fbaInventory.toFixed(2)),
+      fbaAvailableDays: null,
       quantityAchievement: budgetQuantity ? Number(((actualQuantity / budgetQuantity) * 100).toFixed(2)) : 0,
       orderProfit: Number(orderProfit.toFixed(2)),
       averageProfit: actualQuantity ? Number((orderProfit / actualQuantity).toFixed(2)) : 0,
