@@ -438,6 +438,13 @@ export async function getProductCatalogForRows(rows, options = {}) {
       listingSharedXlsxCount: 0,
       sharedListingItems: 0,
       productFetchedCount: 0,
+      listingBatchCount: 0,
+      listingRequestCount: 0,
+      productLookupBatchCount: 0,
+      productInfoRequestCount: 0,
+      productFallbackRequestCount: 0,
+      joinedInFlight: false,
+      transactionDurationMs: 0,
       missingCount: missing.length,
       conflictCount: Number(migration?.conflictCount || 0),
       source: missing.length ? "lingxing" : "sqlite",
@@ -450,6 +457,13 @@ export async function getProductCatalogForRows(rows, options = {}) {
       meta.listingSharedXlsxCount = load.listingSharedXlsxCount;
       meta.sharedListingItems = load.listingSharedXlsxCount;
       meta.productFetchedCount = load.productFetchedCount;
+      meta.listingBatchCount = load.listingBatchCount;
+      meta.listingRequestCount = load.listingRequestCount;
+      meta.productLookupBatchCount = load.productLookupBatchCount;
+      meta.productInfoRequestCount = load.productInfoRequestCount;
+      meta.productFallbackRequestCount = load.productFallbackRequestCount;
+      meta.joinedInFlight = load.joinedInFlight;
+      meta.transactionDurationMs = load.transactionDurationMs;
     }
     const records = recordsForScope(scope, built.repository, built.sellers);
     meta.cacheUpdatedAt = latestRefreshedAt(records);
@@ -496,6 +510,13 @@ export async function refreshProductCatalogScope(input = {}, options = {}) {
           refreshCommittedCount: scope.length,
           joinedInFlight: true,
           transactionDurationMs: joined.transactionDurationMs,
+          listingFetchedCount: joined.listingFetchedCount,
+          productFetchedCount: joined.productFetchedCount,
+          listingBatchCount: joined.listingBatchCount,
+          listingRequestCount: joined.listingRequestCount,
+          productLookupBatchCount: joined.productLookupBatchCount,
+          productInfoRequestCount: joined.productInfoRequestCount,
+          productFallbackRequestCount: joined.productFallbackRequestCount,
           listingSharedXlsxCount: joined.listingSharedXlsxCount,
           sharedListingItems: joined.listingSharedXlsxCount,
           migrationCompleted: true,
@@ -520,6 +541,12 @@ export async function refreshProductCatalogScope(input = {}, options = {}) {
           joinedInFlight: false,
           transactionDurationMs: load.transactionDurationMs,
           listingFetchedCount: load.listingFetchedCount,
+          productFetchedCount: load.productFetchedCount,
+          listingBatchCount: load.listingBatchCount,
+          listingRequestCount: load.listingRequestCount,
+          productLookupBatchCount: load.productLookupBatchCount,
+          productInfoRequestCount: load.productInfoRequestCount,
+          productFallbackRequestCount: load.productFallbackRequestCount,
           listingSharedXlsxCount: load.listingSharedXlsxCount,
           catalogRevisionBeforeRefresh: built.catalogRevisionBeforeRefresh,
           migrationCompleted: true,
@@ -548,6 +575,12 @@ export async function refreshProductCatalogScope(input = {}, options = {}) {
           joinedInFlight: false,
           transactionDurationMs: result.transactionDurationMs,
           listingFetchedCount: result.listingFetchedCount,
+          productFetchedCount: result.productFetchedCount,
+          listingBatchCount: result.listingBatchCount,
+          listingRequestCount: result.listingRequestCount,
+          productLookupBatchCount: result.productLookupBatchCount,
+          productInfoRequestCount: result.productInfoRequestCount,
+          productFallbackRequestCount: result.productFallbackRequestCount,
           listingSharedXlsxCount: result.listingSharedXlsxCount,
           sharedListingItems: result.listingSharedXlsxCount,
           migrationCompleted: result.migrationCompleted,

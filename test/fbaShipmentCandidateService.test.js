@@ -64,12 +64,17 @@ function makeAdapter() {
   };
 }
 
-function seedCatalog(repository) {
+function seedCatalog(repository, {
+  sid = 8708,
+  msku = "JM-DGC-BLUE",
+  internalSku = "TJ-DGC-BLUE",
+} = {}) {
+  const internalSkuKey = internalSku.toLowerCase();
   repository.upsertCatalog({
     operation: "fba-candidate-test-seed",
     products: [{
-      internalSkuKey: "tj-dgc-blue",
-      internalSku: "TJ-DGC-BLUE",
+      internalSkuKey,
+      internalSku,
       productName: "灯光船蓝色",
       imageUrl: "https://img.example.com/blue.jpg",
       source: "test-seed",
@@ -78,12 +83,12 @@ function seedCatalog(repository) {
     }],
     aliases: [],
     listings: [{
-      sid: 8708,
-      msku: "JM-DGC-BLUE",
-      mskuKey: "jm-dgc-blue",
-      internalSkuKey: "tj-dgc-blue",
-      internalSku: "TJ-DGC-BLUE",
-      listingSku: "TJ-DGC-BLUE",
+      sid,
+      msku,
+      mskuKey: msku.toLowerCase(),
+      internalSkuKey,
+      internalSku,
+      listingSku: internalSku,
       storeName: "xiamentanjia-US",
       country: "美国",
       source: "test-seed",
@@ -270,6 +275,62 @@ test("getFbaShipmentCandidates reuses a seeded SQLite catalog without Listing or
   });
 
   assert.equal(result.rows[0].items[0].internalSku, "TJ-DGC-BLUE");
+  assert.equal(listingCalls, 0);
+  assert.equal(productCalls, 0);
+});
+
+test("getFbaShipmentCandidates passes the resolved custom runtime directory to the catalog facade", async (t) => {
+  clearFbaShipmentCandidateCache();
+  const directory = await mkdtemp(path.join(os.tmpdir(), "fba-candidate-custom-sid-test-"));
+  const databasePath = path.join(directory, "product-catalog-v1.sqlite");
+  const repository = createProductCatalogRepository({ databasePath, now: () => 1720000000000 });
+  seedCatalog(repository, { sid: 99123, msku: "CUSTOM-MSKU", internalSku: "CUSTOM-SKU" });
+  t.after(async () => {
+    clearFbaShipmentCandidateCache();
+    repository.close();
+    await rm(directory, { recursive: true, force: true });
+  });
+
+  let listingCalls = 0;
+  let productCalls = 0;
+  const adapter = {
+    async fetchFbaCargoShipments() {
+      return {
+        data: {
+          list: [{
+            ...payload.data.list[0],
+            sid: 99123,
+            seller: "runtime-custom-store",
+            item_list: [{ ...payload.data.list[0].item_list[0], msku: "CUSTOM-MSKU", sku: "CUSTOM-SKU" }],
+          }],
+        },
+        total: 1,
+      };
+    },
+    async fetchListings() {
+      listingCalls += 1;
+      throw new Error("seeded catalog should avoid Listing");
+    },
+    async fetchLocalProductInfos() {
+      productCalls += 1;
+      throw new Error("seeded catalog should avoid product management");
+    },
+  };
+  const result = await getFbaShipmentCandidates({
+    startDate: "2026-07-01",
+    endDate: "2026-07-11",
+    sid: "99123",
+  }, {
+    adapter,
+    getDirectory: async () => ({ sellers: [
+      { sid: 8708, name: "xiamentanjia-US", country: "美国" },
+      { sid: 99123, name: "runtime-custom-store", country: "美国" },
+    ] }),
+    productCatalogRequired: true,
+    productCatalogRepository: repository,
+  });
+
+  assert.equal(result.rows[0].items[0].internalSku, "CUSTOM-SKU");
   assert.equal(listingCalls, 0);
   assert.equal(productCalls, 0);
 });

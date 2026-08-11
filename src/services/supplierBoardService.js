@@ -3,78 +3,19 @@ import { filterCoreSellers, getLingxingAdapter } from "../adapters/lingxingAdapt
 import { supplierTaxRates } from "../data/supplierTaxRates.js";
 import { getSharedProductCatalogMap, getSharedSellers } from "./sharedDataService.js";
 import {
-  fetchLingxingListingsBySidMskus,
-  fetchLingxingProductRecords,
-} from "./lingxingCatalogLookupService.js";
-import {
   readSupplierBoardCache,
-  readSupplierBoardProductMapCache,
   saveSupplierBoardCache,
-  saveSupplierBoardProductMapCache,
 } from "../utils/cacheStore.js";
 
-const PRODUCT_BATCH_SIZE = 80;
 const SALES_PAGE_SIZE = 1000;
 const SALES_STAT_SID_BATCH_SIZE = 20;
-const LISTING_BATCH_SIZE = 50;
 const SALES_STAT_MAX_RANGE_DAYS = 90;
 const SALES_STAT_REQUEST_DELAY_MS = 1300;
 const SALES_STAT_RETRY_DELAYS_MS = [1800, 3500, 6500, 10000];
 const SUPPLIER_BOARD_ACTIVE_TTL_MS = 6 * 60 * 60 * 1000;
 const SUPPLIER_BOARD_CACHE_VERSION = "supplier-board-v6-ordinary-purchase-cost";
-const SUPPLIER_PRODUCT_CACHE_VERSION = "supplier-product-map-v2";
 let salesStatRequestQueue = Promise.resolve();
 let lastSalesStatRequestAt = 0;
-
-const productSupplierKeys = [
-  "supplier_name",
-  "supplierName",
-  "supplier",
-  "supplier_title",
-  "supplierTitle",
-  "supplierInfo",
-  "supplier_info",
-  "provider_name",
-  "providerName",
-  "factory_name",
-  "factoryName",
-  "vendor_name",
-  "vendorName",
-  "purchase_supplier_name",
-  "purchaseSupplierName",
-  "供应商",
-  "工厂名称",
-];
-
-const productPriceKeys = [
-  "purchase_price",
-  "purchasePrice",
-  "purchase_cost",
-  "purchaseCost",
-  "cg_price",
-  "unit_cg_price",
-  "unit_purchase_cost",
-  "product_purchase_cost",
-  "local_purchase_cost",
-  "cost_price",
-  "costPrice",
-  "price",
-  "采购价",
-  "采购价格",
-];
-
-const productModelKeys = [
-  "attribute",
-  "model",
-  "model_name",
-  "modelName",
-  "product_model",
-  "productModel",
-  "style",
-  "specification",
-  "specificationName",
-  "型号",
-];
 
 const dimensionMap = {
   month: { label: "按月", apiValue: "2" },
@@ -362,21 +303,6 @@ function normalizeSalesRow(record, sellersBySid) {
   };
 }
 
-function normalizeProductRecord(record) {
-  const sku = String(readFirst(record, ["sku", "local_sku", "localSku", "product_sku", "sku_identifier", "skuIdentifier"]) || "").trim();
-  const supplier = readFirst(record, productSupplierKeys);
-  return {
-    sku,
-    skuIdentifier: readFirst(record, ["sku_identifier", "skuIdentifier", "local_sku_identifier", "localSkuIdentifier"]),
-    productId: readFirst(record, ["product_id", "productId", "local_product_id", "localProductId"]),
-    productName: readFirst(record, ["product_name", "productName", "local_name", "localName", "name", "item_name", "itemName"]),
-    supplier,
-    purchasePrice: toNumber(readFirst(record, productPriceKeys)),
-    model: readFirst(record, productModelKeys),
-    raw: record,
-  };
-}
-
 function productKey(value) {
   return String(value || "").trim().toLowerCase();
 }
@@ -386,132 +312,10 @@ function listingMskuKey(sid, msku) {
   return key ? `sid:${Number(sid) || 0}:msku:${key}` : "";
 }
 
-function mergeProductInfo(existing = {}, incoming = {}) {
-  return {
-    ...existing,
-    ...incoming,
-    sku: incoming.sku || existing.sku || "",
-    skuIdentifier: incoming.skuIdentifier || existing.skuIdentifier || "",
-    productId: incoming.productId || existing.productId || "",
-    productName: incoming.productName || existing.productName || "",
-    supplier: incoming.supplier || existing.supplier || "",
-    purchasePrice: incoming.purchasePrice || existing.purchasePrice || 0,
-    model: incoming.model || existing.model || "",
-    raw: incoming.raw || existing.raw || null,
-  };
-}
-
-function putProduct(map, product, extraKeys = []) {
-  if (!product) return;
-  [product.sku, product.skuIdentifier, product.productId, ...extraKeys].filter(Boolean).forEach((key) => {
-    const normalizedKey = productKey(key);
-    if (!normalizedKey) return;
-    map.set(normalizedKey, mergeProductInfo(map.get(normalizedKey), product));
-  });
-}
-
-function productMapToRecords(map) {
-  const records = [];
-  const seen = new Set();
-  map.forEach((product, key) => {
-    const identity = [product.sku, product.skuIdentifier, product.productId, product.supplier, product.purchasePrice, product.model].join("|");
-    const recordKey = `${key}|${identity}`;
-    if (seen.has(recordKey)) return;
-    seen.add(recordKey);
-    records.push({ key, product });
-  });
-  return records;
-}
-
-function productRecordsToMap(records) {
-  const map = new Map();
-  (Array.isArray(records) ? records : []).forEach((item) => {
-    if (!item?.key || !item.product) return;
-    map.set(String(item.key), item.product);
-  });
-  return map;
-}
-
-function normalizeListingRecord(record) {
-  const msku = readArrayText(readFirst(record, ["msku", "m_sku", "seller_sku", "sellerSku", "sellerSkuStr", "local_sku", "item_sku", "fnsku"])).trim();
-  if (!msku) return null;
-  return {
-    msku,
-    sid: toNumber(readFirst(record, ["sid", "seller_id", "sellerId", "store_id", "storeId"])),
-    sku: readFirst(record, ["sku", "local_sku", "localSku", "product_sku", "sku_identifier", "skuIdentifier"]),
-    skuIdentifier: readFirst(record, ["sku_identifier", "skuIdentifier", "local_sku_identifier", "localSkuIdentifier"]),
-    productId: readFirst(record, ["product_id", "productId", "local_product_id", "localProductId"]),
-    productName: readFirst(record, ["title", "item_name", "itemName", "product_name", "productName", "product_title", "name"]),
-    supplier: readFirst(record, productSupplierKeys),
-    purchasePrice: toNumber(readFirst(record, productPriceKeys)),
-    model: readFirst(record, productModelKeys),
-    raw: record,
-  };
-}
-
-async function fetchListingItems(adapter, rows) {
-  const rowsBySid = new Map();
-  rows.forEach((row) => {
-    const sid = Number(row.sid || 0);
-    const msku = String(row.msku || "").trim();
-    if (!sid || !msku) return;
-    if (!rowsBySid.has(sid)) rowsBySid.set(sid, []);
-    rowsBySid.get(sid).push(msku);
-  });
-
-  const items = [];
-  for (const [sid, mskus] of rowsBySid.entries()) {
-    const records = await fetchLingxingListingsBySidMskus(adapter, sid, mskus, { batchSize: LISTING_BATCH_SIZE });
-    records.map(normalizeListingRecord).filter(Boolean).forEach((item) => items.push({ ...item, sid: item.sid || sid }));
-  }
-  return items;
-}
-
-async function safeFetchProductRecords(adapter, params, fallbackParams = null) {
-  return fetchLingxingProductRecords(adapter, params, fallbackParams, { strict: true });
-}
-
-async function fetchProductMap(adapter, rows) {
-  const productCacheKey = stableSupplierBoardProductCacheKey(rows);
-  const cached = await readSupplierBoardProductMapCache(productCacheKey);
-  if (cached?.data?.records) return productRecordsToMap(cached.data.records);
-
-  const sharedCatalog = await getSharedProductCatalogMap(adapter, rows);
-  if (sharedCatalog?.map?.size) {
-    await saveSupplierBoardProductMapCache(productCacheKey, { records: productMapToRecords(sharedCatalog.map) });
-    return sharedCatalog.map;
-  }
-
-  const listingItems = await fetchListingItems(adapter, rows);
-  const lookupValues = uniqueText([...rows, ...listingItems].flatMap((row) => [row.sku, row.msku]));
-  const skuIdentifiers = uniqueText(listingItems.flatMap((row) => [row.skuIdentifier, row.sku, row.msku]));
-  const productIds = uniqueText(listingItems.map((row) => row.productId));
-  const productMap = new Map();
-
-  for (const batch of chunkArray(lookupValues, PRODUCT_BATCH_SIZE)) {
-    const records = await safeFetchProductRecords(adapter, { skus: batch }, { sku_list: batch });
-    records.map(normalizeProductRecord).forEach((product) => putProduct(productMap, product));
-  }
-  for (const batch of chunkArray(skuIdentifiers, PRODUCT_BATCH_SIZE)) {
-    const records = await safeFetchProductRecords(adapter, { sku_identifiers: batch }, { sku_identifier_list: batch });
-    records.map(normalizeProductRecord).forEach((product) => putProduct(productMap, product));
-  }
-  for (const batch of chunkArray(productIds, PRODUCT_BATCH_SIZE)) {
-    const records = await safeFetchProductRecords(adapter, { product_ids: batch }, { product_id_list: batch });
-    records.map(normalizeProductRecord).forEach((product) => putProduct(productMap, product));
-  }
-
-  listingItems.forEach((listing) => {
-    const matched = productMap.get(productKey(listing.sku))
-      || productMap.get(productKey(listing.skuIdentifier))
-      || productMap.get(productKey(listing.productId))
-      || {};
-    const product = mergeProductInfo(listing, matched);
-    putProduct(productMap, product, [listing.msku, listingMskuKey(listing.sid, listing.msku)]);
-  });
-
-  await saveSupplierBoardProductMapCache(productCacheKey, { records: productMapToRecords(productMap) });
-  return productMap;
+async function fetchProductMap(adapter, rows, { getSharedCatalog = getSharedProductCatalogMap } = {}) {
+  const sharedCatalog = await getSharedCatalog(adapter, rows, { feature: "supplier-board" });
+  if (!sharedCatalog?.map) throw new Error("共享商品目录未返回有效索引。");
+  return sharedCatalog.map;
 }
 
 function findTaxRate(supplier) {
@@ -743,16 +547,6 @@ function supplierBoardCacheTtl(filters) {
   return isHistoricalSupplierBoardRange(filters) ? Infinity : SUPPLIER_BOARD_ACTIVE_TTL_MS;
 }
 
-function stableSupplierBoardProductCacheKey(rows) {
-  return JSON.stringify({
-    scope: SUPPLIER_PRODUCT_CACHE_VERSION,
-    items: uniqueText((Array.isArray(rows) ? rows : []).flatMap((row) => [
-      row.sid ? `${row.sid}:${row.msku || ""}` : row.msku,
-      row.sku,
-    ])).sort(),
-  });
-}
-
 function withCacheMeta(data, cached, statusPrefix = "已读取服务器缓存") {
   return {
     ...data,
@@ -779,7 +573,14 @@ function emptyPayload(filters, message) {
   };
 }
 
-export async function getSupplierBoardDashboard(filters = {}) {
+export async function getSupplierBoardDashboard(filters = {}, {
+  adapter: injectedAdapter = null,
+  sellers: injectedSellers = null,
+  getSellers = getSharedSellers,
+  getSharedCatalog = getSharedProductCatalogMap,
+  readDashboardCache = readSupplierBoardCache,
+  saveDashboardCache = saveSupplierBoardCache,
+} = {}) {
   const dateFilters = normalizeDateFilters(filters);
   const normalizedFilters = {
     ...dateFilters,
@@ -798,27 +599,29 @@ export async function getSupplierBoardDashboard(filters = {}) {
   }
 
   const cacheKey = stableSupplierBoardCacheKey(normalizedFilters);
-  const cached = await readSupplierBoardCache(cacheKey, supplierBoardCacheTtl(normalizedFilters));
+  const cached = await readDashboardCache(cacheKey, supplierBoardCacheTtl(normalizedFilters));
   if (cached?.data) return withCacheMeta(cached.data, cached);
 
   try {
-	    const adapter = getLingxingAdapter();
-	    const sellersResult = await getSharedSellers({ adapter });
-	    const sellers = filterCoreSellers(sellersResult.sellers || []);
-	    const sellersBySid = new Map(sellers.map((seller) => [Number(seller.sid || seller.seller_id || seller.sellerId), seller]));
-	    const selectedSellers = filterSellers(sellers, normalizedFilters);
-	    const selectedSids = selectedSellers
-	      .map((seller) => Number(seller.sid || seller.seller_id || seller.sellerId))
-	      .filter(Boolean);
-	    const salesResult = await fetchAllSalesRows(adapter, normalizedFilters, sellersBySid, selectedSids);
-	    const salesRows = salesResult.rows;
-    const productMap = await fetchProductMap(adapter, salesRows);
+    const adapter = injectedAdapter || getLingxingAdapter();
+    const sellersResult = injectedSellers
+      ? { sellers: injectedSellers }
+      : await getSellers({ adapter });
+    const sellers = filterCoreSellers(sellersResult.sellers || []);
+    const sellersBySid = new Map(sellers.map((seller) => [Number(seller.sid || seller.seller_id || seller.sellerId), seller]));
+    const selectedSellers = filterSellers(sellers, normalizedFilters);
+    const selectedSids = selectedSellers
+      .map((seller) => Number(seller.sid || seller.seller_id || seller.sellerId))
+      .filter(Boolean);
+    const salesResult = await fetchAllSalesRows(adapter, normalizedFilters, sellersBySid, selectedSids);
+    const salesRows = salesResult.rows;
+    const productMap = await fetchProductMap(adapter, salesRows, { getSharedCatalog });
     const rows = filterRows(mergeProductAndTax(salesRows, productMap), normalizedFilters);
 
-	    const data = {
-		    meta: {
-		        source: "领星 ERP · salesStat 销量统计 + 产品管理",
-	        syncStatus: `salesStat ${salesRows.length} 条；路径 ${salesResult.endpoint || "-"}；店铺 ${selectedSids.length} 个；日期拆分 ${salesResult.dateChunkCount || 1} 段；产品管理匹配 ${productMap.size} 个标识；税点表 ${supplierTaxRates.length} 条`,
+    const data = {
+      meta: {
+        source: "领星 ERP · salesStat 销量统计 + 产品管理",
+        syncStatus: `salesStat ${salesRows.length} 条；路径 ${salesResult.endpoint || "-"}；店铺 ${selectedSids.length} 个；日期拆分 ${salesResult.dateChunkCount || 1} 段；产品管理匹配 ${productMap.size} 个标识；税点表 ${supplierTaxRates.length} 条`,
         updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
         request: normalizedFilters,
         cacheHit: false,
@@ -827,7 +630,7 @@ export async function getSupplierBoardDashboard(filters = {}) {
       rows,
       suppliers: supplierTaxRates,
     };
-    await saveSupplierBoardCache(cacheKey, data);
+    await saveDashboardCache(cacheKey, data);
     return data;
   } catch (error) {
     console.error("[supplier-board] refresh failed", {

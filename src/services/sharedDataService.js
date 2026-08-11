@@ -1,5 +1,4 @@
 import { getLingxingAdapter } from "../adapters/lingxingAdapter.js";
-import { createPerformanceMetrics } from "../utils/performanceMetrics.js";
 import {
   getProductCatalogForRows,
   getProductCatalogRevision,
@@ -261,6 +260,44 @@ function canonicalRecordProduct(record = {}) {
   return next;
 }
 
+function sourceRowValue(row, fields) {
+  for (const field of fields) {
+    const value = row?.[field];
+    if (value !== undefined && value !== null) return value;
+  }
+  return undefined;
+}
+
+function isCatalogValueMissing(value) {
+  return value === undefined || value === null || (typeof value === "string" && !value.trim());
+}
+
+function applySourceRowFallback(product, sourceRow = {}) {
+  if (!sourceRow || typeof sourceRow !== "object") return product;
+  const next = { ...product };
+  const fallbackFields = [
+    ["imageUrl", ["imageUrl", "image_url", "productImageUrl"]],
+    ["productName", ["productName", "product_name", "title"]],
+    ["asin", ["asin", "ASIN"]],
+    ["supplier", ["supplier", "supplier_name"]],
+    ["purchasePrice", ["purchasePrice", "purchase_price"]],
+    ["model", ["model", "model_name"]],
+    ["brand", ["brand", "brand_name"]],
+    ["material", ["material", "material_name"]],
+    ["purpose", ["purpose", "usage"]],
+    ["customsCode", ["customsCode", "customs_code", "hsCode", "hs_code"]],
+    ["isBattery", ["isBattery", "is_battery"]],
+    ["unit", ["unit", "unit_name"]],
+    ["declaredValue", ["declaredValue", "declared_value"]],
+    ["packQuantity", ["packQuantity", "pack_quantity"]],
+  ];
+  fallbackFields.forEach(([field, sourceFields]) => {
+    const candidate = sourceRowValue(sourceRow, sourceFields);
+    if (isCatalogValueMissing(next[field]) && candidate !== undefined && candidate !== null) next[field] = candidate;
+  });
+  return next;
+}
+
 function addRequestLocalCatalogAlias(map, key, product) {
   const normalizedKey = productCatalogKey(key);
   if (!normalizedKey || !product) return;
@@ -274,11 +311,18 @@ function buildCanonicalProductCatalogMap(records = [], sourceRows = []) {
   const map = new Map();
   const recordsByIdentity = new Map();
   const products = [];
+  const sourceRowsByIdentity = new Map();
+
+  for (const row of Array.isArray(sourceRows) ? sourceRows : []) {
+    const identity = listingMskuCatalogKey(row?.sid, row?.msku);
+    if (identity && !sourceRowsByIdentity.has(identity)) sourceRowsByIdentity.set(identity, row);
+  }
 
   for (const record of Array.isArray(records) ? records : []) {
-    const product = canonicalRecordProduct(record);
+    const baseProduct = canonicalRecordProduct(record);
+    const identity = listingMskuCatalogKey(baseProduct.sid, baseProduct.msku);
+    const product = applySourceRowFallback(baseProduct, sourceRowsByIdentity.get(identity));
     if (!product.msku || !product.sid) continue;
-    const identity = listingMskuCatalogKey(product.sid, product.msku);
     if (identity) recordsByIdentity.set(identity, product);
     products.push(product);
   }
@@ -323,29 +367,37 @@ function buildSharedCatalogPerformance(meta, {
   recordCount = 0,
   cacheHit = false,
 } = {}) {
-  const metrics = createPerformanceMetrics("shared-product-catalog");
-  const productFetchedCount = Number(meta?.productFetchedCount || 0);
-  // Task 5 exposes product record counts on normal lookup.  Manual-refresh
-  // metadata intentionally keeps its public shape smaller, but a successful
-  // refresh necessarily executed at least one product batch before commit.
-  const productLookupCount = productFetchedCount > 0
-    ? productFetchedCount
-    : Number(meta?.refreshRequestedCount || 0) > 0
-      ? 1
-      : 0;
-  metrics.increment("sourceRows", sourceRows);
-  metrics.increment("cacheHit", cacheHit ? 1 : 0);
-  metrics.increment("outputRecords", mapSize);
-  metrics.increment("canonicalRecords", Number(recordCount || 0));
-  metrics.increment("catalogRevision", Number(meta?.revision || 0));
-  metrics.increment("listingFetchedCount", Number(meta?.listingFetchedCount || 0));
-  metrics.increment("productFetchedCount", productFetchedCount);
-  metrics.increment("listingSharedXlsxCount", Number(meta?.listingSharedXlsxCount || 0));
-  metrics.increment("missingCount", Number(meta?.missingCount || 0));
-  metrics.increment("lingxingListingRequests", Number(meta?.listingFetchedCount || 0));
-  metrics.increment("lingxingProductInfoRequests", productLookupCount);
-  metrics.increment("joinedInFlight", Number(meta?.joinedInFlight || 0));
-  return metrics.summary();
+  const listingRequestCount = Number(meta?.listingRequestCount || 0);
+  const productInfoRequestCount = Number(meta?.productInfoRequestCount || 0);
+  const counters = {
+    sourceRows: Number(sourceRows || 0),
+    cacheHit: cacheHit ? 1 : 0,
+    outputRecords: Number(mapSize || 0),
+    canonicalRecords: Number(recordCount || 0),
+    catalogRevision: Number(meta?.revision || 0),
+    listingFetchedCount: Number(meta?.listingFetchedCount || 0),
+    productFetchedCount: Number(meta?.productFetchedCount || 0),
+    listingBatchCount: Number(meta?.listingBatchCount || 0),
+    listingRequestCount,
+    productLookupBatchCount: Number(meta?.productLookupBatchCount || 0),
+    productInfoRequestCount,
+    productFallbackRequestCount: Number(meta?.productFallbackRequestCount || 0),
+    listingSharedXlsxCount: Number(meta?.listingSharedXlsxCount || 0),
+    missingCount: Number(meta?.missingCount || 0),
+    joinedInFlight: Number(meta?.joinedInFlight || 0),
+    transactionDurationMs: Number(meta?.transactionDurationMs || 0),
+    // Keep the established counter names while mapping the real loader
+    // request counts; never substitute fetched row counts for API calls.
+    lingxingListingRequests: listingRequestCount,
+    lingxingProductInfoRequests: productInfoRequestCount,
+    lingxingProductFallbackRequests: Number(meta?.productFallbackRequestCount || 0),
+  };
+  return {
+    scope: "shared-product-catalog",
+    durationMs: Number(meta?.elapsedMs || 0),
+    counters,
+    timings: {},
+  };
 }
 
 function canonicalRecordsUpdatedAt(records = []) {
@@ -422,6 +474,10 @@ export async function getSharedProductCatalogMap(adapter = getLingxingAdapter(),
     outputRecords: map.size,
     listingFetchedCount: Number(meta.listingFetchedCount || 0),
     productFetchedCount: Number(meta.productFetchedCount || 0),
+    listingRequestCount: Number(meta.listingRequestCount || 0),
+    productInfoRequestCount: Number(meta.productInfoRequestCount || 0),
+    joinedInFlight: Boolean(meta.joinedInFlight),
+    transactionDurationMs: Number(meta.transactionDurationMs || 0),
   });
   return {
     map,

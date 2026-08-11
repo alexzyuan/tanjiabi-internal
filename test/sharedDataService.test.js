@@ -535,6 +535,14 @@ test("共享商品目录并发相同 SID+MSKU 范围时合并 SQLite 刷新请�
   assert.equal(productCalls, 1);
   assert.equal(firstResult.map.size, secondResult.map.size);
   assert.equal(firstResult.revision, secondResult.revision);
+  assert.deepEqual(
+    [firstResult.performance.counters.joinedInFlight, secondResult.performance.counters.joinedInFlight].sort(),
+    [0, 1],
+  );
+  assert.equal(firstResult.performance.counters.listingRequestCount, 1);
+  assert.equal(secondResult.performance.counters.listingRequestCount, 1);
+  assert.equal(firstResult.performance.counters.productInfoRequestCount, 1);
+  assert.equal(secondResult.performance.counters.productInfoRequestCount, 1);
 });
 
 test("统一店铺缓存命中时不再调用 Lingxing fetchSellers", async () => {

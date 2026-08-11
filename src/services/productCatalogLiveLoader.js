@@ -86,8 +86,14 @@ async function fetchAllListings(scope, context, stats) {
     bySid.get(item.sid).push(item);
   });
   const lookup = context.options.fetchListingsBySidMskus || fetchLingxingListingsBySidMskus;
+  const lookupMetrics = {
+    increment(name, value = 1) {
+      if (name === "lingxingListingRequests") stats.listingRequestCount += Number(value) || 0;
+    },
+  };
   for (const [sid, items] of bySid.entries()) {
     const mskus = items.map((item) => item.msku);
+    stats.listingBatchCount += Math.ceil(mskus.length / LISTING_BATCH_SIZE);
     let records;
     try {
       records = await lookup(context.adapter, sid, mskus, {
@@ -95,6 +101,7 @@ async function fetchAllListings(scope, context, stats) {
         strict: true,
         sidVariants: context.options.sidVariants,
         ...(context.options.listingLookupOptions || {}),
+        metrics: lookupMetrics,
       });
     } catch (error) {
       throw context.wrapUpstream(error, "ERP Listing 查询失败。", context.requestId, "listing-fetch");
@@ -198,6 +205,12 @@ async function fetchProductBatch(context, params, fallback, stats) {
     return await lookup(context.adapter, params, fallback, {
       strict: true,
       ...(context.options.productLookupOptions || {}),
+      metrics: {
+        increment(name, value = 1) {
+          if (name === "lingxingProductInfoRequests") stats.productInfoRequestCount += Number(value) || 0;
+          if (name === "lingxingProductFallbackRequests") stats.productFallbackRequestCount += Number(value) || 0;
+        },
+      },
     });
   } catch (error) {
     throw context.wrapUpstream(error, "ERP 产品管理查询失败。", context.requestId, "product-fetch");
@@ -316,7 +329,11 @@ export async function loadAndCommitScope(scope, context) {
     listingFetchedCount: 0,
     listingSharedXlsxCount: 0,
     productFetchedCount: 0,
+    listingBatchCount: 0,
+    listingRequestCount: 0,
     productLookupBatchCount: 0,
+    productInfoRequestCount: 0,
+    productFallbackRequestCount: 0,
   };
   const listingByKey = await fetchAllListings(scope, context, stats);
   await fillMissingInternalSkusFromSharedXlsx(scope, listingByKey, context, stats);
@@ -343,5 +360,10 @@ export async function loadAndCommitScope(scope, context) {
     listingFetchedCount: stats.listingFetchedCount,
     listingSharedXlsxCount: stats.listingSharedXlsxCount,
     productFetchedCount: stats.productFetchedCount,
+    listingBatchCount: stats.listingBatchCount,
+    listingRequestCount: stats.listingRequestCount,
+    productLookupBatchCount: stats.productLookupBatchCount,
+    productInfoRequestCount: stats.productInfoRequestCount,
+    productFallbackRequestCount: stats.productFallbackRequestCount,
   };
 }

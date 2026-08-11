@@ -320,6 +320,50 @@ test("same sorted refresh scope joins in-flight and commits once", async (t) => 
   );
 });
 
+test("normal lookup exposes true listing/product batch metadata", async (t) => {
+  const mskus = Array.from({ length: 81 }, (_, index) => `M-${index + 1}`);
+  const fixture = await createCatalogServiceFixture({
+    scope: mskus.map((msku) => ({ sid: 8708, msku })),
+    requestedMskus: mskus,
+    productRecords: mskus.map((msku) => liveProduct(msku, {
+      productId: `id-${msku}`,
+      skuIdentifier: `identifier-${msku}`,
+    })),
+  });
+  t.after(fixture.cleanup);
+
+  const result = await getProductCatalogForRows(fixture.scope, fixture.options);
+  assert.equal(result.meta.listingFetchedCount, 81);
+  assert.equal(result.meta.listingBatchCount, 2);
+  assert.equal(result.meta.listingRequestCount, 2);
+  assert.equal(result.meta.productFetchedCount, 81);
+  assert.equal(result.meta.productLookupBatchCount, 2);
+  assert.equal(result.meta.productInfoRequestCount, 2);
+  assert.equal(result.meta.joinedInFlight, false);
+  assert.equal(typeof result.meta.transactionDurationMs, "number");
+  assert.equal(result.meta.transactionDurationMs >= 0, true);
+});
+
+test("normal lookup exposes joinedInFlight on the joining caller", async (t) => {
+  const gate = deferred();
+  const fixture = await createCatalogServiceFixture({ listingGate: gate });
+  t.after(fixture.cleanup);
+
+  const first = getProductCatalogForRows(fixture.scope, fixture.options);
+  await fixture.waitForListingCalls(1);
+  const second = getProductCatalogForRows(fixture.scope, fixture.options);
+  gate.resolve();
+  const [firstResult, secondResult] = await Promise.all([first, second]);
+
+  assert.deepEqual(
+    [firstResult.meta.joinedInFlight, secondResult.meta.joinedInFlight].sort(),
+    [false, true],
+  );
+  assert.equal(firstResult.meta.productLookupBatchCount, 1);
+  assert.equal(secondResult.meta.productLookupBatchCount, 1);
+  assert.equal(typeof secondResult.meta.transactionDurationMs, "number");
+});
+
 test("same feature and scope remain isolated across repository and adapter dependencies", async (t) => {
   const gateA = deferred();
   const gateB = deferred();

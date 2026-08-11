@@ -201,3 +201,72 @@ test("facade builds request-local aliases from canonical records without mutatin
   assert.equal(canonical.listing.storeName, "runtime-store");
   assert.equal(canonical.product.productName, "商品 A");
 });
+
+test("facade maps real loader batch counters and preserves source-row display fallback locally", async (t) => {
+  const fixture = await createFixture();
+  t.after(fixture.cleanup);
+  const mskus = Array.from({ length: 81 }, (_, index) => `M-${index + 1}`);
+  fixture.repository.upsertCatalog({
+    operation: "source-fallback-seed",
+    products: [{
+      internalSkuKey: "fallback-sku",
+      internalSku: "FALLBACK-SKU",
+      productName: "",
+      imageUrl: "",
+      purchasePrice: null,
+      packQuantity: null,
+      productId: "",
+      source: "test-seed",
+      sourceUpdatedAtMs: NOW,
+      refreshedAtMs: NOW,
+    }],
+    aliases: [],
+    listings: [{
+      sid: 8708,
+      msku: "FALLBACK-MSKU",
+      mskuKey: "fallback-msku",
+      internalSkuKey: "fallback-sku",
+      internalSku: "FALLBACK-SKU",
+      listingSku: "FALLBACK-SKU",
+      storeName: "runtime-store",
+      country: "美国",
+      source: "test-seed",
+      sourceUpdatedAtMs: NOW,
+      refreshedAtMs: NOW,
+    }],
+  });
+
+  const result = await getSharedProductCatalogMap(fixture.adapter, mskus.map((msku) => ({ sid: 8708, msku })), {
+    ...fixture.options,
+  });
+  assert.equal(result.performance.counters.listingBatchCount, 2);
+  assert.equal(result.performance.counters.listingRequestCount, 2);
+  assert.equal(result.performance.counters.productLookupBatchCount, 2);
+  assert.equal(result.performance.counters.productInfoRequestCount, 2);
+  assert.equal(result.performance.durationMs, result.meta.elapsedMs);
+  assert.deepEqual(result.performance.timings, {});
+
+  const fallback = await getSharedProductCatalogMap(fixture.adapter, [{
+    sid: 8708,
+    msku: "FALLBACK-MSKU",
+    imageUrl: "https://img.example.com/fallback.jpg",
+    productName: "来源行品名",
+    asin: "ASIN-FALLBACK",
+    purchasePrice: 0,
+    packQuantity: 0,
+  }], fixture.options);
+  const product = fallback.map.get(listingMskuCatalogKey(8708, "FALLBACK-MSKU"));
+  assert.equal(product.imageUrl, "https://img.example.com/fallback.jpg");
+  assert.equal(product.productName, "来源行品名");
+  assert.equal(product.asin, "ASIN-FALLBACK");
+  assert.equal(product.purchasePrice, 0);
+  assert.equal(product.packQuantity, 0);
+  assert.equal(Object.hasOwn(product, "raw"), false);
+  assert.equal(fallback.map.get(productCatalogKey("FALLBACK-SKU")), product);
+
+  const canonical = fixture.repository.readScope([{ sid: 8708, msku: "FALLBACK-MSKU" }])[0];
+  assert.equal(canonical.product.productName, "");
+  assert.equal(canonical.product.imageUrl, "");
+  assert.equal(canonical.product.purchasePrice, null);
+  assert.equal(canonical.product.packQuantity, null);
+});

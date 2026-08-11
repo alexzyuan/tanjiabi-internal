@@ -351,19 +351,19 @@ function readPurchaserName(order) {
 }
 
 function readSid(item = {}, order = {}) {
-  return toNumber(readDeepFirst(item, [
+  const keys = [
     "sid",
     "seller_id",
     "sellerId",
     "store_id",
     "storeId",
-  ]) || readDeepFirst(order, [
-    "sid",
-    "seller_id",
-    "sellerId",
-    "store_id",
-    "storeId",
-  ]));
+  ];
+  const direct = (record) => keys
+    .map((key) => record?.[key])
+    .find((value) => value !== undefined && value !== null && value !== "");
+  const itemSid = toNumber(direct(item));
+  if (itemSid > 0) return itemSid;
+  return toNumber(direct(order));
 }
 
 function readLineId(item = {}) {
@@ -881,6 +881,9 @@ export function normalizePurchaseOrderRows(orders = [], fbaByMsku = new Map(), {
       const entryQuantity = readEntryQuantity(item, order);
       const fba = summarizeFbaForMskus(mskuValues, fbaByMsku);
       const sid = readSid(item, order);
+      const catalogIdentities = sid > 0
+        ? mskuValues.map((mskuValue) => ({ sid, msku: mskuValue })).filter((identity) => identity.msku)
+        : [];
       const storeName = readStoreName(item, order, sellersBySid);
       const country = readCountryName(item, order, sellersBySid);
       const lineId = readLineId(item);
@@ -898,6 +901,7 @@ export function normalizePurchaseOrderRows(orders = [], fbaByMsku = new Map(), {
         sku,
         msku,
         sid,
+        catalogIdentities,
         storeName,
         country,
         unitPrice: readUnitPrice(item, order),
@@ -927,6 +931,49 @@ export function normalizePurchaseOrderRows(orders = [], fbaByMsku = new Map(), {
     });
   });
   return rows.sort((a, b) => String(b.orderTime || "").localeCompare(String(a.orderTime || ""), "zh-CN"));
+}
+
+export function buildProductCatalogScope(rows = []) {
+  const byIdentity = new Map();
+  const isValidIdentity = (identity) => {
+    const sid = Number(identity?.sid || 0);
+    const msku = String(identity?.msku || "").trim();
+    return Number.isInteger(sid) && sid > 0 && Boolean(msku) && !msku.includes("/");
+  };
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    const identities = Array.isArray(row?.catalogIdentities) && row.catalogIdentities.length
+      ? row.catalogIdentities
+      : Number(row?.sid) > 0 && String(row?.msku || "").trim() && !String(row.msku).includes("/")
+        ? [{ sid: Number(row.sid), msku: String(row.msku).trim() }]
+        : [];
+    identities.forEach((identity) => {
+      const sid = Number(identity?.sid || 0);
+      const msku = String(identity?.msku || "").trim();
+      if (!isValidIdentity(identity)) return;
+      const key = `${sid}:${msku.toLowerCase()}`;
+      if (byIdentity.has(key)) return;
+      byIdentity.set(key, {
+        sid,
+        msku,
+        storeName: row.storeName || "",
+        country: row.country || "",
+        sku: row.sku || "",
+        productName: row.productName || "",
+        imageUrl: row.imageUrl || "",
+        asin: row.asin || "",
+      });
+    });
+  });
+  return [...byIdentity.values()];
+}
+
+function hasValidProductCatalogIdentity(row = {}) {
+  return Array.isArray(row?.catalogIdentities)
+    && row.catalogIdentities.some((identity) => {
+      const sid = Number(identity?.sid || 0);
+      const msku = String(identity?.msku || "").trim();
+      return Number.isInteger(sid) && sid > 0 && Boolean(msku) && !msku.includes("/");
+    });
 }
 
 async function readShippedQuantityStore() {
@@ -1046,8 +1093,30 @@ async function buildDashboard(adapter, params) {
   const sellersBySid = new Map((sellersResult.sellers || []).map((seller) => [Number(seller.sid || seller.seller_id || seller.sellerId), seller]).filter(([sid]) => sid));
   const invalidPurchaseOrderCount = purchaseOrders.filter(isInvalidPurchaseOrder).length;
   const normalizedRows = normalizePurchaseOrderRows(purchaseOrders, fbaByMsku, { startDate, sellersBySid });
-  const productCatalogResult = await getSharedProductCatalogMap(adapter, normalizedRows);
-  const allRows = applySharedProductCatalogToRows(normalizedRows, productCatalogResult.map);
+  const catalogScope = buildProductCatalogScope(normalizedRows);
+  const catalogUnresolvedRowCount = normalizedRows.filter((row) => !hasValidProductCatalogIdentity(row)).length;
+  if (catalogUnresolvedRowCount) {
+    console.warn("[factory-inventory] 商品目录行缺少可唯一解析的 SID+MSKU", {
+      rowCount: catalogUnresolvedRowCount,
+      scopeCount: catalogScope.length,
+    });
+  }
+  const productCatalogResult = catalogScope.length
+    ? await getSharedProductCatalogMap(adapter, catalogScope, { sellers: sellersResult.sellers || [] })
+    : {
+      map: new Map(),
+      cacheHit: true,
+      updatedAt: "",
+      status: normalizedRows.length ? "采购单商品缺少可唯一解析的 SID+MSKU" : "共享商品目录无数据",
+  };
+  const allRows = normalizedRows.map((row) => {
+    if (!hasValidProductCatalogIdentity(row)) return row;
+    return applySharedProductCatalogToRows([row], productCatalogResult.map)[0] || row;
+  });
+  const productCatalogStatus = [
+    productCatalogResult.status,
+    catalogUnresolvedRowCount ? `商品目录缺少唯一 SID+MSKU ${catalogUnresolvedRowCount} 行` : "",
+  ].filter(Boolean).join("；");
   const imageCount = allRows.filter((row) => row.imageUrl).length;
   return {
     rows: allRows,
@@ -1059,7 +1128,7 @@ async function buildDashboard(adapter, params) {
       source: "领星 ERP purchaseOrder 采购单",
       startDate,
       endDate,
-      syncStatus: `采购单 ${purchaseOrders.length} 条，过滤作废/无效 ${invalidPurchaseOrderCount} 条；店铺 ${sellersBySid.size} 个；图片 ${imageCount}/${allRows.length}；${fbaResult.status || `复用销售预估 FBA 库存 ${fbaByMsku.size} 个 MSKU`}；${productCatalogResult.status || ""}`,
+      syncStatus: `采购单 ${purchaseOrders.length} 条，过滤作废/无效 ${invalidPurchaseOrderCount} 条；店铺 ${sellersBySid.size} 个；图片 ${imageCount}/${allRows.length}；${fbaResult.status || `复用销售预估 FBA 库存 ${fbaByMsku.size} 个 MSKU`}；${productCatalogStatus}`,
       cacheTtlMinutes: Math.round(FACTORY_INVENTORY_TTL_MS / 60000),
       fbaSource: fbaResult.source || "sales-forecast-cache",
       fbaUpdatedAt: fbaResult.updatedAt || "",
@@ -1167,6 +1236,7 @@ export const factoryInventoryTestUtils = {
   aggregateFbaInventoryByMsku,
   aggregateSalesForecastFbaByMsku,
   applyManualShippedQuantities,
+  buildProductCatalogScope,
   isFactoryInventoryRowManualKey,
   normalizePurchaseOrderRows,
 };
