@@ -15,6 +15,14 @@ export function createSyncCenterFeature({
   runningFromLocalFile = false,
   setButtonBusy,
   setExclusiveClassState,
+  setStatusMessage = (selector, message, tone = "", targetRoot = root) => {
+    const element = targetRoot?.querySelector?.(selector);
+    if (!element) return null;
+    element.textContent = message;
+    element.classList?.toggle("status-danger", tone === "danger");
+    element.classList?.toggle("status-success", tone === "success");
+    return element;
+  },
   setText,
   syncToneClasses = [],
 } = {}) {
@@ -23,6 +31,45 @@ export function createSyncCenterFeature({
 
   function query(selector) {
     return root?.querySelector?.(selector) || null;
+  }
+
+  function clearAftersalesMailPassword() {
+    const password = query("#aftersales-mail-password");
+    if (password) password.value = "";
+  }
+
+  function currentAftersalesMailPassword() {
+    const value = query("#aftersales-mail-password")?.value;
+    return typeof value === "string" && value ? value : "";
+  }
+
+  function setAftersalesMailStatus(message, tone = "") {
+    setStatusMessage("#aftersales-mail-status", message, tone, root);
+  }
+
+  function renderAftersalesMailSettings(data = {}) {
+    clearAftersalesMailPassword();
+    const account = query("#aftersales-mail-account");
+    if (account) account.value = data.account || "jmcustomer@163.com";
+    const enabled = query("#aftersales-mail-enabled");
+    if (enabled) enabled.checked = data.enabled === true;
+    const summary = query("#aftersales-mail-summary");
+    if (!summary) return;
+    const lastTest = data.lastTest || {};
+    const lastChange = data.lastChange || {};
+    const changedAt = lastChange.changedAt || lastChange.at || "-";
+    const changedBy = lastChange.actor ? ` · ${lastChange.actor}` : "";
+    summary.innerHTML = `
+      <div><strong>${data.passwordConfigured ? "授权码已配置" : "授权码未配置"}</strong><span>${escapeHtml(lastTest.message || "尚未测试")}</span></div>
+      <div><strong>最近测试</strong><span>${escapeHtml(lastTest.checkedAt || "-")}</span></div>
+      <div><strong>最近修改</strong><span>${escapeHtml(`${changedAt}${changedBy}`)}</span></div>
+    `;
+  }
+
+  async function parseApiResponse(response) {
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || `API ${response.status}`);
+    return data;
   }
 
   function formatSidebarSyncTime(value) {
@@ -164,6 +211,68 @@ export function createSyncCenterFeature({
     }
   }
 
+  async function loadAftersalesMailSettings() {
+    try {
+      const response = await fetchImpl("/api/admin/aftersales-mail-config", { cache: "no-store" });
+      renderAftersalesMailSettings(await parseApiResponse(response));
+    } catch (error) {
+      renderAftersalesMailSettings({});
+      setAftersalesMailStatus(error.message || "售后邮箱设置读取失败", "danger");
+    } finally {
+      clearAftersalesMailPassword();
+    }
+  }
+
+  async function testAftersalesMailSettings() {
+    const password = currentAftersalesMailPassword();
+    const payload = password ? { password } : {};
+    try {
+      const response = await fetchImpl("/api/admin/aftersales-mail-config/test", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await parseApiResponse(response);
+      if (data.ok === false) {
+        setAftersalesMailStatus(data.message || "连接测试失败", "danger");
+        return;
+      }
+      setAftersalesMailStatus(data.message || "连接测试成功。", "success");
+      clearAftersalesMailPassword();
+      await loadAftersalesMailSettings();
+    } catch (error) {
+      setAftersalesMailStatus(error.message || "连接测试失败", "danger");
+    } finally {
+      clearAftersalesMailPassword();
+    }
+  }
+
+  async function saveAftersalesMailSettings(event) {
+    event?.preventDefault?.();
+    const password = currentAftersalesMailPassword();
+    const payload = { enabled: query("#aftersales-mail-enabled")?.checked === true };
+    if (password) payload.password = password;
+    try {
+      const response = await fetchImpl("/api/admin/aftersales-mail-config", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await parseApiResponse(response);
+      if (data.ok === false) {
+        setAftersalesMailStatus(data.message || "设置保存失败", "danger");
+        return;
+      }
+      setAftersalesMailStatus(data.message || "售后邮箱设置已保存。", "success");
+      clearAftersalesMailPassword();
+      await loadAftersalesMailSettings();
+    } catch (error) {
+      setAftersalesMailStatus(error.message || "设置保存失败", "danger");
+    } finally {
+      clearAftersalesMailPassword();
+    }
+  }
+
   async function triggerManualSync() {
     const button = query("#manual-sync-button");
     const restoreButton = setButtonBusy(button, "同步中", "手动同步", { disable: false });
@@ -178,15 +287,20 @@ export function createSyncCenterFeature({
 
   function setupSyncCenter() {
     bind(root, "#manual-sync-button", "click", triggerManualSync);
+    bind(root, "#aftersales-mail-test", "click", testAftersalesMailSettings);
+    bind(root, "#aftersales-mail-settings-form", "submit", saveAftersalesMailSettings);
   }
 
   return {
+    loadAftersalesMailSettings,
     loadHealthStatus,
     loadLingxingShops,
     loadSyncStatus,
     renderLingxingShops,
     renderSyncStatus,
+    saveAftersalesMailSettings,
     setupSyncCenter,
+    testAftersalesMailSettings,
     triggerManualSync,
   };
 }

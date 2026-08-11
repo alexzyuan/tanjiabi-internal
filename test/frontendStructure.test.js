@@ -892,9 +892,14 @@ test("app.js starts using shared dashboard section loader", async () => {
   assert.ok(syncCenterFeatureSource.includes("async function loadSyncStatus"), "missing loadSyncStatus feature loader");
   assert.ok(syncCenterFeatureSource.includes("async function loadHealthStatus"), "missing loadHealthStatus feature loader");
   assert.ok(syncCenterFeatureSource.includes("async function loadLingxingShops"), "missing loadLingxingShops feature loader");
+  assert.ok(syncCenterFeatureSource.includes("async function loadAftersalesMailSettings"), "missing aftersales mail settings loader");
+  assert.ok(syncCenterFeatureSource.includes("async function testAftersalesMailSettings"), "missing aftersales mail settings test action");
+  assert.ok(syncCenterFeatureSource.includes("async function saveAftersalesMailSettings"), "missing aftersales mail settings save action");
   assert.ok(syncCenterFeatureSource.includes("function renderSyncStatus"), "missing renderSyncStatus feature renderer");
   assert.ok(syncCenterFeatureSource.includes("function renderLingxingShops"), "missing renderLingxingShops feature renderer");
   assert.ok(syncCenterFeatureSource.includes("function setupSyncCenter"), "missing setupSyncCenter feature setup");
+  assert.ok(syncCenterFeatureSource.includes('bind(root, "#aftersales-mail-test", "click"'), "aftersales mail test binding should live in sync center feature");
+  assert.ok(syncCenterFeatureSource.includes('bind(root, "#aftersales-mail-settings-form", "submit"'), "aftersales mail save binding should live in sync center feature");
   assert.ok(topbarStatusFeatureSource.includes("function updateWorldClock"), "missing updateWorldClock topbar renderer");
   assert.ok(topbarStatusFeatureSource.includes("function renderTopbarSyncStatus"), "missing renderTopbarSyncStatus topbar renderer");
   assert.ok(fbaFreightFeatureSource.includes("async function loadFbaFreightInitial"), "missing loadFbaFreightInitial feature entry");
