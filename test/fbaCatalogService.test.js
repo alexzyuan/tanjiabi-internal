@@ -490,3 +490,118 @@ test("strict FBA ERP resolution preserves an unpaired Listing diagnostic and nev
     /商品目录|ERP Listing/,
   );
 });
+
+test("FBA tolerates a canonical null boxSpec and keeps a missing manual override explicit", async (t) => {
+  const fixture = await createFbaCatalogFixture(t, { seeded: true });
+  fixture.repository.upsertCatalog({
+    operation: "fba-catalog-null-box-test",
+    products: [{
+      internalSkuKey: "erp-runtime-10",
+      internalSku: "ERP-RUNTIME-10",
+      productName: "Catalog boat without box",
+      packQuantity: 0,
+      boxSpec: null,
+      source: "test-seed",
+      sourceUpdatedAtMs: 1720000000000,
+      refreshedAtMs: 1720000000000,
+    }],
+    aliases: [],
+    listings: [],
+  });
+  const result = await fixture.search({ getBoxTemplate: async () => null });
+
+  assert.equal(result.items[0].packQuantity, 0);
+  assert.equal(result.items[0].boxDimensions, null);
+  assert.equal(result.items[0].boxWeight, null);
+  assert.equal(result.items[0].boxSource, "missing");
+});
+
+test("FBA forces strict shared-catalog options and rejects an empty custom catalog map", async (t) => {
+  const fixture = await createFbaCatalogFixture(t);
+  const captured = [];
+  const result = await fixture.search({
+    getSharedCatalog: async (_adapter, _rows, options) => {
+      captured.push(options);
+      return { map: new Map() };
+    },
+    sharedCatalogOptions: { strict: false, sellers: [], getDirectory: async () => ({ sellers: [] }) },
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.items.length, 0);
+  assert.equal(captured.length, 1);
+  assert.equal(captured[0].strict, true);
+  assert.deepEqual(captured[0].sellers.map((seller) => seller.sid), [fbaSeller.sid]);
+});
+
+test("FBA hydrates discovery scopes larger than the shared 500-row catalog limit in chunks", async (t) => {
+  const fixture = await createFbaCatalogFixture(t);
+  const rows = Array.from({ length: 501 }, (_, index) => ({
+    sid: fbaSeller.sid,
+    seller_sku: `BULK-${index}`,
+    local_sku: `ERP-BULK-${index}`,
+    title: `Bulk ${index}`,
+  }));
+  fixture.adapter.fetchListings = async () => listingPayload(rows);
+  const calls = [];
+  const result = await fixture.search({
+    getSharedCatalog: async (_adapter, items, options) => {
+      calls.push(items.length);
+      const map = new Map();
+      items.forEach((item) => {
+        map.set(`sid:${item.sid}:msku:${item.msku.toLowerCase()}`, {
+          sid: item.sid,
+          msku: item.msku,
+          internalSku: `ERP-${item.msku}`,
+          productName: `Catalog ${item.msku}`,
+          packQuantity: 1,
+          boxSpec: null,
+        });
+      });
+      assert.equal(options.strict, true);
+      return { map };
+    },
+  });
+
+  assert.deepEqual(calls, [500, 1]);
+  assert.equal(result.ok, true);
+  assert.equal(result.items.length, 200);
+});
+
+test("FBA discovery and catalog handoff use the same SKU/MSKU parser", async (t) => {
+  const fixture = await createFbaCatalogFixture(t);
+  fixture.adapter.fetchListings = async () => listingPayload([{
+    sid: fbaSeller.sid,
+    sku: "PARSER-MSKU-10",
+    title: "Parser item",
+  }]);
+  const result = await fixture.search({
+    getSharedCatalog: async (_adapter, items) => ({
+      map: new Map(items.map((item) => [
+        `sid:${item.sid}:msku:${item.msku.toLowerCase()}`,
+        { sid: item.sid, msku: item.msku, internalSku: "ERP-PARSER-10", productName: "Parser product", packQuantity: 1, boxSpec: null },
+      ])),
+    }),
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.items[0].msku, "PARSER-MSKU-10");
+  assert.equal(result.items[0].internalSku, "ERP-PARSER-10");
+});
+
+test("FBA search redacts raw upstream error messages", async () => {
+  const adapter = {
+    async fetchListings() {
+      throw new Error("token=secret raw payload should not escape");
+    },
+  };
+  const result = await searchFbaMskus({
+    sids: [99011],
+    adapter,
+    getDirectory: async () => ({ sellers: [{ sid: 99011, name: "runtime-store-US" }] }),
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errors.some((message) => message.includes("secret")), false);
+  assert.equal(result.errors.some((message) => message.includes("payload")), false);
+});

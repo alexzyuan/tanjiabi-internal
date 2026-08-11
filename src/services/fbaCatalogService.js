@@ -39,6 +39,18 @@ const PRODUCT_RESULT_FIELDS = [
   "boxSpec",
   "asin",
 ];
+const LISTING_MSKU_KEYS = [
+  "msku",
+  "m_sku",
+  "seller_sku",
+  "sellerSku",
+  "sellerSkuStr",
+  "local_sku",
+  "localSku",
+  "fnsku",
+  "sku",
+  "item_sku",
+];
 
 function walkObject(value, visit, depth = 0) {
   if (!value || depth > 3) return;
@@ -127,7 +139,7 @@ async function resolveRuntimeShops({ sids = [], adapter, getDirectory = getSelle
 }
 
 function normalizeMskuDiscoveryRecord(record, shop) {
-  const msku = readFirst(record, ["msku", "m_sku", "seller_sku", "sellerSku", "sellerSkuStr", "local_sku", "fnsku", "sku", "item_sku"]);
+  const msku = readFirst(record, LISTING_MSKU_KEYS);
   if (!msku) return null;
 
   return {
@@ -142,7 +154,7 @@ function normalizeMskuDiscoveryRecord(record, shop) {
 }
 
 function normalizeListingCatalogRecord(record, shop) {
-  const msku = readFirst(record, ["msku", "m_sku", "seller_sku", "sellerSku", "sellerSkuStr", "item_sku", "fnsku"]);
+  const msku = readFirst(record, LISTING_MSKU_KEYS);
   if (!msku) return null;
   return {
     sid: shop.sid,
@@ -166,7 +178,7 @@ async function applyBoxTemplates(items, { getBoxTemplate = getFbaBoxTemplate } =
         boxSource: "template",
       };
     }
-    if (hasCompleteBoxSpec(item.boxSpec)) {
+    if (hasCompleteBoxSpec(item.boxSpec || {})) {
       return {
         ...item,
         boxDimensions: item.boxSpec.dimensions,
@@ -204,6 +216,14 @@ function emptyDiagnostics() {
     unpairedListings: [],
     errors: [],
   };
+}
+
+function safeFbaErrorMessage(error) {
+  const message = normalizeText(error?.message);
+  if (!message || /token|secret|password|payload|raw|body/i.test(message)) {
+    return "领星 Listing 查询失败。";
+  }
+  return message.length > 160 ? `${message.slice(0, 157)}...` : message;
 }
 
 function diagnosticMessage(unpairedListings = []) {
@@ -247,7 +267,7 @@ async function diagnoseUnpairedListings(adapter, shops, keyword, matchMode) {
         reason: "listing_not_paired_to_erp_product",
       })));
     } catch (error) {
-      diagnostics.errors.push(`${shop.name}: ${error.message}`);
+      diagnostics.errors.push(`${shop.name}: ${safeFbaErrorMessage(error)}`);
     }
   }
 
@@ -284,10 +304,10 @@ function catalogMapKeys(item = {}) {
   const country = normalizeKey(item.country);
   return [
     sid && msku ? `sid:${sid}:msku:${msku}` : "",
-    storeName && msku ? `store:${storeName}:msku:${msku}` : "",
-    country && msku ? `country:${country}:msku:${msku}` : "",
-    sid ? "" : msku,
-    sid ? "" : normalizeKey(item.sku),
+    !sid && storeName && msku ? `store:${storeName}:msku:${msku}` : "",
+    !sid && country && msku ? `country:${country}:msku:${msku}` : "",
+    !sid ? msku : "",
+    !sid ? normalizeKey(item.sku) : "",
   ].filter(Boolean);
 }
 
@@ -341,20 +361,30 @@ async function hydrateMskuDiscovery(adapter, shop, discoveryItems, listingRecord
       .map((record) => [`${shop.sid}:${normalizeKey(record.seller_sku)}`, record]),
   );
   const catalogOptions = {
+    ...sharedCatalogOptions,
     strict: true,
     feature: "fba-catalog",
     sellers: [shop],
     getDirectory,
     ...(repository ? { repository } : {}),
-    ...sharedCatalogOptions,
   };
   if (listingByKey.size) {
     catalogOptions.fetchListingsBySidMskus = async (_adapter, sid, mskus) => mskus
       .map((msku) => listingByKey.get(`${sid}:${normalizeKey(msku)}`))
       .filter(Boolean);
   }
-  const catalogResult = await getSharedCatalog(adapter, sourceItems, catalogOptions);
-  const hydrated = sourceItems.map((item) => mergeCatalogItem(item, findCatalogProduct(item, catalogResult.map)));
+  const hydrated = [];
+  for (let index = 0; index < sourceItems.length; index += 500) {
+    const chunk = sourceItems.slice(index, index + 500);
+    const catalogResult = await getSharedCatalog(adapter, chunk, catalogOptions);
+    const catalogMap = catalogResult?.map;
+    if (!(catalogMap instanceof Map)) throw new Error("共享商品目录返回无效索引。");
+    const missing = chunk.filter((item) => !findCatalogProduct(item, catalogMap));
+    if (missing.length) {
+      throw new Error(`FBA 商品目录未解析 ${missing.length} 个 Listing。`);
+    }
+    hydrated.push(...chunk.map((item) => mergeCatalogItem(item, findCatalogProduct(item, catalogMap))));
+  }
   return applyBoxTemplates(hydrated, { getBoxTemplate });
 }
 
@@ -515,7 +545,7 @@ export async function searchFbaMskus({
     now,
   })));
   const errors = settled
-    .map((result, index) => (result.status === "rejected" ? `${shops[index].name}: ${result.reason.message}` : ""))
+    .map((result, index) => (result.status === "rejected" ? `${shops[index].name}: ${safeFbaErrorMessage(result.reason)}` : ""))
     .filter(Boolean);
   const items = uniqueMskus(settled.flatMap((result) => (result.status === "fulfilled" ? result.value : [])));
   const filteredItems = filterMskus(items, q, matchMode).slice(0, 200);
