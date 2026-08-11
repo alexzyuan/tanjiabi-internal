@@ -1281,6 +1281,7 @@ test("app.js starts using shared dashboard section loader", async () => {
   assert.equal(inventoryProvisionLoadSource.includes("setButtonBusy("), false);
   assert.equal(appSource.includes('bind(document, "#inventory-provision'), false);
   assert.match(inventoryProvisionFeatureSource, /bind\(root, "#inventory-provision-refresh", "click"/);
+  assert.match(inventoryProvisionFeatureSource, /bind\(root, "#inventory-provision-refresh-costs", "click"/);
   assert.match(inventoryProvisionFeatureSource, /bind\(root, "#inventory-provision-keyword", "keydown"/);
 });
 

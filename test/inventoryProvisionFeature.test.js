@@ -44,15 +44,71 @@ test("inventory provision feature owns its DOM event bindings", () => {
     [
       ["#inventory-provision-refresh", "click", feature.loadInventoryProvision],
       ["#inventory-provision-export", "click", bindCalls[1][3]],
-      ["#inventory-provision-date", "change", feature.loadInventoryProvision],
-      ["#inventory-provision-country", "change", bindCalls[3][3]],
-      ["#inventory-provision-store", "change", bindCalls[4][3]],
+      ["#inventory-provision-refresh-costs", "click", feature.refreshInventoryProvisionCosts],
+      ["#inventory-provision-date", "change", bindCalls[3][3]],
+      ["#inventory-provision-country", "change", bindCalls[4][3]],
+      ["#inventory-provision-store", "change", bindCalls[5][3]],
       ["#inventory-provision-owner", "change", feature.loadInventoryProvision],
       ["#inventory-provision-cost-mode", "change", feature.loadInventoryProvision],
-      ["#inventory-provision-keyword", "keydown", bindCalls[7][3]],
-      ["#inventory-detail-table", "click", bindCalls[8][3]],
+      ["#inventory-provision-keyword", "keydown", bindCalls[8][3]],
+      ["#inventory-detail-table", "click", bindCalls[9][3]],
     ],
   );
+});
+
+test("inventory provision cost refresh confirms a historical month, posts it, and reloads the dashboard", async () => {
+  const elements = new Map([
+    ["#inventory-provision-date", { value: "2026-05" }],
+    ["#inventory-provision-refresh-costs", { disabled: false }],
+  ]);
+  const fetchCalls = [];
+  const statuses = [];
+  let dashboardLoads = 0;
+  const { feature } = createFeature({
+    root: { querySelector: (selector) => elements.get(selector) || null },
+    fieldValue: (selector) => elements.get(selector)?.value || "",
+    confirmImpl: () => true,
+    fetchImpl: async (...args) => {
+      fetchCalls.push(args);
+      return {
+        ok: true,
+        json: async () => ({ ok: true, refresh: { date: "2026-05", comparisonMonth: "2026-04", refreshedAt: "2026/8/11 16:03:44", months: [{ updatedRows: 1 }, { updatedRows: 2 }] } }),
+      };
+    },
+    loadDashboardSection: async () => { dashboardLoads += 1; },
+    setText: (selector, value) => statuses.push([selector, value]),
+  });
+
+  await feature.refreshInventoryProvisionCosts();
+
+  assert.deepEqual(fetchCalls, [[
+    "/api/dashboard/inventory-provision/refresh-costs",
+    { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ date: "2026-05" }) },
+  ]]);
+  assert.equal(dashboardLoads, 1);
+  assert.match(statuses.at(-1)[1], /2026-05.*2026-04.*3/);
+});
+
+test("inventory provision cost refresh blocks the current month without a request", async () => {
+  const elements = new Map([
+    ["#inventory-provision-date", { value: "2026-08" }],
+    ["#inventory-provision-refresh-costs", { disabled: false }],
+  ]);
+  let requestCount = 0;
+  const statuses = [];
+  const { feature } = createFeature({
+    root: { querySelector: (selector) => elements.get(selector) || null },
+    fieldValue: (selector) => elements.get(selector)?.value || "",
+    fetchImpl: async () => { requestCount += 1; },
+    setText: (selector, value) => statuses.push([selector, value]),
+    getDefaultMonth: () => "2026-08",
+  });
+
+  await feature.refreshInventoryProvisionCosts();
+
+  assert.equal(requestCount, 0);
+  assert.equal(elements.get("#inventory-provision-refresh-costs").disabled, true);
+  assert.match(statuses.at(-1)[1], /当前月/);
 });
 
 test("inventory provision renders MSKU summary rows and expands batch details from the MSKU button", () => {

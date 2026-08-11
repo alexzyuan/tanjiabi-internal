@@ -69,6 +69,43 @@ test("loadFbaInventoryDetailRows uses Lingxing seller_group_name when an EU ware
   assert.equal(result.rows[0].currencyCode, "EUR");
 });
 
+test("historical inventory force refresh bypasses cache and preserves the German runtime shop", async () => {
+  const { loadHistoricalInventoryRows } = await import("../src/services/inventoryProvisionService.js");
+  assert.equal(typeof loadHistoricalInventoryRows, "function");
+
+  const result = await loadHistoricalInventoryRows("2026-05", {
+    forceRefresh: true,
+    persist: false,
+    sellers: [{ sid: 17307, seller_id: "A-DE", name: "tanjia-eu-DE", country: "德国", countryCode: "DE" }],
+    adapter: {
+      fetchAllFbaInventoryDetails: async () => [],
+      fetchMonthlyInventoryLedgerSummary: async () => ({ data: { records: [] } }),
+      fetchFbaInventoryHistory: async () => ({
+        data: {
+          row_data: [{
+            sid: 17307,
+            country_code: "DE",
+            msku: "JMDE-HJ825A",
+            end_count: 3,
+            end_other_amount: 30,
+            end_logistic_amount: 6,
+          }],
+        },
+      }),
+      fetchListings: async () => ({ data: { list: [] } }),
+    },
+    readHistoryCache: async () => { throw new Error("history cache must not be read"); },
+    saveHistoryCache: async () => { throw new Error("history cache must not be written"); },
+  });
+
+  assert.equal(result.rows.length, 1);
+  assert.equal(result.rows[0].sid, 17307);
+  assert.equal(result.rows[0].storeName, "tanjia-eu-DE");
+  assert.equal(result.rows[0].country, "德国");
+  assert.equal(result.rows[0].purchaseCost, 10);
+  assert.equal(result.rows[0].firstLegCost, 2);
+});
+
 test("inventory provision landed cost rows calculate provision amount by aging bucket", async () => {
   const { inventoryProvisionTestUtils } = await import("../src/services/inventoryProvisionService.js");
   assert.ok(inventoryProvisionTestUtils, "inventory provision test utilities must be exported");

@@ -1469,17 +1469,28 @@ function sellableHistoryRow(row) {
   return sellable ? { ...row, ...sellable, parent_node: true } : row;
 }
 
-async function loadHistoricalInventoryRowsFromLingxing(selectedMonth) {
-  const cached = await readInventoryProvisionHistoryCache(selectedMonth);
-  if (cached?.data?.rows?.length && cached.data.ownerSyncVersion === historicalOwnerSyncVersion) {
-    return { ...cached.data, cacheUpdatedAt: cached.updatedAt || "" };
+export async function loadHistoricalInventoryRows(selectedMonth, {
+  adapter = getLingxingAdapter(),
+  sellers = null,
+  getSellers = getSharedSellers,
+  readHistoryCache = readInventoryProvisionHistoryCache,
+  saveHistoryCache = saveInventoryProvisionHistoryCache,
+  forceRefresh = false,
+  persist = true,
+} = {}) {
+  if (!forceRefresh) {
+    const cached = await readHistoryCache(selectedMonth);
+    if (cached?.data?.rows?.length && cached.data.ownerSyncVersion === historicalOwnerSyncVersion) {
+      return { ...cached.data, cacheUpdatedAt: cached.updatedAt || "" };
+    }
   }
 
-  const adapter = getLingxingAdapter();
-  const sellers = filterCoreSellers((await getSharedSellers({ adapter })).sellers || []);
-  const sellerIds = [...new Set(sellers.map((seller) => seller.seller_id).filter(Boolean))];
-  const sids = uniqueNumbers(sellers.map((seller) => seller.sid));
-  const sellerBySid = new Map(sellers.map((seller) => [Number(seller.sid), seller]));
+  const resolvedSellers = sellers?.length
+    ? filterCoreSellers(sellers)
+    : filterCoreSellers((await getSellers({ adapter })).sellers || []);
+  const sellerIds = [...new Set(resolvedSellers.map((seller) => seller.seller_id).filter(Boolean))];
+  const sids = uniqueNumbers(resolvedSellers.map((seller) => seller.sid));
+  const sellerBySid = new Map(resolvedSellers.map((seller) => [Number(seller.sid), seller]));
   const ownerRecords = await adapter.fetchAllFbaInventoryDetails(sids, {
     maxRows: 5000,
     params: { is_hide_zero_stock: "0" },
@@ -1515,7 +1526,7 @@ async function loadHistoricalInventoryRowsFromLingxing(selectedMonth) {
   });
   const listingOwnerRows = await fetchListingOwnerRows(adapter, historyOwnerLookupRows);
   const directOwnerMap = buildListingOwnerMap([
-    ...normalizeLingxingInventoryRows(ownerRecords, sellers),
+    ...normalizeLingxingInventoryRows(ownerRecords, resolvedSellers),
     ...listingOwnerRows,
   ]);
   const unresolvedMskus = uniqueText(
@@ -1530,7 +1541,7 @@ async function loadHistoricalInventoryRowsFromLingxing(selectedMonth) {
     )
     : [];
   const ownerMap = buildListingOwnerMap([
-    ...normalizeLingxingInventoryRows(ownerRecords, sellers),
+    ...normalizeLingxingInventoryRows(ownerRecords, resolvedSellers),
     ...listingOwnerRows,
     ...globalListingOwnerRows,
   ]);
@@ -1586,7 +1597,7 @@ async function loadHistoricalInventoryRowsFromLingxing(selectedMonth) {
 
   const data = {
     rows,
-    sellers,
+    sellers: resolvedSellers,
     rawCount: historyRows.length,
     ledgerCount: ledgerRecords.length,
     matchedRows,
@@ -1597,7 +1608,7 @@ async function loadHistoricalInventoryRowsFromLingxing(selectedMonth) {
     reportStartDate: historyPayload?.data?.start_date || `${selectedMonth}-01`,
     reportEndDate: historyPayload?.data?.end_date || selectedMonth,
   };
-  await saveInventoryProvisionHistoryCache(selectedMonth, data);
+  if (persist) await saveHistoryCache(selectedMonth, data);
   return data;
 }
 
@@ -1674,6 +1685,8 @@ export async function getInventoryProvisionDashboard(filters = {}) {
   let syncStatus = config.dataProvider === "lingxing" ? "等待领星 FBA 库存明细返回" : "本地模拟库龄数据";
   let snapshotAvailable = true;
   let snapshotUpdatedAt = "";
+  let costRefreshedAt = "";
+  let costRefreshSummary = null;
   let availableDates = [];
   let previousPeriod = "";
   let previousSourceRows = [];
@@ -1700,9 +1713,11 @@ export async function getInventoryProvisionDashboard(filters = {}) {
     } else {
       source = "领星 ERP · FBA历史库存月报";
       try {
-        const result = await loadHistoricalInventoryRowsFromLingxing(date);
+        const result = await loadHistoricalInventoryRows(date);
         sourceRows = result.rows;
         snapshotUpdatedAt = result.cacheUpdatedAt || "";
+        costRefreshedAt = result.costRefreshedAt || "";
+        costRefreshSummary = result.costRefreshSummary || null;
         syncStatus = `${date} 月末历史库存 · FBA月报 ${result.rawCount} 个MSKU · 库存分类账 ${result.ledgerCount} 条 · 库龄匹配 ${result.matchedRows}/${result.rawCount}${snapshotUpdatedAt ? ` · 缓存 ${snapshotUpdatedAt}` : ""}`;
       } catch (error) {
         snapshotAvailable = false;
@@ -1714,7 +1729,7 @@ export async function getInventoryProvisionDashboard(filters = {}) {
       if (canCalculateProvisionMovement(date)) {
         previousPeriod = shiftMonth(date, -1);
         try {
-          const previousResult = await loadHistoricalInventoryRowsFromLingxing(previousPeriod);
+          const previousResult = await loadHistoricalInventoryRows(previousPeriod);
           previousSourceRows = previousResult.rows || [];
           movementComparisonEnabled = true;
           reversalStatus = `本月计提对比 ${previousPeriod} 期末库存计提余额`;
@@ -1790,6 +1805,8 @@ export async function getInventoryProvisionDashboard(filters = {}) {
       costModeDescription: costMode.description,
       snapshotAvailable,
       snapshotUpdatedAt,
+      costRefreshedAt,
+      costRefreshSummary,
       availableDates,
       reversalStatus,
       ruleText: `计提资产减值规则：91-180天*40%、181-270天*80%、271天及以上*100%；当前成本计算=${costMode.label}`,

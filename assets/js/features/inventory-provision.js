@@ -4,6 +4,7 @@ export function createInventoryProvisionFeature({
   root = globalThis.document,
   loadDashboardSection,
   bind,
+  confirmImpl = globalThis.confirm,
   downloadBlob,
   escapeHtml,
   fetchImpl = globalThis.fetch,
@@ -25,6 +26,16 @@ export function createInventoryProvisionFeature({
   if (typeof fetchImpl !== "function") throw new Error("createInventoryProvisionFeature requires fetch.");
 
   let inventoryStoreFilterOptions = [];
+
+  function selectedInventoryProvisionMonth() {
+    return fieldValue("#inventory-provision-date", "", root) || getDefaultMonth();
+  }
+
+  function syncInventoryProvisionCostRefreshState() {
+    const button = root?.querySelector?.("#inventory-provision-refresh-costs");
+    if (!button) return;
+    button.disabled = selectedInventoryProvisionMonth() === getDefaultMonth();
+  }
 
   function shortMoney(value) {
     const number = Number(value || 0);
@@ -221,7 +232,7 @@ export function createInventoryProvisionFeature({
       "#inventory-provision-date-note",
       snapshotAvailable
         ? data.meta?.historicalMode
-          ? `历史月末库存 · 库龄按库存分类账 FIFO 重建${data.meta?.snapshotUpdatedAt ? ` · 缓存 ${data.meta.snapshotUpdatedAt}` : ""}`
+          ? `历史月末库存 · 库龄按库存分类账 FIFO 重建${data.meta?.snapshotUpdatedAt ? ` · 缓存 ${data.meta.snapshotUpdatedAt}` : ""}${data.meta?.costRefreshedAt ? ` · 成本刷新 ${data.meta.costRefreshedAt}` : ""}`
           : "当前月份为实时库存"
         : availableDates.length
           ? `历史月报读取失败；本地快照：${availableDates.slice(-5).join("、")}`
@@ -231,6 +242,7 @@ export function createInventoryProvisionFeature({
     populateInventoryCountryOptions(data.filters?.countryOptions || []);
     populateInventoryStoreOptions(data.filters?.storeOptions || []);
     populateInventoryOwnerOptions(data.filters?.ownerOptions || []);
+    syncInventoryProvisionCostRefreshState();
 
     drawStackedColumnChart("#inventory-age-trend-chart", data.monthTrend || [], buckets, { labelKey: "month" });
     drawDonutChart("#inventory-age-donut-chart", data.bucketSummary || [], buckets);
@@ -352,6 +364,43 @@ export function createInventoryProvisionFeature({
     }
   }
 
+  async function refreshInventoryProvisionCosts() {
+    setDefaultInventoryProvisionDate();
+    const date = selectedInventoryProvisionMonth();
+    const button = root?.querySelector?.("#inventory-provision-refresh-costs");
+    if (date === getDefaultMonth()) {
+      if (button) button.disabled = true;
+      setText("#inventory-provision-status", "当前月为实时 FBA 成本，不能回算产品管理成本。", root);
+      return;
+    }
+    const confirmRefresh = typeof confirmImpl === "function" ? confirmImpl : () => true;
+    if (!confirmRefresh(`将用产品管理当前成本回算 ${date} 及上月，并覆盖历史成本缓存。是否继续？`)) return;
+    const restoreButton = setButtonBusy(button, "刷新成本中...", button?.textContent || "刷新成本");
+    try {
+      const response = await fetchImpl("/api/dashboard/inventory-provision/refresh-costs", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ date }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `API ${response.status}`);
+      await loadInventoryProvision();
+      const refresh = data.refresh || {};
+      const updatedRows = (refresh.months || []).reduce((total, month) => total + Number(month.updatedRows || 0), 0);
+      setText("#inventory-provision-status", `成本已刷新：${refresh.date || date} 与 ${refresh.comparisonMonth || "上月"} · 更新 ${updatedRows} 条 · ${refresh.refreshedAt || ""}`, root);
+    } catch (error) {
+      setText("#inventory-provision-status", `成本刷新失败：${error.message}`, root);
+    } finally {
+      restoreButton();
+      syncInventoryProvisionCostRefreshState();
+    }
+  }
+
+  function handleInventoryProvisionDateChange() {
+    syncInventoryProvisionCostRefreshState();
+    loadInventoryProvision();
+  }
+
   function handleInventoryProvisionCountryChange() {
     syncAllOptionSelection(root?.querySelector?.("#inventory-provision-country"));
     populateInventoryStoreOptions(inventoryStoreFilterOptions, { selectAllStores: true });
@@ -368,9 +417,12 @@ export function createInventoryProvisionFeature({
   }
 
   function setupInventoryProvision() {
+    setDefaultInventoryProvisionDate();
+    syncInventoryProvisionCostRefreshState();
     bind(root, "#inventory-provision-refresh", "click", loadInventoryProvision);
     bind(root, "#inventory-provision-export", "click", exportInventoryProvisionDetail);
-    bind(root, "#inventory-provision-date", "change", loadInventoryProvision);
+    bind(root, "#inventory-provision-refresh-costs", "click", refreshInventoryProvisionCosts);
+    bind(root, "#inventory-provision-date", "change", handleInventoryProvisionDateChange);
     bind(root, "#inventory-provision-country", "change", handleInventoryProvisionCountryChange);
     bind(root, "#inventory-provision-store", "change", handleInventoryProvisionStoreChange);
     bind(root, "#inventory-provision-owner", "change", loadInventoryProvision);
@@ -383,6 +435,7 @@ export function createInventoryProvisionFeature({
     buildInventoryProvisionQuery,
     loadInventoryProvision,
     renderInventoryProvision,
+    refreshInventoryProvisionCosts,
     setDefaultInventoryProvisionDate,
     setupInventoryProvision,
   };

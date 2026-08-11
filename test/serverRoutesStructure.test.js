@@ -94,3 +94,22 @@ test("slow-moving-risk live route forwards the confirmed filter fields", async (
   assert.deepEqual(received, { filters: { country: "US", storeName: "tandanbo-US", listingOwner: "Max", riskLevel: "高风险", currencyCode: "USD" } });
   assert.deepEqual(payload, { rows: [] });
 });
+
+test("inventory provision cost refresh route is finance-protected and forwards its selected month", async () => {
+  let received = null;
+  let payload = null;
+  const route = createInventoryRoutes({
+    readJsonBody: async () => ({ date: "2026-05" }),
+    refreshInventoryProvisionCosts: async (value) => {
+      received = value;
+      return { date: value.date, comparisonMonth: "2026-04", months: [] };
+    },
+    sendJson: (_res, _status, value) => { payload = value; },
+  }).find((item) => item.path === "/api/dashboard/inventory-provision/refresh-costs");
+
+  assert.equal(route?.method, "POST");
+  assert.equal(route?.auth, "finance");
+  await route.handler({ req: {}, res: {} });
+  assert.deepEqual(received, { date: "2026-05" });
+  assert.deepEqual(payload, { ok: true, refresh: { date: "2026-05", comparisonMonth: "2026-04", months: [] } });
+});
