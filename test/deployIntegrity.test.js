@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   extractNavigationModules,
   extractViewIds,
+  validateProductCatalogHealth,
   validateFrontendIntegrity,
   verifySalesReviewSmoke,
 } from "../scripts/deploy-integrity.js";
@@ -109,4 +110,37 @@ test("sales-review deployment smoke rejects an empty detail response", async () 
     }),
     /detailRows 不能为空/,
   );
+});
+
+test("deploy integrity requires healthy nested product catalog diagnostics", () => {
+  assert.deepEqual(validateProductCatalogHealth({ ok: true }), ["/api/health 缺少 productCatalog 健康状态"]);
+  assert.deepEqual(
+    validateProductCatalogHealth({
+      ok: true,
+      productCatalog: {
+        ok: false,
+        schemaVersion: 1,
+        quickCheck: "disk I/O error",
+        error: "SQLITE_IOERR",
+      },
+    }),
+    ["商品目录数据库异常：schemaVersion=1 quickCheck=disk I/O error error=SQLITE_IOERR"],
+  );
+  assert.deepEqual(validateProductCatalogHealth({ ok: true, productCatalog: { ok: true } }), []);
+});
+
+test("nested product catalog health diagnostics do not echo sensitive text", () => {
+  const errors = validateProductCatalogHealth({
+    ok: true,
+    productCatalog: {
+      ok: false,
+      schemaVersion: 1,
+      quickCheck: "/opt/tanjia-bi/data-cache/product-catalog/product-catalog-v1.sqlite token",
+      error: "token raw-secret",
+    },
+  });
+  assert.equal(JSON.stringify(errors).includes("/opt/tanjia-bi"), false);
+  assert.equal(JSON.stringify(errors).includes("raw-secret"), false);
+  assert.equal(JSON.stringify(errors).includes("token"), false);
+  assert.deepEqual(errors, ["商品目录数据库异常：schemaVersion=1 quickCheck=unavailable error=PRODUCT_CATALOG_HEALTH_ERROR"]);
 });

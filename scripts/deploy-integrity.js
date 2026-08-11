@@ -267,6 +267,49 @@ async function fetchJson(url) {
   return JSON.parse(text);
 }
 
+const SAFE_HEALTH_ERROR_PATTERN = /^[A-Za-z0-9_.:-]{1,64}$/u;
+const SENSITIVE_HEALTH_ERROR_PATTERN = /(token|secret|password|payload|raw|body|path|stack)/iu;
+
+function redactProductCatalogError(value) {
+  const code = String(value ?? "").trim();
+  return SAFE_HEALTH_ERROR_PATTERN.test(code) && !SENSITIVE_HEALTH_ERROR_PATTERN.test(code)
+    ? code
+    : "PRODUCT_CATALOG_HEALTH_ERROR";
+}
+
+function redactProductCatalogQuickCheck(value) {
+  const quickCheck = String(value ?? "")
+    .replace(/[\u0000-\u001f\u007f]/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .slice(0, 120);
+  if (!quickCheck || /(token|secret|password|payload|raw|body|stack)/iu.test(quickCheck)) {
+    return "unavailable";
+  }
+  if (/\b(select|pragma|insert|update|delete|create|drop|alter)\b/iu.test(quickCheck)) {
+    return "unavailable";
+  }
+  if (/(?:^|\s)(?:[A-Za-z]:[\\/]|[\\/]\s*[A-Za-z0-9]|file:)/u.test(quickCheck) || /\.sqlite(?:[-.]|$)/iu.test(quickCheck)) {
+    return "unavailable";
+  }
+  return /^[A-Za-z0-9][A-Za-z0-9_./: -]{0,119}$/u.test(quickCheck) ? quickCheck : "unavailable";
+}
+
+export function validateProductCatalogHealth(health) {
+  const productCatalog = health?.productCatalog;
+  if (!productCatalog || typeof productCatalog !== "object" || Array.isArray(productCatalog)) {
+    return ["/api/health 缺少 productCatalog 健康状态"];
+  }
+  if (productCatalog.ok === true) return [];
+
+  const schemaVersion = Number.isInteger(productCatalog.schemaVersion) && productCatalog.schemaVersion >= 0
+    ? String(productCatalog.schemaVersion)
+    : "unknown";
+  const quickCheck = redactProductCatalogQuickCheck(productCatalog.quickCheck);
+  const error = redactProductCatalogError(productCatalog.error);
+  return [`商品目录数据库异常：schemaVersion=${schemaVersion} quickCheck=${quickCheck} error=${error}`];
+}
+
 async function verifyLocalFiles(root, manifest) {
   const errors = [];
   const expectedFiles = manifest.integrity?.files || [];
@@ -299,6 +342,7 @@ export async function verifyDeployedApp({ root = process.cwd(), baseUrl }) {
   if (health?.ok !== true) {
     errors.push(`/api/health 返回异常：${JSON.stringify(health).slice(0, 200)}`);
   }
+  errors.push(...validateProductCatalogHealth(health));
 
   let salesReviewSmoke = null;
   try {

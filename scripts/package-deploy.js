@@ -28,6 +28,8 @@ const explicitFiles = [
   "rollback.sh",
   "scripts/deploy-integrity.js",
   "scripts/package-deploy.js",
+  "scripts/product-catalog-sqlite-smoke.js",
+  "scripts/migrate-product-catalog.js",
   "assets/favicon.svg",
   "assets/jm-logo.jpg",
   "assets/jm-favicon.png",

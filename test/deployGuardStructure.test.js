@@ -29,3 +29,20 @@ test("server deployment rejects packages without a confirmed production branch m
   assert.match(source, /validate_deploy_manifest[\s\S]*if \[ "\$\{ALLOW_CSS_DEPLOY:-0\}" != "1" \]/);
   assert.match(source, /health_check[\s\S]*deploy_integrity_check[\s\S]*cleanup_old_releases/);
 });
+
+test("deployment package source lists catalog smoke and migration scripts explicitly", async () => {
+  const source = await readFile(new URL("../scripts/package-deploy.js", import.meta.url), "utf8");
+  assert.match(source, /scripts\/product-catalog-sqlite-smoke\.js/);
+  assert.match(source, /scripts\/migrate-product-catalog\.js/);
+});
+
+test("deployment source runs catalog checks before PM2 restart", async () => {
+  const source = await readFile(new URL("../deploy.sh", import.meta.url), "utf8");
+  const installIndex = source.indexOf("npm ci");
+  const smokeIndex = source.indexOf("node scripts/product-catalog-sqlite-smoke.js");
+  const migrateIndex = source.indexOf("node scripts/migrate-product-catalog.js");
+  const restartIndex = source.indexOf("pm2 start");
+  assert.ok(installIndex >= 0 && installIndex < smokeIndex);
+  assert.ok(smokeIndex < migrateIndex);
+  assert.ok(migrateIndex < restartIndex);
+});
