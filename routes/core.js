@@ -94,7 +94,7 @@ export function createCoreRoutes({
       path: "/api/admin/aftersales-mail-config/test",
       auth: "admin",
       errorStatusCode: 400,
-      handler: async ({ req, res }) => sendJson(res, 200, await testAftersalesMailSettings(await readJsonBody(req))),
+      handler: async ({ req, res }) => sendJson(res, 200, await testAftersalesMailSettings(await readJsonBody(req), req.user)),
     },
     {
       method: "PUT",

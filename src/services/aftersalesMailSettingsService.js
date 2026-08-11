@@ -7,6 +7,8 @@ import { getConfig as getRuntimeConfig, reloadDotEnv } from "../config/index.js"
 
 const managedKeys = ["AFTERSALES_MAIL_ENABLED", "AFTERSALES_MAIL_PASSWORD"];
 const saveQueuesByPath = new Map();
+const testOperation = "testConnection";
+const testOperationType = "aftersales-mail-connection-test";
 
 function safeProviderMessage(error, passwords = []) {
   let message = String(error?.message || "未知错误");
@@ -64,7 +66,7 @@ function requiresConnectionConfig(config = {}) {
 }
 
 function safeActorName(actor = {}) {
-  const value = typeof actor === "string" ? actor : actor?.name || actor?.username || actor?.id;
+  const value = typeof actor === "string" ? actor : actor?.displayName || actor?.name || actor?.nick || actor?.username || actor?.id;
   return String(value || "未知操作人").trim().slice(0, 200) || "未知操作人";
 }
 
@@ -106,6 +108,14 @@ async function readAuditRows(auditPath) {
     if (error?.code === "ENOENT") return [];
     throw error;
   }
+}
+
+function latestTestResult(auditRows = []) {
+  for (let index = auditRows.length - 1; index >= 0; index -= 1) {
+    const row = auditRows[index];
+    if (row?.operation === testOperation || row?.operationType === testOperationType) return row.result || null;
+  }
+  return null;
 }
 
 async function writeAtomically(filePath, content, options = {}) {
@@ -154,6 +164,27 @@ async function existingFileSnapshot(filePath) {
     if (error?.code === "ENOENT") return { exists: false, content: "", mode: undefined };
     throw error;
   }
+}
+
+async function appendConnectionTestAudit(auditPath, { result, actor, passwords }) {
+  const [auditRows, auditSnapshot] = await Promise.all([
+    readAuditRows(auditPath),
+    existingFileSnapshot(auditPath),
+  ]);
+  const errorSummary = result.ok ? "" : safeProviderMessage({ message: result.message }, passwords);
+  const row = {
+    operation: testOperation,
+    operationType: testOperationType,
+    actor: safeActorName(actor),
+    time: result.checkedAt,
+    result: { ...result },
+    errorSummary,
+  };
+  await writeAtomically(
+    auditPath,
+    `${JSON.stringify([...auditRows, row], null, 2)}\n`,
+    { mode: auditSnapshot.mode },
+  );
 }
 
 export async function defaultVerifyImap(config = {}) {
@@ -211,38 +242,50 @@ export function createAftersalesMailSettingsService({
       account: configuredAccount(config),
       enabled: config.enabled === true,
       passwordConfigured: Boolean(configuredPassword(config)),
-      lastTest: lastTest || latest.lastTest || null,
+      lastTest: latestTestResult(auditRows) || lastTest || latest.lastTest || null,
       lastChange: latest.lastChange || null,
     };
   }
 
-  async function testConnection(payload = {}) {
+  async function runConnectionTest(payload = {}, actor = {}, { persistAudit = true } = {}) {
     const config = mailConfig();
     const password = passwordFromPayload(payload, config);
     const candidate = { ...config, password };
     const checkedAt = now();
 
+    const complete = async (result) => {
+      if (persistAudit) {
+        await appendConnectionTestAudit(auditPath, {
+          result,
+          actor,
+          passwords: [password, configuredPassword(config)],
+        });
+      }
+      lastTest = result;
+      return result;
+    };
+
     if (!requiresConnectionConfig(candidate)) {
-      lastTest = connectionResult(false, checkedAt, "售后邮箱配置不完整，无法测试连接。");
-      return lastTest;
+      return complete(connectionResult(false, checkedAt, "售后邮箱配置不完整，无法测试连接。"));
     }
 
     try {
       await verifyImap(candidate);
     } catch (error) {
-      lastTest = connectionResult(false, checkedAt, `IMAP 登录失败：${safeProviderMessage(error, [password, configuredPassword(config)])}`);
-      return lastTest;
+      return complete(connectionResult(false, checkedAt, `IMAP 登录失败：${safeProviderMessage(error, [password, configuredPassword(config)])}`));
     }
 
     try {
       await verifySmtp(candidate);
     } catch (error) {
-      lastTest = connectionResult(false, checkedAt, `SMTP 登录失败：${safeProviderMessage(error, [password, configuredPassword(config)])}`);
-      return lastTest;
+      return complete(connectionResult(false, checkedAt, `SMTP 登录失败：${safeProviderMessage(error, [password, configuredPassword(config)])}`));
     }
 
-    lastTest = connectionResult(true, checkedAt, "IMAP 和 SMTP 连接验证成功。");
-    return lastTest;
+    return complete(connectionResult(true, checkedAt, "IMAP 和 SMTP 连接验证成功。"));
+  }
+
+  function testConnection(payload = {}, actor = {}) {
+    return enqueueSave(saveQueueKey, () => runConnectionTest(payload, actor));
   }
 
   async function saveSettingsInternal(payload = {}, actor = {}) {
@@ -254,12 +297,13 @@ export function createAftersalesMailSettingsService({
     const candidatePassword = suppliedPassword || configuredPassword(config);
     const requiresVerification = Boolean(suppliedPassword || payload.enabled);
     if (requiresVerification) {
-      const result = await testConnection({ password: candidatePassword });
+      const result = await runConnectionTest({ password: candidatePassword }, actor, { persistAudit: false });
       if (!result.ok) throw new Error(result.message);
     }
 
     const auditRows = await readAuditRows(auditPath);
     const previous = auditRows.at(-1) || {};
+    const durableLastTest = latestTestResult(auditRows);
     const [envSnapshot, auditSnapshot] = await Promise.all([
       existingFileSnapshot(envPath),
       existingFileSnapshot(auditPath),
@@ -274,7 +318,7 @@ export function createAftersalesMailSettingsService({
       actor: safeActorName(actor),
       enabled: payload.enabled,
       passwordConfigured: Boolean(suppliedPassword || configuredPassword(config)),
-      lastTest: lastTest || previous.lastTest || null,
+      lastTest: durableLastTest || lastTest || previous.lastTest || null,
       lastChange: {
         changedAt,
         actor: safeActorName(actor),

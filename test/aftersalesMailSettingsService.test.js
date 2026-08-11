@@ -100,13 +100,33 @@ test("a verified replacement is persisted atomically and audit rows contain no c
   });
 });
 
-test("test-only passwords are neither saved nor recorded", async () => {
+test("test-only connection results are durably audited and restored by a new service", async () => {
   await withTempMailboxSettings(async ({ service, envPath, auditPath }) => {
-    const result = await service.testConnection({ password: "fixture-probe-value-004" });
+    const probe = "fixture-probe-value-004";
+    const result = await service.testConnection({ password: probe }, { displayName: "fixture-operator" });
     assert.equal(result.ok, true);
-    assert.equal(JSON.stringify(await service.getStatus()).includes("fixture-probe-value-004"), false);
+    assert.equal(JSON.stringify(await service.getStatus()).includes(probe), false);
     assert.match(await readFile(envPath, "utf8"), /AFTERSALES_MAIL_PASSWORD=fixture-original-value-001/);
-    await assert.rejects(readFile(auditPath, "utf8"), { code: "ENOENT" });
+    const auditRows = JSON.parse(await readFile(auditPath, "utf8"));
+    assert.equal(auditRows.length, 1);
+    assert.equal(auditRows[0].operation, "testConnection");
+    assert.equal(auditRows[0].operationType, "aftersales-mail-connection-test");
+    assert.equal(auditRows[0].actor, "fixture-operator");
+    assert.equal(auditRows[0].time, result.checkedAt);
+    assert.deepEqual(auditRows[0].result, result);
+    assert.equal(auditRows[0].errorSummary, "");
+    assert.equal((await readFile(auditPath, "utf8")).includes(probe), false);
+
+    const restartedService = createAftersalesMailSettingsService({
+      envPath,
+      auditPath,
+      getConfig: () => readMailboxConfig(envPath),
+      reloadConfig: () => ({}),
+      verifyImap: async () => {},
+      verifySmtp: async () => {},
+      now: () => "2026-08-11T08:01:00.000Z",
+    });
+    assert.deepEqual((await restartedService.getStatus()).lastTest, result);
   });
 });
 
@@ -213,6 +233,12 @@ test("password bytes are passed and persisted unchanged, while CR/LF is rejected
     assert.equal(failedResult.ok, false);
     assert.equal(failedResult.message.includes(candidate), false);
     assert.equal(failedResult.message.includes(candidate.trim()), false);
+    const immediateFailureAudit = JSON.parse(await readFile(failureAuditPath, "utf8"));
+    assert.equal(immediateFailureAudit.length, 1);
+    assert.equal(immediateFailureAudit[0].operation, "testConnection");
+    assert.equal(immediateFailureAudit[0].result.ok, false);
+    assert.equal(immediateFailureAudit[0].errorSummary.includes(candidate), false);
+    assert.equal(immediateFailureAudit[0].errorSummary.includes(candidate.trim()), false);
     await failingService.saveSettings({ enabled: false }, { name: "系统管理员" });
     const failureAudit = await readFile(failureAuditPath, "utf8");
     assert.equal(failureAudit.includes(candidate), false);
