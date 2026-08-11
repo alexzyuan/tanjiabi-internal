@@ -1685,6 +1685,8 @@ export async function getInventoryProvisionDashboard(filters = {}) {
   let syncStatus = config.dataProvider === "lingxing" ? "等待领星 FBA 库存明细返回" : "本地模拟库龄数据";
   let snapshotAvailable = true;
   let snapshotUpdatedAt = "";
+  let costRefreshedAt = "";
+  let costRefreshSummary = null;
   let availableDates = [];
   let previousPeriod = "";
   let previousSourceRows = [];
@@ -1714,6 +1716,8 @@ export async function getInventoryProvisionDashboard(filters = {}) {
         const result = await loadHistoricalInventoryRows(date);
         sourceRows = result.rows;
         snapshotUpdatedAt = result.cacheUpdatedAt || "";
+        costRefreshedAt = result.costRefreshedAt || "";
+        costRefreshSummary = result.costRefreshSummary || null;
         syncStatus = `${date} 月末历史库存 · FBA月报 ${result.rawCount} 个MSKU · 库存分类账 ${result.ledgerCount} 条 · 库龄匹配 ${result.matchedRows}/${result.rawCount}${snapshotUpdatedAt ? ` · 缓存 ${snapshotUpdatedAt}` : ""}`;
       } catch (error) {
         snapshotAvailable = false;
@@ -1801,6 +1805,8 @@ export async function getInventoryProvisionDashboard(filters = {}) {
       costModeDescription: costMode.description,
       snapshotAvailable,
       snapshotUpdatedAt,
+      costRefreshedAt,
+      costRefreshSummary,
       availableDates,
       reversalStatus,
       ruleText: `计提资产减值规则：91-180天*40%、181-270天*80%、271天及以上*100%；当前成本计算=${costMode.label}`,
