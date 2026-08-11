@@ -25,6 +25,7 @@ import {
   ownerLookupRowsFromRecords,
 } from "./listingOwnerService.js";
 import { getSharedSellers } from "./sharedDataService.js";
+import { getSalesForecastAvailableDaysBySellerMsku } from "./salesForecastService.js";
 
 function hasLiveFilters(filters) {
   return Boolean(filters.startDate || filters.endDate || filters.sids?.length);
@@ -76,6 +77,12 @@ export function validateSalesWeeklyDashboardCache(dashboard) {
   ).length;
   if (missingRefundRate30d > 0) {
     return { ok: false, reasons: [`${missingRefundRate30d} detail rows are missing refundRate30d`] };
+  }
+  const missingFbaAvailableDays = detailRows.filter(
+    (row) => !row || !Object.prototype.hasOwnProperty.call(row, "fbaAvailableDays"),
+  ).length;
+  if (missingFbaAvailableDays > 0) {
+    return { ok: false, reasons: [`${missingFbaAvailableDays} detail rows are missing fbaAvailableDays`] };
   }
   return { ok: true, reasons: [] };
 }
@@ -145,6 +152,56 @@ function mapSalesWeeklySourceToDashboard(source = {}, filters = {}) {
     },
     budgetTargets: source.budgetTargets || {},
   });
+}
+
+function salesReviewAvailableDaysKey(sid, msku) {
+  const sellerId = Number(sid);
+  const normalizedMsku = String(msku || "").trim().toLowerCase();
+  return Number.isFinite(sellerId) && sellerId > 0 && normalizedMsku ? `${sellerId}|${normalizedMsku}` : "";
+}
+
+export async function enrichSalesReviewAvailableDays(dashboard, {
+  getAvailableDays = getSalesForecastAvailableDaysBySellerMsku,
+} = {}) {
+  const detailRows = dashboard?.detailRows;
+  if (!Array.isArray(detailRows)) throw new Error("销售复盘明细缺少 detailRows 数组，无法补齐可售天数");
+
+  let availableDaysIndex;
+  try {
+    availableDaysIndex = await getAvailableDays();
+  } catch (error) {
+    console.error("[sales-review-available-days] cache read failed", {
+      detailRowCount: detailRows.length,
+      error: error.message,
+    });
+    throw error;
+  }
+
+  let matchedCount = 0;
+  const nextDetailRows = detailRows.map((row) => {
+    const key = salesReviewAvailableDaysKey(row?.sid, row?.msku);
+    const value = key ? availableDaysIndex.map.get(key) : undefined;
+    if (value !== undefined) matchedCount += 1;
+    return {
+      ...row,
+      fbaAvailableDays: value ?? null,
+    };
+  });
+
+  return {
+    ...dashboard,
+    detailRows: nextDetailRows,
+    meta: {
+      ...(dashboard.meta || {}),
+      availableDays: {
+        source: "sales-forecast-cache",
+        updatedAt: availableDaysIndex.updatedAt,
+        matchedCount,
+        missingCount: nextDetailRows.length - matchedCount,
+        cacheHit: availableDaysIndex.cacheHit,
+      },
+    },
+  };
 }
 
 function salesListingOwnerLookupRows(records = [], budgetTargets = {}, sellers = []) {
@@ -365,7 +422,7 @@ export async function getSalesWeeklyDashboard(filters = {}) {
   }
 
   if (syncState.provider === "lingxing" && cachedSource?.data) {
-    const dashboard = mapSalesWeeklySourceToDashboard(cachedSource.data, filters);
+    const dashboard = await enrichSalesReviewAvailableDays(mapSalesWeeklySourceToDashboard(cachedSource.data, filters));
     if (defaultCacheEligible) refreshSalesWeeklySourceCacheInBackground(filters);
     logSalesWeeklyTiming("cache-hit-source", startedAt, {
       cacheKey: sourceCacheKey,
@@ -404,11 +461,11 @@ export async function getSalesWeeklyDashboard(filters = {}) {
         endDate: filters.endDate || "",
       },
     });
-    return normalizeCachedDashboard(
+    return enrichSalesReviewAvailableDays(normalizeCachedDashboard(
       cachedDashboard,
       syncState,
       cachedDashboard.meta?.syncStatus || syncState.lastStatus || "已显示最近同步缓存，后台刷新实时数据",
-    );
+    ));
   }
 
   if (syncState.provider === "lingxing" && hasLiveFilters(filters)) {
@@ -416,9 +473,9 @@ export async function getSalesWeeklyDashboard(filters = {}) {
       const source = await fetchSalesWeeklySource(filters);
       await saveSalesWeeklySourceCache(sourceCacheKey, source);
       if (defaultCacheEligible) {
-        await saveSalesDashboardCache(mapSalesWeeklySourceToDashboard(source, {}));
+        await saveSalesDashboardCache(await enrichSalesReviewAvailableDays(mapSalesWeeklySourceToDashboard(source, {})));
       }
-      const dashboard = mapSalesWeeklySourceToDashboard(source, filters);
+      const dashboard = await enrichSalesReviewAvailableDays(mapSalesWeeklySourceToDashboard(source, filters));
       logSalesWeeklyTiming("live-success", startedAt, {
         defaultCacheEligible,
         cacheKey: sourceCacheKey,
@@ -442,11 +499,11 @@ export async function getSalesWeeklyDashboard(filters = {}) {
     logSalesWeeklyTiming("cache-hit", startedAt, {
       updatedAt: cachedDashboard.meta?.updatedAt || "",
     });
-    return normalizeCachedDashboard(
+    return enrichSalesReviewAvailableDays(normalizeCachedDashboard(
       cachedDashboard,
       syncState,
       cachedDashboard.meta?.syncStatus || syncState.lastStatus || "已显示最近同步缓存",
-    );
+    ));
   }
 
   const fallback = {
@@ -470,7 +527,7 @@ export async function getSalesWeeklyDashboard(filters = {}) {
 
 function stableMskuDetailCacheKey(filters) {
   return JSON.stringify({
-    version: "budget-msku-v6-au-actual-rows",
+    version: "budget-msku-v7-available-days",
     startDate: filters.startDate || "",
     endDate: filters.endDate || "",
     listingOwner: filters.listingOwner || filters.owner || "",
@@ -536,7 +593,7 @@ export async function getMskuDetailDashboard(filters = {}) {
   const budgetTargets = await getBudgetTargetContext(range);
   const listingOwnerRows = await fetchSalesListingOwnerRows(adapter, records, budgetTargets, sellerList);
 
-  const data = {
+  const data = await enrichSalesReviewAvailableDays({
     ok: true,
     source: inventoryWarning ? "领星 ERP · 订单利润 MSKU，FBA库存读取失败" : "领星 ERP · 订单利润 MSKU + FBA库存",
     cacheHit: false,
@@ -546,7 +603,7 @@ export async function getMskuDetailDashboard(filters = {}) {
     listingOwnerRecordCount: listingOwnerRows.length,
     inventoryWarning,
     updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
-  };
+  });
   await saveMskuDetailCache(cacheKey, data);
   return data;
 }

@@ -1227,19 +1227,58 @@ function mockRows() {
   });
 }
 
-async function readSalesForecastDashboardCache() {
+async function readSalesForecastDashboardCache({ strict = false } = {}) {
   const parsed = await readJsonFile(SALES_FORECAST_DASHBOARD_CACHE_FILE, null);
-  if (
-    !parsed
-    || parsed.version !== SALES_FORECAST_CACHE_VERSION
-    || !Array.isArray(parsed.rows)
-    || !Number.isFinite(Number(parsed.cachedAt))
-  ) return null;
+  if (!parsed) return null;
+  const reasons = [];
+  if (parsed.version !== SALES_FORECAST_CACHE_VERSION) reasons.push("version is invalid");
+  if (!Array.isArray(parsed.rows)) reasons.push("rows must be an array");
+  if (!Number.isFinite(Number(parsed.cachedAt))) reasons.push("cachedAt must be numeric");
+  if (reasons.length) {
+    if (strict) throw new Error(`销售预估缓存契约无效：${reasons.join("; ")}`);
+    return null;
+  }
   return parsed;
 }
 
 function salesForecastFbaKey(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function salesForecastAvailableDaysKey(sid, msku) {
+  const sellerId = Number(sid);
+  const normalizedMsku = salesForecastFbaKey(msku);
+  return Number.isFinite(sellerId) && sellerId > 0 && normalizedMsku ? `${sellerId}|${normalizedMsku}` : "";
+}
+
+export async function getSalesForecastAvailableDaysBySellerMsku() {
+  const cache = await readSalesForecastDashboardCache({ strict: true });
+  const map = new Map();
+  if (!cache?.rows?.length) {
+    return {
+      map,
+      status: "销售预估缓存暂无可售天数数据",
+      updatedAt: "",
+      cacheHit: false,
+    };
+  }
+
+  for (const row of cache.rows) {
+    const key = salesForecastAvailableDaysKey(row?.sid, row?.msku);
+    const rawDays = row?.fbaAvailableDays;
+    if (!key || rawDays === null || rawDays === undefined || rawDays === "") continue;
+    const days = Number(rawDays);
+    if (!Number.isFinite(days)) continue;
+    if (map.has(key)) throw new Error(`销售预估缓存存在重复店铺 MSKU 可售天数：${key}`);
+    map.set(key, days);
+  }
+
+  return {
+    map,
+    status: `复用销售预估可售天数 ${map.size} 条`,
+    updatedAt: cache.updatedAt || "",
+    cacheHit: true,
+  };
 }
 
 export async function getSalesForecastFbaInventoryByMsku() {

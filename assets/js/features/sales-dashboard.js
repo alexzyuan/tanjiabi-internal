@@ -289,6 +289,20 @@ export function createSalesDashboardFeature({
     return `<td${tone ? ` class="${tone}"` : ""}>${formatActualMoney(value || 0)}%</td>`;
   }
 
+  function availableDaysCell(value) {
+    if (value === null || value === undefined || value === "") return "<td>—</td>";
+    const days = Number(value);
+    return Number.isFinite(days) ? `<td>${formatActualMoney(days)}天</td>` : "<td>—</td>";
+  }
+
+  function availableDaysStatus(meta) {
+    const availableDays = meta?.availableDays;
+    const matchedCount = Number(availableDays?.matchedCount);
+    const missingCount = Number(availableDays?.missingCount);
+    if (!Number.isFinite(matchedCount) || !Number.isFinite(missingCount)) return "";
+    return ` · 可售天数 ${matchedCount}/${matchedCount + missingCount}`;
+  }
+
   function renderMskuDetailTable() {
     const detailTable = root?.querySelector?.("#detail-table");
     if (!detailTable) return;
@@ -303,6 +317,7 @@ export function createSalesDashboardFeature({
           <td>${formatActualMoney(row.budgetQuantity || 0)}</td>
           <td>${formatActualMoney(row.actualQuantity || 0)}</td>
           <td>${formatActualMoney(row.fbaInventory || 0)}</td>
+          ${availableDaysCell(row.fbaAvailableDays)}
           ${quantityAchievementCell(row.quantityAchievement)}
           <td>${formatActualMoney(row.orderProfit || 0)}</td>
           <td>${formatActualMoney(row.averageProfit || 0)}</td>
@@ -318,7 +333,7 @@ export function createSalesDashboardFeature({
           ${mskuRateCell("firstLegCostRate", row.firstLegCostRate)}
         </tr>
       `).join("")
-      : `<tr><td colspan="19">当前筛选周期暂无 MSKU 明细。</td></tr>`;
+      : `<tr><td colspan="20">当前筛选周期暂无 MSKU 明细。</td></tr>`;
   }
 
   function normalizeSiteCells(cells) {
@@ -375,7 +390,7 @@ export function createSalesDashboardFeature({
       renderMskuStoreTabs(visibleDetailRows);
       renderMskuDetailTable();
       const status = root?.querySelector?.("#msku-detail-status");
-      if (status) status.textContent = `随销售看板同步加载 · ${visibleDetailRows.length} 条预算 MSKU`;
+      if (status) status.textContent = `随销售看板同步加载 · ${visibleDetailRows.length} 条预算 MSKU${availableDaysStatus(data.meta)}`;
     }
 
     const dailyTable = root?.querySelector?.("#daily-table");

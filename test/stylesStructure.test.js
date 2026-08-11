@@ -945,7 +945,7 @@ test("sales review detail table declares stable table and column semantics", asy
   assert.match(indexSource, /id="sales-dashboard-content"/);
 
   const headers = Array.from(tableMatch[1].matchAll(/<th\b([^>]*)>/g), (match) => match[1]);
-  assert.equal(headers.length, 19);
+  assert.equal(headers.length, 20);
   headers.forEach((attributes, index) => {
     assert.match(attributes, /\bdata-column-key="/, `header ${index + 1} should declare data-column-key`);
     assert.match(attributes, /\bdata-column-kind="/, `header ${index + 1} should declare data-column-kind`);
@@ -954,6 +954,7 @@ test("sales review detail table declares stable table and column semantics", asy
   assert.match(headers[1], /\bdata-column-profile="identifier"/);
   assert.match(headers[2], /\bdata-column-profile="name"/);
   assert.match(tableMatch[0], /\bdata-column-key="averageProfit"[\s\S]*?平均利润/);
+  assert.match(tableMatch[0], /\bdata-column-key="fbaInventory"[\s\S]*?\bdata-column-key="fba-available-days"[\s\S]*?>可售天数<[\s\S]*?\bdata-column-key="quantityAchievement"/);
   assert.match(tableMatch[0], /\bdata-column-key="refundRate30d"[\s\S]*?30d退款[\s\S]*?\bdata-column-key="refundRate"/);
   assert.match(tableMatch[0], /\bdata-column-key="adFeeRate"[\s\S]*?>广告</);
   assert.match(tableMatch[0], /\bdata-column-key="promotionDiscountRate"[\s\S]*?>折扣</);
