@@ -8,6 +8,9 @@ export function createCoreRoutes({
   getConfig,
   updateAiProviderSettings,
   testAiProviderConnection,
+  getAftersalesMailSettings,
+  testAftersalesMailSettings,
+  saveAftersalesMailSettings,
   readJsonBody,
   sendJson,
   adminSeed,
@@ -51,7 +54,7 @@ export function createCoreRoutes({
     {
       method: "GET",
       path: "/api/sync/status",
-      auth: "session",
+      auth: "admin",
       handler: async ({ res }) => {
         sendJson(res, 200, getSyncStatus ? await getSyncStatus() : getSyncState());
       },
@@ -59,7 +62,7 @@ export function createCoreRoutes({
     {
       method: "GET",
       path: "/api/lingxing/shops",
-      auth: "session",
+      auth: "admin",
       handler: async ({ res }) => {
         sendJson(res, 200, await getLingxingShops());
       },
@@ -79,6 +82,26 @@ export function createCoreRoutes({
       handler: async ({ res }) => {
         sendJson(res, 200, await getAiProviderStatus(getConfig()));
       },
+    },
+    {
+      method: "GET",
+      path: "/api/admin/aftersales-mail-config",
+      auth: "admin",
+      handler: async ({ res }) => sendJson(res, 200, await getAftersalesMailSettings()),
+    },
+    {
+      method: "POST",
+      path: "/api/admin/aftersales-mail-config/test",
+      auth: "admin",
+      errorStatusCode: 400,
+      handler: async ({ req, res }) => sendJson(res, 200, await testAftersalesMailSettings(await readJsonBody(req))),
+    },
+    {
+      method: "PUT",
+      path: "/api/admin/aftersales-mail-config",
+      auth: "admin",
+      errorStatusCode: 400,
+      handler: async ({ req, res }) => sendJson(res, 200, await saveAftersalesMailSettings(await readJsonBody(req), req.user)),
     },
     {
       method: "PUT",

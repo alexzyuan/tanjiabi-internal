@@ -42,6 +42,7 @@ import {
   syncAftersalesMail,
   updateAftersalesMailStatus,
 } from "./src/services/aftersalesMailService.js";
+import { createAftersalesMailSettingsService } from "./src/services/aftersalesMailSettingsService.js";
 import {
   debugInventoryProvisionSource,
   exportInventoryProvisionDetailXlsx,
@@ -157,6 +158,7 @@ import { generateAiListingCopy } from "./src/services/aiListingService.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const config = getConfig();
+const aftersalesMailSettingsService = createAftersalesMailSettingsService();
 const slowMovingRiskSnapshotStore = createSlowMovingRiskSnapshotStore();
 const storeOperatingMonthlyReportRowVisibilityService = createStoreOperatingMonthlyReportRowVisibilityService();
 const sessionCookieName = "tanjia_session";
@@ -818,6 +820,9 @@ const apiRoutes = createApiRoutes(buildApiRoutes({
   generateAftersalesMailSuggestion,
   sendAftersalesMailReply,
   updateAftersalesMailStatus,
+  getAftersalesMailSettings: aftersalesMailSettingsService.getStatus,
+  testAftersalesMailSettings: aftersalesMailSettingsService.testConnection,
+  saveAftersalesMailSettings: aftersalesMailSettingsService.saveSettings,
   getInventoryProvisionDashboard,
   exportInventoryProvisionDetailXlsx,
   getSlowMovingRiskDashboard,

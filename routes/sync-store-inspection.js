@@ -15,7 +15,7 @@ export function createSyncStoreInspectionRoutes(deps = {}) {
     {
       method: "POST",
       path: "/api/sync/lingxing/manual",
-      auth: "session",
+      auth: "admin",
       handler: async ({ res }) => {
         const result = await runManualSync();
         sendJson(res, result.ok ? 200 : 500, result);
@@ -24,19 +24,19 @@ export function createSyncStoreInspectionRoutes(deps = {}) {
     {
       method: "GET",
       path: "/api/store-inspection/status",
-      auth: "session",
+      auth: "admin",
       handler: async ({ res }) => sendJson(res, 200, await getStoreInspectionDashboard()),
     },
     {
       method: "GET",
       path: "/api/store-inspection/settings",
-      auth: "session",
+      auth: "admin",
       handler: async ({ res }) => sendJson(res, 200, { ok: true, settings: await getStoreInspectionSettings() }),
     },
     {
       method: "PUT",
       path: "/api/store-inspection/settings",
-      auth: "session",
+      auth: "admin",
       errorStatusCode: 400,
       handler: async ({ req, res }) => {
         sendJson(res, 200, { ok: true, settings: await updateStoreInspectionSettings(await readJsonBody(req)) });
@@ -45,13 +45,13 @@ export function createSyncStoreInspectionRoutes(deps = {}) {
     {
       method: "GET",
       path: "/api/store-inspection/markdown",
-      auth: "session",
+      auth: "admin",
       handler: async ({ res }) => sendJson(res, 200, await getStoreInspectionMarkdown()),
     },
     {
       method: "GET",
       path: "/api/store-inspection/report.md",
-      auth: "session",
+      auth: "admin",
       handler: async ({ res }) => {
         const report = await getStoreInspectionMarkdown();
         res.writeHead(200, {
@@ -64,7 +64,7 @@ export function createSyncStoreInspectionRoutes(deps = {}) {
     {
       method: "POST",
       path: "/api/store-inspection/run",
-      auth: "session",
+      auth: "admin",
       handler: async ({ req, res }) => {
         const payload = await readJsonBody(req).catch(() => ({}));
         const result = await runStoreInspection({
@@ -77,7 +77,7 @@ export function createSyncStoreInspectionRoutes(deps = {}) {
     {
       method: "POST",
       pattern: /^\/api\/store-inspection\/erp-mails\/(?<id>[^/]+)\/status$/,
-      auth: "session",
+      auth: "admin",
       errorStatusCode: 400,
       handler: async ({ req, res, params }) => {
         const payload = await readJsonBody(req).catch(() => ({}));

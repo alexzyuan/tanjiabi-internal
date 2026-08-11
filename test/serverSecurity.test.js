@@ -67,7 +67,7 @@ function waitForServer(child, port) {
   });
 }
 
-async function startServer({ withSessionSecret = true } = {}) {
+async function startServer({ withSessionSecret = true, withIncompleteAftersalesMailConfig = false } = {}) {
   const cwd = await mkdtemp(path.join(os.tmpdir(), "tanjia-bi-security-"));
   await writeManagedUser(cwd);
   const port = await getFreePort();
@@ -82,6 +82,7 @@ async function startServer({ withSessionSecret = true } = {}) {
       AUTH_PASSWORD: "env-password-123",
       SESSION_SECRET: withSessionSecret ? "server-security-test-secret" : "",
       DATA_PROVIDER: "mock",
+      ...(withIncompleteAftersalesMailConfig ? { AFTERSALES_MAIL_SMTP_HOST: " " } : {}),
       PORT: String(port),
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -175,30 +176,24 @@ test("static assets use etag revalidation instead of sending unchanged bundles",
   }
 });
 
-test("route table session routes require login and seller directory failures remain visible after authentication", async () => {
+test("core settings routes reject authenticated subaccounts", async () => {
   const server = await startServer();
   try {
-    const sessionRoutes = ["/api/sync/status", "/api/lingxing/shops"];
+    const settingsRoutes = ["/api/sync/status", "/api/lingxing/shops"];
 
-    for (const path of sessionRoutes) {
+    for (const path of settingsRoutes) {
       const unauthenticatedResponse = await fetch(`${server.baseUrl}${path}`);
       assert.equal(unauthenticatedResponse.status, 401, path);
     }
 
-    const result = await login(server.baseUrl);
-    assert.equal(result.status, 200);
+    const subaccount = await login(server.baseUrl);
+    assert.equal(subaccount.status, 200);
 
-    for (const path of sessionRoutes) {
-      const authenticatedResponse = await fetch(`${server.baseUrl}${path}`, {
-        headers: { cookie: result.cookie },
+    for (const path of settingsRoutes) {
+      const subaccountResponse = await fetch(`${server.baseUrl}${path}`, {
+        headers: { cookie: subaccount.cookie },
       });
-      if (path === "/api/lingxing/shops") {
-        assert.equal(authenticatedResponse.status, 500, path);
-        const body = await authenticatedResponse.json();
-        assert.match(body.error, /领星|店铺目录|LINGXING/);
-      } else {
-        assert.equal(authenticatedResponse.status, 200, path);
-      }
+      assert.equal(subaccountResponse.status, 403, path);
     }
   } finally {
     await server.stop();
@@ -206,13 +201,19 @@ test("route table session routes require login and seller directory failures rem
 });
 
 test("route table admin routes reject subaccounts and allow the environment admin", async () => {
-  const server = await startServer();
+  const server = await startServer({ withIncompleteAftersalesMailConfig: true });
   try {
-    const adminGetRoutes = ["/api/admin/overview", "/api/admin/ai-config"];
     const subaccount = await login(server.baseUrl);
     assert.equal(subaccount.status, 200);
 
-    for (const path of adminGetRoutes) {
+    const settingsRoutes = [
+      "/api/sync/status",
+      "/api/lingxing/shops",
+      "/api/store-inspection/status",
+      "/api/store-inspection/settings",
+      "/api/admin/aftersales-mail-config",
+    ];
+    for (const path of settingsRoutes) {
       const subaccountResponse = await fetch(`${server.baseUrl}${path}`, {
         headers: { cookie: subaccount.cookie },
       });
@@ -239,6 +240,35 @@ test("route table admin routes reject subaccounts and allow the environment admi
     assert.equal(aiConfigResponse.status, 200);
     const aiConfig = await aiConfigResponse.json();
     assert.equal(aiConfig.ok, true);
+
+    const configResponse = await fetch(`${server.baseUrl}/api/admin/aftersales-mail-config`, {
+      headers: { cookie: admin.cookie },
+    });
+    assert.equal(configResponse.status, 200);
+    const config = await configResponse.json();
+    assert.equal(config.passwordConfigured, false);
+    assert.equal(Object.hasOwn(config, "password"), false);
+
+    const secret = "test-mail-secret-should-not-leak";
+    const testResponse = await fetch(`${server.baseUrl}/api/admin/aftersales-mail-config/test`, {
+      method: "POST",
+      headers: { cookie: admin.cookie, "content-type": "application/json" },
+      body: JSON.stringify({ password: secret }),
+    });
+    assert.equal(testResponse.status, 200);
+    const testBody = await testResponse.json();
+    assert.equal(Object.hasOwn(testBody, "password"), false);
+    assert.equal(JSON.stringify(testBody).includes(secret), false);
+
+    const saveResponse = await fetch(`${server.baseUrl}/api/admin/aftersales-mail-config`, {
+      method: "PUT",
+      headers: { cookie: admin.cookie, "content-type": "application/json" },
+      body: JSON.stringify({ enabled: false }),
+    });
+    assert.equal(saveResponse.status, 200);
+    const saveBody = await saveResponse.json();
+    assert.equal(Object.hasOwn(saveBody, "password"), false);
+    assert.equal(JSON.stringify(saveBody).includes(secret), false);
   } finally {
     await server.stop();
   }
