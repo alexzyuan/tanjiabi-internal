@@ -1251,8 +1251,11 @@ function salesForecastAvailableDaysKey(sid, msku) {
   return Number.isFinite(sellerId) && sellerId > 0 && normalizedMsku ? `${sellerId}|${normalizedMsku}` : "";
 }
 
-export async function getSalesForecastAvailableDaysBySellerMsku() {
-  const cache = await readSalesForecastDashboardCache({ strict: true });
+export async function getSalesForecastAvailableDaysBySellerMsku({ now = new Date() } = {}) {
+  const [cache, manualDaily] = await Promise.all([
+    readSalesForecastDashboardCache({ strict: true }),
+    getSalesForecastManualDaily(),
+  ]);
   const map = new Map();
   if (!cache?.rows?.length) {
     return {
@@ -1265,9 +1268,10 @@ export async function getSalesForecastAvailableDaysBySellerMsku() {
 
   for (const row of cache.rows) {
     const key = salesForecastAvailableDaysKey(row?.sid, row?.msku);
-    const rawDays = row?.fbaAvailableDays;
-    if (!key || rawDays === null || rawDays === undefined || rawDays === "") continue;
-    const days = Number(rawDays);
+    const manualKey = canonicalManualDailyKey([row?.sid || "", row?.msku || ""].join("|"));
+    const manualValues = normalizeManualDailyValues(manualDaily.rows?.[manualKey]);
+    if (!key || !manualValues.some((value) => value > 0)) continue;
+    const days = Number(recalculateSalesForecastRowFromManual(row, manualDaily.rows, now).fbaAvailableDays);
     if (!Number.isFinite(days)) continue;
     if (map.has(key)) throw new Error(`销售预估缓存存在重复店铺 MSKU 可售天数：${key}`);
     map.set(key, days);
@@ -1275,7 +1279,7 @@ export async function getSalesForecastAvailableDaysBySellerMsku() {
 
   return {
     map,
-    status: `复用销售预估可售天数 ${map.size} 条`,
+    status: `按销售预估手动日销计算可售天数 ${map.size} 条`,
     updatedAt: cache.updatedAt || "",
     cacheHit: true,
   };

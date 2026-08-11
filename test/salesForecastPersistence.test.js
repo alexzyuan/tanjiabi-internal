@@ -75,7 +75,7 @@ test("sales forecast manual daily store fails fast on corrupted JSON", async () 
   }
 });
 
-test("sales forecast available-days index keeps same MSKU values separate by seller", async () => {
+test("sales forecast available-days index recalculates exact seller and MSKU rows from manual daily sales", async () => {
   const projectRoot = process.cwd();
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), "sales-forecast-available-days-"));
   try {
@@ -86,18 +86,25 @@ test("sales forecast available-days index keeps same MSKU values separate by sel
       cachedAt: Date.now(),
       updatedAt: "2026/8/11 10:00:00",
       rows: [
-        { sid: 101, msku: "MD-LEGBLUE", fbaAvailableDays: 28.5 },
-        { sid: 102, msku: "md-legblue", fbaAvailableDays: 73 },
-        { sid: 103, msku: "NO-DAYS", fbaAvailableDays: null },
+        { sid: 101, msku: "MSKU-SHARED", fbaAvailable: 20, fbaAvailableDays: 999 },
+        { sid: 102, msku: "msku-shared", fbaAvailable: 30, fbaAvailableDays: 999 },
+        { sid: 103, msku: "OVER-HORIZON", fbaAvailable: 1000, fbaAvailableDays: 999 },
       ],
+    }), "utf8");
+    await writeFile(path.join("data-cache", "sales-forecast-manual-daily.json"), JSON.stringify({
+      updatedAt: "2026/8/11 10:05:00",
+      rows: {
+        "101%7CMSKU-SHARED": [0, 0, 0, 0, 0, 0, 0, 10, 10, 10, 10, 10],
+        "103%7COVER-HORIZON": [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1],
+      },
     }), "utf8");
 
     const { getSalesForecastAvailableDaysBySellerMsku } = await importSalesForecastService(projectRoot);
-    const result = await getSalesForecastAvailableDaysBySellerMsku();
+    const result = await getSalesForecastAvailableDaysBySellerMsku({ now: new Date("2026-08-11T12:00:00") });
 
-    assert.equal(result.map.get("101|md-legblue"), 28.5);
-    assert.equal(result.map.get("102|md-legblue"), 73);
-    assert.equal(result.map.has("103|no-days"), false);
+    assert.equal(result.map.get("101|msku-shared"), 2);
+    assert.equal(result.map.has("102|msku-shared"), false);
+    assert.equal(result.map.get("103|over-horizon"), 999);
     assert.equal(result.map.size, 2);
     assert.equal(result.cacheHit, true);
     assert.equal(result.updatedAt, "2026/8/11 10:00:00");
