@@ -2,23 +2,43 @@ import { getLingxingAdapter } from "../adapters/lingxingAdapter.js";
 import { getFbaAddressProfile } from "../data/fbaAddressBook.js";
 import { getSellerDirectory } from "./sellerDirectoryService.js";
 import { getFbaBoxTemplate, hasCompleteBoxSpec } from "./fbaBoxTemplateService.js";
-import {
-  fetchLingxingListingRecords,
-  fetchLingxingProductRecords,
-  lingxingSidVariants,
-} from "./lingxingCatalogLookupService.js";
+import { getSharedProductCatalogMap } from "./sharedDataService.js";
+import { fetchLingxingListingRecords, lingxingSidVariants } from "./lingxingCatalogLookupService.js";
 
 const mskuCache = new Map();
 const CACHE_TTL_MS = 30 * 60 * 1000;
-const PRODUCT_INFO_BATCH_SIZE = 100;
-
-function normalizeRecordList(payload) {
-  if (Array.isArray(payload)) return payload;
-  if (Array.isArray(payload?.data)) return payload.data;
-  const data = payload?.data || payload || {};
-  const records = data.records || data.list || data.rows || data.data || [];
-  return Array.isArray(records) ? records : [];
-}
+const DISCOVERY_CACHE_FIELDS = [
+  "asin",
+  "country",
+  "displayName",
+  "msku",
+  "shopName",
+  "sid",
+  "title",
+];
+const PRODUCT_RESULT_FIELDS = [
+  "internalSku",
+  "internalSkuKey",
+  "sku",
+  "skuIdentifier",
+  "productId",
+  "listingSku",
+  "productName",
+  "imageUrl",
+  "supplier",
+  "purchasePrice",
+  "model",
+  "brand",
+  "material",
+  "purpose",
+  "customsCode",
+  "isBattery",
+  "unit",
+  "declaredValue",
+  "packQuantity",
+  "boxSpec",
+  "asin",
+];
 
 function walkObject(value, visit, depth = 0) {
   if (!value || depth > 3) return;
@@ -49,36 +69,12 @@ function readFirst(record, keys) {
   return "";
 }
 
-function readNumber(record, keys) {
-  const value = readFirst(record, keys);
-  const number = Number(String(value || "").replace(/,/g, ""));
-  return Number.isFinite(number) && number > 0 ? number : 0;
-}
-
 function normalizeText(value) {
   return String(value || "").trim();
 }
 
 function normalizeKey(value) {
   return normalizeText(value).toLowerCase();
-}
-
-function chunkArray(items, size) {
-  const chunks = [];
-  for (let index = 0; index < items.length; index += size) {
-    chunks.push(items.slice(index, index + size));
-  }
-  return chunks;
-}
-
-function uniqueText(values) {
-  const seen = new Set();
-  return values.map(normalizeText).filter((value) => {
-    const key = normalizeKey(value);
-    if (!key || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
 }
 
 function normalizeRuntimeShop(seller = {}) {
@@ -130,65 +126,14 @@ async function resolveRuntimeShops({ sids = [], adapter, getDirectory = getSelle
   return [...new Set(requestedSids)].map((sid) => shopsBySid.get(sid));
 }
 
-function readPackQuantity(record) {
-  return readNumber(record, [
-    "cg_box_pcs",
-    "packQuantity",
-    "pack_quantity",
-    "packingQuantity",
-    "packing_quantity",
-    "boxQuantity",
-    "box_quantity",
-    "box_qty",
-    "cartonQuantity",
-    "carton_quantity",
-    "carton_qty",
-    "casePack",
-    "case_pack",
-    "packageQuantity",
-    "package_quantity",
-    "perBoxQty",
-    "per_box_qty",
-    "qtyPerBox",
-    "qty_per_box",
-    "fbaCartonQty",
-    "fba_carton_qty",
-    "装箱数量",
-    "每箱数量",
-    "单箱数量",
-    "整箱数量",
-    "箱规",
-  ]);
-}
-
-function readOuterBoxSpec(record) {
-  const dimensions = {
-    length: readNumber(record, ["cg_box_length", "outer_box_length", "outerBoxLength", "外箱长", "外箱长度", "外箱规格长"]),
-    width: readNumber(record, ["cg_box_width", "outer_box_width", "outerBoxWidth", "外箱宽", "外箱宽度", "外箱规格宽"]),
-    height: readNumber(record, ["cg_box_height", "outer_box_height", "outerBoxHeight", "外箱高", "外箱高度", "外箱规格高"]),
-    unitOfMeasurement: readFirst(record, ["cg_box_length_unit", "box_length_unit", "length_unit", "lengthUnit", "dimension_unit", "dimensionUnit", "unitOfMeasurement", "尺寸单位"]) || "CM",
-  };
-  const weight = {
-    value: readNumber(record, ["cg_box_weight", "outer_box_weight", "outerBoxWeight", "外箱实重", "外箱重量", "外箱重"]),
-    unit: readFirst(record, ["cg_box_weight_unit", "box_weight_unit", "weight_unit", "weightUnit", "重量单位"]) || "KG",
-  };
-  const boxSpec = { dimensions, weight };
-  return hasCompleteBoxSpec(boxSpec) ? boxSpec : null;
-}
-
-function normalizeMskuRecord(record, shop) {
+function normalizeMskuDiscoveryRecord(record, shop) {
   const msku = readFirst(record, ["msku", "m_sku", "seller_sku", "sellerSku", "sellerSkuStr", "local_sku", "fnsku", "sku", "item_sku"]);
   if (!msku) return null;
 
   return {
     msku,
     asin: readFirst(record, ["asin", "ASIN"]),
-    sku: readFirst(record, ["sku", "localSku", "local_sku", "product_sku"]),
-    skuIdentifier: readFirst(record, ["sku_identifier", "skuIdentifier", "local_sku_identifier", "localSkuIdentifier"]),
-    productId: readFirst(record, ["product_id", "productId", "local_product_id", "localProductId"]),
     title: readFirst(record, ["title", "item_name", "itemName", "product_name", "productName", "product_title", "name"]),
-    packQuantity: readPackQuantity(record),
-    boxSpec: null,
     sid: shop.sid,
     shopName: shop.name,
     displayName: shop.displayName,
@@ -196,88 +141,37 @@ function normalizeMskuRecord(record, shop) {
   };
 }
 
-function normalizeProductRecord(record) {
-  const sku = readFirst(record, ["sku", "local_sku", "product_sku", "sku_identifier"]);
-  if (!sku) return null;
+function normalizeListingCatalogRecord(record, shop) {
+  const msku = readFirst(record, ["msku", "m_sku", "seller_sku", "sellerSku", "sellerSkuStr", "item_sku", "fnsku"]);
+  if (!msku) return null;
   return {
-    sku,
-    skuIdentifier: readFirst(record, ["sku_identifier", "skuIdentifier"]),
-    productName: readFirst(record, ["product_name", "productName", "local_name", "name"]),
-    packQuantity: readPackQuantity(record),
-    boxSpec: readOuterBoxSpec(record),
-    raw: record,
+    sid: shop.sid,
+    seller_sku: msku,
+    local_sku: readFirst(record, ["local_sku", "localSku", "sku", "product_sku"]),
+    sku_identifier: readFirst(record, ["sku_identifier", "skuIdentifier", "local_sku_identifier", "localSkuIdentifier"]),
+    product_id: readFirst(record, ["product_id", "productId", "local_product_id", "localProductId"]),
+    asin: readFirst(record, ["asin", "ASIN"]),
+    title: readFirst(record, ["title", "item_name", "itemName", "product_name", "productName", "product_title", "name"]),
   };
 }
 
-function mergeProductRecords(target, records) {
-  records.map(normalizeProductRecord).filter(Boolean).forEach((product) => {
-    target.set(normalizeKey(product.sku), product);
-    if (product.skuIdentifier) target.set(normalizeKey(product.skuIdentifier), product);
-  });
-}
-
-async function safeFetchProductInfo(adapter, params, fallbackParams = null) {
-  return fetchLingxingProductRecords(adapter, params, fallbackParams, { strict: true });
-}
-
-async function fetchProductInfoMap(adapter, items) {
-  const sourceItems = Array.isArray(items) ? items : [];
-  const skus = uniqueText(sourceItems.flatMap((item) => [item.sku, item.msku]));
-  const skuIdentifiers = uniqueText(sourceItems.flatMap((item) => [item.skuIdentifier, item.sku, item.msku]));
-  const productIds = uniqueText(sourceItems.map((item) => item.productId));
-  const productMap = new Map();
-  if (!skus.length && !skuIdentifiers.length && !productIds.length) return productMap;
-
-  for (const batch of chunkArray(skus, PRODUCT_INFO_BATCH_SIZE)) {
-    const records = await safeFetchProductInfo(adapter, { skus: batch }, { sku_list: batch });
-    mergeProductRecords(productMap, records);
-  }
-  for (const batch of chunkArray(skuIdentifiers, PRODUCT_INFO_BATCH_SIZE)) {
-    const records = await safeFetchProductInfo(adapter, { sku_identifiers: batch }, { sku_identifier_list: batch });
-    mergeProductRecords(productMap, records);
-  }
-  for (const batch of chunkArray(productIds, PRODUCT_INFO_BATCH_SIZE)) {
-    const records = await safeFetchProductInfo(adapter, { productIds: batch });
-    mergeProductRecords(productMap, records);
-  }
-
-  return productMap;
-}
-
-function mergeProductInfo(items, productMap) {
-  return items.map((item) => {
-    const product = productMap.get(normalizeKey(item.sku))
-      || productMap.get(normalizeKey(item.skuIdentifier))
-      || productMap.get(normalizeKey(item.msku));
-    if (!product) return item;
-    return {
-      ...item,
-      productName: product.productName || item.title || "",
-      title: item.title || product.productName || "",
-      packQuantity: product.packQuantity || item.packQuantity || 0,
-      boxSpec: product.boxSpec || item.boxSpec || null,
-      erpSku: product.sku,
-    };
-  });
-}
-
-async function applyBoxTemplates(items) {
+async function applyBoxTemplates(items, { getBoxTemplate = getFbaBoxTemplate } = {}) {
   return Promise.all(items.map(async (item) => {
-    if (hasCompleteBoxSpec(item.boxSpec)) {
-      return {
-        ...item,
-        boxDimensions: item.boxSpec.dimensions,
-        boxWeight: item.boxSpec.weight,
-        boxSource: "erp",
-      };
-    }
-    const template = await getFbaBoxTemplate({ sid: item.sid, msku: item.msku });
+    const template = await getBoxTemplate({ sid: item.sid, msku: item.msku });
     if (template && hasCompleteBoxSpec({ dimensions: template.dimensions, weight: template.weight })) {
       return {
         ...item,
         boxDimensions: template.dimensions,
         boxWeight: template.weight,
         boxSource: "template",
+      };
+    }
+    if (hasCompleteBoxSpec(item.boxSpec)) {
+      return {
+        ...item,
+        boxDimensions: item.boxSpec.dimensions,
+        boxWeight: item.boxSpec.weight,
+        boxSource: "erp",
       };
     }
     return {
@@ -337,7 +231,7 @@ async function diagnoseUnpairedListings(adapter, shops, keyword, matchMode) {
     try {
       const records = await fetchLingxingListingRecords(adapter, baseParams);
       const matches = filterMskus(
-        uniqueMskus(records.map((record) => normalizeMskuRecord(record, shop)).filter(Boolean)),
+        uniqueMskus(records.map((record) => normalizeMskuDiscoveryRecord(record, shop)).filter(Boolean)),
         value,
         matchMode,
       );
@@ -348,7 +242,7 @@ async function diagnoseUnpairedListings(adapter, shops, keyword, matchMode) {
         country: item.country,
         msku: item.msku,
         asin: item.asin,
-        sku: item.sku,
+        sku: "",
         title: item.title,
         reason: "listing_not_paired_to_erp_product",
       })));
@@ -365,17 +259,128 @@ async function diagnoseUnpairedListings(adapter, shops, keyword, matchMode) {
 function uniqueMskus(items) {
   const seen = new Set();
   return items.filter((item) => {
-    const key = `${item.sid}:${item.msku}`;
+    const key = `${item.sid}:${normalizeKey(item.msku)}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });
 }
 
-async function fetchMskusForShop(adapter, shop, { force = false, exactMsku = "" } = {}) {
+function discoveryCacheItem(item) {
+  return DISCOVERY_CACHE_FIELDS.reduce((result, field) => {
+    result[field] = item?.[field] ?? (field === "sid" ? 0 : "");
+    return result;
+  }, {});
+}
+
+function cloneDiscoveryItems(items = []) {
+  return (Array.isArray(items) ? items : []).map((item) => discoveryCacheItem(item));
+}
+
+function catalogMapKeys(item = {}) {
+  const msku = normalizeKey(item.msku);
+  const sid = Number(item.sid || 0);
+  const storeName = normalizeKey(item.shopName || item.storeName);
+  const country = normalizeKey(item.country);
+  return [
+    sid && msku ? `sid:${sid}:msku:${msku}` : "",
+    storeName && msku ? `store:${storeName}:msku:${msku}` : "",
+    country && msku ? `country:${country}:msku:${msku}` : "",
+    sid ? "" : msku,
+    sid ? "" : normalizeKey(item.sku),
+  ].filter(Boolean);
+}
+
+function findCatalogProduct(item, catalogMap = new Map()) {
+  for (const key of catalogMapKeys(item)) {
+    const product = catalogMap.get(key);
+    if (product) return product;
+  }
+  return null;
+}
+
+function mergeCatalogItem(discovery, product) {
+  if (!product) return { ...discovery };
+  const canonical = PRODUCT_RESULT_FIELDS.reduce((result, field) => {
+    if (Object.hasOwn(product, field)) result[field] = product[field];
+    return result;
+  }, {});
+  const internalSku = normalizeText(canonical.internalSku || canonical.sku);
+  return {
+    ...discovery,
+    ...canonical,
+    sid: discovery.sid,
+    msku: discovery.msku,
+    shopName: discovery.shopName,
+    displayName: discovery.displayName,
+    country: discovery.country,
+    asin: discovery.asin || canonical.asin || "",
+    title: discovery.title || canonical.productName || "",
+    productName: canonical.productName || discovery.title || "",
+    internalSku,
+    sku: normalizeText(canonical.sku || internalSku),
+    erpSku: internalSku,
+    packQuantity: Object.hasOwn(canonical, "packQuantity") ? canonical.packQuantity : null,
+    boxSpec: canonical.boxSpec || null,
+  };
+}
+
+async function hydrateMskuDiscovery(adapter, shop, discoveryItems, listingRecords, {
+  repository = null,
+  getDirectory = getSellerDirectory,
+  getSharedCatalog = getSharedProductCatalogMap,
+  getBoxTemplate = getFbaBoxTemplate,
+  sharedCatalogOptions = {},
+} = {}) {
+  const sourceItems = Array.isArray(discoveryItems) ? discoveryItems : [];
+  if (!sourceItems.length) return [];
+  const listingByKey = new Map(
+    (Array.isArray(listingRecords) ? listingRecords : [])
+      .map((record) => normalizeListingCatalogRecord(record, shop))
+      .filter(Boolean)
+      .map((record) => [`${shop.sid}:${normalizeKey(record.seller_sku)}`, record]),
+  );
+  const catalogOptions = {
+    strict: true,
+    feature: "fba-catalog",
+    sellers: [shop],
+    getDirectory,
+    ...(repository ? { repository } : {}),
+    ...sharedCatalogOptions,
+  };
+  if (listingByKey.size) {
+    catalogOptions.fetchListingsBySidMskus = async (_adapter, sid, mskus) => mskus
+      .map((msku) => listingByKey.get(`${sid}:${normalizeKey(msku)}`))
+      .filter(Boolean);
+  }
+  const catalogResult = await getSharedCatalog(adapter, sourceItems, catalogOptions);
+  const hydrated = sourceItems.map((item) => mergeCatalogItem(item, findCatalogProduct(item, catalogResult.map)));
+  return applyBoxTemplates(hydrated, { getBoxTemplate });
+}
+
+async function fetchMskusForShop(adapter, shop, {
+  force = false,
+  exactMsku = "",
+  now = Date.now,
+  repository = null,
+  getDirectory = getSellerDirectory,
+  getSharedCatalog = getSharedProductCatalogMap,
+  getBoxTemplate = getFbaBoxTemplate,
+  sharedCatalogOptions = {},
+} = {}) {
   const cacheKey = exactMsku ? `${shop.sid}:msku:${normalizeKey(exactMsku)}` : String(shop.sid);
   const cached = mskuCache.get(cacheKey);
-  if (!force && cached && Date.now() - cached.updatedAt < CACHE_TTL_MS) return cached.items;
+  const nowMs = typeof now === "function" ? now() : Number(now);
+  if (!force && cached && nowMs - cached.updatedAt < CACHE_TTL_MS) {
+    const discoveryItems = cloneDiscoveryItems(cached.items);
+    return hydrateMskuDiscovery(adapter, shop, discoveryItems, [], {
+      repository,
+      getDirectory,
+      getSharedCatalog,
+      getBoxTemplate,
+      sharedCatalogOptions,
+    });
+  }
 
   const baseParams = {
     is_pair: 1,
@@ -391,11 +396,13 @@ async function fetchMskusForShop(adapter, shop, { force = false, exactMsku = "" 
   let lastPayload = null;
   let lastError = null;
   let items = [];
+  let listingRecords = [];
   for (const variant of variants) {
     try {
       const records = await fetchLingxingListingRecords(adapter, { ...baseParams, ...variant });
       lastPayload = { code: 0, data: records };
-      items = uniqueMskus(records.map((record) => normalizeMskuRecord(record, shop)).filter(Boolean));
+      listingRecords = records;
+      items = uniqueMskus(records.map((record) => normalizeMskuDiscoveryRecord(record, shop)).filter(Boolean));
       if (items.length || lastPayload?.code === 0 || lastPayload?.code === "0") break;
     } catch (error) {
       lastError = error;
@@ -403,13 +410,39 @@ async function fetchMskusForShop(adapter, shop, { force = false, exactMsku = "" 
   }
   if (lastError && !lastPayload) throw lastError;
 
-  const productMap = await fetchProductInfoMap(adapter, items);
-  items = mergeProductInfo(items, productMap);
-  items = await applyBoxTemplates(items);
+  const hydratedItems = await hydrateMskuDiscovery(adapter, shop, items, listingRecords, {
+    repository,
+    getDirectory,
+    getSharedCatalog,
+    getBoxTemplate,
+    sharedCatalogOptions,
+  });
 
-  mskuCache.set(cacheKey, { updatedAt: Date.now(), items });
-  return items;
+  mskuCache.set(cacheKey, { updatedAt: nowMs, items: cloneDiscoveryItems(items) });
+  return hydratedItems;
 }
+
+export const fbaCatalogTestUtils = {
+  clearCache() {
+    mskuCache.clear();
+  },
+  inspectCacheFields() {
+    const fields = new Set();
+    mskuCache.forEach((entry) => {
+      (Array.isArray(entry?.items) ? entry.items : []).forEach((item) => {
+        Object.keys(item || {}).forEach((field) => fields.add(field));
+      });
+    });
+    return [...fields].sort();
+  },
+  getDiscoveryCacheSnapshot() {
+    return [...mskuCache.entries()].map(([key, entry]) => ({
+      key,
+      updatedAt: entry.updatedAt,
+      items: cloneDiscoveryItems(entry.items),
+    }));
+  },
+};
 
 export async function getFbaShopOptions({ getDirectory = getSellerDirectory, logger = console } = {}) {
   const directoryResult = await getDirectory();
@@ -465,9 +498,22 @@ export async function searchFbaMskus({
   matchMode = "fuzzy",
   adapter = getLingxingAdapter(),
   getDirectory = getSellerDirectory,
+  productCatalogRepository = null,
+  repository = null,
+  getSharedCatalog = getSharedProductCatalogMap,
+  getBoxTemplate = getFbaBoxTemplate,
+  sharedCatalogOptions = {},
+  now = Date.now,
 } = {}) {
   const shops = await resolveRuntimeShops({ sids, adapter, getDirectory });
-  const settled = await Promise.allSettled(shops.map((shop) => fetchMskusForShop(adapter, shop)));
+  const settled = await Promise.allSettled(shops.map((shop) => fetchMskusForShop(adapter, shop, {
+    repository: productCatalogRepository || repository,
+    getDirectory,
+    getSharedCatalog,
+    getBoxTemplate,
+    sharedCatalogOptions,
+    now,
+  })));
   const errors = settled
     .map((result, index) => (result.status === "rejected" ? `${shops[index].name}: ${result.reason.message}` : ""))
     .filter(Boolean);
@@ -490,6 +536,12 @@ export async function resolveFbaMskuFromErp({
   msku,
   adapter = getLingxingAdapter(),
   getDirectory = getSellerDirectory,
+  productCatalogRepository = null,
+  repository = null,
+  getSharedCatalog = getSharedProductCatalogMap,
+  getBoxTemplate = getFbaBoxTemplate,
+  sharedCatalogOptions = {},
+  now = Date.now,
 } = {}) {
   const normalizedSid = Number(sid);
   const normalizedMsku = normalizeMskuText(msku);
@@ -497,7 +549,16 @@ export async function resolveFbaMskuFromErp({
   if (!normalizedMsku) throw new Error("MSKU 不能为空。");
 
   const [shop] = await resolveRuntimeShops({ sids: [normalizedSid], adapter, getDirectory });
-  const items = await fetchMskusForShop(adapter, shop, { force: true, exactMsku: msku });
+  const items = await fetchMskusForShop(adapter, shop, {
+    force: true,
+    exactMsku: msku,
+    repository: productCatalogRepository || repository,
+    getDirectory,
+    getSharedCatalog,
+    getBoxTemplate,
+    sharedCatalogOptions,
+    now,
+  });
   const matched = items.find((item) => normalizeMskuText(item.msku) === normalizedMsku);
   if (!matched) {
     throw new Error(`MSKU ${msku} 未在领星 ERP 店铺 ${shop.name} 中匹配到，请检查店铺和 MSKU。`);
@@ -506,7 +567,7 @@ export async function resolveFbaMskuFromErp({
     throw new Error(`MSKU ${matched.msku} 在领星 ERP 未返回装箱数量，请先维护产品管理装箱数量。`);
   }
 
-  return (await applyBoxTemplates([matched]))[0];
+  return matched;
 }
 
 export async function assertFbaMskuPackMatchesErp({
@@ -517,8 +578,24 @@ export async function assertFbaMskuPackMatchesErp({
   quantity,
   adapter = getLingxingAdapter(),
   getDirectory = getSellerDirectory,
+  productCatalogRepository = null,
+  repository = null,
+  getSharedCatalog = getSharedProductCatalogMap,
+  getBoxTemplate = getFbaBoxTemplate,
+  sharedCatalogOptions = {},
+  now = Date.now,
 } = {}) {
-  const erpItem = await resolveFbaMskuFromErp({ sid, msku, adapter, getDirectory });
+  const erpItem = await resolveFbaMskuFromErp({
+    sid,
+    msku,
+    adapter,
+    getDirectory,
+    productCatalogRepository: productCatalogRepository || repository,
+    getSharedCatalog,
+    getBoxTemplate,
+    sharedCatalogOptions,
+    now,
+  });
   const erpPackQuantity = Number(erpItem.packQuantity || 0);
   const providedPackQuantity = Number(packQuantity || 0);
 

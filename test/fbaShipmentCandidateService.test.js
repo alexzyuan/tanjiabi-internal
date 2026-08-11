@@ -279,6 +279,52 @@ test("getFbaShipmentCandidates reuses a seeded SQLite catalog without Listing or
   assert.equal(productCalls, 0);
 });
 
+test("strict FBA candidate catalog resolution fails before product fallback or empty logistics data", async (t) => {
+  clearFbaShipmentCandidateCache();
+  const directory = await mkdtemp(path.join(os.tmpdir(), "fba-candidate-strict-test-"));
+  const repository = createProductCatalogRepository({
+    databasePath: path.join(directory, "product-catalog-v1.sqlite"),
+    now: () => 1720000000000,
+  });
+  let productCalls = 0;
+  const adapter = {
+    async fetchFbaCargoShipments() {
+      return {
+        ...payload,
+        data: {
+          list: [{
+            ...payload.data.list[0],
+            item_list: [{ ...payload.data.list[0].item_list[0], msku: "STRICT-MISSING" }],
+          }],
+        },
+      };
+    },
+    async fetchListings() {
+      return { data: { list: [{ sid: 8708, seller_sku: "STRICT-MISSING" }] } };
+    },
+    async fetchLocalProductInfos() {
+      productCalls += 1;
+      return { data: [] };
+    },
+  };
+  t.after(async () => {
+    clearFbaShipmentCandidateCache();
+    repository.close();
+    await rm(directory, { recursive: true, force: true });
+  });
+
+  await assert.rejects(
+    () => getFbaShipmentCandidates({ startDate: "2026-07-01", endDate: "2026-07-11", sid: "8708" }, {
+      adapter,
+      sellers: [{ sid: 8708, name: "xiamentanjia-US" }],
+      productCatalogRequired: true,
+      productCatalogRepository: repository,
+    }),
+    /商品目录|ERP Listing/,
+  );
+  assert.equal(productCalls, 0);
+});
+
 test("getFbaShipmentCandidates passes the resolved custom runtime directory to the catalog facade", async (t) => {
   clearFbaShipmentCandidateCache();
   const directory = await mkdtemp(path.join(os.tmpdir(), "fba-candidate-custom-sid-test-"));
