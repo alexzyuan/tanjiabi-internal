@@ -46,8 +46,10 @@ export async function runMigrationCli({ logger = console } = {}) {
     return result;
   } catch (error) {
     logger.error?.("[product-catalog-migration] failed", {
+      operation: "legacy-migration",
       errorName: error?.name || "Error",
       errorCode: error?.code || null,
+      errorFile: error?.filePath ? path.basename(error.filePath) : null,
       // Keep logs useful without echoing a legacy payload, credential, or
       // arbitrary identity value that happened to be present in an error.
       errorMessage: error?.code === "JSON_PARSE_FAILED"

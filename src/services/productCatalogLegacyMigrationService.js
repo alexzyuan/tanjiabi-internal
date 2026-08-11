@@ -35,6 +35,8 @@ const PRODUCT_FIELDS = [
   "skuIdentifier",
 ];
 
+const LEGACY_JSON_SOURCE = "legacy-json";
+
 const LISTING_FIELDS = [
   "sid",
   "msku",
@@ -69,6 +71,15 @@ function valuesEqual(left, right) {
     return JSON.stringify(left) === JSON.stringify(right);
   }
   return String(left ?? "").trim() === String(right ?? "").trim();
+}
+
+function canonicalFieldValue(value) {
+  if (value && typeof value === "object") {
+    if (Array.isArray(value)) return `[${value.map(canonicalFieldValue).join(",")}]`;
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalFieldValue(value[key])}`).join(",")}}`;
+  }
+  if (typeof value === "number") return Number.isFinite(value) ? String(value) : "";
+  return JSON.stringify(String(value ?? "").trim());
 }
 
 function sortFiles(files) {
@@ -117,19 +128,27 @@ export async function buildLegacyProductCatalogManifest({ sharedDir, supplierDir
   return { hash, entries, files };
 }
 
-function extractRecordList(payload) {
+function extractRecordList(payload, file) {
   if (Array.isArray(payload)) return payload;
-  if (!payload || typeof payload !== "object") return [];
-  const data = payload.data;
-  if (Array.isArray(data)) return data;
-  const containers = [payload, data].filter((value) => value && typeof value === "object");
-  for (const container of containers) {
-    for (const key of ["records", "list", "rows", "items", "result", "data"]) {
-      if (Array.isArray(container[key])) return container[key];
-    }
+  if (!payload || typeof payload !== "object") {
+    throw new Error(`legacy JSON envelope schema invalid: ${file.name}`);
   }
-  // A direct `{ product: {...} }` entry is also a valid row-set record.
-  return payload.product && typeof payload.product === "object" ? [payload] : [];
+  if (!Object.hasOwn(payload, "data")) {
+    throw new Error(`legacy JSON envelope schema invalid: ${file.name}`);
+  }
+  const unknownEnvelopeKeys = Object.keys(payload).filter((key) => !["updatedAt", "updatedAtMs", "data"].includes(key));
+  if (unknownEnvelopeKeys.length) {
+    throw new Error(`legacy JSON envelope schema invalid: ${file.name}`);
+  }
+  const data = payload.data;
+  if (!data || typeof data !== "object" || Array.isArray(data) || !Array.isArray(data.records)) {
+    throw new Error(`legacy JSON envelope schema invalid: ${file.name}`);
+  }
+  const unknownDataKeys = Object.keys(data).filter((key) => key !== "records");
+  if (unknownDataKeys.length) {
+    throw new Error(`legacy JSON envelope schema invalid: ${file.name}`);
+  }
+  return data.records;
 }
 
 function readEnvelopeUpdatedAtMs(payload, fallback) {
@@ -155,16 +174,15 @@ function errorForJson(file, error) {
 }
 
 async function readLegacyFile(file) {
-  let payload;
   try {
-    payload = JSON.parse(await readFile(file.filePath, "utf8"));
+    const payload = JSON.parse(await readFile(file.filePath, "utf8"));
+    return {
+      sourceUpdatedAtMs: readEnvelopeUpdatedAtMs(payload, file.mtimeMs),
+      records: extractRecordList(payload, file),
+    };
   } catch (error) {
     throw errorForJson(file, error);
   }
-  return {
-    sourceUpdatedAtMs: readEnvelopeUpdatedAtMs(payload, file.mtimeMs),
-    records: extractRecordList(payload),
-  };
 }
 
 function canonicalSeller(sellerBySid, sid, msku) {
@@ -210,10 +228,15 @@ function omitRaw(value) {
 }
 
 function normalizeLegacyRecord(record, file, rowIndex, sellerBySid) {
+  if (!record || typeof record !== "object" || Array.isArray(record)) {
+    throw new Error(`legacy JSON record schema invalid: ${file.name} row ${rowIndex + 1}`);
+  }
   const sanitizedRecord = omitRaw(record);
   const listing = normalizeCatalogListing(sanitizedRecord);
   let product = normalizeCatalogProduct(sanitizedRecord);
-  if (!listing && !product) return null;
+  if (!listing && !product) {
+    throw new Error(`legacy JSON record identity invalid: ${file.name} row ${rowIndex + 1}`);
+  }
 
   let canonicalListing = listing;
   let identity = "";
@@ -246,8 +269,11 @@ function normalizeLegacyRecord(record, file, rowIndex, sellerBySid) {
 
 function createState(value, fields, candidate) {
   const fieldMeta = new Map();
+  const fieldCandidates = new Map();
   fields.forEach((field) => {
     if (hasValue(value?.[field])) {
+      const candidateValue = canonicalFieldValue(value[field]);
+      fieldCandidates.set(field, new Map([[candidateValue, true]]));
       fieldMeta.set(field, {
         sourcePriority: candidate.sourcePriority,
         sourceUpdatedAtMs: candidate.sourceUpdatedAtMs,
@@ -259,12 +285,14 @@ function createState(value, fields, candidate) {
   return {
     value: cloneValue(value),
     fieldMeta,
+    fieldCandidates,
+    identity: candidate.identity,
     sourceUpdatedAtMs: candidate.sourceUpdatedAtMs,
     sourcePriority: candidate.sourcePriority,
   };
 }
 
-function shouldReplace(previous, incoming) {
+function shouldReplace(previous, incoming, previousValue, incomingValue) {
   if (!previous) return true;
   if (incoming.sourcePriority !== previous.sourcePriority) {
     return incoming.sourcePriority > previous.sourcePriority;
@@ -275,6 +303,13 @@ function shouldReplace(previous, incoming) {
   if (incoming.fileName !== previous.fileName) {
     return incoming.fileName.localeCompare(previous.fileName) > 0;
   }
+  const previousCanonical = canonicalFieldValue(previousValue);
+  const incomingCanonical = canonicalFieldValue(incomingValue);
+  if (incomingCanonical !== previousCanonical) {
+    return incomingCanonical.localeCompare(previousCanonical) > 0;
+  }
+  // Equal canonical values produce the same persisted result; row order is
+  // allowed only as an internal tie-breaker for metadata bookkeeping.
   return incoming.rowIndex >= previous.rowIndex;
 }
 
@@ -283,16 +318,16 @@ function mergeIntoState(state, incomingValue, fields, candidate, conflict) {
   fields.forEach((field) => {
     const next = incomingValue?.[field];
     if (!hasValue(next)) return;
+    const candidateValue = canonicalFieldValue(next);
+    if (!state.fieldCandidates.has(field)) state.fieldCandidates.set(field, new Map());
+    state.fieldCandidates.get(field).set(candidateValue, true);
     const previous = state.value?.[field];
     const previousMeta = state.fieldMeta.get(field);
     if (hasValue(previous) && !valuesEqual(previous, next)) {
       conflict.count += 1;
       if (conflict.fields.length < 20 && !conflict.fields.includes(field)) conflict.fields.push(field);
-      if (conflict.samples.length < 10) {
-        conflict.samples.push({ fileName: candidate.fileName, fields: [field] });
-      }
     }
-    if (!hasValue(previous) || shouldReplace(previousMeta, candidate)) {
+    if (!hasValue(previous) || shouldReplace(previousMeta, candidate, previous, next)) {
       state.value[field] = cloneValue(next);
       state.fieldMeta.set(field, {
         sourcePriority: candidate.sourcePriority,
@@ -305,6 +340,24 @@ function mergeIntoState(state, incomingValue, fields, candidate, conflict) {
   state.sourceUpdatedAtMs = Math.max(state.sourceUpdatedAtMs, candidate.sourceUpdatedAtMs);
   state.sourcePriority = Math.max(state.sourcePriority, candidate.sourcePriority);
   return state;
+}
+
+function collectConflictSamples(states) {
+  const samples = [];
+  for (const [identity, state] of [...states.entries()].sort(([left], [right]) => left.localeCompare(right))) {
+    for (const field of [...state.fieldCandidates.keys()].sort()) {
+      const candidateValues = state.fieldCandidates.get(field);
+      if (!candidateValues || candidateValues.size < 2) continue;
+      samples.push({
+        identity,
+        field,
+        candidateCount: candidateValues.size,
+        selectedSourceUpdatedAtMs: state.fieldMeta.get(field)?.sourceUpdatedAtMs ?? null,
+      });
+      if (samples.length >= 10) return samples;
+    }
+  }
+  return samples;
 }
 
 function emptyMetrics() {
@@ -320,6 +373,13 @@ function emptyMetrics() {
   };
 }
 
+function validateMaxScanAttempts(value) {
+  if (!Number.isInteger(value) || value < 1 || value > DEFAULT_MAX_SCAN_ATTEMPTS) {
+    throw new Error(`maxScanAttempts 必须是 1..${DEFAULT_MAX_SCAN_ATTEMPTS} 的整数。`);
+  }
+  return value;
+}
+
 function mergeCandidates(candidates, manifest, refreshedAtMs) {
   const sharedIdentities = new Set(candidates
     .filter((candidate) => candidate.source === SOURCE_SHARED && candidate.identity)
@@ -332,7 +392,7 @@ function mergeCandidates(candidates, manifest, refreshedAtMs) {
 
   const listings = new Map();
   const products = new Map();
-  const conflict = { count: 0, fields: [], samples: [] };
+  const conflict = { count: 0, fields: [] };
   for (const candidate of accepted) {
     if (candidate.identity) {
       const listingKey = candidate.identity;
@@ -346,11 +406,12 @@ function mergeCandidates(candidates, manifest, refreshedAtMs) {
     }
     if (candidate.product?.internalSku) {
       const productKey = normalizeCatalogKey(candidate.product.internalSku);
+      const productCandidate = { ...candidate, identity: productKey };
       products.set(productKey, mergeIntoState(
         products.get(productKey),
         candidate.product,
         PRODUCT_FIELDS,
-        candidate,
+        productCandidate,
         conflict,
       ));
     }
@@ -362,7 +423,7 @@ function mergeCandidates(candidates, manifest, refreshedAtMs) {
   // points at two products, the repository must see both rows and reject the
   // batch atomically rather than allowing migration to silently choose one.
   const aliasByIdentity = new Map();
-  const source = "legacy-migration";
+  const source = LEGACY_JSON_SOURCE;
   const addRows = (product, listing, sourceUpdatedAtMs) => {
     const rows = catalogProductToRepositoryRows({
       product,
@@ -425,7 +486,10 @@ function mergeCandidates(candidates, manifest, refreshedAtMs) {
     aliasCount: aliasByIdentity.size,
     conflictCount: conflict.count,
     conflictFields: conflict.fields,
-    conflictSamples: conflict.samples,
+    conflictSamples: [
+      ...collectConflictSamples(listings),
+      ...collectConflictSamples(products),
+    ].slice(0, 10),
   };
   return {
     records: {
@@ -454,8 +518,7 @@ export async function readAndMergeStableManifest({
   if (!currentManifest || !Array.isArray(currentManifest.files)) {
     throw new Error("legacy product catalog manifest 无效。");
   }
-  const attempts = Number(maxScanAttempts);
-  if (!Number.isInteger(attempts) || attempts <= 0) throw new Error("legacy product catalog manifest 扫描次数无效。");
+  const attempts = validateMaxScanAttempts(maxScanAttempts);
   let startingManifest = currentManifest;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const candidates = [];
@@ -494,6 +557,7 @@ function skippedResult(manifest, repository) {
   return {
     ...emptyMetrics(),
     skipped: true,
+    fileCount: Array.isArray(manifest.entries) ? manifest.entries.length : manifest.files.length,
     manifestHash: manifest.hash,
     revision: repository.getRevision(),
   };
@@ -514,6 +578,7 @@ export async function migrateLegacyProductCatalog({
   if (!repository || typeof repository.getMetadata !== "function" || typeof repository.upsertCatalog !== "function") {
     throw new Error("legacy product catalog migration requires a repository");
   }
+  validateMaxScanAttempts(maxScanAttempts);
   const defaults = getLegacyProductCatalogDirectories();
   const resolvedSharedDir = sharedDir || defaults.sharedProductCatalogDir;
   const resolvedSupplierDir = supplierDir || defaults.supplierBoardProductDir;

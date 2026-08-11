@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
-import { appendFile, mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, readFile, rm, utimes, writeFile } from "node:fs/promises";
+import { spawn } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import Database from "better-sqlite3";
 
 import { createProductCatalogRepository } from "../src/services/productCatalogRepository.js";
 import {
@@ -26,6 +28,18 @@ function legacyRecord(overrides = {}) {
     record.sku = record.local_sku;
   }
   return record;
+}
+
+function runCli(cwd, scriptPath, env = process.env) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [scriptPath], { cwd, env });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.once("error", reject);
+    child.once("close", (code, signal) => resolve({ code, signal, stdout, stderr }));
+  });
 }
 
 async function createLegacyMigrationFixture(t, { sellerSids = [8708], mutateManifestOnEveryRead = false } = {}) {
@@ -108,6 +122,50 @@ test("folds row-set JSON by SID+MSKU/internal SKU and chooses newest non-empty f
   assert.equal(row.product.purchasePrice, 38);
   assert.equal(row.listing.sourceUpdatedAtMs, 2000);
   assert.equal(row.product.refreshedAtMs, 1720000001000);
+  assert.equal(row.listing.source, "legacy-json");
+  assert.equal(row.product.source, "legacy-json");
+  const database = new Database(fixture.repository.databasePath, { readonly: true });
+  assert.deepEqual(database.prepare("SELECT DISTINCT source FROM product_alias").all(), [{ source: "legacy-json" }]);
+  database.close();
+  assert.equal(result.conflictSamples.length, 2);
+  for (const sample of result.conflictSamples) {
+    assert.deepEqual(Object.keys(sample).sort(), [
+      "candidateCount",
+      "field",
+      "identity",
+      "selectedSourceUpdatedAtMs",
+    ]);
+    assert.equal(sample.candidateCount, 2);
+    assert.equal(sample.selectedSourceUpdatedAtMs, 2000);
+    assert.equal(Object.hasOwn(sample, "fileName"), false);
+    assert.equal(Object.hasOwn(sample, "value"), false);
+    assert.doesNotMatch(JSON.stringify(sample), /raw|token/i);
+  }
+});
+
+test("same-timestamp rows choose the same canonical value regardless of array order", async (t) => {
+  async function snapshot(records) {
+    const fixture = await createLegacyMigrationFixture(t);
+    await fixture.writeShared("tie.json", 1000, records);
+    const result = await migrateLegacyProductCatalog(fixture.options);
+    const database = new Database(fixture.repository.databasePath, { readonly: true });
+    const product = database.prepare("SELECT supplier, data_hash FROM product_master").get();
+    database.close();
+    return {
+      supplier: product.supplier,
+      dataHash: product.data_hash,
+      conflictSamples: result.conflictSamples,
+    };
+  }
+  const leftToRight = await snapshot([
+    legacyRecord({ supplier: "AAAA" }),
+    legacyRecord({ supplier: "ZZZZ" }),
+  ]);
+  const rightToLeft = await snapshot([
+    legacyRecord({ supplier: "ZZZZ" }),
+    legacyRecord({ supplier: "AAAA" }),
+  ]);
+  assert.deepEqual(rightToLeft, leftToRight);
 });
 
 test("uses supplier-board legacy files only to fill identities absent from shared catalog", async (t) => {
@@ -131,6 +189,7 @@ test("unchanged manifest skips import while a new rollback-era JSON changes the 
   const changed = await migrateLegacyProductCatalog(fixture.options);
   assert.equal(first.skipped, false);
   assert.equal(unchanged.skipped, true);
+  assert.equal(unchanged.fileCount, 1);
   assert.notEqual(changed.manifestHash, first.manifestHash);
   assert.equal(fixture.readListing("B").msku, "B");
 });
@@ -154,4 +213,63 @@ test("an unstable manifest fails after three scans without writing rows or metad
   await assert.rejects(migrateLegacyProductCatalog(fixture.options), /连续 3 次扫描均发生变化/);
   assert.equal(fixture.repository.getRevision(), 0);
   assert.equal(fixture.repository.getMetadata("legacy_manifest_hash"), null);
+});
+
+test("rejects unknown envelopes and non-empty records without a recognized identity", async (t) => {
+  const cases = [
+    { name: "null.json", payload: null },
+    { name: "unknown-object.json", payload: { token: "fixture-token" } },
+    { name: "unknown-records-envelope.json", payload: { records: [] } },
+    { name: "null-data.json", payload: { data: null } },
+    { name: "invalid-record.json", payload: { data: { records: [{ raw: "fixture-token" }] } } },
+  ];
+  for (const item of cases) {
+    const fixture = await createLegacyMigrationFixture(t);
+    await fixture.writeRawShared(item.name, JSON.stringify(item.payload));
+    await assert.rejects(migrateLegacyProductCatalog(fixture.options), /schema|envelope|record|identity/i);
+    assert.equal(fixture.repository.getRevision(), 0);
+    assert.equal(fixture.repository.getMetadata("legacy_manifest_hash"), null);
+  }
+});
+
+test("rejects maxScanAttempts outside the inclusive 1..3 contract before scanning", async (t) => {
+  const fixture = await createLegacyMigrationFixture(t);
+  await fixture.writeShared("one.json", 1000, legacyRecord());
+  let manifestCalls = 0;
+  fixture.options.buildManifest = async (options) => {
+    manifestCalls += 1;
+    return buildLegacyProductCatalogManifest(options);
+  };
+  await assert.rejects(
+    migrateLegacyProductCatalog({ ...fixture.options, maxScanAttempts: 4 }),
+    /maxScanAttempts|扫描次数|1.*3/,
+  );
+  assert.equal(manifestCalls, 0);
+  assert.equal(fixture.repository.getRevision(), 0);
+  assert.equal(fixture.repository.getMetadata("legacy_manifest_hash"), null);
+});
+
+test("CLI fails on corrupt legacy JSON without echoing payload contents", async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "product-catalog-cli-"));
+  const sharedDir = path.join(directory, "data-cache", "shared-product-catalog");
+  const supplierDir = path.join(directory, "data-cache", "supplier-board-product-map");
+  await mkdir(sharedDir, { recursive: true });
+  await mkdir(supplierDir, { recursive: true });
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const sellersFile = path.join(directory, "data-cache", "lingxing-sellers.json");
+  await mkdir(path.dirname(sellersFile), { recursive: true });
+  await writeFile(sellersFile, JSON.stringify({ sellers: [{ sid: 8708, name: "xiamentanjia-US", country: "美国" }] }), "utf8");
+  const broken = "{not-json, fixture-token, raw}";
+  await writeFile(path.join(sharedDir, "broken.json"), broken, "utf8");
+  const before = await readFile(path.join(sharedDir, "broken.json"), "utf8");
+  const scriptPath = path.resolve("scripts/migrate-product-catalog.js");
+  const result = await runCli(directory, scriptPath, {
+    ...process.env,
+    PRODUCT_CATALOG_DATABASE_PATH: path.join(directory, "data-cache", "product-catalog", "product-catalog-v1.sqlite"),
+  });
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /broken\.json/);
+  assert.match(result.stderr, /product-catalog-migration|failed/i);
+  assert.doesNotMatch(result.stderr, /fixture-token|raw/i);
+  assert.equal(await readFile(path.join(sharedDir, "broken.json"), "utf8"), before);
 });
