@@ -6,15 +6,40 @@ import nodemailer from "nodemailer";
 import { getConfig as getRuntimeConfig, reloadDotEnv } from "../config/index.js";
 
 const managedKeys = ["AFTERSALES_MAIL_ENABLED", "AFTERSALES_MAIL_PASSWORD"];
+const saveQueuesByPath = new Map();
 
 function safeProviderMessage(error, passwords = []) {
-  let message = String(error?.message || "未知错误").trim();
-  for (const password of passwords.filter(Boolean)) {
-    message = message.replaceAll(String(password), "[已隐藏]");
+  let message = String(error?.message || "未知错误");
+  const secrets = [...new Set(passwords
+    .filter((password) => password !== undefined && password !== null && String(password) !== "")
+    .map((password) => String(password)))];
+  for (const secret of secrets) {
+    message = message.replaceAll(secret, "[已隐藏]");
+    const normalizedSecret = secret.trim();
+    if (normalizedSecret && normalizedSecret !== secret) message = message.replaceAll(normalizedSecret, "[已隐藏]");
   }
   return message
     .replace(/\b(pass(?:word)?|authorization|token)\s*[=:]\s*[^\s,;]+/gi, "$1=[已隐藏]")
     .slice(0, 500) || "未知错误";
+}
+
+function sharedSaveQueueKey(envPath, auditPath) {
+  return `${path.resolve(envPath)}\u0000${path.resolve(auditPath)}`;
+}
+
+function enqueueSave(queueKey, operation) {
+  const previous = saveQueuesByPath.get(queueKey) || Promise.resolve();
+  const result = previous.then(operation);
+  const settled = result.then(
+    () => {
+      if (saveQueuesByPath.get(queueKey) === settled) saveQueuesByPath.delete(queueKey);
+    },
+    () => {
+      if (saveQueuesByPath.get(queueKey) === settled) saveQueuesByPath.delete(queueKey);
+    },
+  );
+  saveQueuesByPath.set(queueKey, settled);
+  return result;
 }
 
 function connectionResult(ok, checkedAt, message) {
@@ -168,7 +193,7 @@ export function createAftersalesMailSettingsService({
   now = () => new Date().toISOString(),
 } = {}) {
   let lastTest = null;
-  let saveQueue = Promise.resolve();
+  const saveQueueKey = sharedSaveQueueKey(envPath, auditPath);
 
   function mailConfig() {
     const config = getConfig();
@@ -290,9 +315,7 @@ export function createAftersalesMailSettingsService({
   }
 
   function saveSettings(payload = {}, actor = {}) {
-    const operation = saveQueue.then(() => saveSettingsInternal(payload, actor));
-    saveQueue = operation.then(() => undefined, () => undefined);
-    return operation;
+    return enqueueSave(saveQueueKey, () => saveSettingsInternal(payload, actor));
   }
 
   return { getStatus, testConnection, saveSettings };

@@ -9,7 +9,7 @@ import { createAftersalesMailSettingsService } from "../src/services/aftersalesM
 const initialEnv = [
   "DATA_PROVIDER=mock",
   "AFTERSALES_MAIL_ENABLED=true",
-  "AFTERSALES_MAIL_USER=jmcustomer@163.com",
+  "AFTERSALES_MAIL_USER=fixture-user@example.test",
   "AFTERSALES_MAIL_PASSWORD=fixture-original-value-001",
   "AFTERSALES_MAIL_IMAP_HOST=mail.test.invalid",
   "AFTERSALES_MAIL_SMTP_HOST=mail.test.invalid",
@@ -69,7 +69,7 @@ async function withTempMailboxSettings(callback, options = {}) {
 test("mail settings status never returns the configured authorization code", async () => {
   await withTempMailboxSettings(async ({ service }) => {
     const status = await service.getStatus();
-    assert.equal(status.account, "jmcustomer@163.com");
+    assert.equal(status.account, "fixture-user@example.test");
     assert.equal(status.passwordConfigured, true);
     assert.equal(JSON.stringify(status).includes("fixture-original-value-001"), false);
   });
@@ -196,6 +196,27 @@ test("password bytes are passed and persisted unchanged, while CR/LF is rejected
       /不得包含换行符/,
     );
     assert.match(await readFile(envPath, "utf8"), /AFTERSALES_MAIL_PASSWORD= fixture-preserve-value-008 \n/);
+
+    const failureAuditPath = path.join(path.dirname(envPath), "data-cache", "whitespace-failure-audit.json");
+    const failingService = createAftersalesMailSettingsService({
+      envPath,
+      auditPath: failureAuditPath,
+      getConfig: () => readMailboxConfig(envPath),
+      reloadConfig: () => ({}),
+      verifyImap: async () => {},
+      verifySmtp: async ({ password }) => {
+        throw new Error(`provider rejected ${password}`);
+      },
+      now: () => "2026-08-11T08:00:00.000Z",
+    });
+    const failedResult = await failingService.testConnection({ password: candidate });
+    assert.equal(failedResult.ok, false);
+    assert.equal(failedResult.message.includes(candidate), false);
+    assert.equal(failedResult.message.includes(candidate.trim()), false);
+    await failingService.saveSettings({ enabled: false }, { name: "系统管理员" });
+    const failureAudit = await readFile(failureAuditPath, "utf8");
+    assert.equal(failureAudit.includes(candidate), false);
+    assert.equal(failureAudit.includes(candidate.trim()), false);
   });
 });
 
@@ -205,9 +226,10 @@ test("save operations are serialized and an unavailable audit target leaves .env
     await mkdir(auditPath);
     let active = 0;
     let maxActive = 0;
-    const service = createAftersalesMailSettingsService({
+    const serialAuditPath = path.join(path.dirname(envPath), "serial-audit.json");
+    const createSerialService = () => createAftersalesMailSettingsService({
       envPath,
-      auditPath: path.join(path.dirname(envPath), "serial-audit.json"),
+      auditPath: serialAuditPath,
       getConfig: () => readMailboxConfig(envPath),
       reloadConfig: () => ({}),
       verifyImap: async () => {
@@ -219,11 +241,18 @@ test("save operations are serialized and an unavailable audit target leaves .env
       verifySmtp: async () => {},
       now: () => "2026-08-11T08:00:00.000Z",
     });
+    const firstService = createSerialService();
+    const secondService = createSerialService();
     await Promise.all([
-      service.saveSettings({ enabled: true, password: "fixture-serial-value-010" }, { name: "系统管理员" }),
-      service.saveSettings({ enabled: false, password: "fixture-serial-value-011" }, { name: "系统管理员" }),
+      firstService.saveSettings({ enabled: true, password: "fixture-serial-value-010" }, { name: "系统管理员" }),
+      secondService.saveSettings({ enabled: false, password: "fixture-serial-value-011" }, { name: "系统管理员" }),
     ]);
     assert.equal(maxActive, 1);
+    assert.match(await readFile(envPath, "utf8"), /AFTERSALES_MAIL_ENABLED=false/);
+    assert.match(await readFile(envPath, "utf8"), /AFTERSALES_MAIL_PASSWORD=fixture-serial-value-011/);
+    const serialAudit = JSON.parse(await readFile(serialAuditPath, "utf8"));
+    assert.equal(serialAudit.length, 2);
+    assert.deepEqual(serialAudit.map((row) => row.enabled), [true, false]);
 
     const failingService = createAftersalesMailSettingsService({
       envPath,
