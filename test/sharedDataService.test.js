@@ -19,6 +19,12 @@ import {
   readListingSharedCatalogRecords,
 } from "../src/services/sharedDataService.js";
 
+async function writeListingWorkbook(filePath, rows, sheetName = "Listings") {
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(rows), sheetName);
+  await writeFile(filePath, XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }));
+}
+
 test("共享商品目录跳过缺少内部 SKU 的产品记录", () => {
   assert.doesNotThrow(() => {
     const map = buildSharedProductCatalogMap({
@@ -88,6 +94,36 @@ test("Listing shared-catalog reader honors configured XLSX files and all sheets"
     const records = await readListingSharedCatalogRecords({ directory: path.join(directory, "missing") });
     assert.equal(records.length, 2);
     assert.deepEqual(records.map((record) => [record.MSKU, record.SKU]), [["M-1", "TJ001"], ["M-2", "TJ002"]]);
+  } finally {
+    if (previous === undefined) delete process.env.LISTING_SHARED_CATALOG_FILE;
+    else process.env.LISTING_SHARED_CATALOG_FILE = previous;
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("Listing shared-catalog reader auto-enumerates sorted XLSX files, excludes AppleDouble files, and applies defval", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "listing-shared-catalog-enumeration-"));
+  const previous = process.env.LISTING_SHARED_CATALOG_FILE;
+  delete process.env.LISTING_SHARED_CATALOG_FILE;
+  try {
+    await writeListingWorkbook(path.join(directory, "z.xlsx"), [
+      ["MSKU", "SKU", "Country"],
+      ["Z-MSKU", "Z-SKU", "美国"],
+    ]);
+    await writeListingWorkbook(path.join(directory, "._ignored.xlsx"), [
+      ["MSKU", "SKU"],
+      ["IGNORED-MSKU", "IGNORED-SKU"],
+    ]);
+    await writeListingWorkbook(path.join(directory, "a.xlsx"), [
+      ["MSKU", "SKU", "Country"],
+      ["A-MSKU", "A-SKU"],
+    ]);
+
+    const records = await readListingSharedCatalogRecords({ directory });
+    assert.deepEqual(records.map((record) => record.MSKU), ["A-MSKU", "Z-MSKU"]);
+    assert.equal(records.some((record) => record.MSKU === "IGNORED-MSKU"), false);
+    assert.equal(Object.hasOwn(records[0], "Country"), true);
+    assert.equal(records[0].Country, "");
   } finally {
     if (previous === undefined) delete process.env.LISTING_SHARED_CATALOG_FILE;
     else process.env.LISTING_SHARED_CATALOG_FILE = previous;

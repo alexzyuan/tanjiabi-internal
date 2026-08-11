@@ -122,3 +122,35 @@ node --test test/*.test.js
 - The legacy report's initial 769-test baseline remains historical; this fix round adds eight regression tests and the current full suite is 777/777.
 - `listing_sku` provenance is intentionally empty when internal SKU came from generic `sku`/`product_sku`; downstream Task 4/5 code must only construct the validation alias when `listingSkuSourceField`/`internalSkuSourceField` identifies `local_sku`.
 - FBA service ownership and SQLite persistence/migration remain outside this task as required.
+
+## Review fix round 2: XLSX enumeration evidence
+
+### Test coverage
+
+Updated `test/sharedDataService.test.js` only. A test-local `writeListingWorkbook` helper creates real temporary XLSX files and the test now creates `z.xlsx`, `a.xlsx`, and `._ignored.xlsx` in an automatically enumerated directory. Literal row identities assert that:
+
+- automatic directory enumeration returns `a.xlsx` records before `z.xlsx` records;
+- the AppleDouble `._ignored.xlsx` record is absent;
+- a data row missing the declared `Country` cell still owns `Country` with the exact `""` value, proving `sheet_to_json({ defval: "" })` behavior.
+
+The existing configured-file/all-sheet test remains unchanged, so both configured and automatic XLSX ownership paths are covered with real workbooks and cleanup in the test fixture.
+
+### Verification
+
+This was characterization/regression coverage only; no production behavior failed and no production code was changed. Therefore there is no production RED phase for this round.
+
+```text
+node --test test/sharedDataService.test.js
+# 14 passed, 0 failed
+
+node --test test/productCatalogNormalization.test.js test/sharedDataService.test.js test/fbaCatalogService.test.js test/productCatalogRepository.test.js
+# 47 passed, 0 failed
+
+npm run check:js
+# passed
+
+git diff --check
+# passed
+```
+
+The test-only helper is scoped to `test/sharedDataService.test.js`; no production test-only API or XLSX reader change was introduced.
