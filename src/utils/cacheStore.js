@@ -23,6 +23,15 @@ const supplierBoardProductCachePolicy = { maxBytes: 100 * MB, maxAgeMs: 14 * DAY
 const sharedProductCatalogCachePolicy = { maxBytes: 200 * MB, maxAgeMs: 30 * DAY_MS };
 const factoryInventoryCachePolicy = { maxBytes: 300 * MB, maxAgeMs: 180 * DAY_MS };
 
+/**
+ * Return the legacy product-cache directories without exposing any mutating
+ * filesystem operation.  The migration entry point is the only consumer that
+ * should read these directories after the SQLite cutover.
+ */
+export function getLegacyProductCatalogDirectories() {
+  return { sharedProductCatalogDir, supplierBoardProductDir };
+}
+
 function hashKey(key) {
   return crypto.createHash("sha1").update(String(key)).digest("hex");
 }
