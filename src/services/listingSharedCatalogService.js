@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import {
@@ -28,7 +29,9 @@ async function listXlsxFiles(directory) {
 
 async function loadXlsxModule() {
   const module = await import("xlsx");
-  return module.default || module;
+  const XLSX = module.default || module;
+  if (typeof XLSX.set_fs === "function") XLSX.set_fs(fs);
+  return XLSX;
 }
 
 /** Read every supported workbook/sheet from the legacy Listing shared catalog. */
@@ -87,6 +90,26 @@ function matchesScopeItem(scopeItem, listing) {
   return true;
 }
 
+function cloneListing(listing) {
+  return {
+    ...listing,
+    boxSpec: listing.boxSpec
+      ? {
+        dimensions: {
+          length: listing.boxSpec.dimensions?.length ?? null,
+          width: listing.boxSpec.dimensions?.width ?? null,
+          height: listing.boxSpec.dimensions?.height ?? null,
+          unitOfMeasurement: listing.boxSpec.dimensions?.unitOfMeasurement ?? null,
+        },
+        weight: {
+          value: listing.boxSpec.weight?.value ?? null,
+          unit: listing.boxSpec.weight?.unit ?? null,
+        },
+      }
+      : null,
+  };
+}
+
 /**
  * Match normalized shared-catalog records to a requested SID/MSKU scope.
  * Besides canonical `sid:msku` keys, store/country fallback matching is kept
@@ -95,7 +118,7 @@ function matchesScopeItem(scopeItem, listing) {
 export function findListingSharedCatalogMatches(scope = [], records = []) {
   const normalizedListings = (Array.isArray(records) ? records : [])
     .map((record) => normalizeCatalogListing(record))
-    .filter((listing) => listing?.msku);
+    .filter((listing) => listing?.msku && listing?.internalSku);
   const bySidMsku = new Map();
   normalizedListings.forEach((listing) => {
     if (!listing.sid) return;
@@ -103,8 +126,10 @@ export function findListingSharedCatalogMatches(scope = [], records = []) {
   });
   return (Array.isArray(scope) ? scope : []).flatMap((scopeItem) => {
     const direct = bySidMsku.get(scopeKey(scopeItem));
-    if (direct && matchesScopeItem(scopeItem, direct)) return [direct];
-    return normalizedListings.filter((listing) => matchesScopeItem(scopeItem, listing));
+    if (direct && matchesScopeItem(scopeItem, direct)) return [cloneListing(direct)];
+    return normalizedListings
+      .filter((listing) => matchesScopeItem(scopeItem, listing))
+      .map((listing) => cloneListing(listing));
   });
 }
 

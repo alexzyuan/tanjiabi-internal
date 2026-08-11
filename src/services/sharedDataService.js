@@ -172,6 +172,7 @@ export function buildSharedProductCatalogMap({ sourceRows = [], listingRecords =
       country: String(row.country || "").trim(),
       productName: String(row.productName || "").trim(),
       imageUrl: String(row.imageUrl || "").trim(),
+      asin: String(row.asin || "").trim(),
     };
     putProductCatalog(map, product, sid && product.msku ? [listingMskuCatalogKey(sid, product.msku)] : []);
   });
@@ -184,7 +185,7 @@ export function buildSharedProductCatalogMap({ sourceRows = [], listingRecords =
     ]);
   });
 
-  productRecords.map(normalizeSharedProductRecord).forEach((product) => {
+  productRecords.map(normalizeSharedProductRecord).filter(Boolean).forEach((product) => {
     const keys = [product.internalSku, product.skuIdentifier, product.productId].map(productCatalogKey).filter(Boolean);
     const linkedProducts = keys.map((key) => map.get(key)).filter(Boolean);
     putProductCatalog(map, product);
@@ -246,20 +247,12 @@ async function fetchListingSharedCatalogItems(rows = [], apiListingItems = [], {
     if (strict) throw new Error(`Listing 共享目录读取失败：${error.message}`);
     return [];
   }
-  const matched = findListingSharedCatalogMatches(missingRows, sourceRecords).map((listing) => {
-    const row = missingRows.find((candidate) => {
-      const rowMskus = String(candidate.msku || "").split("/").map((value) => productCatalogKey(value)).filter(Boolean);
-      if (!rowMskus.includes(productCatalogKey(listing.msku))) return false;
-      if (candidate.storeName && listing.storeName && productCatalogKey(candidate.storeName) !== productCatalogKey(listing.storeName)) return false;
-      if (candidate.country && listing.country && productCatalogKey(candidate.country) !== productCatalogKey(listing.country)) return false;
-      if (candidate.sid && listing.sid && Number(candidate.sid) !== Number(listing.sid)) return false;
-      return true;
-    });
-    listing.sid = listing.sid || Number(row?.sid || 0);
-    listing.storeName = listing.storeName || row?.storeName || "";
-    listing.country = listing.country || row?.country || "";
-    return listing;
-  });
+  const matched = missingRows.flatMap((row) => findListingSharedCatalogMatches([row], sourceRecords).map((listing) => ({
+    ...listing,
+    sid: listing.sid || Number(row.sid || 0),
+    storeName: listing.storeName || row.storeName || "",
+    country: listing.country || row.country || "",
+  })));
   if (matched.length) {
     console.info("[shared-product-catalog] Listing 共享目录补充内部 SKU", {
       requestedRows: rows.length,

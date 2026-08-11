@@ -1,15 +1,99 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
+import XLSX from "xlsx";
+XLSX.set_fs(fs);
 import {
   applySharedProductCatalogToRows,
   buildSharedProductCatalogMap,
+  findListingSharedCatalogMatches,
   getSharedProductCatalogMap,
   getSharedSellers,
   listingCountryMskuCatalogKey,
   listingMskuCatalogKey,
   listingStoreMskuCatalogKey,
   productCatalogKey,
+  readListingSharedCatalogRecords,
 } from "../src/services/sharedDataService.js";
+
+test("共享商品目录跳过缺少内部 SKU 的产品记录", () => {
+  assert.doesNotThrow(() => {
+    const map = buildSharedProductCatalogMap({
+      productRecords: [{ product_name: "缺少 SKU", token: "secret" }],
+    });
+    assert.equal(map.size, 0);
+  });
+});
+
+test("共享商品目录保留规范产品的 sku 和 asin 白名单字段", () => {
+  const map = buildSharedProductCatalogMap({
+    sourceRows: [{ sid: 8708, msku: "MSKU-1", sku: "TJ001" }],
+    productRecords: [{
+      sku: "TJ001",
+      asin: "B000000001",
+      photo: "https://img.example.com/photo.jpg",
+    }],
+  });
+  const product = map.get(productCatalogKey("TJ001"));
+  assert.equal(product.sku, "TJ001");
+  assert.equal(product.asin, "B000000001");
+  assert.equal(product.imageUrl, "https://img.example.com/photo.jpg");
+  assert.equal(JSON.parse(JSON.stringify(product)).asin, "B000000001");
+});
+
+test("Listing shared-catalog matches require internal SKU and clone no-SID rows per scope", async () => {
+  const records = [{ MSKU: "SHARED-M", SKU: "TJ001", 店铺: "", 国家: "" }];
+  const matches = findListingSharedCatalogMatches([
+    { sid: 101, msku: "SHARED-M", storeName: "店铺 A", country: "美国" },
+    { sid: 202, msku: "SHARED-M", storeName: "店铺 B", country: "加拿大" },
+  ], records);
+  assert.equal(matches.length, 2);
+  assert.notEqual(matches[0], matches[1]);
+  assert.equal(matches[0].internalSku, "TJ001");
+  assert.equal(matches[1].internalSku, "TJ001");
+  assert.deepEqual(
+    findListingSharedCatalogMatches([{ sid: 101, msku: "SHARED-M" }], [{ MSKU: "SHARED-M" }]),
+    [],
+  );
+
+  const result = await getSharedProductCatalogMap({
+    async fetchListings() { return { data: { list: [] } }; },
+    async fetchLocalProductInfos() { return { data: [{ sku: "TJ001", product_name: "共享商品" }] }; },
+  }, [
+    { sid: 101, storeName: "店铺 A", country: "美国", msku: "SHARED-M", sku: "SHARED-M" },
+    { sid: 202, storeName: "店铺 B", country: "加拿大", msku: "SHARED-M", sku: "SHARED-M" },
+  ], {
+    forceRefresh: true,
+    readProductCatalogCache: async () => null,
+    saveProductCatalogCache: async () => {},
+    listingSharedCatalogRecords: records,
+  });
+  assert.equal(result.map.get(listingMskuCatalogKey(101, "SHARED-M")).internalSku, "TJ001");
+  assert.equal(result.map.get(listingMskuCatalogKey(202, "SHARED-M")).internalSku, "TJ001");
+});
+
+test("Listing shared-catalog reader honors configured XLSX files and all sheets", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "listing-shared-catalog-review-"));
+  const filePath = path.join(directory, "configured.xlsx");
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([["MSKU", "SKU"], ["M-1", "TJ001"]]), "第一张");
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([["MSKU", "SKU"], ["M-2", "TJ002"]]), "第二张");
+  await writeFile(filePath, XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }));
+  const previous = process.env.LISTING_SHARED_CATALOG_FILE;
+  process.env.LISTING_SHARED_CATALOG_FILE = filePath;
+  try {
+    const records = await readListingSharedCatalogRecords({ directory: path.join(directory, "missing") });
+    assert.equal(records.length, 2);
+    assert.deepEqual(records.map((record) => [record.MSKU, record.SKU]), [["M-1", "TJ001"], ["M-2", "TJ002"]]);
+  } finally {
+    if (previous === undefined) delete process.env.LISTING_SHARED_CATALOG_FILE;
+    else process.env.LISTING_SHARED_CATALOG_FILE = previous;
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 test("共享商品目录合并 listing、本地商品、图片、采购信息并按 MSKU/SKU 建索引", () => {
   const map = buildSharedProductCatalogMap({

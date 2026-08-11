@@ -38,6 +38,40 @@ test("does not expose raw upstream records or arbitrary fields", () => {
   assert.equal(Object.hasOwn(product, "unexpected"), false);
 });
 
+test("does not treat local_sku as an Amazon MSKU fallback", () => {
+  assert.equal(normalizeCatalogListing({ sid: 8708, local_sku: "TJ001" }), null);
+});
+
+test("keeps an ERP sku fallback separate from local_sku provenance", () => {
+  const listing = normalizeCatalogListing({
+    sid: 8708,
+    seller_sku: "AMAZON-MSKU-1",
+    sku: "TJ001",
+  });
+  assert.equal(listing.internalSku, "TJ001");
+  assert.equal(listing.listingSku, "");
+  const rows = catalogProductToRepositoryRows({
+    product: normalizeCatalogProduct({ sku: "TJ001" }),
+    listing,
+    source: "test",
+    sourceUpdatedAtMs: 1720000000000,
+    refreshedAtMs: 1720000000000,
+  });
+  assert.equal(rows.aliases.some((alias) => alias.aliasType === "listing_sku"), false);
+});
+
+test("preserves photo-only image URLs and canonical sku/asin fields", () => {
+  const product = normalizeCatalogProduct({
+    sku: "TJ001",
+    asin: "B000000001",
+    photo: "https://img.example.com/photo.jpg",
+  });
+  assert.equal(product.sku, "TJ001");
+  assert.equal(product.asin, "B000000001");
+  assert.equal(product.imageUrl, "https://img.example.com/photo.jpg");
+  assert.equal(JSON.parse(JSON.stringify(product)).asin, "B000000001");
+});
+
 test("keeps Listing seller_sku/MSKU separate from ERP local_sku and exposes local_sku as listingSku", () => {
   const listing = normalizeCatalogListing({
     sid: "8708",
@@ -47,14 +81,14 @@ test("keeps Listing seller_sku/MSKU separate from ERP local_sku and exposes loca
     title: "Listing title",
     token: "secret",
   });
-  assert.deepEqual(listing, {
-    sid: 8708,
-    msku: "AMAZON-SELLER-SKU",
-    internalSku: "TJ033",
-    listingSku: "TJ033",
-    asin: "B000000001",
-    productName: "Listing title",
-  });
+  assert.equal(listing.sid, 8708);
+  assert.equal(listing.msku, "AMAZON-SELLER-SKU");
+  assert.equal(listing.internalSku, "TJ033");
+  assert.equal(listing.listingSku, "TJ033");
+  assert.equal(listing.asin, "B000000001");
+  assert.equal(listing.productName, "Listing title");
+  assert.equal({ ...listing }.internalSkuSourceField, "local_sku");
+  assert.equal(JSON.parse(JSON.stringify(listing)).listingSkuSourceField, "local_sku");
   assert.equal(Object.hasOwn(listing, "seller_sku"), false);
   assert.equal(Object.hasOwn(listing, "token"), false);
 });
@@ -71,9 +105,24 @@ test("merges only canonical product fields and preserves non-empty values", () =
   assert.equal(Object.hasOwn(merged, "token"), false);
 });
 
+test("clones only whitelisted box fields", () => {
+  const merged = mergeCatalogProduct({}, {
+    internalSku: "TJ001",
+    boxSpec: {
+      dimensions: { length: 40, width: 30, token: "secret" },
+      weight: { value: 8, unit: "KG", unexpected: "value" },
+      raw: "secret",
+    },
+  });
+  assert.deepEqual(merged.boxSpec, {
+    dimensions: { length: 40, width: 30, height: null, unitOfMeasurement: null },
+    weight: { value: 8, unit: "KG" },
+  });
+});
+
 test("maps normalized catalog products to repository rows with canonical keys and provenance", () => {
   const product = normalizeCatalogProduct({
-    sku: " TJ001 ", product_name: "灯光船", product_id: 101, sku_identifier: "SID-1",
+    sku: " TJ001 ", asin: "B000000001", product_name: "灯光船", product_id: 101, sku_identifier: "SID-1",
   });
   const rows = catalogProductToRepositoryRows({
     product,
@@ -84,6 +133,7 @@ test("maps normalized catalog products to repository rows with canonical keys an
   });
   assert.equal(rows.product.internalSkuKey, "tj001");
   assert.equal(rows.product.internalSku, "TJ001");
+  assert.equal(Object.hasOwn(rows.product, "asin"), false);
   assert.equal(rows.listing.mskuKey, "msku-1");
   assert.equal(rows.listing.internalSkuKey, "tj001");
   assert.equal(rows.listing.listingSku, "TJ001");

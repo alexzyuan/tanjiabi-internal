@@ -21,10 +21,6 @@ export const LISTING_MSKU_KEYS = [
   "sellerSkuStr",
   "item_sku",
   "fnsku",
-  // Some Lingxing responses expose only local_sku. Keep this as the final
-  // compatibility fallback, while never using seller_sku as an internal SKU.
-  "local_sku",
-  "localSku",
 ];
 
 export const LISTING_INTERNAL_SKU_KEYS = [
@@ -268,10 +264,12 @@ const IMAGE_KEYS = [
   "imageList",
   "pic",
   "picture",
+  "photo",
 ];
 
 const PRODUCT_FIELD_NAMES = [
   "internalSku",
+  "sku",
   "productName",
   "imageUrl",
   "supplier",
@@ -288,6 +286,7 @@ const PRODUCT_FIELD_NAMES = [
   "boxSpec",
   "productId",
   "skuIdentifier",
+  "asin",
 ];
 
 const LISTING_FIELD_NAMES = [
@@ -295,11 +294,15 @@ const LISTING_FIELD_NAMES = [
   "msku",
   "mskuKey",
   "internalSku",
+  "internalSkuSourceField",
   "internalSkuKey",
   "listingSku",
+  "listingSkuSourceField",
   "asin",
   "storeName",
   "country",
+  "countryCode",
+  "displayName",
   "sku",
   "skuIdentifier",
   "productId",
@@ -310,6 +313,7 @@ const LISTING_FIELD_NAMES = [
 const NUMERIC_PRODUCT_FIELDS = new Set(["sid", "purchasePrice", "declaredValue", "packQuantity"]);
 const TEXT_FIELDS = new Set([
   "internalSku",
+  "sku",
   "productName",
   "imageUrl",
   "supplier",
@@ -327,8 +331,12 @@ const TEXT_FIELDS = new Set([
   "internalSkuKey",
   "listingSku",
   "asin",
+  "internalSkuSourceField",
+  "listingSkuSourceField",
   "storeName",
   "country",
+  "countryCode",
+  "displayName",
   "sku",
 ]);
 
@@ -364,6 +372,20 @@ function readFirst(item, keys) {
     found = value;
   });
   return found || "";
+}
+
+function readFirstWithKey(item, keys) {
+  for (const key of keys) {
+    const value = item?.[key];
+    if (hasReadableValue(value)) return { value, sourceField: key };
+  }
+  const normalizedKeys = new Set(keys.map((key) => String(key).toLowerCase()));
+  let found = null;
+  walkObject(item, (key, value) => {
+    if (found || !normalizedKeys.has(String(key).toLowerCase()) || !hasReadableValue(value)) return;
+    found = { value, sourceField: key };
+  });
+  return found || { value: "", sourceField: "" };
 }
 
 function readArrayText(value) {
@@ -512,12 +534,17 @@ function numberValue(value) {
   return value === undefined || value === null || value === "" ? null : toNumber(value);
 }
 
-function normalizeListingContext(record, listing) {
+function normalizeListingContext(record, listing, internalSkuSourceField) {
   const product = normalizeCatalogProduct(record);
+  const localSkuSource = ["local_sku", "localsku"].includes(String(internalSkuSourceField || "").toLowerCase());
   const context = {
     storeName: textValue(readFirst(record, ["storeName", "store_name", "seller", "seller_name", "shop_name", "店铺"])),
     country: textValue(readFirst(record, ["country", "countryName", "country_name", "marketplace", "国家"])),
+    countryCode: textValue(readFirst(record, ["country_code", "countryCode", "marketplaceCode", "marketplace_code", "region"])),
+    displayName: textValue(readFirst(record, ["displayName", "display_name", "shopDisplayName", "shop_display_name"])),
     sku: listing.internalSku,
+    internalSkuSourceField: textValue(internalSkuSourceField),
+    listingSkuSourceField: localSkuSource ? "local_sku" : "",
     skuIdentifier: textValue(readFirst(record, SKU_IDENTIFIER_KEYS)),
     productId: textValue(readFirst(record, PRODUCT_ID_KEYS)),
     imageUrl: product?.imageUrl || "",
@@ -534,17 +561,7 @@ function normalizeListingContext(record, listing) {
     packQuantity: product?.packQuantity ?? null,
     boxSpec: product?.boxSpec || null,
   };
-  // Keep the concise canonical Listing shape enumerable while exposing the
-  // compatibility context to sharedDataService and downstream lookups.
-  Object.defineProperties(listing, Object.fromEntries(
-    Object.entries(context).map(([key, value]) => [key, {
-      enumerable: false,
-      configurable: true,
-      writable: true,
-      value,
-    }]),
-  ));
-  return listing;
+  return { ...listing, ...context };
 }
 
 /**
@@ -554,16 +571,24 @@ function normalizeListingContext(record, listing) {
 export function normalizeCatalogListing(record = {}, { fallbackSid = 0 } = {}) {
   const msku = textValue(readFirst(record, LISTING_MSKU_KEYS));
   if (!msku) return null;
-  const internalSku = textValue(readFirst(record, LISTING_INTERNAL_SKU_KEYS));
+  const internalSkuEntry = hasReadableValue(record.internalSku)
+    ? {
+      value: record.internalSku,
+      sourceField: textValue(record.internalSkuSourceField)
+        || (textValue(record.listingSkuSourceField) === "local_sku" ? "local_sku" : "internalSku"),
+    }
+    : readFirstWithKey(record, LISTING_INTERNAL_SKU_KEYS);
+  const internalSku = textValue(internalSkuEntry.value);
+  const localSkuSource = ["local_sku", "localsku"].includes(String(internalSkuEntry.sourceField || "").toLowerCase());
   const listing = {
     sid: toNumber(readFirst(record, SID_KEYS)) || Number(fallbackSid) || 0,
     msku,
     internalSku,
-    listingSku: internalSku,
+    listingSku: localSkuSource ? textValue(record.listingSku) || internalSku : "",
     asin: textValue(readFirst(record, ["asin", "ASIN"])),
     productName: textValue(readFirst(record, PRODUCT_NAME_KEYS)),
   };
-  return normalizeListingContext(record, listing);
+  return normalizeListingContext(record, listing, internalSkuEntry.sourceField);
 }
 
 /** Normalize an upstream product into an explicit, raw-free whitelist. */
@@ -572,6 +597,7 @@ export function normalizeCatalogProduct(record = {}) {
   if (!internalSku) return null;
   return {
     internalSku,
+    sku: internalSku,
     productName: textValue(readFirst(record, PRODUCT_NAME_KEYS)),
     imageUrl: findImageUrl(record),
     supplier: textValue(readFirst(record, SUPPLIER_KEYS)),
@@ -588,6 +614,7 @@ export function normalizeCatalogProduct(record = {}) {
     boxSpec: readOuterBoxSpec(record),
     productId: readFirst(record, PRODUCT_ID_KEYS),
     skuIdentifier: readFirst(record, SKU_IDENTIFIER_KEYS),
+    asin: textValue(readFirst(record, ["asin", "ASIN"])),
   };
 }
 
@@ -599,9 +626,19 @@ function hasProductValue(value, field) {
 
 function cloneBoxSpec(boxSpec) {
   if (!boxSpec || typeof boxSpec !== "object") return boxSpec || null;
+  const dimensions = boxSpec.dimensions && typeof boxSpec.dimensions === "object" ? boxSpec.dimensions : {};
+  const weight = boxSpec.weight && typeof boxSpec.weight === "object" ? boxSpec.weight : {};
   return {
-    dimensions: { ...(boxSpec.dimensions || {}) },
-    weight: { ...(boxSpec.weight || {}) },
+    dimensions: {
+      length: dimensions.length ?? null,
+      width: dimensions.width ?? null,
+      height: dimensions.height ?? null,
+      unitOfMeasurement: dimensions.unitOfMeasurement ?? null,
+    },
+    weight: {
+      value: weight.value ?? null,
+      unit: weight.unit ?? null,
+    },
   };
 }
 
