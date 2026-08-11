@@ -121,6 +121,33 @@ function signWithHistoricalDevSecret(payload) {
   return `tanjia_session=${encodeURIComponent(`v1.${body}.${signature}`)}`;
 }
 
+function postChunked(baseUrl, path, cookie, chunks) {
+  return new Promise((resolve, reject) => {
+    const target = new URL(path, baseUrl);
+    const request = http.request({
+      hostname: target.hostname,
+      port: target.port,
+      path: `${target.pathname}${target.search}`,
+      method: "POST",
+      headers: {
+        cookie,
+        "content-type": "application/json",
+        // Deliberately omit Content-Length so the body-limit test exercises chunked input.
+      },
+    }, (response) => {
+      const body = [];
+      response.on("data", (chunk) => body.push(chunk));
+      response.on("end", () => resolve({
+        status: response.statusCode,
+        body: Buffer.concat(body).toString("utf8"),
+      }));
+    });
+    request.once("error", reject);
+    chunks.forEach((chunk) => request.write(chunk));
+    request.end();
+  });
+}
+
 test("password login accepts active managed users instead of only the env admin", async () => {
   const server = await startServer();
   try {
@@ -224,6 +251,46 @@ test("product catalog refresh uses the standard session gate", async () => {
       body: JSON.stringify(body),
     });
     assert.notEqual(authenticatedResponse.status, 401);
+  } finally {
+    await server.stop();
+  }
+});
+
+test("product catalog refresh rejects oversized chunked JSON with controlled 413", async () => {
+  const server = await startServer();
+  try {
+    const session = await login(server.baseUrl);
+    assert.equal(session.status, 200);
+    const padding = "x".repeat(300 * 1024);
+    const body = JSON.stringify({
+      feature: "supplier-board",
+      items: [{ sid: 8708, msku: "A" }],
+      padding,
+      token: "oversized-secret",
+    });
+    const chunks = [body.slice(0, 32), body.slice(32, 128), body.slice(128)];
+    const response = await postChunked(server.baseUrl, "/api/product-catalog/refresh", session.cookie, chunks);
+    assert.equal(response.status, 413);
+    assert.equal(response.body.includes("oversized-secret"), false);
+    const payload = JSON.parse(response.body);
+    assert.equal(payload.ok, false);
+    assert.equal(payload.error.includes("oversized-secret"), false);
+  } finally {
+    await server.stop();
+  }
+});
+
+test("product catalog refresh rejects malformed JSON with controlled 400", async () => {
+  const server = await startServer();
+  try {
+    const session = await login(server.baseUrl);
+    assert.equal(session.status, 200);
+    const response = await postChunked(server.baseUrl, "/api/product-catalog/refresh", session.cookie, ["{\"feature\":"]);
+    assert.equal(response.status, 400);
+    assert.equal(response.body.includes("SyntaxError"), false);
+    assert.equal(response.body.includes("feature"), false);
+    const payload = JSON.parse(response.body);
+    assert.equal(payload.ok, false);
   } finally {
     await server.stop();
   }

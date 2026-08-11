@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createCoreRoutes } from "../routes/core.js";
-import { createProductCatalogRoutes } from "../routes/product-catalog.js";
+import {
+  createProductCatalogRoutes,
+  serializeProductCatalogError,
+} from "../routes/product-catalog.js";
+import { dispatchApiRoute } from "../routes/api-dispatch.js";
 
 function createHarness(overrides = {}) {
   const sent = [];
@@ -31,6 +35,7 @@ test("catalog refresh route has the exact authenticated descriptor", () => {
   assert.deepEqual(routes.map(({ method, path, auth }) => ({ method, path, auth })), [
     { method: "POST", path: "/api/product-catalog/refresh", auth: "session" },
   ]);
+  assert.equal(typeof routes[0].serializeError, "function");
 });
 
 test("catalog refresh whitelists feature/items and exposes only safe result fields", async () => {
@@ -82,20 +87,101 @@ test("catalog refresh propagates typed service statuses to router dispatch", asy
   }
 });
 
+test("catalog refresh preserves typed body-read status instead of converting 413 to 400", async () => {
+  const { routes } = createHarness({
+    readJsonBody: async () => { throw Object.assign(new Error("body too large"), { statusCode: 413, code: "REQUEST_BODY_TOO_LARGE" }); },
+  });
+  await assert.rejects(routes[0].handler({ req: {}, res: {} }), (error) => (
+    error.statusCode === 413 && error.code === "REQUEST_BODY_TOO_LARGE"
+  ));
+});
+
+test("catalog error serializer preserves typed status while redacting arbitrary upstream text", () => {
+  for (const statusCode of [400, 409, 422, 502, 503, 599]) {
+    const response = serializeProductCatalogError(
+      Object.assign(new Error("upstream free text token raw-secret payload"), {
+        statusCode,
+        code: "UPSTREAM_FAILURE",
+        endpoint: "token raw-secret",
+        details: {
+          requestId: "safe-request-1",
+          operation: "manual-refresh",
+          raw: "raw-secret",
+        },
+      }),
+      "/api/product-catalog/refresh",
+    );
+    assert.equal(response.statusCode, statusCode);
+    assert.equal(JSON.stringify(response).includes("upstream free text"), false);
+    assert.equal(JSON.stringify(response).includes("raw-secret"), false);
+    assert.equal(response.payload.endpoint, "/api/product-catalog/refresh");
+  }
+  const invalid = serializeProductCatalogError(new Error("free text"), "/api/product-catalog/refresh");
+  assert.equal(invalid.statusCode, 500);
+  assert.equal(invalid.payload.error.includes("free text"), false);
+});
+
+test("generic dispatch invokes route serializers with dynamic status and fail-closed payloads", async () => {
+  const sent = [];
+  const logs = [];
+  const route = {
+    method: "POST",
+    path: "/api/product-catalog/refresh",
+    auth: "session",
+    serializeError: serializeProductCatalogError,
+    handler: async () => {
+      throw Object.assign(new Error("upstream free text token raw-secret"), { statusCode: 422 });
+    },
+  };
+  const handled = await dispatchApiRoute({
+    req: {},
+    res: {},
+    url: new URL("http://localhost/api/product-catalog/refresh"),
+    route,
+    params: {},
+    authorize: () => true,
+    sendJson: (_res, statusCode, payload) => sent.push({ statusCode, payload }),
+    logger: { error: (...args) => logs.push(args) },
+  });
+  assert.equal(handled, true);
+  assert.equal(sent[0].statusCode, 422);
+  assert.equal(sent[0].payload.error.includes("token"), false);
+  assert.equal(JSON.stringify(logs).includes("raw-secret"), false);
+
+  const invalidSent = [];
+  await dispatchApiRoute({
+    req: {},
+    res: {},
+    url: new URL("http://localhost/api/product-catalog/refresh"),
+    route: {
+      ...route,
+      handler: async () => { throw Object.assign(new Error("arbitrary upstream text"), { statusCode: 700 }); },
+    },
+    params: {},
+    authorize: () => true,
+    sendJson: (_res, statusCode, payload) => invalidSent.push({ statusCode, payload }),
+    logger: { error: () => {} },
+  });
+  assert.equal(invalidSent[0].statusCode, 500);
+  assert.equal(invalidSent[0].payload.error.includes("arbitrary"), false);
+});
+
 test("catalog health route always includes a nested degraded-safe productCatalog shape", async () => {
   const createHealthHarness = (getProductCatalogHealth) => {
     const sent = [];
+    const logs = [];
     const routes = createCoreRoutes({
       config: { dataProvider: "mock", runtime: "test", dingtalk: { login: {} } },
       getSyncState: () => ({ running: false }),
       getProductCatalogHealth,
       sendJson: (_res, statusCode, payload) => sent.push({ statusCode, payload }),
+      logger: { error: (...args) => logs.push(args) },
       getSession: () => null,
       isAuthEnabled: () => false,
       isDingtalkLoginConfigured: () => false,
       isPasswordLoginEnabled: () => false,
     });
-    return { routes, sent };
+    return { routes, sent, logs };
   };
 
   const healthy = createHealthHarness(() => ({
@@ -105,6 +191,8 @@ test("catalog health route always includes a nested degraded-safe productCatalog
     quickCheck: "ok",
   }));
   await healthy.routes.find((route) => route.path === "/api/health").handler({ req: {}, res: {} });
+  assert.equal(healthy.sent[0]?.statusCode, 200);
+  assert.equal(healthy.sent[0]?.payload.ok, true);
   assert.deepEqual(healthy.sent[0]?.payload.productCatalog, {
     ok: true,
     status: "healthy",
@@ -117,4 +205,8 @@ test("catalog health route always includes a nested degraded-safe productCatalog
   assert.equal(degraded.sent[0]?.payload.productCatalog.ok, false);
   assert.equal(degraded.sent[0]?.payload.productCatalog.error, "SQLITE_CORRUPT");
   assert.equal(JSON.stringify(degraded.sent[0]?.payload).includes("token"), false);
+  assert.equal(degraded.sent[0]?.statusCode, 200);
+  assert.equal(degraded.sent[0]?.payload.ok, true);
+  assert.equal(degraded.logs.length, 1);
+  assert.equal(JSON.stringify(degraded.logs).includes("token"), false);
 });

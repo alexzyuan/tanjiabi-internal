@@ -5,6 +5,9 @@ const ALLOWED_REFRESH_FEATURES = new Set([
   "fba-freight",
 ]);
 
+export const PRODUCT_CATALOG_REFRESH_MAX_BODY_BYTES = 256 * 1024;
+export const PRODUCT_CATALOG_REFRESH_PATH = "/api/product-catalog/refresh";
+
 const SAFE_META_FIELDS = {
   requestId: "string",
   revision: "number",
@@ -28,6 +31,21 @@ const SAFE_META_FIELDS = {
 
 const SAFE_REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/u;
 const SENSITIVE_VALUE_PATTERN = /(token|secret|password|payload|raw|body)/iu;
+const SAFE_API_CODE_PATTERN = /^[A-Za-z0-9_.:-]{1,64}$/u;
+const SAFE_PRODUCT_CATALOG_OPERATIONS = new Set([
+  "scope-normalization",
+  "seller-directory",
+  "legacy-migration",
+  "repository-bootstrap",
+  "resolution",
+  "listing-fetch",
+  "listing-shared-xlsx-read",
+  "product-fetch",
+  "catalog-commit",
+  "manual-refresh",
+  "initial-fill",
+  "catalog-refresh",
+]);
 
 function invalidRequest(message = "商品目录刷新请求无效。") {
   const error = new Error(message);
@@ -41,6 +59,75 @@ function safeRequestId(value) {
   return SAFE_REQUEST_ID_PATTERN.test(candidate) && !SENSITIVE_VALUE_PATTERN.test(candidate)
     ? candidate
     : undefined;
+}
+
+function safeApiCode(value) {
+  const code = String(value ?? "");
+  return SAFE_API_CODE_PATTERN.test(code) && !SENSITIVE_VALUE_PATTERN.test(code)
+    ? code
+    : undefined;
+}
+
+function safeProductCatalogErrorDetails(error) {
+  const source = error?.details && typeof error.details === "object" && !Array.isArray(error.details)
+    ? error.details
+    : {};
+  const details = {};
+  const requestId = safeRequestId(source.requestId);
+  const code = safeApiCode(error?.code || source.code);
+  if (requestId) details.requestId = requestId;
+  if (code) details.code = code;
+  for (const field of [
+    "operation",
+    "unknownSidCount",
+    "unresolvedCount",
+    "conflictCount",
+    "refreshRequestedCount",
+    "refreshCommittedCount",
+    "migrationCompleted",
+    "catalogRevisionBeforeRefresh",
+  ]) {
+    const value = source[field];
+    if (field === "operation" && SAFE_PRODUCT_CATALOG_OPERATIONS.has(value)) details[field] = value;
+    if (typeof value === "number" && Number.isFinite(value) && value >= 0) details[field] = value;
+    if (typeof value === "boolean") details[field] = value;
+  }
+  return Object.keys(details).length ? details : null;
+}
+
+function validApiStatusCode(value) {
+  const statusCode = Number(value);
+  return Number.isInteger(statusCode) && statusCode >= 400 && statusCode <= 599 ? statusCode : null;
+}
+
+export function serializeProductCatalogError(error, endpoint = PRODUCT_CATALOG_REFRESH_PATH) {
+  const statusCode = validApiStatusCode(error?.statusCode) || 500;
+  const errorByStatus = {
+    400: "商品目录刷新请求无效。",
+    409: "商品目录刷新发生冲突。",
+    413: "商品目录刷新请求体过大。",
+    422: "商品目录资料未解析。",
+    502: "商品目录上游服务失败。",
+    503: "商品目录服务暂不可用。",
+    504: "商品目录上游服务超时。",
+  };
+  const details = safeProductCatalogErrorDetails(error);
+  return {
+    statusCode,
+    payload: {
+      ok: false,
+      error: errorByStatus[statusCode] || "商品目录服务失败。",
+      details,
+      endpoint: PRODUCT_CATALOG_REFRESH_PATH,
+    },
+    log: {
+      endpoint: PRODUCT_CATALOG_REFRESH_PATH,
+      operation: "refresh",
+      statusCode,
+      errorCode: safeApiCode(error?.code) || "PRODUCT_CATALOG_REFRESH_ERROR",
+      ...(details || {}),
+    },
+  };
 }
 
 function safeMeta(meta) {
@@ -82,13 +169,15 @@ export function createProductCatalogRoutes({
   return [
     {
       method: "POST",
-      path: "/api/product-catalog/refresh",
+      path: PRODUCT_CATALOG_REFRESH_PATH,
       auth: "session",
+      serializeError: serializeProductCatalogError,
       handler: async ({ req, res }) => {
         let body;
         try {
-          body = await readJsonBody(req);
-        } catch {
+          body = await readJsonBody(req, { maxBytes: PRODUCT_CATALOG_REFRESH_MAX_BODY_BYTES });
+        } catch (error) {
+          if (validApiStatusCode(error?.statusCode)) throw error;
           throw invalidRequest();
         }
         const input = refreshInput(body);

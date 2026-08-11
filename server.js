@@ -7,6 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getConfig } from "./src/config/index.js";
 import { buildApiRoutes } from "./routes/index.js";
+import { dispatchApiRoute as dispatchRoute } from "./routes/api-dispatch.js";
 import { getLingxingAdapter } from "./src/adapters/lingxingAdapter.js";
 import { getMskuDetailDashboard, getSalesWeeklyDashboard } from "./src/services/dashboardService.js";
 import { getDailyProductPulse } from "./src/services/productPulseService.js";
@@ -630,10 +631,31 @@ function requireFinance(req, res) {
   return false;
 }
 
-async function readJsonBody(req) {
+const DEFAULT_JSON_BODY_MAX_BYTES = 16 * 1024 * 1024;
+
+function requestBodyTooLarge(maxBytes) {
+  const error = new Error("Request body exceeds the allowed size.");
+  error.statusCode = 413;
+  error.code = "REQUEST_BODY_TOO_LARGE";
+  error.details = { maxBytes };
+  return error;
+}
+
+async function readJsonBody(req, { maxBytes = DEFAULT_JSON_BODY_MAX_BYTES } = {}) {
+  const limit = Number(maxBytes);
+  if (!Number.isInteger(limit) || limit <= 0) throw new TypeError("Invalid JSON body limit.");
   const chunks = [];
+  let byteLength = 0;
+  let exceeded = false;
   for await (const chunk of req) {
-    chunks.push(chunk);
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    byteLength += buffer.length;
+    if (byteLength <= limit) chunks.push(buffer);
+    else exceeded = true;
+  }
+
+  if (exceeded) {
+    throw requestBodyTooLarge(limit);
   }
 
   if (!chunks.length) return {};
@@ -915,89 +937,6 @@ function matchApiRoute(req, url) {
   return null;
 }
 
-function validApiStatusCode(value) {
-  const statusCode = Number(value);
-  return Number.isInteger(statusCode) && statusCode >= 400 && statusCode <= 599 ? statusCode : null;
-}
-
-const SAFE_API_CODE_PATTERN = /^[A-Za-z0-9_.:-]{1,64}$/u;
-const SAFE_API_REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/u;
-const SENSITIVE_API_VALUE_PATTERN = /(token|secret|password|payload|raw|body)/iu;
-const SAFE_PRODUCT_CATALOG_OPERATIONS = new Set([
-  "scope-normalization",
-  "seller-directory",
-  "legacy-migration",
-  "repository-bootstrap",
-  "resolution",
-  "listing-fetch",
-  "listing-shared-xlsx-read",
-  "product-fetch",
-  "catalog-commit",
-  "manual-refresh",
-  "initial-fill",
-  "catalog-refresh",
-]);
-
-function safeApiRequestId(value) {
-  const requestId = String(value ?? "");
-  return SAFE_API_REQUEST_ID_PATTERN.test(requestId) && !SENSITIVE_API_VALUE_PATTERN.test(requestId)
-    ? requestId
-    : undefined;
-}
-
-function safeApiCode(value) {
-  const code = String(value ?? "");
-  return SAFE_API_CODE_PATTERN.test(code) && !SENSITIVE_API_VALUE_PATTERN.test(code)
-    ? code
-    : undefined;
-}
-
-function safeProductCatalogErrorDetails(error) {
-  const source = error?.details && typeof error.details === "object" && !Array.isArray(error.details)
-    ? error.details
-    : {};
-  const details = {};
-  const requestId = safeApiRequestId(source.requestId);
-  const code = safeApiCode(error?.code || source.code);
-  if (requestId) details.requestId = requestId;
-  if (code) details.code = code;
-  for (const field of [
-    "operation",
-    "unknownSidCount",
-    "unresolvedCount",
-    "conflictCount",
-    "refreshRequestedCount",
-    "refreshCommittedCount",
-    "migrationCompleted",
-    "catalogRevisionBeforeRefresh",
-  ]) {
-    const value = source[field];
-    if (field === "operation" && SAFE_PRODUCT_CATALOG_OPERATIONS.has(value)) details[field] = value;
-    if (typeof value === "number" && Number.isFinite(value) && value >= 0) details[field] = value;
-    if (typeof value === "boolean") details[field] = value;
-  }
-  return Object.keys(details).length ? details : null;
-}
-
-function productCatalogErrorPayload(error, endpoint) {
-  const statusCode = validApiStatusCode(error?.statusCode) || 500;
-  const errorByStatus = {
-    400: "商品目录刷新请求无效。",
-    409: "商品目录刷新发生冲突。",
-    422: "商品目录资料未解析。",
-    502: "商品目录上游服务失败。",
-    503: "商品目录服务暂不可用。",
-    504: "商品目录上游服务超时。",
-  };
-  const payload = {
-    ok: false,
-    error: errorByStatus[statusCode] || "商品目录服务失败。",
-    details: safeProductCatalogErrorDetails(error),
-    endpoint,
-  };
-  return { statusCode, payload };
-}
-
 function authorizeApiRoute(route, req, res, url) {
   if (route.auth === "none") return true;
   if (!requireAuth(req, res, url)) return false;
@@ -1010,36 +949,16 @@ function authorizeApiRoute(route, req, res, url) {
 async function dispatchApiRoute(req, res, url) {
   const match = matchApiRoute(req, url);
   if (!match) return false;
-  const { route, params } = match;
-  if (!authorizeApiRoute(route, req, res, url)) return true;
-  try {
-    await route.handler({ req, res, url, params });
-  } catch (error) {
-    if (route.path === "/api/product-catalog/refresh") {
-      const endpoint = route.path;
-      const safe = productCatalogErrorPayload(error, endpoint);
-      console.error("[api-error]", {
-        endpoint,
-        operation: "refresh",
-        statusCode: safe.statusCode,
-        errorCode: safeApiCode(error?.code) || "PRODUCT_CATALOG_REFRESH_ERROR",
-        ...(safe.payload.details || {}),
-      });
-      sendJson(res, safe.statusCode, safe.payload);
-      return true;
-    }
-    const endpoint = error?.endpoint || route.path || String(route.pattern);
-    const statusCode = validApiStatusCode(error?.statusCode)
-      || validApiStatusCode(route.errorStatusCode)
-      || 500;
-    sendJson(res, statusCode, {
-      ok: false,
-      error: error?.message || "Internal server error",
-      details: error?.details || null,
-      endpoint,
-    });
-  }
-  return true;
+  return dispatchRoute({
+    req,
+    res,
+    url,
+    route: match.route,
+    params: match.params,
+    authorize: authorizeApiRoute,
+    sendJson,
+    logger: console,
+  });
 }
 
 async function router(req, res) {

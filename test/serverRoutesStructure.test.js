@@ -24,6 +24,7 @@ test("API routes are split into domain route modules", async () => {
   const serverSource = await readFile(new URL("../server.js", import.meta.url), "utf8");
 
   assert.match(serverSource, /import \{ buildApiRoutes \} from "\.\/routes\/index\.js";/);
+  assert.match(serverSource, /import \{ dispatchApiRoute as dispatchRoute \} from "\.\/routes\/api-dispatch\.js";/);
   assert.match(serverSource, /const apiRoutes = createApiRoutes\(buildApiRoutes\(\{/);
 
   for (const file of routeFiles) {
@@ -68,6 +69,8 @@ test("product catalog route is composed from service entry points without refres
   assert.match(source, /getProductCatalogHealth/);
   assert.match(source, /refreshProductCatalogScope/);
   assert.equal((source.match(/refreshProductCatalogScope\s*\(/g) || []).length, 0);
+  assert.equal(source.includes("/api/product-catalog/refresh"), false);
+  assert.equal(source.includes("SAFE_PRODUCT_CATALOG"), false);
 });
 
 test("server router no longer contains legacy API if-else branches", async () => {
