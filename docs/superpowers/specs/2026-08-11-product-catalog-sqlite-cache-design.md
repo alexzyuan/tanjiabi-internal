@@ -145,6 +145,16 @@ data-cache/product-catalog/product-catalog-v1.sqlite
 
 启动时发现同版本 checksum 不一致、未知更高版本或迁移失败时必须使商品目录不可用并记录错误，不能继续猜测兼容。
 
+### `catalog_metadata`
+
+| 字段 | 规则 |
+| --- | --- |
+| `key` | 文本主键 |
+| `value` | 文本值 |
+| `updated_at_ms` | 更新时间 |
+
+首版固定维护 `catalog_revision`、`legacy_manifest_hash` 和 `legacy_migrated_at_ms`。每次成功写入 Listing/商品/别名的事务同时递增 `catalog_revision`；派生页面缓存保存该 revision，发现不一致时只从 SQLite 重新装配商品字段，不重请求其销售或库存来源。`legacy_manifest_hash` 由旧缓存文件名、大小和修改时间的稳定清单生成，确保回滚到旧版本期间新增的 JSON 会在下次部署重新纳入迁移。
+
 ### `listing_identity`
 
 | 字段 | 规则 |
@@ -269,7 +279,7 @@ Content-Type: application/json
 
 1. 从当前业务行提取唯一 `SID + MSKU`，空 SID/MSKU 进入可见诊断；严格消费者直接失败。
 2. 用 seller directory 校验 SID，并用规范 seller 覆盖旧别名店铺名称和国家。
-3. repository 确认旧缓存迁移 marker 已完成；正式部署通常在 PM2 重启前已完成，开发环境可在第一次调用时通过 single-flight 只执行一次迁移。
+3. repository 确认当前旧缓存 manifest hash 已完成迁移；正式部署通常在 PM2 重启前已完成，开发环境可在第一次调用时通过 single-flight 只执行一次迁移。
 4. 批量读取 SQLite。迁移命中的记录已经位于 SQLite，并保留 `source=legacy-json`，运行时不能为每个请求重新扫描旧目录。
 5. 已存在的身份直接返回，不按年龄自动刷新。
 6. 迁移后仍未命中的全新身份，按 SID 批量请求领星 Listing，再按唯一内部 SKU 批量请求产品管理，事务提交后返回。
@@ -306,7 +316,7 @@ Content-Type: application/json
 
 迁移开始和结束时都要记录旧缓存文件名、大小和修改时间清单。若旧 PM2 进程在迁移期间新增或替换文件，迁移命令重新扫描；连续三次仍无法得到稳定清单则失败并停止部署。这样避免在旧进程尚未重启时遗漏最后一次 JSON 原子写入。
 
-没有旧缓存的开发/测试环境允许创建空数据库并成功结束。运行时仍保留 lazy `ensureSchema`，但不能在每次请求重新扫描 114 MB 旧文件。
+没有旧缓存的开发/测试环境允许创建空数据库并成功结束。运行时仍保留 lazy `ensureSchema`，但不能在每次请求重新扫描 114 MB 旧文件。部署迁移即使已有完成记录，也必须比较当前 manifest hash；hash 变化时重新执行确定性 upsert，成功后才更新 `legacy_manifest_hash` 和 `legacy_migrated_at_ms`。
 
 ### 冲突优先级
 
@@ -405,6 +415,7 @@ Content-Type: application/json
 ### Repository 单元测试
 
 - schema 首次创建、重复打开、按版本升级和 checksum 不一致失败；
+- `catalog_revision` 随成功事务递增、失败事务不变，legacy manifest 元数据可重复读取；
 - `SID + MSKU`、内部 SKU 和别名唯一性；
 - 批量 upsert 原子性与冲突回滚；
 - `NULL` 与真实数值 `0` 的区分；
@@ -421,6 +432,7 @@ Content-Type: application/json
 - 共享目录优先，supplier map 只补缺；
 - JSON 损坏、未知 schema 和事务错误失败；
 - 重复执行幂等；
+- manifest 未变化时不重复导入，回滚期间新增旧 JSON 后 hash 变化并重新迁移；
 - 迁移不删除或修改旧文件。
 
 ### Service 单元测试
