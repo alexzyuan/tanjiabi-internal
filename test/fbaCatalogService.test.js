@@ -607,12 +607,38 @@ test("FBA search redacts raw upstream error messages", async () => {
 });
 
 test("FBA rejects malformed or mismatched canonical shared-catalog values", async (t) => {
+  class CanonicalCatalogClass {
+    constructor(fields) {
+      Object.assign(this, fields);
+    }
+  }
+
+  const validIdentity = {
+    sid: fbaSeller.sid,
+    msku: "RUNTIME-MSKU-10",
+    internalSku: "ERP-RUNTIME-10",
+  };
+  const mapValue = new Map(Object.entries(validIdentity));
+  Object.assign(mapValue, validIdentity);
+  const dateValue = Object.assign(new Date(0), validIdentity);
+  const customToString = { toString: () => "ERP-RUNTIME-10" };
   const malformedValues = [
     { sid: fbaSeller.sid + 1, msku: "RUNTIME-MSKU-10", internalSku: "ERP-RUNTIME-10" },
     { sid: fbaSeller.sid, msku: "OTHER-MSKU", internalSku: "ERP-RUNTIME-10" },
     {},
     [],
     { sid: fbaSeller.sid, msku: "RUNTIME-MSKU-10" },
+    mapValue,
+    dateValue,
+    new CanonicalCatalogClass(validIdentity),
+    { ...validIdentity, internalSku: {} },
+    { ...validIdentity, internalSku: 12345 },
+    { ...validIdentity, internalSku: ["ERP-RUNTIME-10"] },
+    { ...validIdentity, internalSku: customToString },
+    { ...validIdentity, internalSku: "", localSku: {} },
+    { ...validIdentity, internalSku: "", localSku: 12345 },
+    { ...validIdentity, internalSku: "", localSku: ["ERP-RUNTIME-10"] },
+    { ...validIdentity, internalSku: "", localSku: customToString },
   ];
 
   for (const value of malformedValues) {
@@ -625,6 +651,19 @@ test("FBA rejects malformed or mismatched canonical shared-catalog values", asyn
     assert.equal(result.ok, false);
     assert.equal(result.items.length, 0);
   }
+
+  const trimmed = await createFbaCatalogFixture(t);
+  const accepted = await trimmed.search({
+    getSharedCatalog: async () => ({
+      map: new Map([["sid:99010:msku:runtime-msku-10", {
+        sid: fbaSeller.sid,
+        msku: " RUNTIME-MSKU-10 ",
+        internalSku: "  ERP-RUNTIME-10  ",
+      }]]),
+    }),
+  });
+  assert.equal(accepted.ok, true);
+  assert.equal(accepted.items[0].internalSku, "ERP-RUNTIME-10");
 });
 
 test("warm FBA Listing discovery is re-based on the current runtime seller metadata", async (t) => {
@@ -720,6 +759,25 @@ test("FBA fail-closed errors never expose arbitrary upstream text in errors or d
   assert.equal(result.diagnostics.errors.length > 0, true);
 });
 
+test("FBA fail-closed errors keep arbitrary upstream text out of generic summaries", async () => {
+  const upstreamText = "upstream timeout payload 7f2a with no credential markers";
+  const adapter = {
+    async fetchListings() {
+      throw new Error(upstreamText);
+    },
+  };
+  const result = await searchFbaMskus({
+    sids: [99011],
+    q: "MISSING",
+    adapter,
+    getDirectory: async () => ({ sellers: [{ sid: 99011, name: "runtime-store-US" }] }),
+  });
+
+  assert.deepEqual(result.errors, ["runtime-store-US: 领星 Listing 查询失败。"]);
+  assert.deepEqual(result.diagnostics.errors, ["runtime-store-US: 领星 Listing 查询失败。"]);
+  assert.equal(JSON.stringify(result).includes(upstreamText), false);
+});
+
 test("FBA uses seller_sku/msku before sku and never treats local_sku as MSKU", async (t) => {
   const fixture = await createFbaCatalogFixture(t);
   let listingCalls = 0;
@@ -750,6 +808,42 @@ test("FBA uses seller_sku/msku before sku and never treats local_sku as MSKU", a
 
   assert.equal(result.ok, true);
   assert.equal(result.items[0].msku, "AMZ-MSKU-10");
+  assert.equal(result.items[0].internalSku, "ERP-SKU-10");
+  assert.equal(listingCalls, 1);
+});
+
+test("FBA resolves conflicting Listing identity fields with MSKU precedence and one Listing call", async (t) => {
+  const fixture = await createFbaCatalogFixture(t);
+  let listingCalls = 0;
+  fixture.adapter.fetchListings = async () => {
+    listingCalls += 1;
+    return listingPayload([{
+      sid: fbaSeller.sid,
+      seller_sku: "SELLER-FIELD-MSKU",
+      msku: "MSKU-FIELD-MSKU",
+      sku: "HISTORICAL-SKU",
+      local_sku: "ERP-SKU-10",
+      title: "Conflicting listing fields",
+    }]);
+  };
+  const result = await fixture.search({
+    getSharedCatalog: async (_adapter, items) => ({
+      map: new Map(items.map((item) => [
+        `sid:${item.sid}:msku:${item.msku.toLowerCase()}`,
+        {
+          sid: item.sid,
+          msku: item.msku,
+          internalSku: "ERP-SKU-10",
+          productName: "ERP product",
+          packQuantity: 1,
+          boxSpec: null,
+        },
+      ])),
+    }),
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.items[0].msku, "MSKU-FIELD-MSKU");
   assert.equal(result.items[0].internalSku, "ERP-SKU-10");
   assert.equal(listingCalls, 1);
 });

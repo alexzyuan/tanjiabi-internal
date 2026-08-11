@@ -329,11 +329,23 @@ function findCatalogProduct(item, catalogMap = new Map()) {
   return null;
 }
 
+function isPlainCatalogObject(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function isNonEmptyCatalogString(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
 function isValidCanonicalCatalogValue(discovery, product) {
-  if (!product || typeof product !== "object" || Array.isArray(product)) return false;
-  if (Number(product.sid) !== Number(discovery.sid)) return false;
+  if (!isPlainCatalogObject(product)) return false;
+  if (!Number.isInteger(discovery?.sid) || discovery.sid <= 0) return false;
+  if (!Number.isInteger(product.sid) || product.sid <= 0 || product.sid !== discovery.sid) return false;
+  if (!isNonEmptyCatalogString(discovery?.msku) || !isNonEmptyCatalogString(product.msku)) return false;
   if (normalizeKey(product.msku) !== normalizeKey(discovery.msku)) return false;
-  return Boolean(normalizeText(product.internalSku || product.localSku));
+  return isNonEmptyCatalogString(product.internalSku) || isNonEmptyCatalogString(product.localSku);
 }
 
 function mergeCatalogItem(discovery, product) {
@@ -342,7 +354,10 @@ function mergeCatalogItem(discovery, product) {
     if (Object.hasOwn(product, field)) result[field] = product[field];
     return result;
   }, {});
-  const internalSku = normalizeText(canonical.internalSku || canonical.localSku);
+  const internalSku = [canonical.internalSku, canonical.localSku]
+    .find((value) => isNonEmptyCatalogString(value))
+    ?.trim() || "";
+  const sku = isNonEmptyCatalogString(canonical.sku) ? canonical.sku.trim() : internalSku;
   return {
     ...discovery,
     ...canonical,
@@ -355,7 +370,7 @@ function mergeCatalogItem(discovery, product) {
     title: discovery.title || canonical.productName || "",
     productName: canonical.productName || discovery.title || "",
     internalSku,
-    sku: normalizeText(canonical.sku || internalSku),
+    sku,
     erpSku: internalSku,
     packQuantity: Object.hasOwn(canonical, "packQuantity") ? canonical.packQuantity : null,
     boxSpec: canonical.boxSpec || null,
