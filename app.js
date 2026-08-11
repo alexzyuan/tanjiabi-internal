@@ -246,6 +246,7 @@ let loadProductPulse = async () => {};
 let setupProductPulse = () => {};
 let loadSupplierBoard = async () => {};
 let loadSupplierDetail = async () => {};
+let loadAftersalesMailSettings = async () => {};
 let loadHealthStatus = async () => {};
 let loadLingxingShops = async () => {};
 let loadSyncStatus = async () => {};
@@ -789,7 +790,7 @@ async function refreshDashboardFromFilters() {
   setText,
 }));
 
-({ loadHealthStatus, loadLingxingShops, loadSyncStatus, renderSyncStatus, setupSyncCenter } = createSyncCenterFeature({
+({ loadAftersalesMailSettings, loadHealthStatus, loadLingxingShops, loadSyncStatus, renderSyncStatus, setupSyncCenter } = createSyncCenterFeature({
   root: document,
   bind,
   escapeHtml,
@@ -806,6 +807,7 @@ async function refreshDashboardFromFilters() {
   runningFromLocalFile,
   setButtonBusy,
   setExclusiveClassState,
+  setStatusMessage,
   setText,
   syncToneClasses,
 }));
@@ -1236,6 +1238,7 @@ function setupNavigation() {
     }
     if (view === "sync") loadSyncStatus();
     if (view === "sync") loadLingxingShops();
+    if (view === "sync") loadAftersalesMailSettings();
     window.__tanjiaHideSidebarFlyout?.();
     collapseSidebar();
   }

@@ -900,6 +900,9 @@ test("app.js starts using shared dashboard section loader", async () => {
   assert.ok(syncCenterFeatureSource.includes("function setupSyncCenter"), "missing setupSyncCenter feature setup");
   assert.ok(syncCenterFeatureSource.includes('bind(root, "#aftersales-mail-test", "click"'), "aftersales mail test binding should live in sync center feature");
   assert.ok(syncCenterFeatureSource.includes('bind(root, "#aftersales-mail-settings-form", "submit"'), "aftersales mail save binding should live in sync center feature");
+  assert.match(appSource, /\(\{[^}]*\bloadAftersalesMailSettings\b[^}]*\} = createSyncCenterFeature\(/s);
+  assert.match(syncCenterSource, /setStatusMessage,/);
+  assert.match(appSource, /if \(view === "sync"\) loadAftersalesMailSettings\(\);/);
   assert.ok(topbarStatusFeatureSource.includes("function updateWorldClock"), "missing updateWorldClock topbar renderer");
   assert.ok(topbarStatusFeatureSource.includes("function renderTopbarSyncStatus"), "missing renderTopbarSyncStatus topbar renderer");
   assert.ok(fbaFreightFeatureSource.includes("async function loadFbaFreightInitial"), "missing loadFbaFreightInitial feature entry");
