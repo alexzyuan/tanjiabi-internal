@@ -605,3 +605,186 @@ test("FBA search redacts raw upstream error messages", async () => {
   assert.equal(result.errors.some((message) => message.includes("secret")), false);
   assert.equal(result.errors.some((message) => message.includes("payload")), false);
 });
+
+test("FBA rejects malformed or mismatched canonical shared-catalog values", async (t) => {
+  const malformedValues = [
+    { sid: fbaSeller.sid + 1, msku: "RUNTIME-MSKU-10", internalSku: "ERP-RUNTIME-10" },
+    { sid: fbaSeller.sid, msku: "OTHER-MSKU", internalSku: "ERP-RUNTIME-10" },
+    {},
+    [],
+    { sid: fbaSeller.sid, msku: "RUNTIME-MSKU-10" },
+  ];
+
+  for (const value of malformedValues) {
+    const fixture = await createFbaCatalogFixture(t);
+    const result = await fixture.search({
+      getSharedCatalog: async () => ({
+        map: new Map([["sid:99010:msku:runtime-msku-10", value]]),
+      }),
+    });
+    assert.equal(result.ok, false);
+    assert.equal(result.items.length, 0);
+  }
+});
+
+test("warm FBA Listing discovery is re-based on the current runtime seller metadata", async (t) => {
+  fbaCatalogTestUtils.clearCache();
+  const directory = await mkdtemp(path.join(os.tmpdir(), "fba-catalog-seller-rebase-test-"));
+  const repository = createProductCatalogRepository({
+    databasePath: path.join(directory, "product-catalog-v1.sqlite"),
+    now: () => 1720000000000,
+  });
+  t.after(async () => {
+    fbaCatalogTestUtils.clearCache();
+    repository.close();
+    await rm(directory, { recursive: true, force: true });
+  });
+  const v1 = { sid: fbaSeller.sid, name: "runtime-store-v1", displayName: "Runtime V1", country: "美国" };
+  const v2 = { sid: fbaSeller.sid, name: "runtime-store-v2", displayName: "Runtime V2", country: "加拿大" };
+  let directoryVersion = 1;
+  let listingCalls = 0;
+  const sellerCalls = [];
+  const adapter = {
+    async fetchListings() {
+      listingCalls += 1;
+      return listingPayload([{
+        sid: fbaSeller.sid,
+        seller_sku: "RUNTIME-MSKU-10",
+        local_sku: "ERP-RUNTIME-10",
+        asin: "B0RUNTIME10",
+        title: "Runtime title",
+      }]);
+    },
+  };
+  const getDirectory = async () => ({ sellers: [directoryVersion === 1 ? v1 : v2] });
+  const getSharedCatalog = async (_adapter, items, options) => {
+    sellerCalls.push(options.sellers.map((seller) => ({ name: seller.name, displayName: seller.displayName, country: seller.country })));
+    return {
+      map: new Map(items.map((item) => [
+        `sid:${item.sid}:msku:${item.msku.toLowerCase()}`,
+        {
+          sid: item.sid,
+          msku: item.msku,
+          internalSku: "ERP-RUNTIME-10",
+          productName: "Runtime product",
+          packQuantity: 1,
+          boxSpec: null,
+        },
+      ])),
+    };
+  };
+  const first = await searchFbaMskus({
+    sids: [fbaSeller.sid],
+    adapter,
+    getDirectory,
+    productCatalogRepository: repository,
+    getSharedCatalog,
+  });
+  directoryVersion = 2;
+  const second = await searchFbaMskus({
+    sids: [fbaSeller.sid],
+    adapter,
+    getDirectory,
+    productCatalogRepository: repository,
+    getSharedCatalog,
+  });
+
+  assert.equal(first.items[0].shopName, "runtime-store-v1");
+  assert.equal(second.items[0].shopName, "runtime-store-v2");
+  assert.equal(second.items[0].displayName, "Runtime V2");
+  assert.equal(second.items[0].country, "加拿大");
+  assert.equal(listingCalls, 1);
+  assert.deepEqual(sellerCalls.map((sellers) => sellers[0].name), ["runtime-store-v1", "runtime-store-v2"]);
+});
+
+test("FBA fail-closed errors never expose arbitrary upstream text in errors or diagnostics", async () => {
+  const upstreamText = '{"credential":"x","authorization":"Bearer abc","body":{"foo":"bar"}}';
+  const adapter = {
+    async fetchListings() {
+      throw new Error(upstreamText);
+    },
+  };
+  const result = await searchFbaMskus({
+    sids: [99011],
+    q: "MISSING",
+    adapter,
+    getDirectory: async () => ({ sellers: [{ sid: 99011, name: "runtime-store-US" }] }),
+  });
+  const serialized = JSON.stringify(result);
+
+  assert.equal(serialized.includes("credential"), false);
+  assert.equal(serialized.includes("authorization"), false);
+  assert.equal(serialized.includes("Bearer abc"), false);
+  assert.equal(serialized.includes("foo"), false);
+  assert.equal(result.errors.length > 0, true);
+  assert.equal(result.diagnostics.errors.length > 0, true);
+});
+
+test("FBA uses seller_sku/msku before sku and never treats local_sku as MSKU", async (t) => {
+  const fixture = await createFbaCatalogFixture(t);
+  let listingCalls = 0;
+  fixture.adapter.fetchListings = async () => {
+    listingCalls += 1;
+    return listingPayload([{
+      sid: fbaSeller.sid,
+      sku: "AMZ-MSKU-10",
+      local_sku: "ERP-SKU-10",
+      title: "Amazon listing SKU",
+    }]);
+  };
+  const result = await fixture.search({
+    getSharedCatalog: async (_adapter, items) => ({
+      map: new Map(items.map((item) => [
+        `sid:${item.sid}:msku:${item.msku.toLowerCase()}`,
+        {
+          sid: item.sid,
+          msku: item.msku,
+          internalSku: "ERP-SKU-10",
+          productName: "ERP product",
+          packQuantity: 1,
+          boxSpec: null,
+        },
+      ])),
+    }),
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.items[0].msku, "AMZ-MSKU-10");
+  assert.equal(result.items[0].internalSku, "ERP-SKU-10");
+  assert.equal(listingCalls, 1);
+});
+
+test("FBA chunk-2 hydration failure returns no partial result or cache entry", async (t) => {
+  const fixture = await createFbaCatalogFixture(t);
+  const rows = Array.from({ length: 501 }, (_, index) => ({
+    sid: fbaSeller.sid,
+    seller_sku: `CHUNK-${index}`,
+    local_sku: `ERP-CHUNK-${index}`,
+  }));
+  let sharedCalls = 0;
+  fixture.adapter.fetchListings = async () => listingPayload(rows);
+  const result = await fixture.search({
+    getSharedCatalog: async (_adapter, items) => {
+      sharedCalls += 1;
+      if (sharedCalls === 2) throw new Error("chunk two failed");
+      return {
+        map: new Map(items.map((item) => [
+          `sid:${item.sid}:msku:${item.msku.toLowerCase()}`,
+          {
+            sid: item.sid,
+            msku: item.msku,
+            internalSku: `ERP-${item.msku}`,
+            productName: "Chunk product",
+            packQuantity: 1,
+            boxSpec: null,
+          },
+        ])),
+      };
+    },
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.items.length, 0);
+  assert.equal(sharedCalls, 2);
+  assert.equal(fbaCatalogTestUtils.getDiscoveryCacheSnapshot().length, 0);
+});

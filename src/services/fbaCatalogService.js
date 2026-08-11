@@ -19,6 +19,7 @@ const DISCOVERY_CACHE_FIELDS = [
 const PRODUCT_RESULT_FIELDS = [
   "internalSku",
   "internalSkuKey",
+  "localSku",
   "sku",
   "skuIdentifier",
   "productId",
@@ -45,8 +46,6 @@ const LISTING_MSKU_KEYS = [
   "seller_sku",
   "sellerSku",
   "sellerSkuStr",
-  "local_sku",
-  "localSku",
   "fnsku",
   "sku",
   "item_sku",
@@ -219,11 +218,12 @@ function emptyDiagnostics() {
 }
 
 function safeFbaErrorMessage(error) {
-  const message = normalizeText(error?.message);
-  if (!message || /token|secret|password|payload|raw|body/i.test(message)) {
-    return "领星 Listing 查询失败。";
+  if (error?.name === "ProductCatalogInputError") return "商品目录输入无效。";
+  if (error?.name === "ProductCatalogConflictError") return "商品目录冲突。";
+  if (error?.name === "ProductCatalogUpstreamError" && Number(error?.statusCode) === 422) {
+    return "商品目录未解析必要资料。";
   }
-  return message.length > 160 ? `${message.slice(0, 157)}...` : message;
+  return "领星 Listing 查询失败。";
 }
 
 function diagnosticMessage(unpairedListings = []) {
@@ -297,6 +297,16 @@ function cloneDiscoveryItems(items = []) {
   return (Array.isArray(items) ? items : []).map((item) => discoveryCacheItem(item));
 }
 
+function rebaseDiscoveryItems(items, shop) {
+  return cloneDiscoveryItems(items).map((item) => ({
+    ...item,
+    sid: shop.sid,
+    shopName: shop.name,
+    displayName: shop.displayName,
+    country: shop.country,
+  }));
+}
+
 function catalogMapKeys(item = {}) {
   const msku = normalizeKey(item.msku);
   const sid = Number(item.sid || 0);
@@ -319,13 +329,20 @@ function findCatalogProduct(item, catalogMap = new Map()) {
   return null;
 }
 
+function isValidCanonicalCatalogValue(discovery, product) {
+  if (!product || typeof product !== "object" || Array.isArray(product)) return false;
+  if (Number(product.sid) !== Number(discovery.sid)) return false;
+  if (normalizeKey(product.msku) !== normalizeKey(discovery.msku)) return false;
+  return Boolean(normalizeText(product.internalSku || product.localSku));
+}
+
 function mergeCatalogItem(discovery, product) {
   if (!product) return { ...discovery };
   const canonical = PRODUCT_RESULT_FIELDS.reduce((result, field) => {
     if (Object.hasOwn(product, field)) result[field] = product[field];
     return result;
   }, {});
-  const internalSku = normalizeText(canonical.internalSku || canonical.sku);
+  const internalSku = normalizeText(canonical.internalSku || canonical.localSku);
   return {
     ...discovery,
     ...canonical,
@@ -379,9 +396,9 @@ async function hydrateMskuDiscovery(adapter, shop, discoveryItems, listingRecord
     const catalogResult = await getSharedCatalog(adapter, chunk, catalogOptions);
     const catalogMap = catalogResult?.map;
     if (!(catalogMap instanceof Map)) throw new Error("共享商品目录返回无效索引。");
-    const missing = chunk.filter((item) => !findCatalogProduct(item, catalogMap));
+    const missing = chunk.filter((item) => !isValidCanonicalCatalogValue(item, findCatalogProduct(item, catalogMap)));
     if (missing.length) {
-      throw new Error(`FBA 商品目录未解析 ${missing.length} 个 Listing。`);
+      throw new Error("FBA 商品目录记录身份或内部 SKU 无效。");
     }
     hydrated.push(...chunk.map((item) => mergeCatalogItem(item, findCatalogProduct(item, catalogMap))));
   }
@@ -402,7 +419,7 @@ async function fetchMskusForShop(adapter, shop, {
   const cached = mskuCache.get(cacheKey);
   const nowMs = typeof now === "function" ? now() : Number(now);
   if (!force && cached && nowMs - cached.updatedAt < CACHE_TTL_MS) {
-    const discoveryItems = cloneDiscoveryItems(cached.items);
+    const discoveryItems = rebaseDiscoveryItems(cached.items, shop);
     return hydrateMskuDiscovery(adapter, shop, discoveryItems, [], {
       repository,
       getDirectory,
