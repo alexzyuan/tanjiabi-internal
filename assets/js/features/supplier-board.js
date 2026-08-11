@@ -258,8 +258,9 @@ export function createSupplierBoardFeature({
 
   function safeProductRefreshErrorMessage(response, data) {
     const hasSafeObject = data && typeof data === "object" && !Array.isArray(data);
-    const controlledError = hasSafeObject && typeof data.error === "string" ? data.error.trim() : "";
-    if (controlledError && controlledError.length <= 200) return controlledError;
+    const controlledError = hasSafeObject && data.ok === false && typeof data.error === "string" ? data.error.trim() : "";
+    const containsSensitiveText = /(token|secret|password|authorization|cookie|payload|raw|body)/iu.test(controlledError);
+    if (controlledError && controlledError.length <= 200 && !containsSensitiveText) return controlledError;
     const status = Number(response?.status);
     return Number.isFinite(status) && status > 0 ? `API ${status}` : "网络请求失败";
   }
@@ -276,9 +277,13 @@ export function createSupplierBoardFeature({
     logger.error(message, details);
   }
 
-  function committedProductCount(data, fallback) {
-    const count = Number(data?.meta?.refreshCommittedCount);
-    return Number.isSafeInteger(count) && count >= 0 ? count : fallback;
+  function committedProductCount(data, expectedCount) {
+    const meta = data?.meta;
+    const count = meta && typeof meta === "object" && !Array.isArray(meta) ? meta.refreshCommittedCount : undefined;
+    if (!Number.isSafeInteger(count) || count < 0 || count > expectedCount) {
+      throw makeProductRefreshError("刷新响应无效。");
+    }
+    return count;
   }
 
   async function refreshSupplierBoardProducts() {
@@ -315,8 +320,7 @@ export function createSupplierBoardFeature({
         }
 
         const committedCount = committedProductCount(data, scope.items.length);
-        const reload = await loadSupplierBoard({ forceRefresh: false });
-        if (!reload?.ok) {
+        const reportCommittedReloadFailure = (reloadError) => {
           setText(
             "#supplier-board-status",
             `商品资料已提交 ${committedCount} 个，但看板重载失败，请稍后重试。`,
@@ -324,10 +328,19 @@ export function createSupplierBoardFeature({
           );
           logProductRefreshError("[supplier-board] product refresh committed but reload failed", {
             committedCount,
-            reloadStatus: Number(reload?.error?.response?.status) || 0,
+            reloadStatus: Number(reloadError?.response?.status) || 0,
             itemCount: scope.items.length,
           });
-          return { ok: false, committed: true, data, error: reload?.error, excludedCount: scope.excludedCount };
+          return { ok: false, committed: true, data, error: reloadError, excludedCount: scope.excludedCount };
+        };
+        let reload;
+        try {
+          reload = await loadSupplierBoard({ forceRefresh: false });
+        } catch (reloadError) {
+          return reportCommittedReloadFailure(reloadError);
+        }
+        if (!reload?.ok) {
+          return reportCommittedReloadFailure(reload?.error);
         }
 
         setText("#supplier-board-status", `商品资料已刷新 ${committedCount} 个，并已重新装配当前看板。`, root);

@@ -55,7 +55,7 @@ function jsonResponse(payload, status = 200) {
   };
 }
 
-async function createProductRefreshFeatureFixture({ rows = [], refreshResponse = jsonResponse({ ok: true, meta: { refreshCommittedCount: 1 } }), reloadResult = { ok: true }, selectedValues = {} } = {}) {
+async function createProductRefreshFeatureFixture({ rows = [], refreshResponse = jsonResponse({ ok: true, meta: { refreshCommittedCount: 1 } }), reloadResult = { ok: true }, reloadError = null, selectedValues = {} } = {}) {
   const bindCalls = [];
   const bindAllCalls = [];
   const requests = [];
@@ -87,13 +87,16 @@ async function createProductRefreshFeatureFixture({ rows = [], refreshResponse =
     },
   };
   let dashboardData = { rows };
+  let dashboardLoadCount = 0;
   const feature = createSupplierBoardFeature({
     root,
     loadDashboardSection: async (options) => {
+      dashboardLoadCount += 1;
       const endpoint = new URL(options.endpoint, "http://localhost");
       dashboardLoads.push({ forceRefresh: endpoint.searchParams.get("forceRefresh") === "1" });
       await options.onData(dashboardData);
       await options.onFinally();
+      if (dashboardLoadCount > 1 && reloadError) throw reloadError;
       return reloadResult;
     },
     fetchImpl: async (url, options) => {
@@ -245,11 +248,54 @@ test("controlled API error is visible without echoing untrusted response fields"
   assert.equal(fixture.dashboardLoads.length, 0);
 });
 
+test("malformed API error shape falls back to status and never renders sensitive error text", async () => {
+  const fixture = await createProductRefreshFeatureFixture({
+    rows: [{ sid: 8708, msku: "A" }],
+    refreshResponse: jsonResponse({ ok: false, error: "token secret should not be shown" }, 502),
+  });
+
+  const result = await fixture.feature.refreshSupplierBoardProducts();
+
+  assert.equal(result.ok, false);
+  assert.match(fixture.statusText(), /刷新失败：API 502/);
+  assert.doesNotMatch(fixture.statusText(), /token|secret/);
+  assert.equal(fixture.dashboardLoads.length, 0);
+});
+
+test("successful API response without a committed count fails closed before dashboard reload", async () => {
+  const fixture = await createProductRefreshFeatureFixture({
+    rows: [{ sid: 8708, msku: "A" }],
+    refreshResponse: jsonResponse({ ok: true, meta: {} }),
+  });
+
+  const result = await fixture.feature.refreshSupplierBoardProducts();
+
+  assert.equal(result.ok, false);
+  assert.equal(fixture.dashboardLoads.length, 0);
+  assert.match(fixture.statusText(), /刷新失败：刷新响应无效/);
+  assert.equal(fixture.productRefreshButton.disabled, false);
+});
+
 test("commit success with reload failure reports partial committed state", async () => {
   const fixture = await createProductRefreshFeatureFixture({
     rows: [{ sid: 8708, msku: "A" }],
     refreshResponse: jsonResponse({ ok: true, meta: { refreshCommittedCount: 1 } }),
     reloadResult: { ok: false, error: new Error("raw reload error") },
+  });
+
+  const result = await fixture.feature.refreshSupplierBoardProducts();
+
+  assert.equal(result.ok, false);
+  assert.equal(result.committed, true);
+  assert.match(fixture.statusText(), /商品资料已提交 1 个，但看板重载失败/);
+  assert.equal(fixture.productRefreshButton.disabled, false);
+});
+
+test("commit success with thrown dashboard reload reports partial committed state", async () => {
+  const fixture = await createProductRefreshFeatureFixture({
+    rows: [{ sid: 8708, msku: "A" }],
+    refreshResponse: jsonResponse({ ok: true, meta: { refreshCommittedCount: 1 } }),
+    reloadError: new Error("raw reload error"),
   });
 
   const result = await fixture.feature.refreshSupplierBoardProducts();
