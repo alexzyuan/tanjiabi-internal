@@ -205,6 +205,30 @@ test("route table session routes require login and seller directory failures rem
   }
 });
 
+test("product catalog refresh uses the standard session gate", async () => {
+  const server = await startServer();
+  try {
+    const body = { feature: "supplier-board", items: [{ sid: 8708, msku: "A" }] };
+    const unauthenticatedResponse = await fetch(`${server.baseUrl}/api/product-catalog/refresh`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    assert.equal(unauthenticatedResponse.status, 401);
+
+    const session = await login(server.baseUrl);
+    assert.equal(session.status, 200);
+    const authenticatedResponse = await fetch(`${server.baseUrl}/api/product-catalog/refresh`, {
+      method: "POST",
+      headers: { cookie: session.cookie, "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    assert.notEqual(authenticatedResponse.status, 401);
+  } finally {
+    await server.stop();
+  }
+});
+
 test("route table admin routes reject subaccounts and allow the environment admin", async () => {
   const server = await startServer();
   try {

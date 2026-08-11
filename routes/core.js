@@ -1,6 +1,62 @@
+const SAFE_HEALTH_CODE_PATTERN = /^[A-Za-z0-9_.:-]{1,64}$/u;
+const SENSITIVE_HEALTH_CODE_PATTERN = /(token|secret|password|payload|raw|body|path)/iu;
+
+function safeHealthCode(value) {
+  const code = String(value ?? "");
+  return SAFE_HEALTH_CODE_PATTERN.test(code) && !SENSITIVE_HEALTH_CODE_PATTERN.test(code)
+    ? code
+    : "PRODUCT_CATALOG_HEALTH_ERROR";
+}
+
+function safeHealthNumber(value) {
+  return Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : null;
+}
+
+function sanitizeProductCatalogHealth(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return degradedProductCatalogHealth({ code: "PRODUCT_CATALOG_HEALTH_INVALID" });
+  }
+  const ok = value.ok === true;
+  const quickCheck = value.quickCheck === "ok" ? "ok" : "unavailable";
+  const result = {
+    ok,
+    status: ok ? "healthy" : "degraded",
+    schemaVersion: Number.isInteger(value.schemaVersion) && value.schemaVersion >= 0 ? value.schemaVersion : null,
+    quickCheck,
+  };
+  if (!ok) result.error = safeHealthCode(value.error || "PRODUCT_CATALOG_HEALTH_ERROR");
+  for (const field of [
+    "revision",
+    "listingCount",
+    "productCount",
+    "aliasCount",
+    "metadataCount",
+    "schemaMigrationCount",
+    "databaseBytes",
+    "walBytes",
+    "legacyMigratedAt",
+  ]) {
+    const number = safeHealthNumber(value[field]);
+    if (number !== null) result[field] = number;
+  }
+  return result;
+}
+
+function degradedProductCatalogHealth(error) {
+  return {
+    ok: false,
+    status: "degraded",
+    schemaVersion: null,
+    quickCheck: "unavailable",
+    error: safeHealthCode(error?.code || error?.name),
+  };
+}
+
 export function createCoreRoutes({
   config,
   getSyncState,
+  getProductCatalogHealth,
+  logger = console,
   getSyncStatus,
   getSession,
   getLingxingShops,
@@ -15,6 +71,23 @@ export function createCoreRoutes({
   isDingtalkLoginConfigured,
   isPasswordLoginEnabled,
 } = {}) {
+  const readProductCatalogHealth = () => {
+    try {
+      return sanitizeProductCatalogHealth(getProductCatalogHealth());
+    } catch (error) {
+      const degraded = degradedProductCatalogHealth(error);
+      const log = logger?.error;
+      if (typeof log === "function") {
+        log.call(logger, "[product-catalog-health]", {
+          operation: "health",
+          status: "degraded",
+          error: degraded.error,
+        });
+      }
+      return degraded;
+    }
+  };
+
   return [
     {
       method: "GET",
@@ -27,6 +100,7 @@ export function createCoreRoutes({
           provider: config.dataProvider,
           runtime: config.runtime,
           sync: getSyncState(),
+          productCatalog: readProductCatalogHealth(),
         });
       },
     },

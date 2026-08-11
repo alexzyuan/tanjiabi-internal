@@ -17,6 +17,7 @@ const routeFiles = [
   "webhook-assistant.js",
   "sync-store-inspection.js",
   "debug-knowledge.js",
+  "product-catalog.js",
 ];
 
 test("API routes are split into domain route modules", async () => {
@@ -53,12 +54,20 @@ test("route table requires every API route to declare auth", () => {
   assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/fba/jiufang/channels")?.auth, "session");
   assert.equal(routes.find((route) => route.method === "POST" && route.path === "/api/fba/jiufang/orders/dry-run")?.auth, "session");
   assert.equal(routes.find((route) => route.method === "POST" && route.path === "/api/fba/jiufang/orders/create")?.auth, "session");
+  assert.equal(routes.find((route) => route.method === "POST" && route.path === "/api/product-catalog/refresh")?.auth, "session");
   assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/webhook-assistant/tasks")?.auth, "admin");
   assert.equal(routes.find((route) => route.method === "POST" && route.path === "/api/webhook-assistant/tasks")?.auth, "admin");
   assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/dashboard/clearance-inventory"), undefined);
   assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/dashboard/slow-moving-risk/live")?.auth, "session");
   assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/dashboard/slow-moving-risk/reports")?.auth, "session");
   assert.ok(routes.some((route) => route.method === "GET" && route.pattern?.toString().includes("slow-moving-risk")));
+});
+
+test("product catalog route is composed from service entry points without refresh business logic in server", async () => {
+  const source = await readFile(new URL("../server.js", import.meta.url), "utf8");
+  assert.match(source, /getProductCatalogHealth/);
+  assert.match(source, /refreshProductCatalogScope/);
+  assert.equal((source.match(/refreshProductCatalogScope\s*\(/g) || []).length, 0);
 });
 
 test("server router no longer contains legacy API if-else branches", async () => {
