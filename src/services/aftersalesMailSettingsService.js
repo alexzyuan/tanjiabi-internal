@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
 import { ImapFlow } from "imapflow";
@@ -22,7 +22,7 @@ function connectionResult(ok, checkedAt, message) {
 }
 
 function configuredPassword(config = {}) {
-  return String(config.password || "").trim();
+  return typeof config.password === "string" ? config.password : String(config.password || "");
 }
 
 function configuredAccount(config = {}) {
@@ -41,6 +41,22 @@ function requiresConnectionConfig(config = {}) {
 function safeActorName(actor = {}) {
   const value = typeof actor === "string" ? actor : actor?.name || actor?.username || actor?.id;
   return String(value || "未知操作人").trim().slice(0, 200) || "未知操作人";
+}
+
+function assertSafePassword(value) {
+  if (value !== undefined && value !== null && typeof value !== "string") {
+    throw new Error("售后邮箱授权码必须为字符串。");
+  }
+  if (typeof value === "string" && /[\r\n]/.test(value)) {
+    throw new Error("售后邮箱授权码不得包含换行符。");
+  }
+}
+
+function passwordFromPayload(payload = {}, config = {}) {
+  assertSafePassword(payload.password);
+  const password = payload.password || configuredPassword(config);
+  assertSafePassword(password);
+  return password;
 }
 
 function updateEnvValue(envText, key, value) {
@@ -67,15 +83,52 @@ async function readAuditRows(auditPath) {
   }
 }
 
-async function writeAtomically(filePath, content) {
-  await mkdir(path.dirname(filePath), { recursive: true });
-  const tempPath = path.join(path.dirname(filePath), `.${path.basename(filePath)}.${process.pid}.${crypto.randomUUID()}.tmp`);
-  await writeFile(tempPath, content, "utf8");
-  await rename(tempPath, filePath);
+async function writeAtomically(filePath, content, options = {}) {
+  const tempPath = await stageAtomically(filePath, content, options);
+  try {
+    await rename(tempPath, filePath);
+  } catch (error) {
+    await removeTemp(tempPath, error);
+    throw error;
+  }
 }
 
-async function writeAuditRows(auditPath, rows) {
-  await writeAtomically(auditPath, `${JSON.stringify(rows, null, 2)}\n`);
+async function stageAtomically(filePath, content, { mode } = {}) {
+  await mkdir(path.dirname(filePath), { recursive: true });
+  const tempPath = path.join(path.dirname(filePath), `.${path.basename(filePath)}.${process.pid}.${crypto.randomUUID()}.tmp`);
+  try {
+    await writeFile(tempPath, content, "utf8");
+    if (mode !== undefined) await chmod(tempPath, mode);
+    return tempPath;
+  } catch (error) {
+    await removeTemp(tempPath, error);
+    throw error;
+  }
+}
+
+async function removeTemp(tempPath, originalError) {
+  try {
+    await rm(tempPath, { force: true });
+  } catch (cleanupError) {
+    originalError.cleanupError = cleanupError;
+  }
+}
+
+async function existingFileSnapshot(filePath) {
+  try {
+    const [content, metadata] = await Promise.all([
+      readFile(filePath, "utf8"),
+      stat(filePath),
+    ]);
+    return {
+      exists: true,
+      content,
+      mode: metadata.mode & 0o7777,
+    };
+  } catch (error) {
+    if (error?.code === "ENOENT") return { exists: false, content: "", mode: undefined };
+    throw error;
+  }
 }
 
 export async function defaultVerifyImap(config = {}) {
@@ -115,6 +168,7 @@ export function createAftersalesMailSettingsService({
   now = () => new Date().toISOString(),
 } = {}) {
   let lastTest = null;
+  let saveQueue = Promise.resolve();
 
   function mailConfig() {
     const config = getConfig();
@@ -139,7 +193,7 @@ export function createAftersalesMailSettingsService({
 
   async function testConnection(payload = {}) {
     const config = mailConfig();
-    const password = String(payload.password || configuredPassword(config)).trim();
+    const password = passwordFromPayload(payload, config);
     const candidate = { ...config, password };
     const checkedAt = now();
 
@@ -166,11 +220,12 @@ export function createAftersalesMailSettingsService({
     return lastTest;
   }
 
-  async function saveSettings(payload = {}, actor = {}) {
+  async function saveSettingsInternal(payload = {}, actor = {}) {
     if (typeof payload.enabled !== "boolean") throw new Error("售后邮箱启用状态必须为布尔值。");
 
     const config = mailConfig();
-    const suppliedPassword = String(payload.password || "").trim();
+    assertSafePassword(payload.password);
+    const suppliedPassword = payload.password || "";
     const candidatePassword = suppliedPassword || configuredPassword(config);
     const requiresVerification = Boolean(suppliedPassword || payload.enabled);
     if (requiresVerification) {
@@ -180,17 +235,13 @@ export function createAftersalesMailSettingsService({
 
     const auditRows = await readAuditRows(auditPath);
     const previous = auditRows.at(-1) || {};
-    let envText = "";
-    try {
-      envText = await readFile(envPath, "utf8");
-    } catch (error) {
-      if (error?.code !== "ENOENT") throw error;
-    }
+    const [envSnapshot, auditSnapshot] = await Promise.all([
+      existingFileSnapshot(envPath),
+      existingFileSnapshot(auditPath),
+    ]);
 
-    let nextEnvText = updateEnvValue(envText, managedKeys[0], String(payload.enabled));
+    let nextEnvText = updateEnvValue(envSnapshot.content, managedKeys[0], String(payload.enabled));
     if (suppliedPassword) nextEnvText = updateEnvValue(nextEnvText, managedKeys[1], suppliedPassword);
-    await writeAtomically(envPath, nextEnvText);
-    reloadConfig();
 
     const changedAt = now();
     const auditRow = {
@@ -204,8 +255,44 @@ export function createAftersalesMailSettingsService({
         actor: safeActorName(actor),
       },
     };
-    await writeAuditRows(auditPath, [...auditRows, auditRow]);
+
+    const envTempPath = await stageAtomically(envPath, nextEnvText, { mode: envSnapshot.mode });
+    let auditTempPath = null;
+    let auditCommitted = false;
+    let envCommitted = false;
+    try {
+      auditTempPath = await stageAtomically(auditPath, `${JSON.stringify([...auditRows, auditRow], null, 2)}\n`, {
+        mode: auditSnapshot.mode,
+      });
+      await rename(auditTempPath, auditPath);
+      auditCommitted = true;
+      auditTempPath = null;
+      await rename(envTempPath, envPath);
+      envCommitted = true;
+      reloadConfig();
+    } catch (error) {
+      if (auditTempPath) await removeTemp(auditTempPath, error);
+      if (!envCommitted) await removeTemp(envTempPath, error);
+      if (auditCommitted && !envCommitted) {
+        try {
+          if (auditSnapshot.exists) {
+            await writeAtomically(auditPath, auditSnapshot.content, { mode: auditSnapshot.mode });
+          } else {
+            await rm(auditPath, { force: true });
+          }
+        } catch (rollbackError) {
+          error.auditRollbackError = rollbackError;
+        }
+      }
+      throw error;
+    }
     return getStatus();
+  }
+
+  function saveSettings(payload = {}, actor = {}) {
+    const operation = saveQueue.then(() => saveSettingsInternal(payload, actor));
+    saveQueue = operation.then(() => undefined, () => undefined);
+    return operation;
   }
 
   return { getStatus, testConnection, saveSettings };

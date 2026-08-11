@@ -3,34 +3,47 @@ import path from "node:path";
 
 const DEFAULT_PORT = 4173;
 const DEFAULT_SYNC_INTERVAL_HOURS = 12;
+const DOT_ENV_MANAGED_KEYS = new Set([
+  "AFTERSALES_MAIL_ENABLED",
+  "AFTERSALES_MAIL_PASSWORD",
+]);
+const dotEnvPath = path.join(process.cwd(), ".env");
 
-function loadDotEnv() {
-  const envPath = path.join(process.cwd(), ".env");
+function loadDotEnv(envPath = dotEnvPath) {
   if (!existsSync(envPath)) return {};
 
   return readFileSync(envPath, "utf8")
     .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith("#") && line.includes("="))
+    .filter((line) => {
+      const trimmed = line.trim();
+      return trimmed && !trimmed.startsWith("#") && trimmed.includes("=");
+    })
     .reduce((acc, line) => {
       const index = line.indexOf("=");
       const key = line.slice(0, index).trim();
-      const value = line.slice(index + 1).trim().replace(/^["']|["']$/g, "");
+      const rawValue = line.slice(index + 1);
+      const managedPassword = key === "AFTERSALES_MAIL_PASSWORD";
+      const value = managedPassword
+        ? rawValue.replace(/^\s*(["'])([\s\S]*)\1\s*$/, "$2")
+        : rawValue.trim().replace(/^["']|["']$/g, "");
       acc[key] = value;
       return acc;
     }, {});
 }
 
-const dotEnvPath = path.join(process.cwd(), ".env");
-let dotEnv = loadDotEnv();
-const dotEnvLoaded = existsSync(dotEnvPath);
+let dotEnv = loadDotEnv(dotEnvPath);
+let dotEnvLoaded = existsSync(dotEnvPath);
+let preferDotEnvKeys = new Set();
 
 export function reloadDotEnv() {
-  dotEnv = loadDotEnv();
+  dotEnv = loadDotEnv(dotEnvPath);
+  dotEnvLoaded = existsSync(dotEnvPath);
+  preferDotEnvKeys = new Set([...DOT_ENV_MANAGED_KEYS].filter((key) => Object.hasOwn(dotEnv, key)));
   return { ...dotEnv };
 }
 
 export function readEnv(name, fallback = "") {
+  if (preferDotEnvKeys.has(name) && dotEnv[name] !== undefined) return dotEnv[name];
   return process.env[name] || dotEnv[name] || fallback;
 }
 
