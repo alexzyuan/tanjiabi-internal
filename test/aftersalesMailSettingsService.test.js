@@ -130,6 +130,27 @@ test("test-only connection results are durably audited and restored by a new ser
   });
 });
 
+test("a standalone test audit does not hide the latest durable save change", async () => {
+  await withTempMailboxSettings(async ({ service, envPath, auditPath }) => {
+    const saved = await service.saveSettings({ enabled: false }, { displayName: "fixture-saver" });
+    const testResult = await service.testConnection({ password: "fixture-probe-value-014" }, { displayName: "fixture-tester" });
+    assert.equal(testResult.ok, true);
+
+    const restartedService = createAftersalesMailSettingsService({
+      envPath,
+      auditPath,
+      getConfig: () => readMailboxConfig(envPath),
+      reloadConfig: () => ({}),
+      verifyImap: async () => {},
+      verifySmtp: async () => {},
+      now: () => "2026-08-11T08:02:00.000Z",
+    });
+    const status = await restartedService.getStatus();
+    assert.deepEqual(status.lastChange, saved.lastChange);
+    assert.deepEqual(status.lastTest, testResult);
+  });
+});
+
 test("disabling mail keeps its saved authorization code while changing only the enabled flag", async () => {
   await withTempMailboxSettings(async ({ service, envPath }) => {
     const status = await service.saveSettings({ enabled: false }, { name: "系统管理员" });

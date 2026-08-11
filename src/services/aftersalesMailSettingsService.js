@@ -118,6 +118,13 @@ function latestTestResult(auditRows = []) {
   return null;
 }
 
+function latestLastChange(auditRows = []) {
+  for (let index = auditRows.length - 1; index >= 0; index -= 1) {
+    if (auditRows[index]?.lastChange) return auditRows[index].lastChange;
+  }
+  return null;
+}
+
 async function writeAtomically(filePath, content, options = {}) {
   const tempPath = await stageAtomically(filePath, content, options);
   try {
@@ -243,7 +250,7 @@ export function createAftersalesMailSettingsService({
       enabled: config.enabled === true,
       passwordConfigured: Boolean(configuredPassword(config)),
       lastTest: latestTestResult(auditRows) || lastTest || latest.lastTest || null,
-      lastChange: latest.lastChange || null,
+      lastChange: latestLastChange(auditRows),
     };
   }
 
