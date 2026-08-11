@@ -262,7 +262,7 @@ test("reports health diagnostics without exposing row payloads", async (t) => {
     operation: "health-seed",
     requestId: "health-seed",
     products: [{ internalSkuKey: "tj001", internalSku: "TJ001", source: "test", sourceUpdatedAtMs: 1720000000000, refreshedAtMs: 1720000000000 }],
-    aliases: [],
+    aliases: [{ aliasType: "product_id", aliasKey: "101", aliasValue: "101", internalSkuKey: "tj001", source: "test", updatedAtMs: 1720000000000 }],
     listings: [{ sid: 8708, mskuKey: "A", msku: "A", source: "test", sourceUpdatedAtMs: 1720000000000, refreshedAtMs: 1720000000000 }],
   });
   const health = repository.getHealth();
@@ -272,8 +272,165 @@ test("reports health diagnostics without exposing row payloads", async (t) => {
   assert.equal(health.revision, 1);
   assert.equal(health.listingCount, 1);
   assert.equal(health.productCount, 1);
+  assert.equal(health.aliasCount, 1);
+  assert.equal(health.metadataCount, 1);
+  assert.equal(health.schemaMigrationCount, 1);
   assert.equal(typeof health.databaseBytes, "number");
   assert.equal(typeof health.walBytes, "number");
   assert.equal(health.legacyMigratedAt, null);
   assert.equal(Object.hasOwn(health, "raw"), false);
+});
+
+test("restricts metadata to redacted legacy manifest scalars before any row mutation", async (t) => {
+  const calls = [];
+  const { repository } = await createRepositoryFixture(t, { logger: { error: (...args) => calls.push(args) } });
+  const product = {
+    internalSkuKey: "tj001",
+    internalSku: "TJ001",
+    source: "test",
+    sourceUpdatedAtMs: 1720000000000,
+    refreshedAtMs: 1720000000000,
+  };
+  assert.throws(() => repository.upsertCatalog({
+    products: [product],
+    metadata: { raw: { token: "secret" } },
+  }), (error) => error.statusCode === 400);
+  assert.equal(repository.readProductsByInternalSkuKeys(["tj001"]).length, 0);
+  assert.equal(repository.getRevision(), 0);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(Object.keys(calls[0][1]).sort(), ["code", "message", "operation"]);
+  assert.doesNotMatch(JSON.stringify(calls[0][1]), /raw|token|secret/);
+
+  assert.equal(repository.upsertCatalog({
+    metadata: { legacy_manifest_hash: null, legacy_migrated_at_ms: 1720000000000 },
+  }).revision, 0);
+  assert.equal(repository.getMetadata("legacy_manifest_hash"), "null");
+});
+
+test("rejects explicit product and Listing canonical keys that disagree with raw identities", async (t) => {
+  const { repository } = await createRepositoryFixture(t);
+  assert.throws(() => repository.upsertCatalog({
+    products: [{
+      internalSkuKey: "other",
+      internalSku: "TJ001",
+      source: "test",
+      sourceUpdatedAtMs: 1720000000000,
+      refreshedAtMs: 1720000000000,
+    }],
+  }), (error) => error.statusCode === 400);
+  assert.equal(repository.getRevision(), 0);
+
+  assert.throws(() => repository.upsertCatalog({
+    listings: [{
+      sid: 8708,
+      mskuKey: "other",
+      msku: "JM-DGC-BLUE",
+      source: "test",
+      sourceUpdatedAtMs: 1720000000000,
+      refreshedAtMs: 1720000000000,
+    }],
+  }), (error) => error.statusCode === 400);
+  assert.equal(repository.getRevision(), 0);
+
+  assert.throws(() => repository.upsertCatalog({
+    listings: [{
+      sid: 8708,
+      mskuKey: "jm-dgc-blue",
+      msku: "JM-DGC-BLUE",
+      internalSkuKey: "other",
+      internalSku: "TJ001",
+      source: "test",
+      sourceUpdatedAtMs: 1720000000000,
+      refreshedAtMs: 1720000000000,
+    }],
+  }), (error) => error.statusCode === 400);
+  assert.equal(repository.getRevision(), 0);
+});
+
+test("requires listing_sku aliases to prove ERP local_sku origin without persisting sourceField", async (t) => {
+  const { repository } = await createRepositoryFixture(t);
+  const product = {
+    internalSkuKey: "tj001",
+    internalSku: "TJ001",
+    source: "test",
+    sourceUpdatedAtMs: 1720000000000,
+    refreshedAtMs: 1720000000000,
+  };
+  assert.throws(() => repository.upsertCatalog({
+    products: [product],
+    aliases: [{
+      aliasType: "listing_sku",
+      aliasKey: "seller-sku",
+      aliasValue: "seller-sku",
+      internalSkuKey: "tj001",
+      source: "test",
+      sourceField: "seller_sku",
+      updatedAtMs: 1720000000000,
+    }],
+  }), (error) => error.statusCode === 400);
+  assert.equal(repository.getRevision(), 0);
+
+  assert.equal(repository.upsertCatalog({
+    products: [product],
+    aliases: [{
+      aliasType: "listing_sku",
+      aliasKey: "seller-sku",
+      aliasValue: "seller-sku",
+      internalSkuKey: "tj001",
+      source: "test",
+      sourceField: "local_sku",
+      updatedAtMs: 1720000000000,
+    }],
+  }).revision, 1);
+  const inspector = new Database(repository.databasePath, { readonly: true });
+  const columns = inspector.prepare("PRAGMA table_info(product_alias)").all().map(({ name }) => name);
+  assert.equal(columns.includes("sourceField"), false);
+  inspector.close();
+});
+
+test("logs and rethrows redacted errors for non-array reads and repeated close", async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "product-catalog-operation-test-"));
+  const databasePath = path.join(directory, "product-catalog-v1.sqlite");
+  const calls = [];
+  const repository = createProductCatalogRepository({ databasePath, logger: { error: (...args) => calls.push(args) } });
+  t.after(() => rm(directory, { recursive: true, force: true }));
+
+  assert.throws(() => repository.readScope(null), (error) => error.statusCode === 400);
+  assert.throws(() => repository.readProductsByInternalSkuKeys(null), (error) => error.statusCode === 400);
+  repository.close();
+  repository.close();
+
+  assert.deepEqual(calls.map(([, details]) => details.operation), ["read-scope", "read-products"]);
+  for (const [, details] of calls) {
+    assert.deepEqual(Object.keys(details).sort(), ["code", "message", "operation"]);
+    assert.doesNotMatch(JSON.stringify(details), /token|raw|secret/);
+  }
+});
+
+test("deduplicates product lookups and retains zero box dimensions and weight", async (t) => {
+  const { repository } = await createRepositoryFixture(t);
+  repository.upsertCatalog({
+    products: [{
+      internalSkuKey: "tj001",
+      internalSku: "TJ001",
+      boxSpec: {
+        dimensions: { length: null, width: 0, height: null, unitOfMeasurement: "CM" },
+        weight: { value: 0, unit: "KG" },
+      },
+      source: "test",
+      sourceUpdatedAtMs: 1720000000000,
+      refreshedAtMs: 1720000000000,
+    }],
+    listings: [
+      { sid: 8708, mskuKey: "a", msku: "A", internalSkuKey: "tj001", source: "test", sourceUpdatedAtMs: 1, refreshedAtMs: 1 },
+      { sid: 8708, mskuKey: "b", msku: "B", internalSkuKey: "tj001", source: "test", sourceUpdatedAtMs: 1, refreshedAtMs: 1 },
+    ],
+  });
+  const rows = repository.readScope([{ sid: 8708, mskuKey: "a" }, { sid: 8708, mskuKey: "b" }]);
+  assert.equal(rows.length, 2);
+  assert.strictEqual(rows[0].product.internalSkuKey, rows[1].product.internalSkuKey);
+  assert.deepEqual(rows[0].product.boxSpec, {
+    dimensions: { length: null, width: 0, height: null, unitOfMeasurement: "CM" },
+    weight: { value: 0, unit: "KG" },
+  });
 });

@@ -13,6 +13,7 @@ import {
 } from "./productCatalogIdentity.js";
 
 const ALIAS_TYPES = new Set(["sku_identifier", "product_id", "listing_sku"]);
+const EXTERNAL_METADATA_KEYS = new Set(["legacy_manifest_hash", "legacy_migrated_at_ms"]);
 
 function writeLog(logger, level, details) {
   const method = logger?.[level];
@@ -31,9 +32,21 @@ function operationErrorDetails(operation, error) {
   return {
     operation,
     code: error?.code || null,
-    errorName: error?.name || "Error",
-    errorMessage: String(error?.message || "未知错误").slice(0, 300),
+    message: error instanceof ProductCatalogConflictError
+      ? "商品目录冲突。"
+      : error instanceof ProductCatalogInputError
+        ? "商品目录输入无效。"
+        : String(error?.message || "未知错误").slice(0, 300),
   };
+}
+
+function withOperation(logger, operation, callback) {
+  try {
+    return callback();
+  } catch (error) {
+    writeLog(logger, "error", operationErrorDetails(operation, error));
+    throw error;
+  }
 }
 
 function readPragmas(db) {
@@ -108,12 +121,23 @@ function normalizeInternalSkuKey(value, message = "商品目录缺少有效内�
   return key;
 }
 
+function assertCanonicalIdentityKey(explicitKey, rawValue, message) {
+  const rawKey = normalizeCatalogKey(rawValue);
+  if (!rawKey) throw new ProductCatalogInputError(message);
+  const key = normalizeInternalSkuKey(explicitKey, message);
+  if (key !== rawKey) throw new ProductCatalogInputError(message);
+  return key;
+}
+
 function normalizeAlias(alias) {
   const aliasType = requiredText(alias?.aliasType, "商品别名类型不能为空。");
   if (!ALIAS_TYPES.has(aliasType)) throw new ProductCatalogInputError("商品别名类型无效。");
   const aliasKey = normalizeCatalogKey(alias?.aliasKey);
   if (!aliasKey) throw new ProductCatalogInputError("商品别名键不能为空。");
   const aliasValue = requiredText(alias?.aliasValue ?? alias?.aliasKey, "商品别名值不能为空。");
+  if (aliasType === "listing_sku" && alias?.sourceField !== "local_sku") {
+    throw new ProductCatalogInputError("listing_sku 别名必须来自 Listing local_sku。");
+  }
   const internalSkuKey = normalizeInternalSkuKey(alias?.internalSkuKey);
   return {
     aliasType,
@@ -150,8 +174,12 @@ function normalizeProduct(product) {
   if (!product || typeof product !== "object" || Array.isArray(product)) {
     throw new ProductCatalogInputError("商品主数据无效。");
   }
-  const internalSkuKey = normalizeInternalSkuKey(product.internalSkuKey);
   const internalSku = requiredText(product.internalSku, "商品主数据缺少内部 SKU。");
+  const internalSkuKey = assertCanonicalIdentityKey(
+    product.internalSkuKey,
+    internalSku,
+    "商品主数据内部 SKU key 与内部 SKU 不一致。",
+  );
   const boxSpec = normalizeBoxSpec(product.boxSpec);
   return {
     internalSkuKey,
@@ -190,16 +218,32 @@ function normalizeListing(listing) {
   const sid = Number(listing.sid);
   if (!Number.isInteger(sid) || sid <= 0) throw new ProductCatalogInputError("Listing SID 无效。");
   const msku = requiredText(listing.msku, `SID ${sid} 缺少有效 MSKU。`);
-  const mskuKey = normalizeCatalogKey(listing.mskuKey || msku);
-  if (!mskuKey) throw new ProductCatalogInputError(`SID ${sid} 缺少有效 MSKU。`);
+  const explicitMskuKey = listing.mskuKey === null || listing.mskuKey === undefined || listing.mskuKey === ""
+    ? null
+    : listing.mskuKey;
+  const mskuKey = explicitMskuKey === null
+    ? normalizeCatalogKey(msku)
+    : assertCanonicalIdentityKey(explicitMskuKey, msku, `SID ${sid} 的 MSKU key 与 MSKU 不一致。`);
+  const internalSku = nullableText(listing.internalSku);
+  const hasInternalSku = internalSku !== null && internalSku.trim() !== "";
+  const hasInternalSkuKey = listing.internalSkuKey !== null
+    && listing.internalSkuKey !== undefined
+    && listing.internalSkuKey !== "";
+  if (hasInternalSkuKey && hasInternalSku) {
+    assertCanonicalIdentityKey(
+      listing.internalSkuKey,
+      internalSku,
+      "Listing 内部 SKU key 与内部 SKU 不一致。",
+    );
+  }
   return {
     sid,
     mskuKey,
     msku,
-    internalSkuKey: listing.internalSkuKey == null || listing.internalSkuKey === ""
+    internalSkuKey: !hasInternalSkuKey
       ? null
       : normalizeInternalSkuKey(listing.internalSkuKey),
-    internalSku: nullableText(listing.internalSku),
+    internalSku,
     listingSku: nullableText(listing.listingSku),
     asin: nullableText(listing.asin),
     storeName: nullableText(listing.storeName),
@@ -249,6 +293,43 @@ function computeProductHash(product) {
   return createHash("sha256").update(JSON.stringify(productHashInput(product))).digest("hex");
 }
 
+function normalizeMetadata(metadata) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    throw new ProductCatalogInputError("metadata 必须为对象。");
+  }
+  return Object.entries(metadata).map(([key, value]) => {
+    if (!EXTERNAL_METADATA_KEYS.has(key)) {
+      throw new ProductCatalogInputError("商品目录元数据键不在允许范围内。");
+    }
+    if (value !== null && typeof value !== "string"
+      && (typeof value !== "number" || !Number.isFinite(value))) {
+      throw new ProductCatalogInputError("商品目录元数据值必须为字符串、有限数字或 null。");
+    }
+    return [key, String(value)];
+  });
+}
+
+function mapBoxSpecRow(row) {
+  const boxValues = [
+    row.box_length,
+    row.box_width,
+    row.box_height,
+    row.box_dimension_unit,
+    row.box_weight,
+    row.box_weight_unit,
+  ];
+  if (boxValues.every((value) => value === null)) return null;
+  return {
+    dimensions: {
+      length: row.box_length,
+      width: row.box_width,
+      height: row.box_height,
+      unitOfMeasurement: row.box_dimension_unit,
+    },
+    weight: { value: row.box_weight, unit: row.box_weight_unit },
+  };
+}
+
 function mapProductRow(row) {
   if (!row) return null;
   return {
@@ -267,15 +348,7 @@ function mapProductRow(row) {
     unit: row.unit,
     declaredValue: row.declared_value,
     packQuantity: row.pack_quantity,
-    boxSpec: row.box_length === null ? null : {
-      dimensions: {
-        length: row.box_length,
-        width: row.box_width,
-        height: row.box_height,
-        unitOfMeasurement: row.box_dimension_unit,
-      },
-      weight: { value: row.box_weight, unit: row.box_weight_unit },
-    },
+    boxSpec: mapBoxSpecRow(row),
     productId: row.product_id,
     skuIdentifier: row.sku_identifier,
     source: row.source,
@@ -447,7 +520,7 @@ export function createProductCatalogRepository({
       refreshed_at_ms = excluded.refreshed_at_ms`,
   );
 
-  const writeCatalog = db.transaction(({ products, aliases, listings, metadata = {} }) => {
+  const writeCatalog = db.transaction(({ products, aliases, listings, metadata = [] }) => {
     const normalizedProducts = products.map(normalizeProduct).map((product) => ({
       ...product,
       dataHash: computeProductHash(product),
@@ -469,118 +542,131 @@ export function createProductCatalogRepository({
     }
     const revision = hasCatalogRows ? currentRevision + 1 : currentRevision;
     if (hasCatalogRows) writeMetadata.run("catalog_revision", String(revision), resolveNow(now));
-    for (const [key, value] of Object.entries(metadata)) {
-      if (key === "catalog_revision") throw new ProductCatalogInputError("catalog_revision 由仓储统一维护。");
-      if (!key || value === undefined) throw new ProductCatalogInputError("商品目录元数据无效。");
-      writeMetadata.run(key, String(value), resolveNow(now));
+    for (const [key, value] of metadata) {
+      writeMetadata.run(key, value, resolveNow(now));
     }
     return { revision };
   });
 
   function readScope(scope) {
-    const items = Array.isArray(scope) ? scope : [];
-    const seen = new Set();
-    const rows = [];
-    for (const item of items) {
-      const normalized = normalizeScopeItem(item);
-      const key = `${normalized.sid}:${normalized.mskuKey}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const listingRow = readListing.get(normalized.sid, normalized.mskuKey);
-      if (!listingRow) continue;
-      const listing = mapListingRow(listingRow);
-      const product = listing.internalSkuKey ? mapProductRow(readProduct.get(listing.internalSkuKey)) : null;
-      rows.push({ listing, product });
-    }
-    return rows;
+    return withOperation(logger, "read-scope", () => {
+      if (!Array.isArray(scope)) throw new ProductCatalogInputError("商品目录范围必须为数组。");
+      const seen = new Set();
+      const productByKey = new Map();
+      const rows = [];
+      for (const item of scope) {
+        const normalized = normalizeScopeItem(item);
+        const key = `${normalized.sid}:${normalized.mskuKey}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const listingRow = readListing.get(normalized.sid, normalized.mskuKey);
+        if (!listingRow) continue;
+        const listing = mapListingRow(listingRow);
+        let product = null;
+        if (listing.internalSkuKey) {
+          if (!productByKey.has(listing.internalSkuKey)) {
+            productByKey.set(listing.internalSkuKey, mapProductRow(readProduct.get(listing.internalSkuKey)));
+          }
+          product = productByKey.get(listing.internalSkuKey);
+        }
+        rows.push({ listing, product });
+      }
+      return rows;
+    });
   }
 
   function readProductsByInternalSkuKeys(keys) {
-    const values = Array.isArray(keys) ? keys : [];
-    const seen = new Set();
-    const rows = [];
-    for (const value of values) {
-      const key = normalizeInternalSkuKey(value);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const row = readProduct.get(key);
-      if (row) rows.push(mapProductRow(row));
-    }
-    return rows;
+    return withOperation(logger, "read-products", () => {
+      if (!Array.isArray(keys)) throw new ProductCatalogInputError("内部 SKU key 范围必须为数组。");
+      const seen = new Set();
+      const rows = [];
+      for (const value of keys) {
+        const key = normalizeInternalSkuKey(value);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const row = readProduct.get(key);
+        if (row) rows.push(mapProductRow(row));
+      }
+      return rows;
+    });
   }
 
-  function upsertCatalog({
-    products = [],
-    aliases = [],
-    listings = [],
-    operation = "upsert-catalog",
-    requestId = null,
-    metadata = {},
-  } = {}) {
-    const normalizedProducts = asArray(products, "products");
-    const normalizedAliases = asArray(aliases, "aliases");
-    const normalizedListings = asArray(listings, "listings");
-    if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
-      throw new ProductCatalogInputError("metadata 必须为对象。");
-    }
-    try {
+  function upsertCatalog(input = {}) {
+    const operation = input && typeof input === "object" && !Array.isArray(input) && input.operation
+      ? String(input.operation)
+      : "upsert-catalog";
+    return withOperation(logger, operation, () => {
+      if (!input || typeof input !== "object" || Array.isArray(input)) {
+        throw new ProductCatalogInputError("商品目录写入参数必须为对象。");
+      }
+      const {
+        products = [],
+        aliases = [],
+        listings = [],
+        metadata = {},
+      } = input;
+      const normalizedProducts = asArray(products, "products");
+      const normalizedAliases = asArray(aliases, "aliases");
+      const normalizedListings = asArray(listings, "listings");
+      const normalizedMetadata = normalizeMetadata(metadata);
       return writeCatalog({
         products: normalizedProducts,
         aliases: normalizedAliases,
         listings: normalizedListings,
-        metadata,
+        metadata: normalizedMetadata,
       });
-    } catch (error) {
-      writeLog(logger, "error", {
-        ...operationErrorDetails(operation, error),
-        requestId: requestId == null ? null : String(requestId),
-      });
-      throw error;
-    }
+    });
   }
 
   function getRevision() {
-    const value = readMetadataValue.get("catalog_revision")?.value;
-    const revision = Number(value ?? 0);
-    if (!Number.isInteger(revision) || revision < 0) throw new Error("商品目录 catalog_revision 元数据无效。");
-    return revision;
+    return withOperation(logger, "get-revision", () => {
+      const value = readMetadataValue.get("catalog_revision")?.value;
+      const revision = Number(value ?? 0);
+      if (!Number.isInteger(revision) || revision < 0) throw new Error("商品目录 catalog_revision 元数据无效。");
+      return revision;
+    });
   }
 
   function getMetadata(key) {
-    const normalizedKey = requiredText(key, "商品目录元数据键不能为空。");
-    return readMetadataValue.get(normalizedKey)?.value ?? null;
+    return withOperation(logger, "get-metadata", () => {
+      const normalizedKey = requiredText(key, "商品目录元数据键不能为空。");
+      return readMetadataValue.get(normalizedKey)?.value ?? null;
+    });
   }
 
   function getHealth() {
-    try {
+    return withOperation(logger, "health", () => {
       const quickCheck = String(db.pragma("quick_check", { simple: true })).toLowerCase();
-      const legacyValue = getMetadata("legacy_migrated_at_ms");
-      const legacyMigratedAt = legacyValue === null ? null : Number(legacyValue);
-      if (legacyValue !== null && !Number.isFinite(legacyMigratedAt)) {
+      const legacyValue = readMetadataValue.get("legacy_migrated_at_ms")?.value ?? null;
+      const legacyMigratedAt = legacyValue === null || legacyValue === "null" ? null : Number(legacyValue);
+      if (legacyValue !== null && legacyValue !== "null" && !Number.isFinite(legacyMigratedAt)) {
         throw new Error("商品目录 legacy_migrated_at_ms 元数据无效。");
       }
+      const revisionValue = readMetadataValue.get("catalog_revision")?.value;
+      const revision = Number(revisionValue ?? 0);
+      if (!Number.isInteger(revision) || revision < 0) throw new Error("商品目录 catalog_revision 元数据无效。");
       return {
         ok: quickCheck === "ok",
         schemaVersion: PRODUCT_CATALOG_SCHEMA_VERSION,
         quickCheck,
-        revision: getRevision(),
+        revision,
         listingCount: Number(db.prepare("SELECT COUNT(*) AS count FROM listing_identity").get().count),
         productCount: Number(db.prepare("SELECT COUNT(*) AS count FROM product_master").get().count),
+        aliasCount: Number(db.prepare("SELECT COUNT(*) AS count FROM product_alias").get().count),
+        metadataCount: Number(db.prepare("SELECT COUNT(*) AS count FROM catalog_metadata").get().count),
+        schemaMigrationCount: Number(db.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get().count),
         databaseBytes: fileSize(databasePath),
         walBytes: fileSize(`${databasePath}-wal`),
         legacyMigratedAt,
       };
-    } catch (error) {
-      writeLog(logger, "error", operationErrorDetails("health", error));
-      throw error;
-    }
+    });
   }
 
   function getSchemaInfo() {
-    return {
+    return withOperation(logger, "schema-info", () => ({
       version: PRODUCT_CATALOG_SCHEMA_VERSION,
       ...readPragmas(db),
-    };
+    }));
   }
 
   return {
@@ -592,6 +678,6 @@ export function createProductCatalogRepository({
     getRevision,
     getMetadata,
     getHealth,
-    close: () => db.close(),
+    close: () => withOperation(logger, "close", () => db.close()),
   };
 }
