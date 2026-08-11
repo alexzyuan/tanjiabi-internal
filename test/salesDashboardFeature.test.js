@@ -291,16 +291,20 @@ test("sales dashboard feature filters MSKU detail rows by current listing owner"
 
     renderDashboard({
       kpis: [{ title: "时间进度", value: "80%" }],
+      meta: { availableDays: { matchedCount: 1, missingCount: 1 } },
       filters: { ownerOptions: [{ value: "林芃", name: "林芃" }, { value: "熊丹轩", name: "熊丹轩" }] },
       detailRows: [
         { budgetStoreName: "探嘉美国", msku: "MSKU-LP", listingOwner: "林芃", productName: "林芃产品", budgetQuantity: 1 },
-        { budgetStoreName: "探嘉加拿大", msku: "MSKU-XDX", listingOwner: "熊丹轩", productName: "熊丹轩产品", budgetQuantity: 2, quantityAchievement: 74, refundRate30d: 3, refundRate: 5 },
+        { budgetStoreName: "探嘉加拿大", msku: "MSKU-XDX", listingOwner: "熊丹轩", productName: "熊丹轩产品", budgetQuantity: 2, fbaAvailableDays: 28.5, quantityAchievement: 74, refundRate30d: 3, refundRate: 5 },
+        { budgetStoreName: "探嘉加拿大", msku: "MSKU-MISSING", listingOwner: "熊丹轩", productName: "无可售天数产品", budgetQuantity: 3, fbaAvailableDays: null },
       ],
     });
 
-    assert.equal(status.textContent, "随销售看板同步加载 · 1 条预算 MSKU");
+    assert.equal(status.textContent, "随销售看板同步加载 · 2 条预算 MSKU · 可售天数 1/2");
     assert.match(detailTable.innerHTML, /MSKU-XDX/);
     assert.doesNotMatch(detailTable.innerHTML, /MSKU-LP/);
+    assert.match(detailTable.innerHTML, /MSKU-XDX[\s\S]*?<td>28\.5天<\/td>/);
+    assert.match(detailTable.innerHTML, /MSKU-MISSING[\s\S]*?<td>—<\/td>/);
     assert.match(detailTable.innerHTML, /<td class="msku-achievement-danger">74%<\/td>/);
     assert.notEqual(detailTable.innerHTML.indexOf("3%"), -1);
     assert.ok(detailTable.innerHTML.indexOf("3%") < detailTable.innerHTML.indexOf("5%"));
