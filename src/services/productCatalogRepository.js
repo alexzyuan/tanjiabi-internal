@@ -14,6 +14,50 @@ import {
 
 const ALIAS_TYPES = new Set(["sku_identifier", "product_id", "listing_sku"]);
 const EXTERNAL_METADATA_KEYS = new Set(["legacy_manifest_hash", "legacy_migrated_at_ms"]);
+const SAFE_REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
+const SENSITIVE_REQUEST_ID_PATTERN = /(token|secret|password|payload|raw|body)/iu;
+
+export class ProductCatalogDatabaseError extends Error {
+  constructor(message = "商品目录数据库不可用。", {
+    operation = "database",
+    code = null,
+    requestId,
+    cause,
+  } = {}) {
+    super(message, { cause });
+    this.name = "ProductCatalogDatabaseError";
+    this.statusCode = 503;
+    this.code = sqliteErrorCode({ code });
+    const safeCode = this.code;
+    this.details = {
+      operation,
+      ...(safeCode ? { code: safeCode } : {}),
+      ...(normalizeRequestId(requestId) ? { requestId: normalizeRequestId(requestId) } : {}),
+    };
+  }
+}
+
+function normalizeRequestId(value) {
+  if (value === undefined || value === null) return undefined;
+  const text = String(value).trim();
+  if (!text || !SAFE_REQUEST_ID_PATTERN.test(text) || SENSITIVE_REQUEST_ID_PATTERN.test(text)) return undefined;
+  return text;
+}
+
+function sqliteErrorCode(error) {
+  const code = String(error?.code || "").trim();
+  return /^[A-Za-z0-9_.:-]{1,64}$/u.test(code) ? code : null;
+}
+
+function toDatabaseError(error, operation, requestId) {
+  if (error instanceof ProductCatalogDatabaseError) return error;
+  return new ProductCatalogDatabaseError("商品目录数据库不可用。", {
+    operation,
+    code: sqliteErrorCode(error),
+    requestId,
+    cause: error,
+  });
+}
 
 function writeLog(logger, level, details) {
   const method = logger?.[level];
@@ -21,31 +65,46 @@ function writeLog(logger, level, details) {
 }
 
 function bootstrapErrorDetails(error) {
+  const message = String(error?.message || "未知错误");
+  const safeMessage = /schema checksum/iu.test(message)
+    ? "商品目录数据库 schema checksum 与当前实现不一致。"
+    : /商品目录数据库包含未知的更高 schema 版本 \d+。/u.test(message)
+      ? message.match(/商品目录数据库包含未知的更高 schema 版本 \d+。/u)?.[0]
+      : "商品目录数据库初始化失败。";
   return {
     operation: "bootstrap",
     errorName: error?.name || "Error",
-    errorMessage: String(error?.message || "未知错误").slice(0, 300),
+    errorMessage: safeMessage,
   };
 }
 
-function operationErrorDetails(operation, error) {
+function operationErrorDetails(operation, error, requestId) {
+  const normalizedRequestId = normalizeRequestId(requestId);
   return {
     operation,
-    code: error?.code || null,
+    code: sqliteErrorCode(error),
     message: error instanceof ProductCatalogConflictError
       ? "商品目录冲突。"
       : error instanceof ProductCatalogInputError
         ? "商品目录输入无效。"
-        : String(error?.message || "未知错误").slice(0, 300),
+        : error instanceof ProductCatalogDatabaseError
+          ? "商品目录数据库不可用。"
+          : "商品目录操作失败。",
+    ...(normalizedRequestId ? { requestId: normalizedRequestId } : {}),
   };
 }
 
-function withOperation(logger, operation, callback) {
+function withOperation(logger, operation, callback, requestId) {
   try {
     return callback();
   } catch (error) {
-    writeLog(logger, "error", operationErrorDetails(operation, error));
-    throw error;
+    writeLog(logger, "error", operationErrorDetails(operation, error, requestId));
+    if (error instanceof ProductCatalogInputError
+      || error instanceof ProductCatalogConflictError
+      || error instanceof ProductCatalogDatabaseError) {
+      throw error;
+    }
+    throw toDatabaseError(error, operation, requestId);
   }
 }
 
@@ -297,7 +356,7 @@ function normalizeMetadata(metadata) {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
     throw new ProductCatalogInputError("metadata 必须为对象。");
   }
-  return Object.entries(metadata).map(([key, value]) => {
+  return Object.entries(metadata).flatMap(([key, value]) => {
     if (!EXTERNAL_METADATA_KEYS.has(key)) {
       throw new ProductCatalogInputError("商品目录元数据键不在允许范围内。");
     }
@@ -305,7 +364,11 @@ function normalizeMetadata(metadata) {
       && (typeof value !== "number" || !Number.isFinite(value))) {
       throw new ProductCatalogInputError("商品目录元数据值必须为字符串、有限数字或 null。");
     }
-    return [key, String(value)];
+    // NULL means that the optional metadata value is absent.  The schema is
+    // intentionally NOT NULL, so omit it instead of persisting the literal
+    // string "null" and making a missing value look present.
+    if (value === null) return [];
+    return [[key, String(value)]];
   });
 }
 
@@ -406,6 +469,52 @@ function assertAliasesDoNotConflict(db, aliases) {
   }
 }
 
+function isLiveOwnedSource(source) {
+  const normalized = String(source || "").trim().toLowerCase();
+  return normalized === "manual-refresh"
+    || normalized === "lingxing"
+    || normalized.startsWith("lingxing-");
+}
+
+function filterLegacyWrites(db, { products, aliases, listings }) {
+  const liveProducts = new Set(
+    db.prepare("SELECT internal_sku_key FROM product_master WHERE lower(source) = 'manual-refresh' OR lower(source) = 'lingxing' OR lower(source) LIKE 'lingxing-%'")
+      .all()
+      .map(({ internal_sku_key }) => internal_sku_key),
+  );
+  const liveListings = new Set(
+    db.prepare("SELECT sid, msku_key FROM listing_identity WHERE lower(source) = 'manual-refresh' OR lower(source) = 'lingxing' OR lower(source) LIKE 'lingxing-%'")
+      .all()
+      .map(({ sid, msku_key }) => `${sid}:${msku_key}`),
+  );
+  const existingAliases = db.prepare("SELECT alias_type, alias_key, internal_sku_key, source FROM product_alias").all();
+  const liveAliases = new Set(existingAliases
+    .filter((row) => isLiveOwnedSource(row.source))
+    .map((row) => `${row.alias_type}:${row.alias_key}`));
+  const protectedProducts = new Set(liveProducts);
+  const writableProducts = products.filter((product) => {
+    if (!isLiveOwnedSource(product.source) && protectedProducts.has(product.internalSkuKey)) return false;
+    return true;
+  });
+  const writableListings = listings.filter((listing) => {
+    const key = `${listing.sid}:${listing.mskuKey}`;
+    return isLiveOwnedSource(listing.source) || !liveListings.has(key);
+  });
+  const writableAliases = aliases.filter((alias) => {
+    if (protectedProducts.has(alias.internalSkuKey) && !isLiveOwnedSource(alias.source)) return false;
+    if (liveAliases.has(`${alias.aliasType}:${alias.aliasKey}`) && !isLiveOwnedSource(alias.source)) return false;
+    return true;
+  });
+  return {
+    products: writableProducts,
+    aliases: writableAliases,
+    listings: writableListings,
+    liveOwnedSkipCount: (products.length - writableProducts.length)
+      + (aliases.length - writableAliases.length)
+      + (listings.length - writableListings.length),
+  };
+}
+
 function fileSize(filePath) {
   try {
     return statSync(filePath).size;
@@ -413,6 +522,16 @@ function fileSize(filePath) {
     if (error?.code === "ENOENT") return 0;
     throw error;
   }
+}
+
+function safeQuickCheckDiagnostic(value) {
+  const raw = String(value ?? "").replace(/[\r\n\t]+/gu, " ").replace(/\s+/gu, " ").trim();
+  const text = raw.replace(/\s+at\s+\/(?:tmp|Users|var|home|opt)\/.*$/iu, "").trim().slice(0, 120);
+  if (!text) return "unavailable";
+  if (/(token|secret|password|payload|raw|body|select|pragma|sqlite|\.sqlite|\\|(?:^|\s)\/(?:tmp|Users|var|home|opt)\/)/iu.test(text)) {
+    return "unavailable";
+  }
+  return /^[A-Za-z0-9][A-Za-z0-9 .,:()/'_-]*$/u.test(text) ? text : "unavailable";
 }
 
 export function createProductCatalogRepository({
@@ -528,14 +647,19 @@ export function createProductCatalogRepository({
     const normalizedAliases = aliases.map(normalizeAlias);
     const normalizedListings = listings.map(normalizeListing);
 
-    assertAliasesDoNotConflict(db, normalizedAliases);
-    for (const product of normalizedProducts) upsertProduct.run(product);
-    for (const alias of normalizedAliases) upsertAlias.run(alias);
-    for (const listing of normalizedListings) upsertListing.run(listing);
+    const writable = filterLegacyWrites(db, {
+      products: normalizedProducts,
+      aliases: normalizedAliases,
+      listings: normalizedListings,
+    });
+    assertAliasesDoNotConflict(db, writable.aliases);
+    for (const product of writable.products) upsertProduct.run(product);
+    for (const alias of writable.aliases) upsertAlias.run(alias);
+    for (const listing of writable.listings) upsertListing.run(listing);
 
-    const hasCatalogRows = normalizedProducts.length > 0
-      || normalizedAliases.length > 0
-      || normalizedListings.length > 0;
+    const hasCatalogRows = writable.products.length > 0
+      || writable.aliases.length > 0
+      || writable.listings.length > 0;
     const currentRevision = Number(readMetadataValue.get("catalog_revision")?.value || 0);
     if (!Number.isInteger(currentRevision) || currentRevision < 0) {
       throw new Error("商品目录 catalog_revision 元数据无效。");
@@ -545,10 +669,13 @@ export function createProductCatalogRepository({
     for (const [key, value] of metadata) {
       writeMetadata.run(key, value, resolveNow(now));
     }
-    return { revision };
+    return {
+      revision,
+      liveOwnedSkipCount: writable.liveOwnedSkipCount,
+    };
   });
 
-  function readScope(scope) {
+  function readScope(scope, options = {}) {
     return withOperation(logger, "read-scope", () => {
       if (!Array.isArray(scope)) throw new ProductCatalogInputError("商品目录范围必须为数组。");
       const seen = new Set();
@@ -572,10 +699,10 @@ export function createProductCatalogRepository({
         rows.push({ listing, product });
       }
       return rows;
-    });
+    }, options?.requestId);
   }
 
-  function readProductsByInternalSkuKeys(keys) {
+  function readProductsByInternalSkuKeys(keys, options = {}) {
     return withOperation(logger, "read-products", () => {
       if (!Array.isArray(keys)) throw new ProductCatalogInputError("内部 SKU key 范围必须为数组。");
       const seen = new Set();
@@ -588,7 +715,7 @@ export function createProductCatalogRepository({
         if (row) rows.push(mapProductRow(row));
       }
       return rows;
-    });
+    }, options?.requestId);
   }
 
   function upsertCatalog(input = {}) {
@@ -615,28 +742,36 @@ export function createProductCatalogRepository({
         listings: normalizedListings,
         metadata: normalizedMetadata,
       });
-    });
+    }, input?.requestId);
   }
 
-  function getRevision() {
+  function getRevision(options = {}) {
     return withOperation(logger, "get-revision", () => {
       const value = readMetadataValue.get("catalog_revision")?.value;
       const revision = Number(value ?? 0);
       if (!Number.isInteger(revision) || revision < 0) throw new Error("商品目录 catalog_revision 元数据无效。");
       return revision;
-    });
+    }, options?.requestId);
   }
 
-  function getMetadata(key) {
+  function getMetadata(key, options = {}) {
     return withOperation(logger, "get-metadata", () => {
       const normalizedKey = requiredText(key, "商品目录元数据键不能为空。");
       return readMetadataValue.get(normalizedKey)?.value ?? null;
-    });
+    }, options?.requestId);
   }
 
-  function getHealth() {
+  function getHealth(options = {}) {
     return withOperation(logger, "health", () => {
-      const quickCheck = String(db.pragma("quick_check", { simple: true })).toLowerCase();
+      let quickCheck = "unavailable";
+      let quickCheckCode = null;
+      try {
+        quickCheck = String(db.pragma("quick_check", { simple: true })).toLowerCase();
+      } catch (error) {
+        quickCheck = safeQuickCheckDiagnostic(error?.message);
+        quickCheckCode = sqliteErrorCode(error);
+        writeLog(logger, "error", operationErrorDetails("health", error, options?.requestId));
+      }
       const legacyValue = readMetadataValue.get("legacy_migrated_at_ms")?.value ?? null;
       const legacyMigratedAt = legacyValue === null || legacyValue === "null" ? null : Number(legacyValue);
       if (legacyValue !== null && legacyValue !== "null" && !Number.isFinite(legacyMigratedAt)) {
@@ -649,6 +784,7 @@ export function createProductCatalogRepository({
         ok: quickCheck === "ok",
         schemaVersion: PRODUCT_CATALOG_SCHEMA_VERSION,
         quickCheck,
+        ...(quickCheckCode ? { error: quickCheckCode } : {}),
         revision,
         listingCount: Number(db.prepare("SELECT COUNT(*) AS count FROM listing_identity").get().count),
         productCount: Number(db.prepare("SELECT COUNT(*) AS count FROM product_master").get().count),
@@ -659,7 +795,7 @@ export function createProductCatalogRepository({
         walBytes: fileSize(`${databasePath}-wal`),
         legacyMigratedAt,
       };
-    });
+    }, options?.requestId);
   }
 
   function getSchemaInfo() {
@@ -678,6 +814,6 @@ export function createProductCatalogRepository({
     getRevision,
     getMetadata,
     getHealth,
-    close: () => withOperation(logger, "close", () => db.close()),
+    close: (options = {}) => withOperation(logger, "close", () => db.close(), options?.requestId),
   };
 }

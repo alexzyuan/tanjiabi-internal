@@ -304,7 +304,22 @@ test("restricts metadata to redacted legacy manifest scalars before any row muta
   assert.equal(repository.upsertCatalog({
     metadata: { legacy_manifest_hash: null, legacy_migrated_at_ms: 1720000000000 },
   }).revision, 0);
-  assert.equal(repository.getMetadata("legacy_manifest_hash"), "null");
+  assert.equal(repository.getMetadata("legacy_manifest_hash"), null);
+});
+
+test("operation logs carry a normalized requestId when supplied", async (t) => {
+  const calls = [];
+  const { repository } = await createRepositoryFixture(t, {
+    logger: { error: (...args) => calls.push(args) },
+  });
+  assert.throws(() => repository.upsertCatalog({
+    operation: "request-id-test",
+    requestId: "  request-123  ",
+    metadata: { raw: "must-fail" },
+  }), (error) => error.statusCode === 400);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][1].requestId, "request-123");
+  assert.doesNotMatch(JSON.stringify(calls[0][1]), /must-fail|raw/);
 });
 
 test("rejects explicit product and Listing canonical keys that disagree with raw identities", async (t) => {

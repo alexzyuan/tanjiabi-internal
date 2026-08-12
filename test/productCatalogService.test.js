@@ -8,6 +8,7 @@ import { createProductCatalogRepository } from "../src/services/productCatalogRe
 import {
   closeProductCatalogRepositoryForTests,
   getProductCatalogForRows,
+  getProductCatalogHealth,
   getProductCatalogRevision,
   ProductCatalogUpstreamError,
   refreshProductCatalogScope,
@@ -344,6 +345,69 @@ test("normal lookup exposes true listing/product batch metadata", async (t) => {
   assert.equal(result.meta.transactionDurationMs >= 0, true);
 });
 
+test("catalog timings measure migration, database lookup, upstream phases, and commit separately", async (t) => {
+  let clock = 1000;
+  const timingNow = () => clock;
+  const fixture = await createCatalogServiceFixture({
+    timingNow,
+    listingRecords: [liveListing("A")],
+    productRecords: [liveProduct("A")],
+  });
+  t.after(fixture.cleanup);
+  const originalListing = fixture.adapter.fetchListings;
+  fixture.adapter.fetchListings = async (...args) => {
+    clock += 17;
+    return originalListing(...args);
+  };
+  const originalProducts = fixture.adapter.fetchLocalProductInfos;
+  fixture.adapter.fetchLocalProductInfos = async (...args) => {
+    clock += 13;
+    return originalProducts(...args);
+  };
+  const originalUpsert = fixture.repository.upsertCatalog.bind(fixture.repository);
+  const repository = {
+    ...fixture.repository,
+    upsertCatalog(input) {
+      clock += 3;
+      return originalUpsert(input);
+    },
+  };
+  const result = await getProductCatalogForRows(fixture.rows, {
+    ...fixture.options,
+    repository,
+    timingNow,
+  });
+  assert.equal(result.meta.source, "sqlite");
+  assert.equal(result.meta.scopeCount, 1);
+  assert.equal(typeof result.meta.requestId, "string");
+  assert.deepEqual(Object.keys(result.meta.timings).sort(), [
+    "dbLookupDurationMs",
+    "listingFetchDurationMs",
+    "migrationDurationMs",
+    "productFetchDurationMs",
+    "transactionDurationMs",
+  ]);
+  assert.equal(result.meta.timings.listingFetchDurationMs, 17);
+  assert.equal(result.meta.timings.productFetchDurationMs, 13);
+  assert.equal(result.meta.timings.transactionDurationMs, 3);
+  assert.equal(result.meta.transactionDurationMs, 3);
+  Object.values(result.meta.timings).forEach((duration) => assert.equal(duration >= 0, true));
+});
+
+test("catalog meta exposes live-owned legacy skip count", async (t) => {
+  const fixture = await createCatalogServiceFixture();
+  t.after(fixture.cleanup);
+  fixture.options.migrateLegacyProductCatalog = async () => ({
+    skipped: false,
+    listingCount: 1,
+    productCount: 1,
+    liveOwnedSkipCount: 3,
+    revision: fixture.repository.getRevision(),
+  });
+  const result = await getProductCatalogForRows(fixture.rows, fixture.options);
+  assert.equal(result.meta.liveOwnedSkipCount, 3);
+});
+
 test("normal lookup exposes joinedInFlight on the joining caller", async (t) => {
   const gate = deferred();
   const fixture = await createCatalogServiceFixture({ listingGate: gate });
@@ -474,13 +538,15 @@ test("missing product returns 422 and alias conflict returns 409 without committ
   assert.equal(conflict.repository.getRevision(), seedRevision);
 });
 
-test("repository read errors normalize to status 500 with request-scoped error logs", async (t) => {
+test("repository read errors normalize to redacted status 503 with request-scoped error logs", async (t) => {
   const fixture = await createCatalogServiceFixture();
   t.after(fixture.cleanup);
   const repository = {
     ...fixture.repository,
     readScope() {
-      throw new Error("repository read unavailable");
+      throw Object.assign(new Error("repository read unavailable at /tmp/private.sqlite"), {
+        code: "SQLITE_IOERR",
+      });
     },
   };
   await assert.rejects(
@@ -489,26 +555,28 @@ test("repository read errors normalize to status 500 with request-scoped error l
       repository,
       requestId: "req-read-normalization",
     }),
-    (error) => error.statusCode === 500
+    (error) => error.statusCode === 503
       && error.details?.requestId === "req-read-normalization",
   );
   const errorLog = fixture.logEntries
     .filter(([prefix]) => prefix === "[product-catalog-service]")
     .map(([, details]) => details)
     .find((details) => details.status === "error");
-  assert.equal(errorLog.statusCode, 500);
+  assert.equal(errorLog.statusCode, 503);
   assert.equal(errorLog.requestId, "req-read-normalization");
-  assert.equal(errorLog.errorName, "Error");
-  assert.equal(errorLog.errorMessage, "商品目录操作失败。");
+  assert.equal(errorLog.errorName, "ProductCatalogDatabaseError");
+  assert.equal(errorLog.errorCode, "SQLITE_IOERR");
+  assert.equal(errorLog.errorMessage, "商品目录数据库不可用。");
+  assert.doesNotMatch(JSON.stringify(errorLog), /private\.sqlite|repository read unavailable/);
 });
 
-test("revision errors normalize to status 500 and are logged through the shared request context", async (t) => {
+test("revision errors normalize to redacted status 503 and are logged through the shared request context", async (t) => {
   const fixture = await createCatalogServiceFixture();
   t.after(fixture.cleanup);
   const repository = {
     ...fixture.repository,
     getRevision() {
-      throw new Error("revision unavailable");
+      throw Object.assign(new Error("revision unavailable"), { code: "SQLITE_BUSY" });
     },
   };
   await assert.rejects(
@@ -517,17 +585,37 @@ test("revision errors normalize to status 500 and are logged through the shared 
       repository,
       requestId: "req-revision-normalization",
     })),
-    (error) => error.statusCode === 500
+    (error) => error.statusCode === 503
       && error.details?.requestId === "req-revision-normalization",
   );
   const errorLog = fixture.logEntries
     .filter(([prefix]) => prefix === "[product-catalog-service]")
     .map(([, details]) => details)
     .find((details) => details.status === "error");
-  assert.equal(errorLog.statusCode, 500);
+  assert.equal(errorLog.statusCode, 503);
   assert.equal(errorLog.requestId, "req-revision-normalization");
   assert.equal(errorLog.operation, "revision");
-  assert.equal(errorLog.errorMessage, "商品目录操作失败。");
+  assert.equal(errorLog.errorCode, "SQLITE_BUSY");
+  assert.equal(errorLog.errorMessage, "商品目录数据库不可用。");
+});
+
+test("database migration failures normalize to 503 instead of upstream 502", async (t) => {
+  const fixture = await createCatalogServiceFixture();
+  t.after(fixture.cleanup);
+  const failure = Object.assign(new Error("database locked at /tmp/private.sqlite"), {
+    code: "SQLITE_BUSY",
+  });
+  await assert.rejects(
+    getProductCatalogForRows(fixture.rows, {
+      ...fixture.options,
+      requestId: "req-migration-db",
+      migrateLegacyProductCatalog: async () => { throw failure; },
+    }),
+    (error) => error.statusCode === 503
+      && error.details?.requestId === "req-migration-db"
+      && error.details?.operation === "legacy-migration"
+      && error.details?.code === "SQLITE_BUSY",
+  );
 });
 
 test("malicious request IDs and upstream messages are fail-closed in error details and logs", async (t) => {
@@ -563,4 +651,33 @@ test("malicious request IDs and upstream messages are fail-closed in error detai
   assert.doesNotMatch(JSON.stringify(errorLog), /token|raw-secret|payload|body/i);
   assert.doesNotMatch(JSON.stringify(failure.details), /token|raw-secret|payload|body/i);
   assert.equal(errorLog.errorMessage, "商品目录上游失败。");
+});
+
+test("health accessor logs degraded database errors without raw messages", () => {
+  const logs = [];
+  const result = getProductCatalogHealth({
+    requestId: "health-request-1",
+    repository: {
+      getHealth() {
+        throw Object.assign(new Error("disk I/O error at /tmp/private.sqlite"), {
+          code: "SQLITE_IOERR",
+        });
+      },
+    },
+    logger: { error: (...args) => logs.push(args) },
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.status, "degraded");
+  assert.equal(result.quickCheck, "disk I/O error");
+  assert.equal(result.error, "SQLITE_IOERR");
+  assert.equal(logs.length, 1);
+  assert.equal(logs[0][0], "[product-catalog-service]");
+  assert.deepEqual(logs[0][1], {
+    requestId: "health-request-1",
+    feature: "catalog-health",
+    operation: "health",
+    status: "degraded",
+    code: "SQLITE_IOERR",
+  });
+  assert.doesNotMatch(JSON.stringify(logs), /disk I\/O error|private\.sqlite/);
 });

@@ -194,6 +194,85 @@ test("unchanged manifest skips import while a new rollback-era JSON changes the 
   assert.equal(fixture.readListing("B").msku, "B");
 });
 
+test("manifest changes never overwrite live-owned rows while importing a new legacy identity", async (t) => {
+  const fixture = await createLegacyMigrationFixture(t);
+  await fixture.writeShared("catalog.json", 1000, legacyRecord({
+    msku: "A",
+    local_sku: "TJ001",
+    supplier: "旧工厂",
+    purchasePrice: 35,
+  }));
+  await migrateLegacyProductCatalog(fixture.options);
+
+  fixture.repository.upsertCatalog({
+    operation: "manual-refresh",
+    requestId: "live-refresh-1",
+    products: [{
+      internalSkuKey: "tj001",
+      internalSku: "TJ001",
+      productName: "实时商品",
+      supplier: "实时工厂",
+      purchasePrice: 88,
+      productId: "live-product-id",
+      source: "lingxing-product",
+      sourceUpdatedAtMs: 3000,
+      refreshedAtMs: 3000,
+    }],
+    aliases: [{
+      aliasType: "product_id",
+      aliasKey: "live-product-id",
+      aliasValue: "live-product-id",
+      internalSkuKey: "tj001",
+      source: "lingxing-product",
+      updatedAtMs: 3000,
+    }],
+    listings: [{
+      sid: 8708,
+      msku: "A",
+      mskuKey: "a",
+      internalSkuKey: "tj001",
+      internalSku: "TJ001",
+      listingSku: "TJ001",
+      asin: "LIVE-ASIN",
+      storeName: "runtime-live-store",
+      country: "美国",
+      source: "lingxing-listing",
+      sourceUpdatedAtMs: 3000,
+      refreshedAtMs: 3000,
+    }],
+  });
+
+  await fixture.writeShared("catalog.json", 4000, legacyRecord({
+    msku: "A",
+    local_sku: "TJ001",
+    supplier: "旧工厂再次变更",
+    purchasePrice: 1,
+  }));
+  await fixture.writeShared("new-identity.json", 4000, legacyRecord({
+    msku: "B",
+    local_sku: "TJ002",
+    supplier: "新旧工厂",
+    purchasePrice: 42,
+  }));
+
+  const result = await migrateLegacyProductCatalog(fixture.options);
+  assert.equal(result.skipped, false);
+  assert.equal(result.liveOwnedSkipCount, 3);
+  assert.equal(fixture.readProduct("A").supplier, "实时工厂");
+  assert.equal(fixture.readProduct("A").purchasePrice, 88);
+  assert.equal(fixture.readProduct("A").source, "lingxing-product");
+  assert.equal(fixture.readProduct("A").sourceUpdatedAtMs, 3000);
+  assert.equal(fixture.readListing("A").storeName, "runtime-live-store");
+  assert.equal(fixture.readListing("A").source, "lingxing-listing");
+  const inspector = new Database(fixture.repository.databasePath, { readonly: true });
+  assert.equal(inspector.prepare(
+    "SELECT source FROM product_alias WHERE alias_type = 'product_id' AND alias_key = 'live-product-id'",
+  ).get()?.source, "lingxing-product");
+  inspector.close();
+  assert.equal(fixture.readProduct("B").supplier, "新旧工厂");
+  assert.equal(fixture.readProduct("B").source, "legacy-json");
+});
+
 test("corrupt JSON fails without updating migration metadata", async (t) => {
   const fixture = await createLegacyMigrationFixture(t);
   await fixture.writeRawShared("broken.json", "{not-json");

@@ -8,7 +8,10 @@ import {
   normalizeProductCatalogScope,
 } from "./productCatalogIdentity.js";
 import { migrateLegacyProductCatalog } from "./productCatalogLegacyMigrationService.js";
-import { createProductCatalogRepository } from "./productCatalogRepository.js";
+import {
+  createProductCatalogRepository,
+  ProductCatalogDatabaseError,
+} from "./productCatalogRepository.js";
 import { getSellerDirectory } from "./sellerDirectoryService.js";
 import { loadAndCommitScope } from "./productCatalogLiveLoader.js";
 
@@ -23,6 +26,7 @@ const REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/;
 const REQUEST_ID_SENSITIVE_PATTERN = /(token|secret|password|payload|raw|body)/i;
 const SAFE_ERROR_NAMES = new Set([
   "Error",
+  "ProductCatalogDatabaseError",
   "ProductCatalogUpstreamError",
   "ProductCatalogInputError",
   "ProductCatalogConflictError",
@@ -50,6 +54,18 @@ function nowMs(options = {}) {
 
 function elapsedMs(startedAtMs) {
   return Math.max(0, Date.now() - startedAtMs);
+}
+
+function timingNow(options = {}) {
+  const candidate = options.timingNow || options.clock;
+  const value = typeof candidate === "function" ? candidate() : Date.now();
+  const number = Number(value);
+  if (!Number.isFinite(number)) throw new ProductCatalogInputError("商品目录计时无效。");
+  return number;
+}
+
+function measureDuration(context, startedAt) {
+  return Math.max(0, timingNow(context.options) - startedAt);
 }
 
 function requestIdFrom(options = {}) {
@@ -93,9 +109,16 @@ function safeErrorCode(error) {
   return SAFE_ERROR_CODE_PATTERN.test(code) && !SAFE_ERROR_CODE_SENSITIVE_PATTERN.test(code) ? code : null;
 }
 
+function isDatabaseFailure(error) {
+  if (error instanceof ProductCatalogDatabaseError) return true;
+  const code = String(error?.code || "");
+  return /^SQLITE_/u.test(code);
+}
+
 function safeErrorMessage(error) {
   if (error instanceof ProductCatalogConflictError) return "商品目录冲突。";
   if (error instanceof ProductCatalogInputError) return "商品目录输入无效。";
+  if (error instanceof ProductCatalogDatabaseError) return "商品目录数据库不可用。";
   if (error instanceof ProductCatalogUpstreamError) {
     const knownMessages = new Set([
       "ERP Listing 查询失败。",
@@ -112,6 +135,17 @@ function safeErrorMessage(error) {
     return "商品目录上游失败。";
   }
   return "商品目录操作失败。";
+}
+
+function safeQuickCheckDiagnostic(value) {
+  const raw = String(value ?? "").replace(/[\r\n\t]+/gu, " ").replace(/\s+/gu, " ").trim();
+  const text = raw.replace(/\s+at\s+\/(?:tmp|Users|var|home|opt)\/.*$/iu, "").trim().slice(0, 120);
+  if (!text) return "unavailable";
+  if (/(token|secret|password|payload|raw|body|select|pragma|sqlite|\.sqlite|\\|(?:^|\s)\/(?:tmp|Users|var|home|opt)\/)/iu.test(text)) {
+    return "unavailable";
+  }
+  if (!/^[A-Za-z0-9][A-Za-z0-9 .,:()/'_-]*$/u.test(text)) return "unavailable";
+  return text;
 }
 
 function writeLog(logger, level, context, status, error = null, extra = {}) {
@@ -179,11 +213,19 @@ function unresolvedError(kind, count, context) {
 }
 
 function databaseError(error, message, context, operation) {
-  return attachError(new ProductCatalogUpstreamError(message, {
-    statusCode: 503,
-    details: { operation },
-    cause: error,
-  }), context);
+  const sourceCode = safeErrorCode(error) || safeErrorCode(error?.cause);
+  const database = error instanceof ProductCatalogDatabaseError
+    ? error
+    : new ProductCatalogDatabaseError(message || "商品目录数据库不可用。", {
+      operation,
+      code: sourceCode,
+      requestId: context.requestId,
+      cause: error,
+    });
+  return attachError(database, context, {
+    operation,
+    ...(sourceCode ? { code: sourceCode } : {}),
+  });
 }
 
 function repositoryFor(options = {}) {
@@ -303,6 +345,7 @@ async function ensureMigrated(repository, sellers, context) {
   const promise = Promise.resolve().then(() => migrate({
     ...migrationOptions,
     repository,
+    requestId: context.requestId,
     sellers: [...sellers.values()],
     adapter: context.adapter,
     logger: context.options.logger || console,
@@ -318,6 +361,7 @@ async function ensureMigrated(repository, sellers, context) {
   try {
     return await promise;
   } catch (error) {
+    if (isDatabaseFailure(error)) throw databaseError(error, "商品目录数据库不可用。", context, "legacy-migration");
     throw wrapUpstream(error, "旧商品目录迁移失败。", context, "legacy-migration");
   }
 }
@@ -338,6 +382,7 @@ async function buildContext(scope, context) {
     sellers,
     now: nowMs(context.options),
     elapsedMs,
+    timingNow: () => timingNow(context.options),
   };
   // Loader callbacks must observe mutable refresh state (migrationCompleted,
   // catalogRevisionBeforeRefresh) updated after the bootstrap phase. Closing
@@ -385,10 +430,14 @@ function decorateRecord(row, scopeItem, seller) {
   };
 }
 
-function recordsForScope(scope, repository, sellers) {
-  const rows = repository.readScope(scope);
-  const byKey = new Map(rows.map((row) => [listingKey(row.listing), row]));
-  return scope.map((item) => decorateRecord(byKey.get(item.key), item, sellers.get(item.sid)));
+function recordsForScope(scope, repository, sellers, requestId, context) {
+  try {
+    const rows = repository.readScope(scope, { requestId });
+    const byKey = new Map(rows.map((row) => [listingKey(row.listing), row]));
+    return scope.map((item) => decorateRecord(byKey.get(item.key), item, sellers.get(item.sid)));
+  } catch (error) {
+    throw databaseError(error, "商品目录数据库不可用。", context, "read-scope");
+  }
 }
 
 function latestRefreshedAt(records) {
@@ -398,10 +447,25 @@ function latestRefreshedAt(records) {
   return values.length ? new Date(Math.max(...values)).toISOString() : "";
 }
 
-function ensureRowsComplete(scope, repository) {
-  const rows = repository.readScope(scope);
-  const complete = new Set(rows.filter((row) => row?.listing && row?.product).map((row) => listingKey(row.listing)));
-  return scope.filter((item) => !complete.has(item.key));
+function ensureRowsComplete(scope, repository, requestId, context) {
+  try {
+    const rows = repository.readScope(scope, { requestId });
+    const complete = new Set(rows.filter((row) => row?.listing && row?.product).map((row) => listingKey(row.listing)));
+    return scope.filter((item) => !complete.has(item.key));
+  } catch (error) {
+    throw databaseError(error, "商品目录数据库不可用。", context, "read-scope");
+  }
+}
+
+function revisionFor(repository, requestId, context, operation = "get-revision") {
+  try {
+    return repository.getRevision({ requestId });
+  } catch (error) {
+    if (error instanceof ProductCatalogUpstreamError
+      || error instanceof ProductCatalogInputError
+      || error instanceof ProductCatalogConflictError) throw error;
+    throw databaseError(error, "商品目录数据库不可用。", context, operation);
+  }
 }
 
 async function runScopeSingleFlight(scope, context, operation) {
@@ -427,13 +491,20 @@ export async function getProductCatalogForRows(rows, options = {}) {
     scope = normalizeScope(rows, context);
     context.scopeCount = scope.length;
     const built = await buildContext(scope, context);
+    const migrationStarted = timingNow(options);
     const migration = await ensureMigrated(built.repository, built.sellers, built);
-    const missing = ensureRowsComplete(scope, built.repository);
+    const migrationDurationMs = measureDuration(context, migrationStarted);
+    const dbLookupStarted = timingNow(options);
+    const missing = ensureRowsComplete(scope, built.repository, context.requestId, built);
+    const dbLookupDurationMs = measureDuration(context, dbLookupStarted);
     const meta = {
       requestId: context.requestId,
-      revision: built.repository.getRevision(),
+      source: "sqlite",
+      scopeCount: scope.length,
+      revision: revisionFor(built.repository, context.requestId, built),
       dbHitCount: scope.length - missing.length,
       legacyMigratedCount: Number(migration?.listingCount || 0),
+      liveOwnedSkipCount: Number(migration?.liveOwnedSkipCount || 0),
       listingFetchedCount: 0,
       listingSharedXlsxCount: 0,
       sharedListingItems: 0,
@@ -447,7 +518,13 @@ export async function getProductCatalogForRows(rows, options = {}) {
       transactionDurationMs: 0,
       missingCount: missing.length,
       conflictCount: Number(migration?.conflictCount || 0),
-      source: missing.length ? "lingxing" : "sqlite",
+      timings: {
+        migrationDurationMs,
+        dbLookupDurationMs,
+        listingFetchDurationMs: 0,
+        productFetchDurationMs: 0,
+        transactionDurationMs: 0,
+      },
     };
     if (missing.length) {
       if (options.allowFetchMissing === false) throw unresolvedError("商品目录", missing.length, built);
@@ -464,17 +541,27 @@ export async function getProductCatalogForRows(rows, options = {}) {
       meta.productFallbackRequestCount = load.productFallbackRequestCount;
       meta.joinedInFlight = load.joinedInFlight;
       meta.transactionDurationMs = load.transactionDurationMs;
+      meta.timings = {
+        ...meta.timings,
+        ...load.timings,
+      };
     }
-    const records = recordsForScope(scope, built.repository, built.sellers);
+    const records = recordsForScope(scope, built.repository, built.sellers, context.requestId, built);
     meta.cacheUpdatedAt = latestRefreshedAt(records);
     meta.elapsedMs = elapsedMs(context.startedAtMs);
     writeLog(options.logger || console, "info", context, "success", null, {
       listingCount: meta.listingFetchedCount,
       productCount: meta.productFetchedCount,
+      liveOwnedSkipCount: meta.liveOwnedSkipCount,
     });
     return { records, meta };
   } catch (error) {
-    const attached = attachError(error, context);
+    const repositoryFailure = !(error instanceof ProductCatalogUpstreamError)
+      && !(error instanceof ProductCatalogInputError)
+      && !(error instanceof ProductCatalogConflictError);
+    const attached = isDatabaseFailure(error) || repositoryFailure
+      ? databaseError(error, "商品目录数据库不可用。", context, error?.details?.operation || context.operation)
+      : attachError(error, context);
     writeLog(options.logger || console, "error", context, "error", attached);
     throw attached;
   }
@@ -493,18 +580,21 @@ export async function refreshProductCatalogScope(input = {}, options = {}) {
     const existing = refreshInFlight.get(key);
     if (existing) {
       const joined = await existing;
-      const records = recordsForScope(scope, built.repository, built.sellers);
+      const records = recordsForScope(scope, built.repository, built.sellers, context.requestId, built);
       writeLog(options.logger || console, "info", context, "success", null, {
         refreshRequestedCount: scope.length,
         refreshCommittedCount: scope.length,
         joinedInFlight: true,
         listingSharedXlsxCount: joined.listingSharedXlsxCount,
+        liveOwnedSkipCount: joined.liveOwnedSkipCount,
       });
       return {
         ok: true,
         records,
         meta: {
           requestId: joined.requestId || context.requestId,
+          source: "sqlite",
+          scopeCount: scope.length,
           revision: joined.revision,
           refreshRequestedCount: scope.length,
           refreshCommittedCount: scope.length,
@@ -518,20 +608,27 @@ export async function refreshProductCatalogScope(input = {}, options = {}) {
           productInfoRequestCount: joined.productInfoRequestCount,
           productFallbackRequestCount: joined.productFallbackRequestCount,
           listingSharedXlsxCount: joined.listingSharedXlsxCount,
+          liveOwnedSkipCount: joined.liveOwnedSkipCount,
           sharedListingItems: joined.listingSharedXlsxCount,
           migrationCompleted: true,
           catalogRevisionBeforeRefresh: joined.catalogRevisionBeforeRefresh,
+          timings: joined.timings,
           elapsedMs: elapsedMs(context.startedAtMs),
         },
       };
     }
     const ownerPromise = (async () => {
       try {
-        await ensureMigrated(built.repository, built.sellers, built);
+        const migrationStarted = timingNow(options);
+        const migration = await ensureMigrated(built.repository, built.sellers, built);
+        const migrationDurationMs = measureDuration(context, migrationStarted);
+        const liveOwnedSkipCount = Number(migration?.liveOwnedSkipCount || 0);
         built.migrationCompleted = true;
-        built.catalogRevisionBeforeRefresh = built.repository.getRevision();
+        const dbLookupStarted = timingNow(options);
+        built.catalogRevisionBeforeRefresh = revisionFor(built.repository, context.requestId, built);
+        const dbLookupDurationMs = measureDuration(context, dbLookupStarted);
         const load = await loadAndCommitScope(scope, { ...built, operation: "manual-refresh" });
-        const records = recordsForScope(scope, built.repository, built.sellers);
+        const records = recordsForScope(scope, built.repository, built.sellers, context.requestId, built);
         return {
           requestId: context.requestId,
           revision: load.revision,
@@ -548,6 +645,14 @@ export async function refreshProductCatalogScope(input = {}, options = {}) {
           productInfoRequestCount: load.productInfoRequestCount,
           productFallbackRequestCount: load.productFallbackRequestCount,
           listingSharedXlsxCount: load.listingSharedXlsxCount,
+          liveOwnedSkipCount,
+          migrationDurationMs,
+          dbLookupDurationMs,
+          timings: {
+            migrationDurationMs,
+            dbLookupDurationMs,
+            ...load.timings,
+          },
           catalogRevisionBeforeRefresh: built.catalogRevisionBeforeRefresh,
           migrationCompleted: true,
         };
@@ -563,12 +668,15 @@ export async function refreshProductCatalogScope(input = {}, options = {}) {
         refreshCommittedCount: result.refreshCommittedCount,
         joinedInFlight: false,
         listingSharedXlsxCount: result.listingSharedXlsxCount,
+        liveOwnedSkipCount: result.liveOwnedSkipCount,
       });
       return {
         ok: true,
         records: result.records,
         meta: {
           requestId: result.requestId,
+          source: "sqlite",
+          scopeCount: scope.length,
           revision: result.revision,
           refreshRequestedCount: result.refreshRequestedCount,
           refreshCommittedCount: result.refreshCommittedCount,
@@ -582,9 +690,11 @@ export async function refreshProductCatalogScope(input = {}, options = {}) {
           productInfoRequestCount: result.productInfoRequestCount,
           productFallbackRequestCount: result.productFallbackRequestCount,
           listingSharedXlsxCount: result.listingSharedXlsxCount,
+          liveOwnedSkipCount: result.liveOwnedSkipCount,
           sharedListingItems: result.listingSharedXlsxCount,
           migrationCompleted: result.migrationCompleted,
           catalogRevisionBeforeRefresh: result.catalogRevisionBeforeRefresh,
+          timings: result.timings,
           elapsedMs: elapsedMs(context.startedAtMs),
         },
       };
@@ -592,7 +702,9 @@ export async function refreshProductCatalogScope(input = {}, options = {}) {
       if (refreshInFlight.get(key) === ownerPromise) refreshInFlight.delete(key);
     }
   } catch (error) {
-    const attached = attachError(error, built || context);
+    const attached = isDatabaseFailure(error)
+      ? databaseError(error, "商品目录数据库不可用。", built || context, error?.details?.operation || context.operation)
+      : attachError(error, built || context);
     writeLog(options.logger || console, "error", context, "error", attached);
     throw attached;
   }
@@ -601,27 +713,40 @@ export async function refreshProductCatalogScope(input = {}, options = {}) {
 export function getProductCatalogRevision(options = {}) {
   const context = createRequestContext(options, options.feature || "catalog", "revision");
   try {
-    const revision = repositoryFor(options).getRevision();
+    const revision = revisionFor(repositoryFor(options), context.requestId, context);
     writeLog(options.logger || console, "info", context, "success", null, { revision });
     return revision;
   } catch (error) {
-    const attached = attachError(error, context);
+    const attached = isDatabaseFailure(error)
+      ? databaseError(error, "商品目录数据库不可用。", context, error?.details?.operation || context.operation)
+      : attachError(error, context);
     writeLog(options.logger || console, "error", context, "error", attached);
     throw attached;
   }
 }
 
 export function getProductCatalogHealth(options = {}) {
+  const requestId = requestIdFrom(options);
   try {
-    return repositoryFor(options).getHealth();
+    return repositoryFor(options).getHealth({ requestId });
   } catch (error) {
-    const code = error?.code || error?.name || "PRODUCT_CATALOG_HEALTH_ERROR";
+    const code = safeErrorCode(error) || "PRODUCT_CATALOG_HEALTH_ERROR";
+    const logger = options.logger || console;
+    if (typeof logger?.error === "function") {
+      logger.error("[product-catalog-service]", {
+        requestId,
+        feature: "catalog-health",
+        operation: "health",
+        status: "degraded",
+        code,
+      });
+    }
     return {
       ok: false,
       status: "degraded",
       schemaVersion: null,
-      quickCheck: "unavailable",
-      error: String(code).slice(0, 120),
+      quickCheck: safeQuickCheckDiagnostic(error?.message),
+      error: code,
     };
   }
 }

@@ -368,6 +368,7 @@ function emptyMetrics() {
     listingCount: 0,
     productCount: 0,
     aliasCount: 0,
+    liveOwnedSkipCount: 0,
     conflictCount: 0,
     conflictSamples: [],
   };
@@ -553,13 +554,13 @@ function logMigration(logger, level, details) {
   if (typeof method === "function") method.call(logger, "[product-catalog-legacy-migration]", details);
 }
 
-function skippedResult(manifest, repository) {
+function skippedResult(manifest, repository, requestId) {
   return {
     ...emptyMetrics(),
     skipped: true,
     fileCount: Array.isArray(manifest.entries) ? manifest.entries.length : manifest.files.length,
     manifestHash: manifest.hash,
-    revision: repository.getRevision(),
+    revision: repository.getRevision({ requestId }),
   };
 }
 
@@ -570,6 +571,7 @@ export async function migrateLegacyProductCatalog({
   sharedDir,
   supplierDir,
   logger = console,
+  requestId,
   maxScanAttempts = DEFAULT_MAX_SCAN_ATTEMPTS,
   now = Date.now,
   buildManifest = buildLegacyProductCatalogManifest,
@@ -586,8 +588,8 @@ export async function migrateLegacyProductCatalog({
     sharedDir: resolvedSharedDir,
     supplierDir: resolvedSupplierDir,
   });
-  if (repository.getMetadata("legacy_manifest_hash") === initialManifest.hash) {
-    return skippedResult(initialManifest, repository);
+  if (repository.getMetadata("legacy_manifest_hash", { requestId }) === initialManifest.hash) {
+    return skippedResult(initialManifest, repository, requestId);
   }
 
   const sellerBySid = new Map((Array.isArray(sellers) ? sellers : [])
@@ -612,7 +614,7 @@ export async function migrateLegacyProductCatalog({
   const write = repository.upsertCatalog({
     ...merged.records,
     operation: "legacy-migration",
-    requestId: `legacy:${manifest.hash.slice(0, 12)}`,
+    requestId: requestId || `legacy:${manifest.hash.slice(0, 12)}`,
     metadata: {
       legacy_manifest_hash: manifest.hash,
       legacy_migrated_at_ms: migratedAtMs,
@@ -620,6 +622,7 @@ export async function migrateLegacyProductCatalog({
   });
   const result = {
     ...merged.metrics,
+    liveOwnedSkipCount: Number(write.liveOwnedSkipCount || 0),
     revision: write.revision,
     manifestHash: manifest.hash,
   };
@@ -628,6 +631,7 @@ export async function migrateLegacyProductCatalog({
     listingCount: result.listingCount,
     productCount: result.productCount,
     aliasCount: result.aliasCount,
+    liveOwnedSkipCount: result.liveOwnedSkipCount,
     conflictCount: result.conflictCount,
     conflictFields: result.conflictFields,
     conflictSamples: result.conflictSamples,
