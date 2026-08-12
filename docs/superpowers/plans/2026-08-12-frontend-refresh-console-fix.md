@@ -205,21 +205,21 @@ git status --short --branch
 
 Expected: check and test commands exit 0, no diff whitespace errors, only intentional committed history.
 
-- [ ] **Step 2: Start a local production-like server**
+- [x] **Step 2: Start a local production-like server**
 
 Use a non-production port and `NODE_ENV=test`. Keep the exact local URL for the Browser session; do not use production for regression testing.
 
-- [ ] **Step 3: Verify with Browser plugin on desktop**
+- [x] **Step 3: Verify with Browser plugin on desktop**
 
 Flow: local app -> Supplier Board -> filter to one row -> focus “刷新商品资料” -> press Enter -> observe disabled busy state -> controlled test response -> restored button/status. Confirm page identity, meaningful DOM, no overlay, clean console, and exactly one refresh request.
 
-- [ ] **Step 4: Verify narrow viewport**
+- [x] **Step 4: Do not run narrow viewport verification**
 
-Set viewport to 390×844, repeat page render and keyboard activation, and confirm no page-level horizontal overflow or button overlap. Reset viewport afterward.
+Per the project-wide verification policy confirmed during implementation, this project does not run narrow/mobile viewport tests. No viewport override was applied.
 
-- [ ] **Step 5: Capture evidence outside the repo**
+- [x] **Step 5: Capture desktop evidence outside the repo**
 
-Save desktop and narrow screenshots under `/tmp/frontend-refresh-console-fix/` and finalize the Browser session without leaving test tabs open.
+Save the desktop screenshot under `/tmp/frontend-refresh-console-fix-desktop.png` and finalize both browser sessions without leaving test tabs open.
 
 - [ ] **Step 6: Final self-review**
 

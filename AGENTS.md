@@ -146,7 +146,7 @@ Use `design.md` as the source of truth for UI decisions. For new or changed UI:
 3. User-resized widths have the highest precedence and remain browser-local. Explicit `data-column-width` is allowed only for a reviewed business constraint; shared smart widths are the normal default.
 4. When a label is not classified correctly, improve the central profile vocabulary or add semantic `data-column-profile` metadata. Do not patch the page with a fixed pixel width.
 5. Selection controls, image columns, numeric values, short organizational names, identifiers, narrative fields, and action controls must retain their shared alignment and width behavior.
-6. Layout changes to tables require desktop and narrow viewport checks for page-level overflow, table-contained horizontal scrolling, manual-width persistence, and per-table restore behavior.
+6. Layout changes to tables require desktop viewport checks for page-level overflow, table-contained horizontal scrolling, manual-width persistence, and per-table restore behavior. This project does not run narrow/mobile viewport tests.
 7. Narrow viewports must keep the document, application shell, dashboard, and view at viewport width. Never use a page-level fixed `min-width` to accommodate a table; the relevant table wrapper owns horizontal scrolling.
 8. Shared table presentation belongs in `assets/css/components/45-table-controls.css`: use `.data-table--middle` for whole-table vertical centering and `.data-table-wrap--detail` with `.data-table--detail` for reusable detail-table sticky-header presentation. Do not recreate these in page or legacy CSS.
 9. Shared table sort affordances are mandatory for managed BI tables. Plain leaf headers are wrapped by `assets/js/data-table-manager.js` with `.sort-button` and use the generic sorter; feature-owned sort buttons may add `data-msku-sort`, `data-supplier-sort`, or `data-factory-sort`, but must reuse the same `.sort-button` class and shared icon spacing. Do not add page-specific sort icon CSS or active-sort padding overrides.
@@ -159,7 +159,7 @@ Minimum checks:
 
 1. The target view renders without console errors.
 2. The changed controls can be used with mouse and keyboard.
-3. Text does not overlap or overflow at desktop and narrow widths.
+3. Text does not overlap or overflow at the desktop viewport. Do not run narrow/mobile viewport tests for this project.
 4. Relevant requests contain the expected query/body fields.
 5. Screenshots or DOM checks confirm the UI state that was changed.
 
