@@ -18,6 +18,12 @@
 npm ci
 ```
 
+商品目录第一阶段使用 `better-sqlite3@13.0.3`。安装完成后可运行一次可丢弃的原生模块与事务 smoke（不会写入项目 `data-cache/`）：
+
+```bash
+node scripts/product-catalog-sqlite-smoke.js
+```
+
 ## 怎么打开
 
 当前已经升级为前后端骨架，推荐用本地服务打开：
@@ -68,6 +74,20 @@ http://localhost:4173
 - 默认同步频率：每 12 小时一次。
 - 手动同步接口：`POST /api/sync/lingxing/manual`。
 
+## 商品目录 SQLite 缓存
+
+领星仍是商品资料的唯一来源，SQLite 只是本机派生缓存。第一阶段数据库固定为：
+
+```text
+data-cache/product-catalog/product-catalog-v1.sqlite
+```
+
+Listing 以 `SID + 标准化 MSKU` 为身份，商品主数据以标准化内部 SKU 为身份。已存在的商品不会因年龄自动刷新；新身份可以首次查询时补录，已有资料必须通过当前页面的“刷新商品资料”显式更新。刷新会先校验运行时店铺 SID，并在全部领星请求成功后一次性提交；数据库不保存原始上游 payload、凭据或 token。
+
+销售事实 SQLite（`sales-facts.sqlite`）和库存快照 SQLite（`inventory-snapshots.sqlite`）属于后续阶段，目前尚未实现，必须先完成独立设计。
+
+旧的 `shared-product-catalog` 与 `supplier-board-product-map` JSON 在观察期内只读，用于迁移、回退和对账；未经单独清理批准不得删除或继续写入。
+
 ## 安全部署与回退
 
 每次上传新版 `tanjia-bi-deploy.tar.gz` 后，在服务器执行：
@@ -82,6 +102,10 @@ bash deploy.sh
 ```bash
 DEPLOY_CONFIRM_BRANCH=main npm run package:deploy
 ```
+
+部署脚本在服务器上的固定顺序是：`npm ci` → `node scripts/product-catalog-sqlite-smoke.js` → `node scripts/migrate-product-catalog.js` → PM2 重启 → `/api/health` 与部署完整性检查。迁移失败时不会重启应用；`/api/health` 会保留根级 `ok`，并在 `productCatalog` 字段报告 schema、quick-check、revision 和行数等受控诊断。
+
+打包前必须保证工作树 clean。非生产分支的临时验证需要同时设置 `ALLOW_NON_PRODUCTION_DEPLOY=1` 和 `DEPLOY_CONFIRM_BRANCH=<当前分支>`；这不会改变服务器正式分支规则。
 
 服务器会校验部署包内的 `.deploy-manifest.json`，确认分支、提交、干净工作区状态、部署文件哈希，并逐项核对首页侧边栏全部板块和对应页面容器，避免从错误分支或不完整部署包覆盖线上版本。
 
@@ -98,4 +122,4 @@ bash rollback.sh
 bash rollback.sh list
 ```
 
-部署和回退脚本不会覆盖 `.env`、`data-cache/`、`uploads/`、`node_modules/`，所以密钥、账号、预算记录和缓存数据会保留。
+部署包和部署/回退脚本都不会携带或覆盖 `.env`、`data-cache/`（包括 SQLite、WAL、SHM）、`uploads/`、`node_modules/`，所以密钥、账号、预算记录和缓存数据会保留。SQLite 迁移写入失败时部署会在 PM2 重启前停止；回退旧代码时旧 JSON 与 SQLite 数据仍保留，旧版本会忽略新数据库文件。

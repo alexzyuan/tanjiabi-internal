@@ -1,15 +1,213 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
+import XLSX from "xlsx";
+XLSX.set_fs(fs);
 import {
   applySharedProductCatalogToRows,
   buildSharedProductCatalogMap,
+  findListingSharedCatalogMatches,
   getSharedProductCatalogMap,
   getSharedSellers,
   listingCountryMskuCatalogKey,
   listingMskuCatalogKey,
   listingStoreMskuCatalogKey,
+  performanceNow,
   productCatalogKey,
+  readListingSharedCatalogRecords,
 } from "../src/services/sharedDataService.js";
+import { createProductCatalogRepository } from "../src/services/productCatalogRepository.js";
+import { closeProductCatalogRepositoryForTests } from "../src/services/productCatalogService.js";
+
+const TEST_CATALOG_NOW = 1720000000000;
+
+function seedScopedCatalog(repository, {
+  sid = 8708,
+  msku = "JM-DGC-BLUE",
+  internalSku = "TJ001",
+  storeName = "xiamentanjia-US",
+  country = "美国",
+} = {}) {
+  const internalSkuKey = internalSku.toLowerCase();
+  repository.upsertCatalog({
+    operation: "shared-test-seed",
+    products: [{
+      internalSkuKey,
+      internalSku,
+      productName: "灯光船蓝色",
+      imageUrl: "https://img.example.com/blue.jpg",
+      supplier: "测试工厂",
+      purchasePrice: 38,
+      source: "test-seed",
+      sourceUpdatedAtMs: TEST_CATALOG_NOW,
+      refreshedAtMs: TEST_CATALOG_NOW,
+    }],
+    aliases: [],
+    listings: [{
+      sid,
+      msku,
+      mskuKey: msku.toLowerCase(),
+      internalSkuKey,
+      internalSku,
+      listingSku: internalSku,
+      storeName,
+      country,
+      source: "test-seed",
+      sourceUpdatedAtMs: TEST_CATALOG_NOW,
+      refreshedAtMs: TEST_CATALOG_NOW,
+    }],
+  });
+}
+
+async function createScopedCatalogFixture() {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "shared-product-catalog-service-test-"));
+  const repository = createProductCatalogRepository({
+    databasePath: path.join(directory, "product-catalog-v1.sqlite"),
+    now: () => TEST_CATALOG_NOW,
+  });
+  return {
+    directory,
+    repository,
+    options: {
+      repository,
+      skipMigration: true,
+      sellers: [
+        { sid: 8708, name: "xiamentanjia-US", country: "美国" },
+        { sid: 101, name: "店铺 A", country: "美国" },
+        { sid: 202, name: "店铺 B", country: "加拿大" },
+      ],
+      listingSharedCatalogRecords: [],
+    },
+    async cleanup() {
+      await closeProductCatalogRepositoryForTests();
+      repository.close();
+      await rm(directory, { recursive: true, force: true });
+    },
+  };
+}
+
+async function writeListingWorkbook(filePath, rows, sheetName = "Listings") {
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(rows), sheetName);
+  await writeFile(filePath, XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }));
+}
+
+test("共享商品目录跳过缺少内部 SKU 的产品记录", () => {
+  assert.doesNotThrow(() => {
+    const map = buildSharedProductCatalogMap({
+      productRecords: [{ product_name: "缺少 SKU", token: "secret" }],
+    });
+    assert.equal(map.size, 0);
+  });
+});
+
+test("共享商品目录保留规范产品的 sku 和 asin 白名单字段", () => {
+  const map = buildSharedProductCatalogMap({
+    sourceRows: [{ sid: 8708, msku: "MSKU-1", sku: "TJ001" }],
+    productRecords: [{
+      sku: "TJ001",
+      asin: "B000000001",
+      photo: "https://img.example.com/photo.jpg",
+    }],
+  });
+  const product = map.get(productCatalogKey("TJ001"));
+  assert.equal(product.sku, "TJ001");
+  assert.equal(product.asin, "B000000001");
+  assert.equal(product.imageUrl, "https://img.example.com/photo.jpg");
+  assert.equal(JSON.parse(JSON.stringify(product)).asin, "B000000001");
+});
+
+test("Listing shared-catalog matches require internal SKU and clone no-SID rows per scope", async (t) => {
+  const records = [{ MSKU: "SHARED-M", SKU: "TJ001", 店铺: "", 国家: "" }];
+  const matches = findListingSharedCatalogMatches([
+    { sid: 101, msku: "SHARED-M", storeName: "店铺 A", country: "美国" },
+    { sid: 202, msku: "SHARED-M", storeName: "店铺 B", country: "加拿大" },
+  ], records);
+  assert.equal(matches.length, 2);
+  assert.notEqual(matches[0], matches[1]);
+  assert.equal(matches[0].internalSku, "TJ001");
+  assert.equal(matches[1].internalSku, "TJ001");
+  assert.deepEqual(
+    findListingSharedCatalogMatches([{ sid: 101, msku: "SHARED-M" }], [{ MSKU: "SHARED-M" }]),
+    [],
+  );
+
+  const fixture = await createScopedCatalogFixture();
+  t.after(fixture.cleanup);
+  const result = await getSharedProductCatalogMap({
+    async fetchListings(params) {
+      const sid = Number(params.sid || params.seller_id || 0);
+      return {
+        data: {
+          list: [{ sid, seller_sku: "SHARED-M" }],
+        },
+      };
+    },
+    async fetchLocalProductInfos() { return { data: [{ sku: "TJ001", product_name: "共享商品" }] }; },
+  }, [
+    { sid: 101, storeName: "店铺 A", country: "美国", msku: "SHARED-M", sku: "SHARED-M" },
+    { sid: 202, storeName: "店铺 B", country: "加拿大", msku: "SHARED-M", sku: "SHARED-M" },
+  ], {
+    ...fixture.options,
+    forceRefresh: true,
+    listingSharedCatalogRecords: records,
+  });
+  assert.equal(result.map.get(listingMskuCatalogKey(101, "SHARED-M")).internalSku, "TJ001");
+  assert.equal(result.map.get(listingMskuCatalogKey(202, "SHARED-M")).internalSku, "TJ001");
+});
+
+test("Listing shared-catalog reader honors configured XLSX files and all sheets", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "listing-shared-catalog-review-"));
+  const filePath = path.join(directory, "configured.xlsx");
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([["MSKU", "SKU"], ["M-1", "TJ001"]]), "第一张");
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([["MSKU", "SKU"], ["M-2", "TJ002"]]), "第二张");
+  await writeFile(filePath, XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }));
+  const previous = process.env.LISTING_SHARED_CATALOG_FILE;
+  process.env.LISTING_SHARED_CATALOG_FILE = filePath;
+  try {
+    const records = await readListingSharedCatalogRecords({ directory: path.join(directory, "missing") });
+    assert.equal(records.length, 2);
+    assert.deepEqual(records.map((record) => [record.MSKU, record.SKU]), [["M-1", "TJ001"], ["M-2", "TJ002"]]);
+  } finally {
+    if (previous === undefined) delete process.env.LISTING_SHARED_CATALOG_FILE;
+    else process.env.LISTING_SHARED_CATALOG_FILE = previous;
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("Listing shared-catalog reader auto-enumerates sorted XLSX files, excludes AppleDouble files, and applies defval", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "listing-shared-catalog-enumeration-"));
+  const previous = process.env.LISTING_SHARED_CATALOG_FILE;
+  delete process.env.LISTING_SHARED_CATALOG_FILE;
+  try {
+    await writeListingWorkbook(path.join(directory, "z.xlsx"), [
+      ["MSKU", "SKU", "Country"],
+      ["Z-MSKU", "Z-SKU", "美国"],
+    ]);
+    await writeListingWorkbook(path.join(directory, "._ignored.xlsx"), [
+      ["MSKU", "SKU"],
+      ["IGNORED-MSKU", "IGNORED-SKU"],
+    ]);
+    await writeListingWorkbook(path.join(directory, "a.xlsx"), [
+      ["MSKU", "SKU", "Country"],
+      ["A-MSKU", "A-SKU"],
+    ]);
+
+    const records = await readListingSharedCatalogRecords({ directory });
+    assert.deepEqual(records.map((record) => record.MSKU), ["A-MSKU", "Z-MSKU"]);
+    assert.equal(records.some((record) => record.MSKU === "IGNORED-MSKU"), false);
+    assert.equal(Object.hasOwn(records[0], "Country"), true);
+    assert.equal(records[0].Country, "");
+  } finally {
+    if (previous === undefined) delete process.env.LISTING_SHARED_CATALOG_FILE;
+    else process.env.LISTING_SHARED_CATALOG_FILE = previous;
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 test("共享商品目录合并 listing、本地商品、图片、采购信息并按 MSKU/SKU 建索引", () => {
   const map = buildSharedProductCatalogMap({
@@ -197,13 +395,15 @@ test("共享商品目录应用到行时合并所有命中的索引，避免空�
   assert.equal(row.declaredValue, 2);
 });
 
-test("共享商品目录在 ERP Listing API 缺失时用 Listing 共享目录兜底内部 SKU", async () => {
+test("共享商品目录在 ERP Listing API 缺失内部 SKU 时用 Listing 共享目录兜底", async (t) => {
   let listingApiCalled = false;
   const productLookupSkus = [];
+  const fixture = await createScopedCatalogFixture();
+  t.after(fixture.cleanup);
   const result = await getSharedProductCatalogMap({
     async fetchListings() {
       listingApiCalled = true;
-      return { data: { list: [] } };
+      return { data: { list: [{ sid: 8708, seller_sku: "JMCA-DGC-Spider" }] } };
     },
     async fetchLocalProductInfos(params) {
       productLookupSkus.push(...(params.skus || []));
@@ -227,6 +427,7 @@ test("共享商品目录在 ERP Listing API 缺失时用 Listing 共享目录兜
     msku: "JMCA-DGC-Spider",
     sku: "JMCA-DGC-Spider",
   }], {
+    ...fixture.options,
     forceRefresh: true,
     listingSharedCatalogRecords: [{
       MSKU: "JMCA-DGC-Spider",
@@ -251,12 +452,15 @@ test("共享商品目录在 ERP Listing API 缺失时用 Listing 共享目录兜
   assert.equal(result.performance.counters.lingxingProductInfoRequests > 0, true);
 });
 
-test("共享商品目录缓存命中返回性能元数据且不调用 Lingxing", async () => {
+test("共享商品目录 SQLite 命中返回性能元数据且不调用 Lingxing", async (t) => {
+  const fixture = await createScopedCatalogFixture();
+  t.after(fixture.cleanup);
+  seedScopedCatalog(fixture.repository);
   let listingCalls = 0;
   const result = await getSharedProductCatalogMap({
     async fetchListings() {
       listingCalls += 1;
-      throw new Error("should not fetch listings on cache hit");
+      throw new Error("should not fetch listings on SQLite hit");
     },
   }, [{
     sid: 8708,
@@ -264,40 +468,59 @@ test("共享商品目录缓存命中返回性能元数据且不调用 Lingxing",
     country: "美国",
     msku: "JM-DGC-BLUE",
     sku: "TJ001",
-  }], {
-    readProductCatalogCache: async () => ({
-      updatedAt: "2026-07-15 10:00:00",
-      data: {
-        records: [{
-          key: listingMskuCatalogKey(8708, "JM-DGC-BLUE"),
-          product: {
-            sid: 8708,
-            msku: "JM-DGC-BLUE",
-            sku: "TJ001",
-            productName: "灯光船蓝色",
-          },
-        }],
-      },
-    }),
-  });
+  }], fixture.options);
 
   assert.equal(listingCalls, 0);
   assert.equal(result.cacheHit, true);
-  assert.equal(result.map.size, 1);
+  assert.equal(result.map.has(listingMskuCatalogKey(8708, "JM-DGC-BLUE")), true);
   assert.equal(result.performance.scope, "shared-product-catalog");
   assert.equal(result.performance.counters.cacheHit, 1);
-  assert.equal(result.performance.counters.outputRecords, 1);
+  assert.equal(result.performance.counters.outputRecords, result.map.size);
   assert.equal(result.performance.counters.lingxingListingRequests || 0, 0);
 });
 
-test("共享商品目录并发相同缓存键时合并刷新请求", async () => {
+test("空商品目录范围返回完整稳定的零阶段 meta", async (t) => {
+  const fixture = await createScopedCatalogFixture();
+  t.after(fixture.cleanup);
+  const result = await getSharedProductCatalogMap({ fetchListings: async () => ({ data: [] }) }, [], {
+    ...fixture.options,
+    requestId: "empty-scope-request",
+  });
+  assert.deepEqual(result.meta, {
+    requestId: "empty-scope-request",
+    source: "sqlite",
+    scopeCount: 0,
+    revision: 0,
+    missingCount: 0,
+    timings: {
+      migrationDurationMs: 0,
+      dbLookupDurationMs: 0,
+      listingFetchDurationMs: 0,
+      productFetchDurationMs: 0,
+      transactionDurationMs: 0,
+      compatibilityMapDurationMs: 0,
+    },
+  });
+  assert.equal(result.performance.requestId, "empty-scope-request");
+  assert.equal(result.performance.timings.compatibilityMapDurationMs, 0);
+});
+
+test("invalid compatibility-map clock fails closed instead of falling back to wall time", () => {
+  assert.throws(
+    () => performanceNow({ timingNow: () => Number.NaN }),
+    (error) => error.statusCode === 400 && error.message === "商品目录计时无效。",
+  );
+});
+
+test("共享商品目录并发相同 SID+MSKU 范围时合并 SQLite 刷新请求", async (t) => {
   let releaseListing;
   const listingGate = new Promise((resolve) => {
     releaseListing = resolve;
   });
   let listingCalls = 0;
   let productCalls = 0;
-  let saveCalls = 0;
+  const fixture = await createScopedCatalogFixture();
+  t.after(fixture.cleanup);
   const rows = [{
     sid: 8708,
     storeName: "xiamentanjia-US",
@@ -306,7 +529,7 @@ test("共享商品目录并发相同缓存键时合并刷新请求", async () =>
     sku: "TJ001",
   }];
   const adapter = {
-    async fetchListings() {
+    async fetchListings(params) {
       listingCalls += 1;
       await listingGate;
       return {
@@ -331,11 +554,10 @@ test("共享商品目录并发相同缓存键时合并刷新请求", async () =>
     },
   };
   const options = {
-    readProductCatalogCache: async () => null,
-    saveProductCatalogCache: async () => {
-      saveCalls += 1;
-    },
+    ...fixture.options,
+    adapter,
     listingSharedCatalogRecords: [],
+    forceRefresh: true,
   };
 
   const first = getSharedProductCatalogMap(adapter, rows, options);
@@ -344,10 +566,17 @@ test("共享商品目录并发相同缓存键时合并刷新请求", async () =>
   const [firstResult, secondResult] = await Promise.all([first, second]);
 
   assert.equal(listingCalls, 1);
-  assert.equal(productCalls, 2);
-  assert.equal(saveCalls, 1);
+  assert.equal(productCalls, 1);
   assert.equal(firstResult.map.size, secondResult.map.size);
-  assert.equal(secondResult.performance.counters.joinedInFlight, 1);
+  assert.equal(firstResult.revision, secondResult.revision);
+  assert.deepEqual(
+    [firstResult.performance.counters.joinedInFlight, secondResult.performance.counters.joinedInFlight].sort(),
+    [0, 1],
+  );
+  assert.equal(firstResult.performance.counters.listingRequestCount, 1);
+  assert.equal(secondResult.performance.counters.listingRequestCount, 1);
+  assert.equal(firstResult.performance.counters.productInfoRequestCount, 1);
+  assert.equal(secondResult.performance.counters.productInfoRequestCount, 1);
 });
 
 test("统一店铺缓存命中时不再调用 Lingxing fetchSellers", async () => {

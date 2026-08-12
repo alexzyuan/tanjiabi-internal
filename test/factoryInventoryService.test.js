@@ -6,6 +6,7 @@ const {
   aggregateFbaInventoryByMsku,
   aggregateSalesForecastFbaByMsku,
   applyManualShippedQuantities,
+  buildProductCatalogScope,
   isFactoryInventoryRowManualKey,
   normalizePurchaseOrderRows,
 } = factoryInventoryTestUtils;
@@ -92,6 +93,42 @@ test("采购单 msku 数组保持一条采购明细并汇总关联的 FBA 库存
   assert.equal(rows[0].fbaAvailable, 14);
   assert.equal(rows[0].fbaTransfer, 3);
   assert.equal(rows[0].fbaInbound, 11);
+});
+
+test("工厂商品目录 scope 只保留独立有效 SID+MSKU，并对无 SID 组合显式缺失", async (t) => {
+  const rows = normalizePurchaseOrderRows([
+    {
+      order_sn: "PO-CATALOG-SCOPE",
+      supplier_name: "测试工厂",
+      create_time: "2026-07-15 08:00:00",
+      item_list: [
+        {
+          sid: "8708",
+          sku: "SKU-US",
+          product_name: "美国商品",
+          msku: [{ msku: "US-MSKU" }, { msku: "CA-MSKU" }],
+          quantity_real: 2,
+        },
+        {
+          sku: "SKU-UNKNOWN",
+          product_name: "缺少店铺",
+          msku: [{ msku: "NO-SID-A" }, { msku: "NO-SID-B" }],
+          quantity_real: 1,
+        },
+      ],
+    },
+  ], new Map(), { startDate: "2026-03-01" });
+  const scope = buildProductCatalogScope(rows);
+  assert.deepEqual(scope.map((item) => `${item.sid}:${item.msku}`).sort(), [
+    "8708:CA-MSKU",
+    "8708:US-MSKU",
+  ]);
+  assert.equal(scope.some((item) => item.sid === 0 || item.msku.includes("/")), false);
+  assert.deepEqual(buildProductCatalogScope([{
+    sid: 8708,
+    msku: "A / B",
+    catalogIdentities: [{ sid: 8708, msku: "A / B" }],
+  }]), []);
 });
 
 test("采购单明细只有 sid 时会用店铺缓存补齐店铺和国家", () => {

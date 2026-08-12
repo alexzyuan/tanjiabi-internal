@@ -1,263 +1,33 @@
-import { readdir, stat } from "node:fs/promises";
-import path from "node:path";
 import { getLingxingAdapter } from "../adapters/lingxingAdapter.js";
-import { createPerformanceMetrics } from "../utils/performanceMetrics.js";
 import {
-  fetchLingxingListingsBySidMskus,
-  fetchLingxingProductRecords,
-} from "./lingxingCatalogLookupService.js";
-import {
-  readSharedProductCatalogCache,
-  saveSharedProductCatalogCache,
-} from "../utils/cacheStore.js";
+  getProductCatalogForRows,
+  getProductCatalogRevision,
+  ProductCatalogInputError,
+  refreshProductCatalogScope,
+} from "./productCatalogService.js";
 import { getSellerDirectory } from "./sellerDirectoryService.js";
+import {
+  catalogProductToRepositoryRows,
+  hasReadableValue,
+  mergeCatalogProduct,
+  normalizeCatalogListing,
+  normalizeCatalogProduct,
+} from "./productCatalogNormalization.js";
+import {
+  findListingSharedCatalogMatches,
+  readListingSharedCatalogRecords,
+} from "./listingSharedCatalogService.js";
 
-const PRODUCT_CATALOG_CACHE_VERSION = "shared-product-catalog-v3";
-const PRODUCT_CATALOG_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const LISTING_BATCH_SIZE = 50;
-const PRODUCT_BATCH_SIZE = 80;
-const LISTING_SHARED_CATALOG_DIR = path.join(process.cwd(), "data-cache", "listing-shared-catalog");
-const sharedProductCatalogRefreshes = new Map();
-
-const productSupplierKeys = [
-  "supplier_name",
-  "supplierName",
-  "supplier",
-  "supplier_title",
-  "supplierTitle",
-  "supplierInfo",
-  "supplier_info",
-  "provider_name",
-  "providerName",
-  "factory_name",
-  "factoryName",
-  "vendor_name",
-  "vendorName",
-  "purchase_supplier_name",
-  "purchaseSupplierName",
-  "供应商",
-  "工厂名称",
-];
-
-const productPriceKeys = [
-  "purchase_price",
-  "purchasePrice",
-  "purchase_cost",
-  "purchaseCost",
-  "cg_price",
-  "unit_cg_price",
-  "unit_purchase_cost",
-  "product_purchase_cost",
-  "local_purchase_cost",
-  "cost_price",
-  "costPrice",
-  "price",
-  "采购价",
-  "采购价格",
-];
-
-const productModelKeys = [
-  "attribute",
-  "model",
-  "model_name",
-  "modelName",
-  "product_model",
-  "productModel",
-  "style",
-  "specification",
-  "specificationName",
-  "型号",
-];
-
-const productBrandKeys = [
-  "brand",
-  "brand_name",
-  "brandName",
-  "brand_title",
-  "brandTitle",
-  "product_brand",
-  "productBrand",
-  "品牌",
-];
-
-const productMaterialKeys = [
-  "material",
-  "material_name",
-  "materialName",
-  "product_material",
-  "productMaterial",
-  "cg_product_material",
-  "cgProductMaterial",
-  "customs_clearance_material",
-  "customsClearanceMaterial",
-  "customs_clearance_en_material",
-  "customsClearanceEnMaterial",
-  "declaration_material",
-  "declarationMaterial",
-  "材质",
-  "申报材质",
-];
-
-const productPurposeKeys = [
-  "purpose",
-  "usage",
-  "use",
-  "product_use",
-  "productUse",
-  "customs_clearance_usage",
-  "customsClearanceUsage",
-  "customs_clearance_en_usage",
-  "customsClearanceEnUsage",
-  "declaration_purpose",
-  "declarationPurpose",
-  "用途",
-  "申报用途",
-];
-
-const productCustomsCodeKeys = [
-  "customs_code",
-  "customsCode",
-  "clearance_code",
-  "clearanceCode",
-  "bg_export_hs_code",
-  "bgExportHsCode",
-  "bg_import_hs_code",
-  "bgImportHsCode",
-  "customs_declaration_hs_code",
-  "customsDeclarationHsCode",
-  "customs_clearance_hs_code",
-  "customsClearanceHsCode",
-  "hs_code",
-  "hsCode",
-  "hscode",
-  "tariff_code",
-  "tariffCode",
-  "海关编码",
-  "清关编码",
-  "出口报关编码",
-  "中国报关编码",
-];
-
-const productBatteryKeys = [
-  "is_battery",
-  "isBattery",
-  "battery",
-  "battery_type",
-  "batteryType",
-  "has_battery",
-  "hasBattery",
-  "带电",
-  "是否带电",
-  "是否含电池",
-];
-
-const productUnitKeys = [
-  "unit",
-  "unit_name",
-  "unitName",
-  "declare_unit",
-  "declareUnit",
-  "customs_declaration_unit",
-  "customsDeclarationUnit",
-  "declaration_unit",
-  "declarationUnit",
-  "单位",
-  "申报单位",
-];
-
-const productDeclaredValueKeys = [
-  "declared_value",
-  "declaredValue",
-  "declare_unit_price",
-  "declareUnitPrice",
-  "declaration_price",
-  "declarationPrice",
-  "bg_customs_import_price",
-  "bgCustomsImportPrice",
-  "customs_import_price",
-  "customsImportPrice",
-  "customs_clearance_price",
-  "customsClearancePrice",
-  "申报单价",
-  "申报价格",
-];
-
-function hasReadableValue(value) {
-  if (value === undefined || value === null) return false;
-  if (Array.isArray(value)) return value.some((item) => hasReadableValue(item));
-  if (typeof value === "object") return false;
-  return String(value).trim() !== "";
-}
-
-function walkObject(value, visit, depth = 0) {
-  if (!value || depth > 4) return;
-  if (Array.isArray(value)) {
-    value.forEach((item) => walkObject(item, visit, depth + 1));
-    return;
-  }
-  if (typeof value !== "object") return;
-  Object.entries(value).forEach(([key, child]) => {
-    visit(key, child);
-    walkObject(child, visit, depth + 1);
-  });
-}
-
-function readFirst(item, keys) {
-  for (const key of keys) {
-    const value = item?.[key];
-    if (hasReadableValue(value)) return value;
-  }
-  const normalizedKeys = new Set(keys.map((key) => String(key).toLowerCase()));
-  let found = "";
-  walkObject(item, (key, value) => {
-    if (found || !normalizedKeys.has(String(key).toLowerCase()) || !hasReadableValue(value)) return;
-    found = value;
-  });
-  return found || "";
-}
-
-function readBatteryDeclaration(record = {}) {
-  const explicit = readFirst(record, productBatteryKeys);
-  if (explicit) return explicit;
-  const specialAttrs = Array.isArray(record.special_attr)
-    ? record.special_attr
-    : Array.isArray(record.specialAttr)
-      ? record.specialAttr
-      : [];
-  const codes = specialAttrs.map((value) => String(value).trim()).filter(Boolean);
-  if (codes.includes("1")) return "是";
-  if (codes.includes("8")) return "否";
-  if (codes.length) {
-    console.warn("[shared-product-catalog] 未识别产品带电属性码", {
-      sku: readFirst(record, ["sku", "local_sku", "localSku", "product_sku"]),
-      productId: readFirst(record, ["product_id", "productId", "local_product_id", "localProductId"]),
-      specialAttrs: codes,
-    });
-  }
-  return "";
-}
-
-function readArrayText(value) {
-  if (Array.isArray(value)) return value.filter((item) => item !== undefined && item !== null && String(item).trim() !== "").map(String).join(" / ");
-  if (typeof value === "string") {
-    const text = value.trim();
-    if ((text.startsWith("[") && text.endsWith("]")) || (text.startsWith("{") && text.endsWith("}"))) {
-      try {
-        return readArrayText(JSON.parse(text));
-      } catch {
-        return text;
-      }
-    }
-    return text;
-  }
-  return value === undefined || value === null ? "" : String(value);
-}
-
-function toNumber(value) {
-  if (value === undefined || value === null || value === "") return 0;
-  const number = Number(String(value).replace(/,/g, "").replace(/¥/g, "").replace(/￥/g, "").replace(/%/g, ""));
-  return Number.isFinite(number) ? number : 0;
-}
+export {
+  catalogProductToRepositoryRows,
+  mergeCatalogProduct,
+  normalizeCatalogListing,
+  normalizeCatalogProduct,
+} from "./productCatalogNormalization.js";
+export {
+  findListingSharedCatalogMatches,
+  readListingSharedCatalogRecords,
+} from "./listingSharedCatalogService.js";
 
 function uniqueText(values = []) {
   const seen = new Set();
@@ -267,85 +37,6 @@ function uniqueText(values = []) {
     seen.add(key);
     return true;
   });
-}
-
-function chunkArray(values, size) {
-  const chunks = [];
-  for (let index = 0; index < values.length; index += size) chunks.push(values.slice(index, index + size));
-  return chunks;
-}
-
-function normalizeRecordList(payload) {
-  if (Array.isArray(payload)) return payload;
-  if (Array.isArray(payload?.data)) return payload.data;
-  const data = payload?.data || payload || {};
-  const records = data.records || data.list || data.rows || data.data || data.items || data.result || data;
-  return Array.isArray(records) ? records : [];
-}
-
-function totalCountOf(payload, recordsLength = 0) {
-  const data = payload?.data || payload || {};
-  return Number(data.total ?? data.count ?? data.totalCount ?? payload?.total ?? recordsLength) || recordsLength;
-}
-
-function findImageUrl(source, depth = 0) {
-  if (!source || depth > 4) return "";
-  if (typeof source === "string") {
-    const text = source.trim();
-    if (!text) return "";
-    if ((text.startsWith("[") && text.endsWith("]")) || (text.startsWith("{") && text.endsWith("}"))) {
-      try {
-        return findImageUrl(JSON.parse(text), depth + 1);
-      } catch {
-        return /^https?:\/\//i.test(text) ? text : "";
-      }
-    }
-    return /^https?:\/\//i.test(text) ? text : "";
-  }
-  if (Array.isArray(source)) {
-    for (const item of source) {
-      const found = findImageUrl(item, depth + 1);
-      if (found) return found;
-    }
-    return "";
-  }
-  if (typeof source !== "object") return "";
-  const preferredKeys = [
-    "image_url",
-    "imageUrl",
-    "small_image_url",
-    "smallImageUrl",
-    "main_image",
-    "mainImage",
-    "main_image_url",
-    "mainImageUrl",
-    "large_image_url",
-    "largeImageUrl",
-    "medium_image_url",
-    "mediumImageUrl",
-    "thumbnail_url",
-    "thumbnailUrl",
-    "pic_url",
-    "picUrl",
-    "picture_url",
-    "pictureUrl",
-    "product_image",
-    "productImage",
-    "img",
-    "image",
-    "images",
-    "image_list",
-    "imageList",
-    "pic",
-    "picture",
-    "photo",
-    ...(depth > 0 ? ["url", "src", "href", "thumbnail"] : []),
-  ];
-  for (const key of preferredKeys) {
-    const found = findImageUrl(source[key], depth + 1);
-    if (found) return found;
-  }
-  return "";
 }
 
 export function productCatalogKey(value) {
@@ -369,35 +60,6 @@ export function listingCountryMskuCatalogKey(country, msku) {
   return countryKey && mskuKey ? `country:${countryKey}:msku:${mskuKey}` : "";
 }
 
-function mergeProductCatalogInfo(existing = {}, incoming = {}) {
-  return {
-    ...existing,
-    ...incoming,
-    sku: incoming.sku || existing.sku || "",
-    internalSku: incoming.internalSku || existing.internalSku || "",
-    skuIdentifier: incoming.skuIdentifier || existing.skuIdentifier || "",
-    productId: incoming.productId || existing.productId || "",
-    msku: incoming.msku || existing.msku || "",
-    sid: incoming.sid || existing.sid || 0,
-    storeName: incoming.storeName || existing.storeName || "",
-    country: incoming.country || existing.country || "",
-    productName: incoming.productName || existing.productName || "",
-    imageUrl: incoming.imageUrl || existing.imageUrl || "",
-    supplier: incoming.supplier || existing.supplier || "",
-    purchasePrice: incoming.purchasePrice || existing.purchasePrice || 0,
-    model: incoming.model || existing.model || "",
-    brand: incoming.brand || existing.brand || "",
-    material: incoming.material || existing.material || "",
-    purpose: incoming.purpose || existing.purpose || "",
-    customsCode: incoming.customsCode || existing.customsCode || "",
-    isBattery: incoming.isBattery || existing.isBattery || "",
-    unit: incoming.unit || existing.unit || "",
-    declaredValue: incoming.declaredValue || existing.declaredValue || 0,
-    asin: incoming.asin || existing.asin || "",
-    raw: incoming.raw || existing.raw || null,
-  };
-}
-
 function putProductCatalog(map, product, extraKeys = []) {
   if (!product) return;
   [
@@ -413,7 +75,7 @@ function putProductCatalog(map, product, extraKeys = []) {
   ].filter(Boolean).forEach((key) => {
     const normalizedKey = productCatalogKey(key);
     if (!normalizedKey) return;
-    map.set(normalizedKey, mergeProductCatalogInfo(map.get(normalizedKey), product));
+    map.set(normalizedKey, mergeCatalogProduct(map.get(normalizedKey), product));
   });
 }
 
@@ -462,76 +124,20 @@ export function productCatalogRecordsToMap(records = []) {
 }
 
 function normalizeSharedListingRecord(record = {}, fallbackSid = 0) {
-  const msku = readArrayText(readFirst(record, ["msku", "m_sku", "seller_sku", "sellerSku", "sellerSkuStr", "local_sku", "item_sku", "fnsku"])).trim();
-  if (!msku) return null;
-  return {
-    sid: toNumber(readFirst(record, ["sid", "seller_id", "sellerId", "store_id", "storeId"])) || Number(fallbackSid || 0),
-    msku,
-    storeName: readFirst(record, ["storeName", "store_name", "seller", "seller_name", "shop_name", "店铺"]),
-    country: readFirst(record, ["country", "countryName", "country_name", "marketplace", "国家"]),
-    sku: readFirst(record, ["sku", "local_sku", "localSku", "product_sku", "sku_identifier", "skuIdentifier"]),
-    internalSku: readFirst(record, ["local_sku", "localSku", "sku", "product_sku", "sku_identifier", "skuIdentifier"]),
-    skuIdentifier: readFirst(record, ["sku_identifier", "skuIdentifier", "local_sku_identifier", "localSkuIdentifier"]),
-    productId: readFirst(record, ["product_id", "productId", "local_product_id", "localProductId"]),
-    productName: readArrayText(readFirst(record, ["local_name", "localName", "product_name", "productName", "item_name", "itemName", "title", "product_title", "name"])),
-    imageUrl: findImageUrl(record),
-    supplier: readFirst(record, productSupplierKeys),
-    purchasePrice: toNumber(readFirst(record, productPriceKeys)),
-    model: readFirst(record, productModelKeys),
-    brand: readFirst(record, productBrandKeys),
-    material: readFirst(record, productMaterialKeys),
-    purpose: readFirst(record, productPurposeKeys),
-    customsCode: readFirst(record, productCustomsCodeKeys),
-    isBattery: readBatteryDeclaration(record),
-    unit: readFirst(record, productUnitKeys),
-    declaredValue: toNumber(readFirst(record, productDeclaredValueKeys)),
-    asin: readFirst(record, ["asin", "ASIN"]),
-    raw: record,
-  };
-}
-
-function normalizeListingSharedCatalogRecord(record = {}) {
-  const msku = readArrayText(readFirst(record, ["MSKU", "msku", "m_sku", "seller_sku", "sellerSku", "sellerSkuStr"])).trim();
-  const internalSku = readArrayText(readFirst(record, ["SKU", "sku", "local_sku", "localSku", "product_sku", "商品SKU"])).trim();
-  if (!msku || !internalSku) return null;
-  return {
-    sid: toNumber(readFirst(record, ["sid", "SID", "seller_id", "sellerId", "store_id", "storeId"])),
-    msku,
-    sku: internalSku,
-    internalSku,
-    storeName: readFirst(record, ["店铺", "storeName", "store_name", "seller", "seller_name", "shop_name"]),
-    country: readFirst(record, ["国家", "country", "countryName", "country_name", "marketplace"]),
-    productName: readArrayText(readFirst(record, ["品名", "local_name", "localName", "product_name", "productName", "item_name", "itemName", "title", "标题"])),
-    asin: readFirst(record, ["ASIN", "asin"]),
-    raw: record,
-  };
+  return normalizeCatalogListing(record, { fallbackSid });
 }
 
 function normalizeSharedProductRecord(record = {}) {
-  const sku = String(readFirst(record, ["sku", "local_sku", "localSku", "product_sku", "sku_identifier", "skuIdentifier"]) || "").trim();
-  return {
-    sku,
-    internalSku: sku,
-    skuIdentifier: readFirst(record, ["sku_identifier", "skuIdentifier", "local_sku_identifier", "localSkuIdentifier"]),
-    productId: readFirst(record, ["product_id", "productId", "local_product_id", "localProductId"]),
-    productName: readFirst(record, ["product_name", "productName", "local_name", "localName", "name", "item_name", "itemName"]),
-    imageUrl: findImageUrl(record),
-    supplier: readFirst(record, productSupplierKeys),
-    purchasePrice: toNumber(readFirst(record, productPriceKeys)),
-    model: readFirst(record, productModelKeys),
-    brand: readFirst(record, productBrandKeys),
-    material: readFirst(record, productMaterialKeys),
-    purpose: readFirst(record, productPurposeKeys),
-    customsCode: readFirst(record, productCustomsCodeKeys),
-    isBattery: readBatteryDeclaration(record),
-    unit: readFirst(record, productUnitKeys),
-    declaredValue: toNumber(readFirst(record, productDeclaredValueKeys)),
-    asin: readFirst(record, ["asin", "ASIN"]),
-    raw: record,
-  };
+  return normalizeCatalogProduct(record);
 }
 
-export function buildSharedProductCatalogMap({ sourceRows = [], listingRecords = [], productRecords = [] } = {}) {
+export function buildSharedProductCatalogMap({
+  sourceRows = [],
+  listingRecords = [],
+  productRecords = [],
+  catalogRecords = null,
+} = {}) {
+  if (Array.isArray(catalogRecords)) return buildCanonicalProductCatalogMap(catalogRecords, sourceRows);
   const map = new Map();
   sourceRows.forEach((row) => {
     const sid = Number(row.sid || 0);
@@ -544,7 +150,7 @@ export function buildSharedProductCatalogMap({ sourceRows = [], listingRecords =
       country: String(row.country || "").trim(),
       productName: String(row.productName || "").trim(),
       imageUrl: String(row.imageUrl || "").trim(),
-      raw: null,
+      asin: String(row.asin || "").trim(),
     };
     putProductCatalog(map, product, sid && product.msku ? [listingMskuCatalogKey(sid, product.msku)] : []);
   });
@@ -557,12 +163,12 @@ export function buildSharedProductCatalogMap({ sourceRows = [], listingRecords =
     ]);
   });
 
-  productRecords.map(normalizeSharedProductRecord).forEach((product) => {
-    const keys = [product.sku, product.skuIdentifier, product.productId].map(productCatalogKey).filter(Boolean);
+  productRecords.map(normalizeSharedProductRecord).filter(Boolean).forEach((product) => {
+    const keys = [product.internalSku, product.skuIdentifier, product.productId].map(productCatalogKey).filter(Boolean);
     const linkedProducts = keys.map((key) => map.get(key)).filter(Boolean);
     putProductCatalog(map, product);
     linkedProducts.forEach((linked) => {
-      const merged = mergeProductCatalogInfo(linked, product);
+      const merged = mergeCatalogProduct(linked, product);
       putProductCatalog(map, { ...merged, msku: linked.msku, sid: linked.sid, storeName: linked.storeName, country: linked.country }, [
         linked.sid && linked.msku ? listingMskuCatalogKey(linked.sid, linked.msku) : "",
         linked.storeName && linked.msku ? listingStoreMskuCatalogKey(linked.storeName, linked.msku) : "",
@@ -571,157 +177,6 @@ export function buildSharedProductCatalogMap({ sourceRows = [], listingRecords =
     });
   });
   return map;
-}
-
-function stableProductCatalogCacheKey(rows = []) {
-  const identities = uniqueText(rows.flatMap((row) => [
-    Number(row.sid || 0) && row.msku ? listingMskuCatalogKey(row.sid, row.msku) : "",
-    row.storeName && row.msku ? listingStoreMskuCatalogKey(row.storeName, row.msku) : "",
-    row.country && row.msku ? listingCountryMskuCatalogKey(row.country, row.msku) : "",
-    row.msku,
-    row.sku,
-  ]));
-  return JSON.stringify({
-    source: "shared-product-catalog",
-    version: PRODUCT_CATALOG_CACHE_VERSION,
-    identities: identities.sort(),
-  });
-}
-
-async function listingSharedCatalogFilePaths() {
-  const configured = String(process.env.LISTING_SHARED_CATALOG_FILE || "").trim();
-  if (configured) return [configured];
-  try {
-    const names = await readdir(LISTING_SHARED_CATALOG_DIR);
-    const paths = [];
-    for (const name of names) {
-      if (!/\.xlsx$/i.test(name) || name.startsWith("._")) continue;
-      const filePath = path.join(LISTING_SHARED_CATALOG_DIR, name);
-      const info = await stat(filePath);
-      if (info.isFile()) paths.push(filePath);
-    }
-    return paths.sort();
-  } catch (error) {
-    if (error?.code === "ENOENT") return [];
-    throw error;
-  }
-}
-
-export async function readListingSharedCatalogRecords({ files = null } = {}) {
-  const filePaths = Array.isArray(files) ? files : await listingSharedCatalogFilePaths();
-  if (!filePaths.length) return [];
-  const module = await import("xlsx");
-  const XLSX = module.default || module;
-  const records = [];
-  for (const filePath of filePaths) {
-    const workbook = XLSX.readFile(filePath, { cellDates: false });
-    workbook.SheetNames.forEach((sheetName) => {
-      records.push(...XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: "" }));
-    });
-  }
-  return records;
-}
-
-function listingItemHasInternalSkuForRow(row = {}, item = {}) {
-  if (!item?.internalSku) return false;
-  const rowMskus = String(row.msku || "").split("/").map((value) => productCatalogKey(value)).filter(Boolean);
-  if (!rowMskus.includes(productCatalogKey(item.msku))) return false;
-  if (row.sid && item.sid && Number(row.sid) !== Number(item.sid)) return false;
-  if (row.storeName && item.storeName && productCatalogKey(row.storeName) !== productCatalogKey(item.storeName)) return false;
-  if (row.country && item.country && productCatalogKey(row.country) !== productCatalogKey(item.country)) return false;
-  return true;
-}
-
-function listingSharedCatalogMatchesRow(row = {}, listing = {}) {
-  const rowMskus = String(row.msku || "").split("/").map((value) => productCatalogKey(value)).filter(Boolean);
-  if (!rowMskus.includes(productCatalogKey(listing.msku))) return false;
-  if (row.storeName && listing.storeName) return productCatalogKey(row.storeName) === productCatalogKey(listing.storeName);
-  if (row.country && listing.country) return productCatalogKey(row.country) === productCatalogKey(listing.country);
-  if (row.sid && listing.sid) return Number(row.sid) === Number(listing.sid);
-  return true;
-}
-
-async function fetchListingSharedCatalogItems(rows = [], apiListingItems = [], {
-  listingSharedCatalogRecords = null,
-  readListingSharedCatalog = readListingSharedCatalogRecords,
-  strict = false,
-} = {}) {
-  const missingRows = rows.filter((row) => !apiListingItems.some((item) => listingItemHasInternalSkuForRow(row, item)));
-  if (!missingRows.length) return [];
-  let rawRecords = [];
-  try {
-    rawRecords = Array.isArray(listingSharedCatalogRecords)
-      ? listingSharedCatalogRecords
-      : await readListingSharedCatalog();
-  } catch (error) {
-    console.error("[shared-product-catalog] Listing 共享目录读取失败", {
-      rowCount: rows.length,
-      missingRowCount: missingRows.length,
-      error: error.message,
-    });
-    if (strict) throw new Error(`Listing 共享目录读取失败：${error.message}`);
-    return [];
-  }
-  const listings = rawRecords.map(normalizeListingSharedCatalogRecord).filter(Boolean);
-  const matched = [];
-  missingRows.forEach((row) => {
-    listings
-      .filter((listing) => listingSharedCatalogMatchesRow(row, listing))
-      .forEach((listing) => matched.push({
-        ...listing,
-        sid: listing.sid || Number(row.sid || 0),
-        storeName: listing.storeName || row.storeName || "",
-        country: listing.country || row.country || "",
-      }));
-  });
-  if (matched.length) {
-    console.info("[shared-product-catalog] Listing 共享目录补充内部 SKU", {
-      requestedRows: rows.length,
-      missingRows: missingRows.length,
-      matchedRows: matched.length,
-    });
-  }
-  return matched;
-}
-
-async function fetchListingItems(adapter, rows = [], { strict = false, metrics = null } = {}) {
-  const rowsBySid = new Map();
-  rows.forEach((row) => {
-    const sid = Number(row.sid || 0);
-    const mskus = String(row.msku || "").split("/").map((item) => item.trim()).filter(Boolean);
-    if (!sid || !mskus.length) return;
-    if (!rowsBySid.has(sid)) rowsBySid.set(sid, []);
-    rowsBySid.get(sid).push(...mskus);
-  });
-
-  const items = [];
-  for (const [sid, mskus] of rowsBySid.entries()) {
-    const records = await fetchLingxingListingsBySidMskus(adapter, sid, mskus, { batchSize: LISTING_BATCH_SIZE, strict, metrics });
-    records.map((record) => normalizeSharedListingRecord(record, sid)).filter(Boolean).forEach((item) => items.push(item));
-  }
-  return items;
-}
-
-async function safeFetchProductRecords(adapter, params, fallbackParams = null, { strict = false, metrics = null } = {}) {
-  return fetchLingxingProductRecords(adapter, params, fallbackParams, { strict, metrics });
-}
-
-async function fetchProductRecords(adapter, rows = [], listingItems = [], { strict = false, metrics = null } = {}) {
-  const lookupValues = uniqueText([...rows, ...listingItems].flatMap((row) => [row.internalSku, row.sku, row.msku]));
-  const skuIdentifiers = uniqueText(listingItems.flatMap((row) => [row.skuIdentifier, row.internalSku, row.sku, row.msku]));
-  const productIds = uniqueText(listingItems.map((row) => row.productId));
-  const records = [];
-
-  for (const batch of chunkArray(lookupValues, PRODUCT_BATCH_SIZE)) {
-    records.push(...await safeFetchProductRecords(adapter, { skus: batch }, { sku_list: batch }, { strict, metrics }));
-  }
-  for (const batch of chunkArray(skuIdentifiers, PRODUCT_BATCH_SIZE)) {
-    records.push(...await safeFetchProductRecords(adapter, { sku_identifiers: batch }, { sku_identifier_list: batch }, { strict, metrics }));
-  }
-  for (const batch of chunkArray(productIds, PRODUCT_BATCH_SIZE)) {
-    records.push(...await safeFetchProductRecords(adapter, { product_ids: batch }, { product_id_list: batch }, { strict, metrics }));
-  }
-  return records;
 }
 
 export async function getSharedSellers({
@@ -755,81 +210,338 @@ export async function getCurrentFbaInventoryByMsku() {
   };
 }
 
+function canonicalRecordProduct(record = {}) {
+  const product = record?.product && typeof record.product === "object" ? record.product : {};
+  const listing = record?.listing && typeof record.listing === "object" ? record.listing : {};
+  const merged = mergeCatalogProduct({}, product);
+  const withListing = mergeCatalogProduct(merged, listing);
+  const withRecord = mergeCatalogProduct(withListing, record);
+  const internalSku = String(
+    withRecord.internalSku
+      || product.internalSku
+      || listing.internalSku
+      || record.internalSku
+      || "",
+  ).trim();
+  const msku = String(record.msku || listing.msku || "").trim();
+  const sid = Number(record.sid || listing.sid || 0);
+  const productId = String(
+    withRecord.productId
+      || product.productId
+      || listing.productId
+      || record.productId
+      || "",
+  ).trim();
+  const skuIdentifier = String(
+    withRecord.skuIdentifier
+      || product.skuIdentifier
+      || listing.skuIdentifier
+      || record.skuIdentifier
+      || "",
+  ).trim();
+  const next = {
+    ...withRecord,
+    sid,
+    msku,
+    mskuKey: String(record.mskuKey || listing.mskuKey || msku).trim().toLowerCase(),
+    internalSku,
+    internalSkuKey: internalSku ? productCatalogKey(internalSku) : "",
+    sku: String(withRecord.sku || internalSku).trim(),
+    listingSku: String(withRecord.listingSku || listing.listingSku || "").trim(),
+    productId,
+    skuIdentifier,
+    asin: String(withRecord.asin || listing.asin || product.asin || "").trim(),
+    storeName: String(record.storeName || listing.storeName || "").trim(),
+    country: String(record.country || listing.country || "").trim(),
+    countryCode: String(record.countryCode || listing.countryCode || "").trim(),
+    displayName: String(record.displayName || listing.displayName || "").trim(),
+    internalSkuSourceField: String(record.internalSkuSourceField || listing.internalSkuSourceField || "").trim(),
+    listingSkuSourceField: String(record.listingSkuSourceField || listing.listingSkuSourceField || "").trim(),
+  };
+  return next;
+}
+
+function sourceRowValue(row, fields) {
+  for (const field of fields) {
+    const value = row?.[field];
+    if (value !== undefined && value !== null) return value;
+  }
+  return undefined;
+}
+
+function isCatalogValueMissing(value) {
+  return value === undefined || value === null || (typeof value === "string" && !value.trim());
+}
+
+function applySourceRowFallback(product, sourceRow = {}) {
+  if (!sourceRow || typeof sourceRow !== "object") return product;
+  const next = { ...product };
+  const fallbackFields = [
+    ["imageUrl", ["imageUrl", "image_url", "productImageUrl"]],
+    ["productName", ["productName", "product_name", "title"]],
+    ["asin", ["asin", "ASIN"]],
+    ["supplier", ["supplier", "supplier_name"]],
+    ["purchasePrice", ["purchasePrice", "purchase_price"]],
+    ["model", ["model", "model_name"]],
+    ["brand", ["brand", "brand_name"]],
+    ["material", ["material", "material_name"]],
+    ["purpose", ["purpose", "usage"]],
+    ["customsCode", ["customsCode", "customs_code", "hsCode", "hs_code"]],
+    ["isBattery", ["isBattery", "is_battery"]],
+    ["unit", ["unit", "unit_name"]],
+    ["declaredValue", ["declaredValue", "declared_value"]],
+    ["packQuantity", ["packQuantity", "pack_quantity"]],
+  ];
+  fallbackFields.forEach(([field, sourceFields]) => {
+    const candidate = sourceRowValue(sourceRow, sourceFields);
+    if (isCatalogValueMissing(next[field]) && candidate !== undefined && candidate !== null) next[field] = candidate;
+  });
+  return next;
+}
+
+function addRequestLocalCatalogAlias(map, key, product) {
+  const normalizedKey = productCatalogKey(key);
+  if (!normalizedKey || !product) return;
+  // Aliases are request-local compatibility lookups.  The first canonical
+  // product wins when two listings share an internal SKU; SID+MSKU remains the
+  // authoritative listing identity for each row.
+  if (!map.has(normalizedKey)) map.set(normalizedKey, product);
+}
+
+function buildCanonicalProductCatalogMap(records = [], sourceRows = []) {
+  const map = new Map();
+  const recordsByIdentity = new Map();
+  const products = [];
+  const sourceRowsByIdentity = new Map();
+
+  for (const row of Array.isArray(sourceRows) ? sourceRows : []) {
+    const identity = listingMskuCatalogKey(row?.sid, row?.msku);
+    if (identity && !sourceRowsByIdentity.has(identity)) sourceRowsByIdentity.set(identity, row);
+  }
+
+  for (const record of Array.isArray(records) ? records : []) {
+    const baseProduct = canonicalRecordProduct(record);
+    const identity = listingMskuCatalogKey(baseProduct.sid, baseProduct.msku);
+    const product = applySourceRowFallback(baseProduct, sourceRowsByIdentity.get(identity));
+    if (!product.msku || !product.sid) continue;
+    if (identity) recordsByIdentity.set(identity, product);
+    products.push(product);
+  }
+
+  for (const product of products) {
+    const aliases = [
+      product.internalSku,
+      product.sku,
+      product.productId,
+      product.skuIdentifier,
+      // MSKU alone is retained only as a compatibility alias.  It never acts
+      // as the canonical persisted identity and never replaces a prior alias.
+      product.msku,
+      listingMskuCatalogKey(product.sid, product.msku),
+      listingStoreMskuCatalogKey(product.storeName, product.msku),
+      listingCountryMskuCatalogKey(product.country, product.msku),
+    ];
+    aliases.forEach((key) => addRequestLocalCatalogAlias(map, key, product));
+  }
+
+  for (const row of Array.isArray(sourceRows) ? sourceRows : []) {
+    const identity = listingMskuCatalogKey(row?.sid, row?.msku);
+    const product = recordsByIdentity.get(identity);
+    if (!product) continue;
+    [
+      row?.sku,
+      row?.internalSku,
+      row?.productId,
+      row?.skuIdentifier,
+      row?.msku,
+      listingStoreMskuCatalogKey(row?.storeName, row?.msku),
+      listingCountryMskuCatalogKey(row?.country, row?.msku),
+      identity,
+    ].forEach((key) => addRequestLocalCatalogAlias(map, key, product));
+  }
+  return map;
+}
+
+function buildSharedCatalogPerformance(meta, {
+  sourceRows = 0,
+  mapSize = 0,
+  recordCount = 0,
+  cacheHit = false,
+  compatibilityMapDurationMs = 0,
+} = {}) {
+  const listingRequestCount = Number(meta?.listingRequestCount || 0);
+  const productInfoRequestCount = Number(meta?.productInfoRequestCount || 0);
+  const counters = {
+    sourceRows: Number(sourceRows || 0),
+    cacheHit: cacheHit ? 1 : 0,
+    outputRecords: Number(mapSize || 0),
+    canonicalRecords: Number(recordCount || 0),
+    catalogRevision: Number(meta?.revision || 0),
+    listingFetchedCount: Number(meta?.listingFetchedCount || 0),
+    productFetchedCount: Number(meta?.productFetchedCount || 0),
+    listingBatchCount: Number(meta?.listingBatchCount || 0),
+    listingRequestCount,
+    productLookupBatchCount: Number(meta?.productLookupBatchCount || 0),
+    productInfoRequestCount,
+    productFallbackRequestCount: Number(meta?.productFallbackRequestCount || 0),
+    listingSharedXlsxCount: Number(meta?.listingSharedXlsxCount || 0),
+    liveOwnedSkipCount: Number(meta?.liveOwnedSkipCount || 0),
+    missingCount: Number(meta?.missingCount || 0),
+    joinedInFlight: Number(meta?.joinedInFlight || 0),
+    transactionDurationMs: Number(meta?.transactionDurationMs || 0),
+    // Keep the established counter names while mapping the real loader
+    // request counts; never substitute fetched row counts for API calls.
+    lingxingListingRequests: listingRequestCount,
+    lingxingProductInfoRequests: productInfoRequestCount,
+    lingxingProductFallbackRequests: Number(meta?.productFallbackRequestCount || 0),
+  };
+  return {
+    scope: "shared-product-catalog",
+    ...(meta?.requestId ? { requestId: String(meta.requestId) } : {}),
+    durationMs: Number(meta?.elapsedMs || 0),
+    counters,
+    timings: {
+      ...(meta?.timings && typeof meta.timings === "object" ? meta.timings : {}),
+      compatibilityMapDurationMs: Math.max(0, Number(compatibilityMapDurationMs || 0)),
+    },
+  };
+}
+
+export function performanceNow(options = {}) {
+  const candidate = options.timingNow || options.clock;
+  const value = typeof candidate === "function" ? candidate() : Date.now();
+  const number = Number(value);
+  if (!Number.isFinite(number)) throw new ProductCatalogInputError("商品目录计时无效。");
+  return number;
+}
+
+function requestIdForEmptyScope(options = {}) {
+  const supplied = String(options.requestId ?? "").trim();
+  if (/^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/u.test(supplied)
+    && !/(token|secret|password|payload|raw|body)/iu.test(supplied)) return supplied;
+  return `shared-${Date.now().toString(36)}`;
+}
+
+function canonicalRecordsUpdatedAt(records = []) {
+  const refreshedAtMs = (Array.isArray(records) ? records : [])
+    .flatMap((record) => [
+      record?.listing?.refreshedAtMs,
+      record?.product?.refreshedAtMs,
+      record?.refreshedAtMs,
+    ])
+    .map(Number)
+    .filter((value) => Number.isFinite(value) && value > 0);
+  return refreshedAtMs.length ? new Date(Math.max(...refreshedAtMs)).toISOString() : "";
+}
+
 export async function getSharedProductCatalogMap(adapter = getLingxingAdapter(), rows = [], {
   forceRefresh = false,
-  ttlMs = PRODUCT_CATALOG_TTL_MS,
   strict = false,
-  listingSharedCatalogRecords = null,
-  readListingSharedCatalog = readListingSharedCatalogRecords,
-  readProductCatalogCache = readSharedProductCatalogCache,
-  saveProductCatalogCache = saveSharedProductCatalogCache,
+  ...options
 } = {}) {
-  const metrics = createPerformanceMetrics("shared-product-catalog");
-  metrics.increment("sourceRows", rows.length);
-  const cacheKey = stableProductCatalogCacheKey(rows);
-  if (!forceRefresh) {
-    const cached = await metrics.measure("readCache", () => readProductCatalogCache(cacheKey, ttlMs));
-    if (cached?.data?.records) {
-      metrics.increment("cacheHit");
-      metrics.increment("outputRecords", cached.data.records.length);
-      const performance = metrics.summary();
-      console.info("[shared-product-catalog] performance", performance);
-      return {
-        map: productCatalogRecordsToMap(cached.data.records),
-        cacheHit: true,
-        updatedAt: cached.updatedAt || "",
-        status: `复用共享商品目录 ${cached.data.records.length} 个索引`,
-        performance,
-      };
+  const serviceOptions = { ...options, adapter, strict, feature: options.feature || "shared-data" };
+  if (!Array.isArray(rows)) {
+    // Let Task 5 attach the typed validation error and request context instead
+    // of silently treating malformed input as an empty compatibility scope.
+    if (forceRefresh) {
+      await refreshProductCatalogScope({ feature: serviceOptions.feature, items: rows }, serviceOptions);
+    } else {
+      await getProductCatalogForRows(rows, serviceOptions);
     }
+    throw new Error("商品目录服务返回了无效输入。");
   }
-  metrics.increment("cacheHit", 0);
-
-  const refreshKey = JSON.stringify({ cacheKey, strict });
-  const inFlight = sharedProductCatalogRefreshes.get(refreshKey);
-  if (inFlight) {
-    metrics.increment("joinedInFlight");
-    const joined = await metrics.measure("joinInFlight", () => inFlight);
-    metrics.increment("outputRecords", joined.map?.size || 0);
-    const performance = metrics.summary();
-    console.info("[shared-product-catalog] performance", performance);
-    return { ...joined, performance };
-  }
-
-  const refresh = (async () => {
-    const apiListingItems = await metrics.measure("listingLookup", () => fetchListingItems(adapter, rows, { strict, metrics }));
-    metrics.increment("apiListingItems", apiListingItems.length);
-    const sharedListingItems = await metrics.measure("sharedCatalogLookup", () => fetchListingSharedCatalogItems(rows, apiListingItems, {
-      listingSharedCatalogRecords,
-      readListingSharedCatalog,
-      strict,
-    }));
-    metrics.increment("sharedListingItems", sharedListingItems.length);
-    const listingItems = [...apiListingItems, ...sharedListingItems];
-    const productRecords = await metrics.measure("productLookup", () => fetchProductRecords(adapter, rows, listingItems, { strict, metrics }));
-    metrics.increment("productRecords", productRecords.length);
-    const map = await metrics.measure("buildCatalog", async () => buildSharedProductCatalogMap({ sourceRows: rows, listingRecords: listingItems, productRecords }));
-    const records = productCatalogMapToRecords(map);
-    metrics.increment("outputRecords", records.length);
-    await metrics.measure("writeCache", () => saveProductCatalogCache(cacheKey, { records }));
-    const performance = metrics.summary();
-    console.info("[shared-product-catalog] performance", performance);
+  const sourceRows = rows;
+  if (!sourceRows.length) {
+    const requestId = requestIdForEmptyScope(serviceOptions);
+    const revision = getProductCatalogRevision({ ...serviceOptions, requestId });
+    const timings = {
+      migrationDurationMs: 0,
+      dbLookupDurationMs: 0,
+      listingFetchDurationMs: 0,
+      productFetchDurationMs: 0,
+      transactionDurationMs: 0,
+      compatibilityMapDurationMs: 0,
+    };
+    const emptyMeta = {
+      requestId,
+      source: "sqlite",
+      scopeCount: 0,
+      revision,
+      missingCount: 0,
+      timings,
+    };
+    const performance = buildSharedCatalogPerformance(emptyMeta, {
+      sourceRows: 0,
+      mapSize: 0,
+      recordCount: 0,
+      cacheHit: true,
+      compatibilityMapDurationMs: 0,
+    });
+    console.info("[shared-product-catalog] performance", {
+      requestId,
+      revision,
+      cacheHit: true,
+      sourceRows: 0,
+      outputRecords: 0,
+      timings,
+    });
     return {
-      map,
-      cacheHit: false,
-      updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
-      status: `刷新共享商品目录 ${records.length} 个索引`,
+      map: new Map(),
+      cacheHit: true,
+      updatedAt: "",
+      status: "共享商品目录无数据",
+      revision,
+      meta: emptyMeta,
       performance,
     };
-  })();
-  sharedProductCatalogRefreshes.set(refreshKey, refresh);
-  try {
-    return await refresh;
-  } finally {
-    if (sharedProductCatalogRefreshes.get(refreshKey) === refresh) {
-      sharedProductCatalogRefreshes.delete(refreshKey);
-    }
   }
+  const lookup = forceRefresh
+    ? await refreshProductCatalogScope({ feature: serviceOptions.feature, items: sourceRows }, serviceOptions)
+    : await getProductCatalogForRows(sourceRows, serviceOptions);
+  const records = Array.isArray(lookup.records) ? lookup.records : [];
+  const mapStartedAtMs = performanceNow(serviceOptions);
+  const map = buildCanonicalProductCatalogMap(records, sourceRows);
+  const compatibilityMapDurationMs = Math.max(0, performanceNow(serviceOptions) - mapStartedAtMs);
+  const meta = lookup.meta || {};
+  const cacheHit = !forceRefresh
+    && meta.source === "sqlite"
+    && Number(meta.listingFetchedCount || 0) === 0
+    && Number(meta.productFetchedCount || 0) === 0;
+  const performance = buildSharedCatalogPerformance(meta, {
+    sourceRows: sourceRows.length,
+    mapSize: map.size,
+    recordCount: records.length,
+    cacheHit,
+    compatibilityMapDurationMs,
+  });
+  const updatedAt = String(meta.cacheUpdatedAt || canonicalRecordsUpdatedAt(records) || "").trim();
+  const status = cacheHit
+    ? `复用共享商品目录 ${records.length} 个索引`
+    : `刷新共享商品目录 ${records.length} 个索引`;
+  console.info("[shared-product-catalog] performance", {
+    requestId: meta.requestId,
+    revision: Number(meta.revision || 0),
+    cacheHit,
+    sourceRows: sourceRows.length,
+    outputRecords: map.size,
+    listingFetchedCount: Number(meta.listingFetchedCount || 0),
+    productFetchedCount: Number(meta.productFetchedCount || 0),
+    listingRequestCount: Number(meta.listingRequestCount || 0),
+    productInfoRequestCount: Number(meta.productInfoRequestCount || 0),
+    joinedInFlight: Boolean(meta.joinedInFlight),
+    liveOwnedSkipCount: Number(meta.liveOwnedSkipCount || 0),
+    transactionDurationMs: Number(meta.transactionDurationMs || 0),
+    timings: performance.timings,
+  });
+  return {
+    map,
+    cacheHit,
+    updatedAt,
+    status,
+    revision: Number(meta.revision || 0),
+    meta,
+    performance,
+  };
 }
 
 function sameCode(left, right) {
@@ -875,7 +587,7 @@ function findMergedCatalogProduct(row = {}, catalogMap = new Map()) {
     .map((key) => ({ key, product: catalogMap.get(key) }))
     .filter((item) => item.product);
   if (!matches.length) return { product: null, matches: [], shadowedFields: [] };
-  const product = matches.reduce((merged, item) => mergeProductCatalogInfo(merged, item.product), {});
+  const product = matches.reduce((merged, item) => mergeCatalogProduct(merged, item.product), {});
   const first = matches[0].product;
   const shadowedFields = matches.length > 1
     ? productCatalogFillFields.filter((field) => !catalogFieldHasValue(first, field) && catalogFieldHasValue(product, field))

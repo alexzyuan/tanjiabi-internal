@@ -7,6 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getConfig } from "./src/config/index.js";
 import { buildApiRoutes } from "./routes/index.js";
+import { dispatchApiRoute as dispatchRoute } from "./routes/api-dispatch.js";
 import { getLingxingAdapter } from "./src/adapters/lingxingAdapter.js";
 import { getMskuDetailDashboard, getSalesWeeklyDashboard } from "./src/services/dashboardService.js";
 import { getDailyProductPulse } from "./src/services/productPulseService.js";
@@ -155,6 +156,10 @@ import {
   isDingtalkLoginConfigured,
 } from "./src/services/dingtalkAuthService.js";
 import { generateAiListingCopy } from "./src/services/aiListingService.js";
+import {
+  getProductCatalogHealth,
+  refreshProductCatalogScope,
+} from "./src/services/productCatalogService.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -629,10 +634,31 @@ function requireFinance(req, res) {
   return false;
 }
 
-async function readJsonBody(req) {
+const DEFAULT_JSON_BODY_MAX_BYTES = 16 * 1024 * 1024;
+
+function requestBodyTooLarge(maxBytes) {
+  const error = new Error("Request body exceeds the allowed size.");
+  error.statusCode = 413;
+  error.code = "REQUEST_BODY_TOO_LARGE";
+  error.details = { maxBytes };
+  return error;
+}
+
+async function readJsonBody(req, { maxBytes = DEFAULT_JSON_BODY_MAX_BYTES } = {}) {
+  const limit = Number(maxBytes);
+  if (!Number.isInteger(limit) || limit <= 0) throw new TypeError("Invalid JSON body limit.");
   const chunks = [];
+  let byteLength = 0;
+  let exceeded = false;
   for await (const chunk of req) {
-    chunks.push(chunk);
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    byteLength += buffer.length;
+    if (byteLength <= limit) chunks.push(buffer);
+    else exceeded = true;
+  }
+
+  if (exceeded) {
+    throw requestBodyTooLarge(limit);
   }
 
   if (!chunks.length) return {};
@@ -767,6 +793,8 @@ const apiRoutes = createApiRoutes(buildApiRoutes({
   getSession,
   getSyncState,
   getSyncStatus,
+  getProductCatalogHealth,
+  refreshProductCatalogScope,
   getLingxingShops,
   getLingxingAdapter,
   getAiProviderStatus,
@@ -901,6 +929,7 @@ const apiRoutes = createApiRoutes(buildApiRoutes({
   getStoreInspectionMarkdown,
   runStoreInspection,
   updateErpBuyerMessageManualStatus,
+  logger: console,
 }));
 
 function matchApiRoute(req, url) {
@@ -927,19 +956,16 @@ function authorizeApiRoute(route, req, res, url) {
 async function dispatchApiRoute(req, res, url) {
   const match = matchApiRoute(req, url);
   if (!match) return false;
-  const { route, params } = match;
-  if (!authorizeApiRoute(route, req, res, url)) return true;
-  try {
-    await route.handler({ req, res, url, params });
-  } catch (error) {
-    sendJson(res, error.statusCode || route.errorStatusCode || 500, {
-      ok: false,
-      error: error.message || "Internal server error",
-      details: error.details || null,
-      endpoint: error.endpoint || route.path || String(route.pattern),
-    });
-  }
-  return true;
+  return dispatchRoute({
+    req,
+    res,
+    url,
+    route: match.route,
+    params: match.params,
+    authorize: authorizeApiRoute,
+    sendJson,
+    logger: console,
+  });
 }
 
 async function router(req, res) {

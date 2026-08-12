@@ -168,6 +168,12 @@ node --check app.js
 log "安装依赖"
 npm ci
 
+log "检查 SQLite 原生模块和事务"
+node scripts/product-catalog-sqlite-smoke.js
+
+log "迁移共享商品目录缓存"
+node scripts/migrate-product-catalog.js
+
 log "重启 PM2 应用：$APP_NAME"
 if pm2 describe "$APP_NAME" >/dev/null 2>&1; then
   pm2 restart "$APP_NAME" --update-env

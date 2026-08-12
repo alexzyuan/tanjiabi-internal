@@ -2,83 +2,51 @@ import { getLingxingAdapter } from "../adapters/lingxingAdapter.js";
 import { getFbaAddressProfile } from "../data/fbaAddressBook.js";
 import { getSellerDirectory } from "./sellerDirectoryService.js";
 import { getFbaBoxTemplate, hasCompleteBoxSpec } from "./fbaBoxTemplateService.js";
-import {
-  fetchLingxingListingRecords,
-  fetchLingxingProductRecords,
-  lingxingSidVariants,
-} from "./lingxingCatalogLookupService.js";
+import { normalizeCatalogListing } from "./productCatalogNormalization.js";
+import { getSharedProductCatalogMap } from "./sharedDataService.js";
+import { fetchLingxingListingRecords, lingxingSidVariants } from "./lingxingCatalogLookupService.js";
 
 const mskuCache = new Map();
 const CACHE_TTL_MS = 30 * 60 * 1000;
-const PRODUCT_INFO_BATCH_SIZE = 100;
-
-function normalizeRecordList(payload) {
-  if (Array.isArray(payload)) return payload;
-  if (Array.isArray(payload?.data)) return payload.data;
-  const data = payload?.data || payload || {};
-  const records = data.records || data.list || data.rows || data.data || [];
-  return Array.isArray(records) ? records : [];
-}
-
-function walkObject(value, visit, depth = 0) {
-  if (!value || depth > 3) return;
-  if (Array.isArray(value)) {
-    value.forEach((item) => walkObject(item, visit, depth + 1));
-    return;
-  }
-  if (typeof value !== "object") return;
-  Object.entries(value).forEach(([key, child]) => {
-    visit(key, child);
-    walkObject(child, visit, depth + 1);
-  });
-}
-
-function readFirst(record, keys) {
-  for (const key of keys) {
-    const value = record?.[key];
-    if (value !== undefined && value !== null && String(value).trim()) return String(value).trim();
-  }
-  const normalizedKeys = new Set(keys.map((key) => key.toLowerCase()));
-  let found = "";
-  walkObject(record, (key, value) => {
-    if (found) return;
-    if (!normalizedKeys.has(String(key).toLowerCase())) return;
-    if (value !== undefined && value !== null && String(value).trim()) found = String(value).trim();
-  });
-  if (found) return found;
-  return "";
-}
-
-function readNumber(record, keys) {
-  const value = readFirst(record, keys);
-  const number = Number(String(value || "").replace(/,/g, ""));
-  return Number.isFinite(number) && number > 0 ? number : 0;
-}
-
+const DISCOVERY_CACHE_FIELDS = [
+  "asin",
+  "country",
+  "displayName",
+  "msku",
+  "shopName",
+  "sid",
+  "title",
+];
+const PRODUCT_RESULT_FIELDS = [
+  "internalSku",
+  "internalSkuKey",
+  "localSku",
+  "sku",
+  "skuIdentifier",
+  "productId",
+  "listingSku",
+  "productName",
+  "imageUrl",
+  "supplier",
+  "purchasePrice",
+  "model",
+  "brand",
+  "material",
+  "purpose",
+  "customsCode",
+  "isBattery",
+  "unit",
+  "declaredValue",
+  "packQuantity",
+  "boxSpec",
+  "asin",
+];
 function normalizeText(value) {
   return String(value || "").trim();
 }
 
 function normalizeKey(value) {
   return normalizeText(value).toLowerCase();
-}
-
-function chunkArray(items, size) {
-  const chunks = [];
-  for (let index = 0; index < items.length; index += size) {
-    chunks.push(items.slice(index, index + size));
-  }
-  return chunks;
-}
-
-function uniqueText(values) {
-  const seen = new Set();
-  return values.map(normalizeText).filter((value) => {
-    const key = normalizeKey(value);
-    if (!key || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
 }
 
 function normalizeRuntimeShop(seller = {}) {
@@ -130,65 +98,14 @@ async function resolveRuntimeShops({ sids = [], adapter, getDirectory = getSelle
   return [...new Set(requestedSids)].map((sid) => shopsBySid.get(sid));
 }
 
-function readPackQuantity(record) {
-  return readNumber(record, [
-    "cg_box_pcs",
-    "packQuantity",
-    "pack_quantity",
-    "packingQuantity",
-    "packing_quantity",
-    "boxQuantity",
-    "box_quantity",
-    "box_qty",
-    "cartonQuantity",
-    "carton_quantity",
-    "carton_qty",
-    "casePack",
-    "case_pack",
-    "packageQuantity",
-    "package_quantity",
-    "perBoxQty",
-    "per_box_qty",
-    "qtyPerBox",
-    "qty_per_box",
-    "fbaCartonQty",
-    "fba_carton_qty",
-    "装箱数量",
-    "每箱数量",
-    "单箱数量",
-    "整箱数量",
-    "箱规",
-  ]);
-}
-
-function readOuterBoxSpec(record) {
-  const dimensions = {
-    length: readNumber(record, ["cg_box_length", "outer_box_length", "outerBoxLength", "外箱长", "外箱长度", "外箱规格长"]),
-    width: readNumber(record, ["cg_box_width", "outer_box_width", "outerBoxWidth", "外箱宽", "外箱宽度", "外箱规格宽"]),
-    height: readNumber(record, ["cg_box_height", "outer_box_height", "outerBoxHeight", "外箱高", "外箱高度", "外箱规格高"]),
-    unitOfMeasurement: readFirst(record, ["cg_box_length_unit", "box_length_unit", "length_unit", "lengthUnit", "dimension_unit", "dimensionUnit", "unitOfMeasurement", "尺寸单位"]) || "CM",
-  };
-  const weight = {
-    value: readNumber(record, ["cg_box_weight", "outer_box_weight", "outerBoxWeight", "外箱实重", "外箱重量", "外箱重"]),
-    unit: readFirst(record, ["cg_box_weight_unit", "box_weight_unit", "weight_unit", "weightUnit", "重量单位"]) || "KG",
-  };
-  const boxSpec = { dimensions, weight };
-  return hasCompleteBoxSpec(boxSpec) ? boxSpec : null;
-}
-
-function normalizeMskuRecord(record, shop) {
-  const msku = readFirst(record, ["msku", "m_sku", "seller_sku", "sellerSku", "sellerSkuStr", "local_sku", "fnsku", "sku", "item_sku"]);
-  if (!msku) return null;
+function normalizeMskuDiscoveryRecord(record, shop) {
+  const listing = normalizeCatalogListing(record, { fallbackSid: shop.sid });
+  if (!listing) return null;
 
   return {
-    msku,
-    asin: readFirst(record, ["asin", "ASIN"]),
-    sku: readFirst(record, ["sku", "localSku", "local_sku", "product_sku"]),
-    skuIdentifier: readFirst(record, ["sku_identifier", "skuIdentifier", "local_sku_identifier", "localSkuIdentifier"]),
-    productId: readFirst(record, ["product_id", "productId", "local_product_id", "localProductId"]),
-    title: readFirst(record, ["title", "item_name", "itemName", "product_name", "productName", "product_title", "name"]),
-    packQuantity: readPackQuantity(record),
-    boxSpec: null,
+    msku: listing.msku,
+    asin: listing.asin,
+    title: listing.productName,
     sid: shop.sid,
     shopName: shop.name,
     displayName: shop.displayName,
@@ -196,88 +113,41 @@ function normalizeMskuRecord(record, shop) {
   };
 }
 
-function normalizeProductRecord(record) {
-  const sku = readFirst(record, ["sku", "local_sku", "product_sku", "sku_identifier"]);
-  if (!sku) return null;
+function normalizeListingCatalogRecord(record, shop) {
+  const listing = normalizeCatalogListing(record, { fallbackSid: shop.sid });
+  if (!listing) return null;
   return {
-    sku,
-    skuIdentifier: readFirst(record, ["sku_identifier", "skuIdentifier"]),
-    productName: readFirst(record, ["product_name", "productName", "local_name", "name"]),
-    packQuantity: readPackQuantity(record),
-    boxSpec: readOuterBoxSpec(record),
-    raw: record,
+    sid: shop.sid,
+    seller_sku: listing.msku,
+    // Preserve local_sku provenance. Generic `sku` remains an internal-SKU
+    // fallback, but must not be rewritten as local_sku or become a listing_sku
+    // alias downstream.
+    local_sku: listing.listingSku,
+    sku: listing.listingSku ? "" : listing.internalSku,
+    sku_identifier: listing.skuIdentifier,
+    product_id: listing.productId,
+    asin: listing.asin,
+    title: listing.productName,
   };
 }
 
-function mergeProductRecords(target, records) {
-  records.map(normalizeProductRecord).filter(Boolean).forEach((product) => {
-    target.set(normalizeKey(product.sku), product);
-    if (product.skuIdentifier) target.set(normalizeKey(product.skuIdentifier), product);
-  });
-}
-
-async function safeFetchProductInfo(adapter, params, fallbackParams = null) {
-  return fetchLingxingProductRecords(adapter, params, fallbackParams, { strict: true });
-}
-
-async function fetchProductInfoMap(adapter, items) {
-  const sourceItems = Array.isArray(items) ? items : [];
-  const skus = uniqueText(sourceItems.flatMap((item) => [item.sku, item.msku]));
-  const skuIdentifiers = uniqueText(sourceItems.flatMap((item) => [item.skuIdentifier, item.sku, item.msku]));
-  const productIds = uniqueText(sourceItems.map((item) => item.productId));
-  const productMap = new Map();
-  if (!skus.length && !skuIdentifiers.length && !productIds.length) return productMap;
-
-  for (const batch of chunkArray(skus, PRODUCT_INFO_BATCH_SIZE)) {
-    const records = await safeFetchProductInfo(adapter, { skus: batch }, { sku_list: batch });
-    mergeProductRecords(productMap, records);
-  }
-  for (const batch of chunkArray(skuIdentifiers, PRODUCT_INFO_BATCH_SIZE)) {
-    const records = await safeFetchProductInfo(adapter, { sku_identifiers: batch }, { sku_identifier_list: batch });
-    mergeProductRecords(productMap, records);
-  }
-  for (const batch of chunkArray(productIds, PRODUCT_INFO_BATCH_SIZE)) {
-    const records = await safeFetchProductInfo(adapter, { productIds: batch });
-    mergeProductRecords(productMap, records);
-  }
-
-  return productMap;
-}
-
-function mergeProductInfo(items, productMap) {
-  return items.map((item) => {
-    const product = productMap.get(normalizeKey(item.sku))
-      || productMap.get(normalizeKey(item.skuIdentifier))
-      || productMap.get(normalizeKey(item.msku));
-    if (!product) return item;
-    return {
-      ...item,
-      productName: product.productName || item.title || "",
-      title: item.title || product.productName || "",
-      packQuantity: product.packQuantity || item.packQuantity || 0,
-      boxSpec: product.boxSpec || item.boxSpec || null,
-      erpSku: product.sku,
-    };
-  });
-}
-
-async function applyBoxTemplates(items) {
+async function applyBoxTemplates(items, { getBoxTemplate = getFbaBoxTemplate } = {}) {
   return Promise.all(items.map(async (item) => {
-    if (hasCompleteBoxSpec(item.boxSpec)) {
-      return {
-        ...item,
-        boxDimensions: item.boxSpec.dimensions,
-        boxWeight: item.boxSpec.weight,
-        boxSource: "erp",
-      };
-    }
-    const template = await getFbaBoxTemplate({ sid: item.sid, msku: item.msku });
+    const template = await getBoxTemplate({ sid: item.sid, msku: item.msku });
     if (template && hasCompleteBoxSpec({ dimensions: template.dimensions, weight: template.weight })) {
       return {
         ...item,
         boxDimensions: template.dimensions,
         boxWeight: template.weight,
         boxSource: "template",
+      };
+    }
+    if (hasCompleteBoxSpec(item.boxSpec || {})) {
+      return {
+        ...item,
+        boxDimensions: item.boxSpec.dimensions,
+        boxWeight: item.boxSpec.weight,
+        boxSource: "erp",
       };
     }
     return {
@@ -312,6 +182,15 @@ function emptyDiagnostics() {
   };
 }
 
+function safeFbaErrorMessage(error) {
+  if (error?.name === "ProductCatalogInputError") return "商品目录输入无效。";
+  if (error?.name === "ProductCatalogConflictError") return "商品目录冲突。";
+  if (error?.name === "ProductCatalogUpstreamError" && Number(error?.statusCode) === 422) {
+    return "商品目录未解析必要资料。";
+  }
+  return "领星 Listing 查询失败。";
+}
+
 function diagnosticMessage(unpairedListings = []) {
   if (!unpairedListings.length) return "";
   const samples = unpairedListings
@@ -337,7 +216,7 @@ async function diagnoseUnpairedListings(adapter, shops, keyword, matchMode) {
     try {
       const records = await fetchLingxingListingRecords(adapter, baseParams);
       const matches = filterMskus(
-        uniqueMskus(records.map((record) => normalizeMskuRecord(record, shop)).filter(Boolean)),
+        uniqueMskus(records.map((record) => normalizeMskuDiscoveryRecord(record, shop)).filter(Boolean)),
         value,
         matchMode,
       );
@@ -348,12 +227,12 @@ async function diagnoseUnpairedListings(adapter, shops, keyword, matchMode) {
         country: item.country,
         msku: item.msku,
         asin: item.asin,
-        sku: item.sku,
+        sku: "",
         title: item.title,
         reason: "listing_not_paired_to_erp_product",
       })));
     } catch (error) {
-      diagnostics.errors.push(`${shop.name}: ${error.message}`);
+      diagnostics.errors.push(`${shop.name}: ${safeFbaErrorMessage(error)}`);
     }
   }
 
@@ -365,17 +244,170 @@ async function diagnoseUnpairedListings(adapter, shops, keyword, matchMode) {
 function uniqueMskus(items) {
   const seen = new Set();
   return items.filter((item) => {
-    const key = `${item.sid}:${item.msku}`;
+    const key = `${item.sid}:${normalizeKey(item.msku)}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });
 }
 
-async function fetchMskusForShop(adapter, shop, { force = false, exactMsku = "" } = {}) {
+function discoveryCacheItem(item) {
+  return DISCOVERY_CACHE_FIELDS.reduce((result, field) => {
+    result[field] = item?.[field] ?? (field === "sid" ? 0 : "");
+    return result;
+  }, {});
+}
+
+function cloneDiscoveryItems(items = []) {
+  return (Array.isArray(items) ? items : []).map((item) => discoveryCacheItem(item));
+}
+
+function rebaseDiscoveryItems(items, shop) {
+  return cloneDiscoveryItems(items).map((item) => ({
+    ...item,
+    sid: shop.sid,
+    shopName: shop.name,
+    displayName: shop.displayName,
+    country: shop.country,
+  }));
+}
+
+function catalogMapKeys(item = {}) {
+  const msku = normalizeKey(item.msku);
+  const sid = Number(item.sid || 0);
+  const storeName = normalizeKey(item.shopName || item.storeName);
+  const country = normalizeKey(item.country);
+  return [
+    sid && msku ? `sid:${sid}:msku:${msku}` : "",
+    !sid && storeName && msku ? `store:${storeName}:msku:${msku}` : "",
+    !sid && country && msku ? `country:${country}:msku:${msku}` : "",
+    !sid ? msku : "",
+    !sid ? normalizeKey(item.sku) : "",
+  ].filter(Boolean);
+}
+
+function findCatalogProduct(item, catalogMap = new Map()) {
+  for (const key of catalogMapKeys(item)) {
+    const product = catalogMap.get(key);
+    if (product) return product;
+  }
+  return null;
+}
+
+function isPlainCatalogObject(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function isNonEmptyCatalogString(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function isValidCanonicalCatalogValue(discovery, product) {
+  if (!isPlainCatalogObject(product)) return false;
+  if (!Number.isInteger(discovery?.sid) || discovery.sid <= 0) return false;
+  if (!Number.isInteger(product.sid) || product.sid <= 0 || product.sid !== discovery.sid) return false;
+  if (!isNonEmptyCatalogString(discovery?.msku) || !isNonEmptyCatalogString(product.msku)) return false;
+  if (normalizeKey(product.msku) !== normalizeKey(discovery.msku)) return false;
+  return isNonEmptyCatalogString(product.internalSku) || isNonEmptyCatalogString(product.localSku);
+}
+
+function mergeCatalogItem(discovery, product) {
+  if (!product) return { ...discovery };
+  const canonical = PRODUCT_RESULT_FIELDS.reduce((result, field) => {
+    if (Object.hasOwn(product, field)) result[field] = product[field];
+    return result;
+  }, {});
+  const internalSku = [canonical.internalSku, canonical.localSku]
+    .find((value) => isNonEmptyCatalogString(value))
+    ?.trim() || "";
+  const sku = isNonEmptyCatalogString(canonical.sku) ? canonical.sku.trim() : internalSku;
+  return {
+    ...discovery,
+    ...canonical,
+    sid: discovery.sid,
+    msku: discovery.msku,
+    shopName: discovery.shopName,
+    displayName: discovery.displayName,
+    country: discovery.country,
+    asin: discovery.asin || canonical.asin || "",
+    title: discovery.title || canonical.productName || "",
+    productName: canonical.productName || discovery.title || "",
+    internalSku,
+    sku,
+    erpSku: internalSku,
+    packQuantity: Object.hasOwn(canonical, "packQuantity") ? canonical.packQuantity : null,
+    boxSpec: canonical.boxSpec || null,
+  };
+}
+
+async function hydrateMskuDiscovery(adapter, shop, discoveryItems, listingRecords, {
+  repository = null,
+  getDirectory = getSellerDirectory,
+  getSharedCatalog = getSharedProductCatalogMap,
+  getBoxTemplate = getFbaBoxTemplate,
+  sharedCatalogOptions = {},
+} = {}) {
+  const sourceItems = Array.isArray(discoveryItems) ? discoveryItems : [];
+  if (!sourceItems.length) return [];
+  const listingByKey = new Map(
+    (Array.isArray(listingRecords) ? listingRecords : [])
+      .map((record) => normalizeListingCatalogRecord(record, shop))
+      .filter(Boolean)
+      .map((record) => [`${shop.sid}:${normalizeKey(record.seller_sku)}`, record]),
+  );
+  const catalogOptions = {
+    ...sharedCatalogOptions,
+    strict: true,
+    feature: "fba-catalog",
+    sellers: [shop],
+    getDirectory,
+    ...(repository ? { repository } : {}),
+  };
+  if (listingByKey.size) {
+    catalogOptions.fetchListingsBySidMskus = async (_adapter, sid, mskus) => mskus
+      .map((msku) => listingByKey.get(`${sid}:${normalizeKey(msku)}`))
+      .filter(Boolean);
+  }
+  const hydrated = [];
+  for (let index = 0; index < sourceItems.length; index += 500) {
+    const chunk = sourceItems.slice(index, index + 500);
+    const catalogResult = await getSharedCatalog(adapter, chunk, catalogOptions);
+    const catalogMap = catalogResult?.map;
+    if (!(catalogMap instanceof Map)) throw new Error("共享商品目录返回无效索引。");
+    const missing = chunk.filter((item) => !isValidCanonicalCatalogValue(item, findCatalogProduct(item, catalogMap)));
+    if (missing.length) {
+      throw new Error("FBA 商品目录记录身份或内部 SKU 无效。");
+    }
+    hydrated.push(...chunk.map((item) => mergeCatalogItem(item, findCatalogProduct(item, catalogMap))));
+  }
+  return applyBoxTemplates(hydrated, { getBoxTemplate });
+}
+
+async function fetchMskusForShop(adapter, shop, {
+  force = false,
+  exactMsku = "",
+  now = Date.now,
+  repository = null,
+  getDirectory = getSellerDirectory,
+  getSharedCatalog = getSharedProductCatalogMap,
+  getBoxTemplate = getFbaBoxTemplate,
+  sharedCatalogOptions = {},
+} = {}) {
   const cacheKey = exactMsku ? `${shop.sid}:msku:${normalizeKey(exactMsku)}` : String(shop.sid);
   const cached = mskuCache.get(cacheKey);
-  if (!force && cached && Date.now() - cached.updatedAt < CACHE_TTL_MS) return cached.items;
+  const nowMs = typeof now === "function" ? now() : Number(now);
+  if (!force && cached && nowMs - cached.updatedAt < CACHE_TTL_MS) {
+    const discoveryItems = rebaseDiscoveryItems(cached.items, shop);
+    return hydrateMskuDiscovery(adapter, shop, discoveryItems, [], {
+      repository,
+      getDirectory,
+      getSharedCatalog,
+      getBoxTemplate,
+      sharedCatalogOptions,
+    });
+  }
 
   const baseParams = {
     is_pair: 1,
@@ -391,11 +423,13 @@ async function fetchMskusForShop(adapter, shop, { force = false, exactMsku = "" 
   let lastPayload = null;
   let lastError = null;
   let items = [];
+  let listingRecords = [];
   for (const variant of variants) {
     try {
       const records = await fetchLingxingListingRecords(adapter, { ...baseParams, ...variant });
       lastPayload = { code: 0, data: records };
-      items = uniqueMskus(records.map((record) => normalizeMskuRecord(record, shop)).filter(Boolean));
+      listingRecords = records;
+      items = uniqueMskus(records.map((record) => normalizeMskuDiscoveryRecord(record, shop)).filter(Boolean));
       if (items.length || lastPayload?.code === 0 || lastPayload?.code === "0") break;
     } catch (error) {
       lastError = error;
@@ -403,13 +437,39 @@ async function fetchMskusForShop(adapter, shop, { force = false, exactMsku = "" 
   }
   if (lastError && !lastPayload) throw lastError;
 
-  const productMap = await fetchProductInfoMap(adapter, items);
-  items = mergeProductInfo(items, productMap);
-  items = await applyBoxTemplates(items);
+  const hydratedItems = await hydrateMskuDiscovery(adapter, shop, items, listingRecords, {
+    repository,
+    getDirectory,
+    getSharedCatalog,
+    getBoxTemplate,
+    sharedCatalogOptions,
+  });
 
-  mskuCache.set(cacheKey, { updatedAt: Date.now(), items });
-  return items;
+  mskuCache.set(cacheKey, { updatedAt: nowMs, items: cloneDiscoveryItems(items) });
+  return hydratedItems;
 }
+
+export const fbaCatalogTestUtils = {
+  clearCache() {
+    mskuCache.clear();
+  },
+  inspectCacheFields() {
+    const fields = new Set();
+    mskuCache.forEach((entry) => {
+      (Array.isArray(entry?.items) ? entry.items : []).forEach((item) => {
+        Object.keys(item || {}).forEach((field) => fields.add(field));
+      });
+    });
+    return [...fields].sort();
+  },
+  getDiscoveryCacheSnapshot() {
+    return [...mskuCache.entries()].map(([key, entry]) => ({
+      key,
+      updatedAt: entry.updatedAt,
+      items: cloneDiscoveryItems(entry.items),
+    }));
+  },
+};
 
 export async function getFbaShopOptions({ getDirectory = getSellerDirectory, logger = console } = {}) {
   const directoryResult = await getDirectory();
@@ -465,11 +525,24 @@ export async function searchFbaMskus({
   matchMode = "fuzzy",
   adapter = getLingxingAdapter(),
   getDirectory = getSellerDirectory,
+  productCatalogRepository = null,
+  repository = null,
+  getSharedCatalog = getSharedProductCatalogMap,
+  getBoxTemplate = getFbaBoxTemplate,
+  sharedCatalogOptions = {},
+  now = Date.now,
 } = {}) {
   const shops = await resolveRuntimeShops({ sids, adapter, getDirectory });
-  const settled = await Promise.allSettled(shops.map((shop) => fetchMskusForShop(adapter, shop)));
+  const settled = await Promise.allSettled(shops.map((shop) => fetchMskusForShop(adapter, shop, {
+    repository: productCatalogRepository || repository,
+    getDirectory,
+    getSharedCatalog,
+    getBoxTemplate,
+    sharedCatalogOptions,
+    now,
+  })));
   const errors = settled
-    .map((result, index) => (result.status === "rejected" ? `${shops[index].name}: ${result.reason.message}` : ""))
+    .map((result, index) => (result.status === "rejected" ? `${shops[index].name}: ${safeFbaErrorMessage(result.reason)}` : ""))
     .filter(Boolean);
   const items = uniqueMskus(settled.flatMap((result) => (result.status === "fulfilled" ? result.value : [])));
   const filteredItems = filterMskus(items, q, matchMode).slice(0, 200);
@@ -490,6 +563,12 @@ export async function resolveFbaMskuFromErp({
   msku,
   adapter = getLingxingAdapter(),
   getDirectory = getSellerDirectory,
+  productCatalogRepository = null,
+  repository = null,
+  getSharedCatalog = getSharedProductCatalogMap,
+  getBoxTemplate = getFbaBoxTemplate,
+  sharedCatalogOptions = {},
+  now = Date.now,
 } = {}) {
   const normalizedSid = Number(sid);
   const normalizedMsku = normalizeMskuText(msku);
@@ -497,7 +576,16 @@ export async function resolveFbaMskuFromErp({
   if (!normalizedMsku) throw new Error("MSKU 不能为空。");
 
   const [shop] = await resolveRuntimeShops({ sids: [normalizedSid], adapter, getDirectory });
-  const items = await fetchMskusForShop(adapter, shop, { force: true, exactMsku: msku });
+  const items = await fetchMskusForShop(adapter, shop, {
+    force: true,
+    exactMsku: msku,
+    repository: productCatalogRepository || repository,
+    getDirectory,
+    getSharedCatalog,
+    getBoxTemplate,
+    sharedCatalogOptions,
+    now,
+  });
   const matched = items.find((item) => normalizeMskuText(item.msku) === normalizedMsku);
   if (!matched) {
     throw new Error(`MSKU ${msku} 未在领星 ERP 店铺 ${shop.name} 中匹配到，请检查店铺和 MSKU。`);
@@ -506,7 +594,7 @@ export async function resolveFbaMskuFromErp({
     throw new Error(`MSKU ${matched.msku} 在领星 ERP 未返回装箱数量，请先维护产品管理装箱数量。`);
   }
 
-  return (await applyBoxTemplates([matched]))[0];
+  return matched;
 }
 
 export async function assertFbaMskuPackMatchesErp({
@@ -517,8 +605,24 @@ export async function assertFbaMskuPackMatchesErp({
   quantity,
   adapter = getLingxingAdapter(),
   getDirectory = getSellerDirectory,
+  productCatalogRepository = null,
+  repository = null,
+  getSharedCatalog = getSharedProductCatalogMap,
+  getBoxTemplate = getFbaBoxTemplate,
+  sharedCatalogOptions = {},
+  now = Date.now,
 } = {}) {
-  const erpItem = await resolveFbaMskuFromErp({ sid, msku, adapter, getDirectory });
+  const erpItem = await resolveFbaMskuFromErp({
+    sid,
+    msku,
+    adapter,
+    getDirectory,
+    productCatalogRepository: productCatalogRepository || repository,
+    getSharedCatalog,
+    getBoxTemplate,
+    sharedCatalogOptions,
+    now,
+  });
   const erpPackQuantity = Number(erpItem.packQuantity || 0);
   const providedPackQuantity = Number(packQuantity || 0);
 

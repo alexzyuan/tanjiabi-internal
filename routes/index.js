@@ -10,10 +10,12 @@ import { createAdminRoutes } from "./admin.js";
 import { createWebhookAssistantRoutes } from "./webhook-assistant.js";
 import { createSyncStoreInspectionRoutes } from "./sync-store-inspection.js";
 import { createDebugKnowledgeRoutes } from "./debug-knowledge.js";
+import { createProductCatalogRoutes } from "./product-catalog.js";
 
 export function buildApiRoutes(deps) {
   return [
     ...createCoreRoutes(deps),
+    ...createProductCatalogRoutes(deps),
     ...createAuthRoutes(deps),
     ...createSalesRoutes(deps),
     ...createAdvertisingRoutes(deps),

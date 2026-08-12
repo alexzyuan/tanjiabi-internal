@@ -1,14 +1,20 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import * as XLSX from "xlsx";
+import { createProductCatalogRepository } from "../src/services/productCatalogRepository.js";
+import { closeProductCatalogRepositoryForTests } from "../src/services/productCatalogService.js";
+import { clearFbaShipmentCandidateCache } from "../src/services/fbaShipmentCandidateService.js";
 import {
   applyProductCatalogToFbaFreightShipments,
   buildFbaFreightWorkbookBuffer,
   buildFbaForwarderWorkbookBuffer,
   convertFbaFreightShipmentsToForwarderTemplate,
   fbaFreightSheetTestUtils,
+  getFbaFreightShipments,
   listFbaForwarderTemplates,
   normalizeFbaFreightFilters,
   normalizeFbaFreightShipments,
@@ -79,6 +85,32 @@ const shipmentPayload = {
     ],
   },
 };
+
+function seedFreightCatalog(repository) {
+  const products = ["BLUE", "RED"].map((color) => ({
+    internalSkuKey: `tj-dgc-${color.toLowerCase()}`,
+    internalSku: `TJ-DGC-${color}`,
+    productName: `灯光船${color}`,
+    imageUrl: `https://img.example.com/${color.toLowerCase()}.jpg`,
+    source: "test-seed",
+    sourceUpdatedAtMs: 1720000000000,
+    refreshedAtMs: 1720000000000,
+  }));
+  const listings = ["BLUE", "RED"].map((color) => ({
+    sid: 8708,
+    msku: `JM-DGC-${color}`,
+    mskuKey: `jm-dgc-${color.toLowerCase()}`,
+    internalSkuKey: `tj-dgc-${color.toLowerCase()}`,
+    internalSku: `TJ-DGC-${color}`,
+    listingSku: `TJ-DGC-${color}`,
+    storeName: "xiamentanjia-US",
+    country: "美国",
+    source: "test-seed",
+    sourceUpdatedAtMs: 1720000000000,
+    refreshedAtMs: 1720000000000,
+  }));
+  repository.upsertCatalog({ operation: "fba-freight-test-seed", products, aliases: [], listings });
+}
 
 test("normalizeFbaFreightShipments maps Lingxing fba shipment rows into freight table rows", () => {
   const rows = normalizeFbaFreightShipments(shipmentPayload, {
@@ -239,6 +271,13 @@ test("convertFbaFreightShipmentsToForwarderTemplate fills Jiufang header and pro
           local_sku: "TJ-DGC-BLUE",
           asin: "B0BLUEBOAT",
           product_name: "Catalog Boat Blue",
+        }, {
+          sid: 8708,
+          seller_sku: "JM-DGC-RED",
+          sku: "TJ-DGC-RED",
+          local_sku: "TJ-DGC-RED",
+          asin: "B0REDBOAT",
+          product_name: "Catalog Boat Red",
         }],
       },
     }),
@@ -489,4 +528,51 @@ test("getFbaFreightShipments annotates rows with persisted Jiufang order numbers
 
   assert.equal(result.rows[0].jiufangOrderNumber, "LCL2607ZZ01");
   assert.equal(result.rows[0].jiufangChannelCode, "SEA-OA-03");
+});
+
+test("getFbaFreightShipments reuses a seeded SQLite catalog without Listing or product calls", async (t) => {
+  clearFbaShipmentCandidateCache();
+  const directory = await mkdtemp(path.join(os.tmpdir(), "fba-freight-catalog-test-"));
+  const databasePath = path.join(directory, "product-catalog-v1.sqlite");
+  const repository = createProductCatalogRepository({ databasePath, now: () => 1720000000000 });
+  seedFreightCatalog(repository);
+  repository.close();
+  const previousDatabasePath = process.env.PRODUCT_CATALOG_DATABASE_PATH;
+  process.env.PRODUCT_CATALOG_DATABASE_PATH = databasePath;
+  await closeProductCatalogRepositoryForTests();
+  t.after(async () => {
+    clearFbaShipmentCandidateCache();
+    await closeProductCatalogRepositoryForTests();
+    if (previousDatabasePath === undefined) delete process.env.PRODUCT_CATALOG_DATABASE_PATH;
+    else process.env.PRODUCT_CATALOG_DATABASE_PATH = previousDatabasePath;
+    await rm(directory, { recursive: true, force: true });
+  });
+
+  let listingCalls = 0;
+  let productCalls = 0;
+  const adapter = {
+    async fetchFbaCargoShipments() { return shipmentPayload; },
+    async fetchListings() {
+      listingCalls += 1;
+      throw new Error("seeded catalog should avoid Listing");
+    },
+    async fetchLocalProductInfos() {
+      productCalls += 1;
+      throw new Error("seeded catalog should avoid product management");
+    },
+  };
+  const result = await getFbaFreightShipments({
+    startDate: "2026-07-01",
+    endDate: "2026-07-10",
+    sid: "8708",
+  }, {
+    adapter,
+    sellers: [{ sid: 8708, name: "xiamentanjia-US", country: "美国" }],
+    productCatalogRequired: true,
+  });
+
+  assert.equal(result.rows[0].items[0].internalSku, "TJ-DGC-BLUE");
+  assert.equal(result.rows[0].items[1].internalSku, "TJ-DGC-RED");
+  assert.equal(listingCalls, 0);
+  assert.equal(productCalls, 0);
 });

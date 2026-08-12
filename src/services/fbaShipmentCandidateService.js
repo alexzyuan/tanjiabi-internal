@@ -130,6 +130,8 @@ function enrichShipmentWithSeller(row = {}, sellerMap = new Map()) {
 async function enrichProductCatalog(adapter, shipments, {
   productCatalogRequired = false,
   forceProductCatalogRefresh = false,
+  sellers = [],
+  repository = null,
 } = {}) {
   const seedRows = shipments.flatMap((shipment) =>
     (shipment.items || []).map((item) => ({
@@ -144,10 +146,13 @@ async function enrichProductCatalog(adapter, shipments, {
   );
   if (!seedRows.length) return { rows: shipments, status: "" };
   try {
-    const catalogResult = await getSharedProductCatalogMap(adapter, seedRows, {
+    const catalogOptions = {
       forceRefresh: forceProductCatalogRefresh,
       strict: productCatalogRequired,
-    });
+      sellers,
+    };
+    if (repository) catalogOptions.repository = repository;
+    const catalogResult = await getSharedProductCatalogMap(adapter, seedRows, catalogOptions);
     return {
       rows: applyProductCatalogToFbaFreightShipments(shipments, catalogResult.map),
       status: catalogResult.status || "",
@@ -170,13 +175,19 @@ async function fetchFbaShipmentCandidates(normalizedFilters, cacheKey, {
   now,
   productCatalogRequired = false,
   forceProductCatalogRefresh = false,
+  productCatalogRepository = null,
 } = {}) {
   const params = fbaFreightSheetTestUtils.buildLingxingShipmentParams(normalizedFilters);
   const payload = await adapter.fetchFbaCargoShipments(params);
   const sellerMap = buildSellerMap(sellerMappings);
   const baseRows = normalizeFbaFreightShipments(payload, { sellersBySid: sellerMap })
     .map((row) => enrichShipmentWithSeller(row, sellerMap));
-  const catalog = await enrichProductCatalog(adapter, baseRows, { productCatalogRequired, forceProductCatalogRefresh });
+  const catalog = await enrichProductCatalog(adapter, baseRows, {
+    productCatalogRequired,
+    forceProductCatalogRefresh,
+    sellers: sellerMappings,
+    repository: productCatalogRepository,
+  });
   const fetchedAt = new Date(now).toISOString();
   const result = {
     ok: true,
@@ -207,6 +218,7 @@ export async function getFbaShipmentCandidates(filters = {}, {
   ttlMs = DEFAULT_CACHE_TTL_MS,
   productCatalogRequired = false,
   forceProductCatalogRefresh = false,
+  productCatalogRepository = null,
 } = {}) {
   const requestedFilters = normalizeFbaShipmentCandidateFilters(filters);
   const sellerMappings = await resolveSellerMappings(adapter, sellers, { getDirectory });
@@ -265,6 +277,7 @@ export async function getFbaShipmentCandidates(filters = {}, {
     now,
     productCatalogRequired,
     forceProductCatalogRefresh,
+    productCatalogRepository,
   }).finally(() => {
     candidateInflightRequests.delete(inflightKey);
   });

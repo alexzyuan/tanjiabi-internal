@@ -63,6 +63,8 @@ node -v
 
 如果 `node -v` 低于 `v22.19.0`，请升级后再执行 `npm ci` 或部署；当前项目的 `package.json` 明确要求 Node.js `>=22.19.0 <25`。
 
+商品目录第一阶段依赖 `better-sqlite3@13.0.3`。`npm ci` 完成后必须先运行一次可丢弃的原生模块事务 smoke，确认 WAL、写入、读取和回滚都可用；该 smoke 只使用临时目录，不触碰生产 `data-cache/`。
+
 安装 PM2：
 
 ```bash
@@ -103,12 +105,31 @@ DATA_PROVIDER=lingxing
 
 真实密钥只放服务器 `.env`，不要写进代码。
 
+### 6.1 商品目录 SQLite 缓存
+
+第一阶段数据库路径固定为：
+
+```text
+/opt/tanjia-bi/data-cache/product-catalog/product-catalog-v1.sqlite
+```
+
+领星是唯一来源，SQLite 是按领域拆分的本机派生缓存。Listing 身份为 `SID + 标准化 MSKU`，商品主数据身份为标准化内部 SKU。已有行不会按年龄自动刷新；新身份可在首次查询时补录，已有资料只允许通过当前页面的显式商品资料刷新动作更新，且一次刷新必须全量成功后才提交。
+
+`sales-facts.sqlite` 与 `inventory-snapshots.sqlite` 是批准的后续阶段，目前尚未实现；在独立设计批准前不得创建或迁移这两个事实库。旧 `shared-product-catalog`、`supplier-board-product-map` JSON 在观察期内保持只读，用于迁移、回退和对账，未经单独清理批准不得删除或继续写入。
+
 ## 7. 启动探嘉
 
 在项目目录执行：
 
 ```bash
 npm ci
+node scripts/product-catalog-sqlite-smoke.js
+node scripts/migrate-product-catalog.js
+```
+
+确认依赖、SQLite 原生模块和旧 JSON 迁移都成功后，再启动应用：
+
+```bash
 node server.js
 ```
 
@@ -133,9 +154,13 @@ bash deploy.sh
 - 解压新版 `tanjia-bi-deploy.tar.gz`
 - 执行 `node --check` 检查前后端脚本语法
 - 执行 `npm ci`
+- 执行 `node scripts/product-catalog-sqlite-smoke.js`，失败立即停止
+- 执行 `node scripts/migrate-product-catalog.js`，失败时不重启 PM2
 - 重启 PM2
-- 访问 `/api/health` 做健康检查
+- 访问 `/api/health` 并执行部署完整性检查
 - 默认只保留最近 3 个备份
+
+部署包不携带 `.env`、`data-cache/`、SQLite 数据库及其 `-wal`/`-shm` 文件、`uploads/` 或 `node_modules/`；这些运行时数据由服务器原地保留。
 
 如果新版上线后页面异常，可以立刻回退到上一个版本：
 
@@ -273,7 +298,16 @@ AUTH_ALLOWED_OPEN_IDS=钉钉openId1,钉钉openId2
 `deploy.sh` 会在重启后自动执行两层检查：
 
 - `/api/health` 健康检查。
+- `/api/health` 根级响应保持 `ok: true`，并必须包含 `productCatalog.ok: true`；该节点报告受控的 schema、quick-check、revision、行数和 SQLite/WAL 大小诊断，不返回路径、SQL、token 或原始异常文本。
 - `scripts/deploy-integrity.js verify-deployed` 完整性检查，逐项核对部署包 manifest 中的全部侧边栏板块、对应 `view-*` 页面容器、部署文件哈希和线上 `/app.js` 哈希。
+
+发布前必须在 clean、已提交的生产分支生成归档，并二次确认分支：
+
+```bash
+DEPLOY_CONFIRM_BRANCH=main npm run package:deploy
+```
+
+临时验证非生产分支时还必须显式设置 `ALLOW_NON_PRODUCTION_DEPLOY=1`；`deploy.sh` 仍会校验归档 manifest 的 branch、commit、clean 和 confirmedBranch，禁止未确认来源进入服务器。
 
 需要人工排障时再看这些信息：
 

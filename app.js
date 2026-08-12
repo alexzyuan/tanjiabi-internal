@@ -245,6 +245,7 @@ let loadPayablesDashboard = async () => {};
 let loadProductPulse = async () => {};
 let setupProductPulse = () => {};
 let loadSupplierBoard = async () => {};
+let refreshSupplierBoardProducts = async () => ({ ok: false, reason: "uninitialized" });
 let loadSupplierDetail = async () => {};
 let loadAftersalesMailSettings = async () => {};
 let loadHealthStatus = async () => {};
@@ -600,10 +601,12 @@ async function refreshDashboardFromFilters() {
 ({
   applySupplierBoardSort,
   loadSupplierBoard,
+  refreshSupplierBoardProducts,
   setDefaultSupplierBoardDates,
   setupSupplierBoard,
 } = createSupplierBoardFeature({
   root: document,
+  fetchImpl: fetch.bind(window),
   loadDashboardSection,
   bind,
   bindAll,
@@ -617,10 +620,12 @@ async function refreshDashboardFromFilters() {
   normalizeCountryName,
   selectedFilterValues,
   setSelectOptions,
+  setButtonBusy,
   setTableSortButtonGroupState,
   setText,
   syncAllOptionSelection,
   trimmedFieldValue,
+  logger: console,
 }));
 
 ({

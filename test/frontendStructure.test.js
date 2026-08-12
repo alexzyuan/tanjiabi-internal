@@ -28,6 +28,28 @@ test("sales dashboard places time progress between date range and currency filte
   assert.ok(dateIndex < progressIndex && progressIndex < currencyIndex, "time progress must sit between date and currency filters");
 });
 
+test("supplier board exposes separate semantic dashboard and product refresh actions", async () => {
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const appSource = await readFile(new URL("../app.js", import.meta.url), "utf8");
+  const featureSource = await readFile(new URL("../assets/js/features/supplier-board.js", import.meta.url), "utf8");
+  const heroStart = indexSource.indexOf('<section class="module-hero supplier-board-hero">');
+  const heroEnd = indexSource.indexOf("</section>", heroStart);
+  const hero = indexSource.slice(heroStart, heroEnd);
+
+  assert.notEqual(heroStart, -1, "supplier board hero is missing");
+  assert.match(hero, /<button class="secondary-button" id="supplier-board-product-refresh" type="button">刷新商品资料<\/button>/);
+  assert.match(hero, /<button class="primary-button" id="supplier-board-refresh" type="button">刷新看板<\/button>/);
+  assert.match(hero, /<button class="secondary-button" id="supplier-board-export" type="button">导出 Excel<\/button>/);
+  assert.doesNotMatch(hero, /style\s*=/);
+  assert.match(appSource, /createSupplierBoardFeature\(\{/);
+  const featureCall = appSource.match(/createSupplierBoardFeature\(\{[\s\S]*?\n\}\)\);/)?.[0] || "";
+  assert.match(featureCall, /fetchImpl:/);
+  assert.match(featureCall, /setButtonBusy,/);
+  assert.match(featureSource, /bind\(root, "#supplier-board-product-refresh", "click"/);
+  assert.match(featureSource, /refreshSupplierBoardProducts,/);
+  assert.equal(appSource.includes('bind(document, "#supplier-board-product-refresh"'), false);
+});
+
 test("budget targets use shared filters and a modal import workflow", async () => {
   const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
   const appSource = await readFile(new URL("../app.js", import.meta.url), "utf8");
@@ -939,7 +961,7 @@ test("app.js starts using shared dashboard section loader", async () => {
   assert.equal(supplierBoardSource.includes("fetch(`/api/dashboard/supplier-board"), false);
   assert.equal(supplierBoardFeatureSource.includes("fetch(`/api/dashboard/supplier-board"), false);
   assert.equal(supplierBoardSource.includes("setButtonBusy("), false);
-  assert.equal(supplierBoardFeatureSource.includes("setButtonBusy("), false);
+  assert.match(supplierBoardFeatureSource, /setButtonBusy\(/);
 
   assert.match(factoryInventoryFeatureSource, /loadDashboardSection\(\{/);
   assert.equal(factoryInventorySource.includes("fetch(`/api/dashboard/factory-inventory"), false);

@@ -56,6 +56,16 @@ Production deploys are package-based, so the deployment source branch must be gu
 4. `deploy.sh` must reject archives without `.deploy-manifest.json`, archives from an unconfirmed branch, or archives whose branch differs from `PRODUCTION_DEPLOY_BRANCH` unless `ALLOW_NON_PRODUCTION_DEPLOY=1` is explicitly set.
 5. Do not bypass these guards by hand-copying runtime files into `/opt/tanjia-bi`.
 
+## BI SQLite Cache Architecture
+
+- Lingxing remains the source of truth. SQLite files are local derived caches, split by domain.
+- Stage 1 uses `data-cache/product-catalog/product-catalog-v1.sqlite` with `SID + normalized MSKU` Listing identity and normalized internal-SKU product identity.
+- Existing catalog rows never refresh by age. New missing identities may be filled once; updates require an explicit current-page product refresh.
+- Product refresh is all-or-nothing, validates runtime seller SID, and never persists raw upstream payloads or credentials.
+- `sales-facts.sqlite` and `inventory-snapshots.sqlite` are approved later stages but require separate detailed designs before implementation.
+
+Operationally, the native `better-sqlite3` dependency is checked with the disposable WAL/write/read/rollback smoke immediately after `npm ci`. Deployment then runs the deterministic legacy JSON migration before the PM2 restart, followed by `/api/health` and deployed-integrity checks. The SQLite file and its WAL/SHM companions remain under `data-cache/` and are excluded from deploy archives while being preserved by rollback. Legacy `shared-product-catalog` and `supplier-board-product-map` JSON files remain read-only during the observation period; deleting or rewriting them requires a separate cleanup approval.
+
 ## FBA Logistics API Ordering
 
 The FBA freight workflow now supports direct external logistics API ordering in addition to Excel template export and Lingxing ready-send shipment-order creation.

@@ -23,6 +23,15 @@ const supplierBoardProductCachePolicy = { maxBytes: 100 * MB, maxAgeMs: 14 * DAY
 const sharedProductCatalogCachePolicy = { maxBytes: 200 * MB, maxAgeMs: 30 * DAY_MS };
 const factoryInventoryCachePolicy = { maxBytes: 300 * MB, maxAgeMs: 180 * DAY_MS };
 
+/**
+ * Return the legacy product-cache directories without exposing any mutating
+ * filesystem operation.  The migration entry point is the only consumer that
+ * should read these directories after the SQLite cutover.
+ */
+export function getLegacyProductCatalogDirectories() {
+  return { sharedProductCatalogDir, supplierBoardProductDir };
+}
+
 function hashKey(key) {
   return crypto.createHash("sha1").update(String(key)).digest("hex");
 }
@@ -223,20 +232,24 @@ export async function readSupplierBoardCache(key, ttlMs = Infinity) {
   return readNamedCache(supplierBoardDir, key, ttlMs);
 }
 
+/** @deprecated Product catalog callers must use the SQLite repository. Kept only for rollback tooling. */
 export async function saveSupplierBoardProductMapCache(key, data) {
   await saveNamedCache(supplierBoardProductDir, key, data);
   await cleanupCacheDir(supplierBoardProductDir, supplierBoardProductCachePolicy);
 }
 
+/** @deprecated Legacy supplier product-map reader retained for migration observation. */
 export async function readSupplierBoardProductMapCache(key, ttlMs = 7 * 24 * 60 * 60 * 1000) {
   return readNamedCache(supplierBoardProductDir, key, ttlMs);
 }
 
+/** @deprecated Product catalog callers must use the SQLite repository. Kept only for rollback tooling. */
 export async function saveSharedProductCatalogCache(key, data) {
   await saveNamedCache(sharedProductCatalogDir, key, data);
   await cleanupCacheDir(sharedProductCatalogDir, sharedProductCatalogCachePolicy);
 }
 
+/** @deprecated Legacy shared product-map reader retained for migration observation. */
 export async function readSharedProductCatalogCache(key, ttlMs = 7 * 24 * 60 * 60 * 1000) {
   return readNamedCache(sharedProductCatalogDir, key, ttlMs);
 }
