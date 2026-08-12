@@ -259,7 +259,18 @@ test("applyProductCatalogToFbaFreightShipments fills product images by sid and m
   assert.equal(enriched[0].items[0].model, "SB-2");
 });
 
-test("convertFbaFreightShipmentsToForwarderTemplate fills Jiufang header and product declaration fields from ERP product management", async () => {
+test("convertFbaFreightShipmentsToForwarderTemplate fills Jiufang header and product declaration fields from ERP product management", async (t) => {
+  clearFbaShipmentCandidateCache();
+  const directory = await mkdtemp(path.join(os.tmpdir(), "fba-forwarder-catalog-test-"));
+  const repository = createProductCatalogRepository({
+    databasePath: path.join(directory, "product-catalog-v1.sqlite"),
+    now: () => 1720000000000,
+  });
+  t.after(async () => {
+    clearFbaShipmentCandidateCache();
+    repository.close();
+    await rm(directory, { recursive: true, force: true });
+  });
   const adapter = {
     fetchFbaCargoShipments: async () => shipmentPayload,
     fetchListings: async () => ({
@@ -315,6 +326,8 @@ test("convertFbaFreightShipmentsToForwarderTemplate fills Jiufang header and pro
   }, {
     adapter,
     sellers: [{ sid: 8708, name: "xiamentanjia-US", country: "美国" }],
+    productCatalogRepository: repository,
+    sharedCatalogOptions: { skipMigration: true },
   });
   const workbook = XLSX.read(result.buffer, { type: "buffer" });
   const sheet = workbook.Sheets["下单模板"];

@@ -8,7 +8,9 @@ const MANAGED_LOADING_REQUEST = Symbol.for("tanjia.dashboard.loading.managed-req
 const GLOBAL_FETCH_OVERLAY_STATE = Symbol.for("tanjia.dashboard.loading.fetch-overlay-state");
 
 function resolveElement(selectorOrElement, root = globalThis.document) {
-  return typeof selectorOrElement === "string" ? root?.querySelector?.(selectorOrElement) : selectorOrElement;
+  if (typeof selectorOrElement !== "string") return selectorOrElement;
+  const selector = selectorOrElement.trim();
+  return selector ? root?.querySelector?.(selector) : null;
 }
 
 function bannerAdjacentFilterOffset(target) {

@@ -61,7 +61,31 @@ async function createProductRefreshFeatureFixture({ rows = [], refreshResponse =
   const requests = [];
   const dashboardLoads = [];
   const status = { textContent: "" };
-  const productRefreshButton = { disabled: false, textContent: "刷新商品资料" };
+  const productRefreshListeners = new Map();
+  const productRefreshButton = {
+    disabled: false,
+    textContent: "刷新商品资料",
+    addEventListener(eventName, handler) {
+      const handlers = productRefreshListeners.get(eventName) || [];
+      handlers.push(handler);
+      productRefreshListeners.set(eventName, handlers);
+    },
+    async dispatch(eventName, init = {}) {
+      const event = {
+        defaultPrevented: false,
+        isComposing: false,
+        key: "",
+        repeat: false,
+        preventDefault() {
+          this.defaultPrevented = true;
+        },
+        ...init,
+      };
+      const handlers = productRefreshListeners.get(eventName) || [];
+      await Promise.all(handlers.map((handler) => handler.call(productRefreshButton, event)));
+      return event;
+    },
+  };
   const startDate = {
     value: "2026-01",
     type: "text",
@@ -103,7 +127,11 @@ async function createProductRefreshFeatureFixture({ rows = [], refreshResponse =
       requests.push({ url, options });
       return refreshResponse;
     },
-    bind: (...args) => bindCalls.push(args),
+    bind: (...args) => {
+      bindCalls.push(args);
+      const [, selector, eventName, handler] = args;
+      root.querySelector(selector)?.addEventListener?.(eventName, handler);
+    },
     bindAll: (...args) => bindAllCalls.push(args),
     closestTarget: () => null,
     compareTableSortableValues: () => 0,
@@ -156,8 +184,9 @@ test("supplier board owns refresh, export, sorting, date, and filter bindings", 
     [
       ["#supplier-board-refresh", "click", bindCalls[0][3]],
       ["#supplier-board-product-refresh", "click", feature.refreshSupplierBoardProducts],
+      ["#supplier-board-product-refresh", "keydown", feature.handleSupplierBoardProductRefreshKeydown],
       ["#supplier-board-export", "click", feature.exportSupplierBoardExcel],
-      ["#supplier-board-table thead", "click", bindCalls[3][3]],
+      ["#supplier-board-table thead", "click", bindCalls[4][3]],
       ["#supplier-board-dimension", "change", feature.handleSupplierBoardDimensionChange],
       ["#supplier-board-start-date", "change", feature.loadSupplierBoard],
       ["#supplier-board-end-date", "change", feature.loadSupplierBoard],
@@ -312,6 +341,32 @@ test("repeated setup binds product refresh once and native click handler is expo
   fixture.feature.setupSupplierBoard();
 
   const productBindings = fixture.bindCalls.filter(([, selector, eventName]) => selector === "#supplier-board-product-refresh" && eventName === "click");
+  const productKeyBindings = fixture.bindCalls.filter(([, selector, eventName]) => selector === "#supplier-board-product-refresh" && eventName === "keydown");
   assert.equal(productBindings.length, 1);
+  assert.equal(productKeyBindings.length, 1);
   assert.equal(typeof productBindings[0][3], "function");
+});
+
+test("supplier product refresh handles Enter exactly once when native click synthesis is unavailable", async () => {
+  const fixture = await createProductRefreshFeatureFixture({ rows: [{ sid: 8708, msku: "A" }] });
+  fixture.feature.setupSupplierBoard();
+
+  const event = await fixture.productRefreshButton.dispatch("keydown", { key: "Enter" });
+
+  assert.equal(event.defaultPrevented, true);
+  assert.equal(fixture.requests.length, 1);
+  assert.equal(fixture.productRefreshButton.disabled, false);
+  assert.equal(fixture.productRefreshButton.textContent, "刷新商品资料");
+});
+
+test("supplier product refresh ignores repeated and composing Enter key events", async () => {
+  const fixture = await createProductRefreshFeatureFixture({ rows: [{ sid: 8708, msku: "A" }] });
+  fixture.feature.setupSupplierBoard();
+
+  const repeated = await fixture.productRefreshButton.dispatch("keydown", { key: "Enter", repeat: true });
+  const composing = await fixture.productRefreshButton.dispatch("keydown", { key: "Enter", isComposing: true });
+
+  assert.equal(repeated.defaultPrevented, false);
+  assert.equal(composing.defaultPrevented, false);
+  assert.equal(fixture.requests.length, 0);
 });

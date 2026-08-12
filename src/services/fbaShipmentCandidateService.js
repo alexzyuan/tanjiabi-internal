@@ -132,6 +132,7 @@ async function enrichProductCatalog(adapter, shipments, {
   forceProductCatalogRefresh = false,
   sellers = [],
   repository = null,
+  sharedCatalogOptions = {},
 } = {}) {
   const seedRows = shipments.flatMap((shipment) =>
     (shipment.items || []).map((item) => ({
@@ -147,6 +148,7 @@ async function enrichProductCatalog(adapter, shipments, {
   if (!seedRows.length) return { rows: shipments, status: "" };
   try {
     const catalogOptions = {
+      ...sharedCatalogOptions,
       forceRefresh: forceProductCatalogRefresh,
       strict: productCatalogRequired,
       sellers,
@@ -176,6 +178,7 @@ async function fetchFbaShipmentCandidates(normalizedFilters, cacheKey, {
   productCatalogRequired = false,
   forceProductCatalogRefresh = false,
   productCatalogRepository = null,
+  sharedCatalogOptions = {},
 } = {}) {
   const params = fbaFreightSheetTestUtils.buildLingxingShipmentParams(normalizedFilters);
   const payload = await adapter.fetchFbaCargoShipments(params);
@@ -187,6 +190,7 @@ async function fetchFbaShipmentCandidates(normalizedFilters, cacheKey, {
     forceProductCatalogRefresh,
     sellers: sellerMappings,
     repository: productCatalogRepository,
+    sharedCatalogOptions,
   });
   const fetchedAt = new Date(now).toISOString();
   const result = {
@@ -219,6 +223,7 @@ export async function getFbaShipmentCandidates(filters = {}, {
   productCatalogRequired = false,
   forceProductCatalogRefresh = false,
   productCatalogRepository = null,
+  sharedCatalogOptions = {},
 } = {}) {
   const requestedFilters = normalizeFbaShipmentCandidateFilters(filters);
   const sellerMappings = await resolveSellerMappings(adapter, sellers, { getDirectory });
@@ -278,6 +283,7 @@ export async function getFbaShipmentCandidates(filters = {}, {
     productCatalogRequired,
     forceProductCatalogRefresh,
     productCatalogRepository,
+    sharedCatalogOptions,
   }).finally(() => {
     candidateInflightRequests.delete(inflightKey);
   });
