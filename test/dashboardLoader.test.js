@@ -222,6 +222,61 @@ test("dashboard loading overlay is scoped to the requested content target", asyn
   assert.ok(overlayElements.some((element) => element.className === "dashboard-loading-percent"));
 });
 
+test("optional loading-overlay selectors never call querySelector with empty input", async () => {
+  const { showDashboardLoadingOverlay } = await loadModule();
+  const selectors = [];
+  const viewChildren = [];
+  const activeView = {
+    classList: { add() {}, remove() {} },
+    querySelector() { return null; },
+    appendChild(element) {
+      viewChildren.push(element);
+      element.parentNode = activeView;
+      return element;
+    },
+    removeChild(element) {
+      const index = viewChildren.indexOf(element);
+      if (index >= 0) viewChildren.splice(index, 1);
+      element.parentNode = null;
+      return element;
+    },
+  };
+  const root = {
+    body: activeView,
+    querySelector(selector) {
+      selectors.push(selector);
+      if (!String(selector).trim()) throw new SyntaxError("empty selector");
+      return selector === ".view.active" ? activeView : null;
+    },
+    createElement(tagName) {
+      return {
+        tagName,
+        className: "",
+        textContent: "",
+        attributes: {},
+        children: [],
+        parentNode: null,
+        setAttribute(name, value) {
+          this.attributes[name] = String(value);
+        },
+        append(...children) {
+          this.children.push(...children);
+        },
+      };
+    },
+  };
+
+  const hideDefault = showDashboardLoadingOverlay({ root });
+  assert.equal(viewChildren.length, 1);
+  hideDefault();
+  const hideWhitespace = showDashboardLoadingOverlay({ root, targetSelector: "   " });
+  assert.equal(viewChildren.length, 1);
+  hideWhitespace();
+
+  assert.equal(selectors.includes(""), false);
+  assert.equal(selectors.includes("   "), false);
+});
+
 test("loadDashboardSection shows the default overlay only when a request stays pending", async () => {
   const { loadDashboardSection } = await loadModule();
   const dom = createDomHarness();
