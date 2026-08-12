@@ -117,6 +117,31 @@ DATA_PROVIDER=lingxing
 
 `sales-facts.sqlite` 与 `inventory-snapshots.sqlite` 是批准的后续阶段，目前尚未实现；在独立设计批准前不得创建或迁移这两个事实库。旧 `shared-product-catalog`、`supplier-board-product-map` JSON 在观察期内保持只读，用于迁移、回退和对账，未经单独清理批准不得删除或继续写入。
 
+### 6.2 旧商品 JSON 退役预检与归档
+
+部署包从本版本开始在 `.deploy-manifest.json` 中声明 `product-catalog-sqlite-v1` capability。只有连续稳定运行至少 30 天、当前保留的至少三个 release 都带该 capability、SQLite health 正常，并且旧 JSON manifest 与数据库 `legacy_manifest_hash` 完全一致时，退役预检才会通过。旧版本 release 不应伪造或补写 capability。
+
+首次 SQLite 上线时间必须由运维人员根据受控部署记录提供毫秒时间戳，不能从 JSON 或 SQLite 文件 mtime 猜测：
+
+```bash
+cd /opt/tanjia-bi
+export PRODUCT_CATALOG_APP_DIR=/opt/tanjia-bi
+export PRODUCT_CATALOG_RELEASES_DIR=/opt/tanjia-bi/releases
+export PRODUCT_CATALOG_DATABASE_PATH=/opt/tanjia-bi/data-cache/product-catalog/product-catalog-v1.sqlite
+export PRODUCT_CATALOG_SQLITE_FIRST_LIVE_AT_MS=<首次上线毫秒时间戳>
+
+npm run catalog:legacy:dry-run
+```
+
+预检成功并人工复核后，才可创建应用目录外的归档：
+
+```bash
+export PRODUCT_CATALOG_LEGACY_ARCHIVE_ROOT=/opt/tanjia-bi-archives/product-catalog
+npm run catalog:legacy:archive
+```
+
+归档会真实解包并逐文件校验 SHA-256，源 `shared-product-catalog` 与 `supplier-board-product-map` 保持不变。脚本不由 `deploy.sh` 自动调用，也没有隔离或删除命令。禁止把归档根设在 `/opt/tanjia-bi` 内，禁止手工删除源目录。SQLite、`-wal`、`-shm`、Listing 共享 XLSX 和其他业务缓存绝不属于该工具的目标。
+
 ## 7. 启动探嘉
 
 在项目目录执行：

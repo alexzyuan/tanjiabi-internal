@@ -19,7 +19,7 @@ async function createRepositoryFixture(t, options = {}) {
     repository.close();
     await rm(directory, { recursive: true, force: true });
   });
-  return { repository, tableNames };
+  return { repository, databasePath, tableNames };
 }
 
 async function createCorruptedRepositoryDatabase(t, mutate) {
@@ -449,4 +449,35 @@ test("deduplicates product lookups and retains zero box dimensions and weight", 
     dimensions: { length: null, width: 0, height: null, unitOfMeasurement: "CM" },
     weight: { value: 0, unit: "KG" },
   });
+});
+
+test("readonly repository validates existing schema without permitting catalog writes", async (t) => {
+  const fixture = await createRepositoryFixture(t);
+  fixture.repository.upsertCatalog({
+    operation: "seed-readonly",
+    metadata: { legacy_manifest_hash: "a".repeat(64), legacy_migrated_at_ms: 1720000000000 },
+  });
+  const revisionBefore = fixture.repository.getRevision();
+  const readonly = createProductCatalogRepository({
+    databasePath: fixture.databasePath,
+    readonly: true,
+    logger: { info() {}, warn() {}, error() {} },
+  });
+  t.after(() => readonly.close());
+  assert.equal(readonly.getHealth().ok, true);
+  assert.equal(readonly.getMetadata("legacy_manifest_hash"), "a".repeat(64));
+  assert.throws(
+    () => readonly.upsertCatalog({
+      operation: "must-not-write",
+      metadata: { legacy_manifest_hash: "b".repeat(64) },
+    }),
+    (error) => {
+      assert.equal(error.name, "ProductCatalogDatabaseError");
+      assert.equal(error.statusCode, 503);
+      assert.equal(error.cause?.code, "SQLITE_READONLY");
+      assert.doesNotMatch(error.message, /attempt to write/i);
+      return true;
+    },
+  );
+  assert.equal(readonly.getRevision(), revisionBefore);
 });

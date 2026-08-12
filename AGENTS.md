@@ -66,6 +66,8 @@ Production deploys are package-based, so the deployment source branch must be gu
 
 Operationally, the native `better-sqlite3` dependency is checked with the disposable WAL/write/read/rollback smoke immediately after `npm ci`. Deployment then runs the deterministic legacy JSON migration before the PM2 restart, followed by `/api/health` and deployed-integrity checks. The SQLite file and its WAL/SHM companions remain under `data-cache/` and are excluded from deploy archives while being preserved by rollback. Legacy `shared-product-catalog` and `supplier-board-product-map` JSON files remain read-only during the observation period; deleting or rewriting them requires a separate cleanup approval.
 
+Legacy product-catalog retirement is a manual two-phase operation. Phase 1 only permits `--dry-run` and creation of a verified archive outside the application directory. It requires 30 stable days, three retained release manifests advertising `product-catalog-sqlite-v1`, healthy SQLite, and an exact migrated manifest match. It must never move or delete the source JSON. Quarantine, restore, purge, archive retention and compatibility-code removal require a later reviewed phase. SQLite/WAL/SHM files, Listing shared XLSX files and every other `data-cache` domain are never retirement targets.
+
 ## FBA Logistics API Ordering
 
 The FBA freight workflow now supports direct external logistics API ordering in addition to Excel template export and Lingxing ready-send shipment-order creation.

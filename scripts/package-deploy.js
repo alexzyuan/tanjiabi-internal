@@ -30,6 +30,7 @@ const explicitFiles = [
   "scripts/package-deploy.js",
   "scripts/product-catalog-sqlite-smoke.js",
   "scripts/migrate-product-catalog.js",
+  "scripts/retire-product-catalog-legacy-cache.js",
   "assets/favicon.svg",
   "assets/jm-logo.jpg",
   "assets/jm-favicon.png",
@@ -141,6 +142,7 @@ function resolveDeployMetadata() {
     confirmedBranch: confirmedDeployBranch,
     clean: true,
     includeCss,
+    capabilities: ["product-catalog-sqlite-v1"],
     packagedAt: new Date().toISOString(),
   };
 }
