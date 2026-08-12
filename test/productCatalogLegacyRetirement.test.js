@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, readdir, rm, symlink, utimes, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -240,6 +240,7 @@ test("verified archive contains only legacy JSON and preserves source bytes", as
     sha256(sourceBefore.supplier),
   ]);
   assert.equal(manifest.archiveSha256, result.archiveSha256);
+  assert.equal(manifest.toolVersion, "0.1.0");
   assert.deepEqual(await readFile(path.join(fixture.sharedDir, "shared.json")), sourceBefore.shared);
   assert.deepEqual(await readFile(path.join(fixture.supplierDir, "supplier.json")), sourceBefore.supplier);
   assert.deepEqual((await readdir(fixture.archiveRoot)).sort(), [result.retirementId]);
@@ -356,4 +357,212 @@ test("retirement CLI does not create a missing SQLite database during inspection
 test("retirement CLI opens the existing catalog in readonly mode", async () => {
   const source = await readFile(retirementCliPath, "utf8");
   assert.match(source, /createProductCatalogRepository\(\{[\s\S]*?readonly:\s*true/u);
+});
+
+test("retirement rejects symlinked roots and noncanonical legacy directory names", async (t) => {
+  const fixture = await createFixture(t);
+  const linkedRoot = `${fixture.archiveRoot}-link`;
+  await symlink(fixture.archiveRoot, linkedRoot);
+  t.after(() => rm(linkedRoot, { force: true }));
+  await assert.rejects(
+    archiveLegacyProductCatalog({ ...fixture.options, archiveRoot: linkedRoot }),
+    (error) => error.code === "ARCHIVE_ROOT_UNSAFE",
+  );
+  await assert.rejects(
+    inspectLegacyProductCatalogRetirement({
+      ...fixture.options,
+      sharedDir: path.join(fixture.root, "data-cache", "not-the-shared-cache"),
+    }),
+    (error) => error.code === "LEGACY_DIRECTORY_INVALID",
+  );
+  await rm(fixture.sharedDir, { recursive: true, force: true });
+  await assert.rejects(
+    inspectLegacyProductCatalogRetirement(fixture.options),
+    (error) => error.code === "LEGACY_DIRECTORY_INVALID",
+  );
+});
+
+test("archive performs the complete eligibility check before creating an output root", async (t) => {
+  const fixture = await createFixture(t);
+  const missingArchiveRoot = `${fixture.archiveRoot}-not-created`;
+  t.after(() => rm(missingArchiveRoot, { recursive: true, force: true }));
+  await assert.rejects(
+    archiveLegacyProductCatalog({
+      ...fixture.options,
+      firstSqliteLiveAtMs: NOW_MS - 2 * DAY_MS,
+      archiveRoot: missingArchiveRoot,
+    }),
+    (error) => error.code === "SQLITE_STABILITY_WINDOW_INCOMPLETE",
+  );
+  await assert.rejects(lstat(missingArchiveRoot), { code: "ENOENT" });
+});
+
+test("archive root validation leaves no directory through an external parent symlink", async (t) => {
+  const fixture = await createFixture(t);
+  const linkedParent = `${fixture.archiveRoot}-parent-link`;
+  const escapedTarget = path.join(fixture.root, "data-cache", "retirement-archive");
+  await symlink(path.join(fixture.root, "data-cache"), linkedParent);
+  t.after(() => rm(linkedParent, { force: true }));
+  await assert.rejects(
+    archiveLegacyProductCatalog({
+      ...fixture.options,
+      archiveRoot: path.join(linkedParent, "retirement-archive"),
+    }),
+    (error) => error.code === "ARCHIVE_ROOT_UNSAFE",
+  );
+  await assert.rejects(lstat(escapedTarget), { code: "ENOENT" });
+});
+
+test("archive detects source content replacement during copy", async (t) => {
+  const fixture = await createFixture(t);
+  let copies = 0;
+  await assert.rejects(
+    archiveLegacyProductCatalog({
+      ...fixture.options,
+      archiveRoot: fixture.archiveRoot,
+      copySourceFile: async (source, target) => {
+        const bytes = await readFile(source);
+        await writeFile(target, bytes);
+        copies += 1;
+        if (copies === 1) await writeFile(source, Buffer.alloc(bytes.length, 120));
+      },
+    }),
+    (error) => error.code === "LEGACY_SOURCE_CHANGED",
+  );
+  assert.deepEqual(await readdir(fixture.archiveRoot), []);
+});
+
+test("retirement requires every retained release to be compatible and commits to be distinct", async (t) => {
+  const fixture = await createFixture(t);
+  const manifests = (await readdir(fixture.releasesDir)).sort();
+  const lastManifest = path.join(fixture.releasesDir, manifests.at(-1), ".deploy-manifest.json");
+  const first = JSON.parse(await readFile(path.join(fixture.releasesDir, manifests[0], ".deploy-manifest.json"), "utf8"));
+  await writeFile(lastManifest, JSON.stringify({ ...first }), "utf8");
+  await assert.rejects(
+    inspectLegacyProductCatalogRetirement(fixture.options),
+    (error) => error.code === "SQLITE_RELEASE_EVIDENCE_INVALID",
+  );
+
+  const externalManifest = path.join(fixture.root, "external-release-manifest.json");
+  await writeFile(externalManifest, JSON.stringify({ ...first, commit: "external" }), "utf8");
+  await rm(lastManifest);
+  await symlink(externalManifest, lastManifest);
+  await assert.rejects(
+    inspectLegacyProductCatalogRetirement(fixture.options),
+    (error) => error.code === "SQLITE_RELEASE_EVIDENCE_INVALID",
+  );
+  await writeFile(lastManifest, JSON.stringify({ ...first, commit: "unique", capabilities: [] }), "utf8");
+  await assert.rejects(
+    inspectLegacyProductCatalogRetirement(fixture.options),
+    (error) => error.code === "SQLITE_RELEASE_EVIDENCE_INVALID",
+  );
+});
+
+test("archive never removes a preexisting temporary directory or replacement lock", async (t) => {
+  const fixture = await createFixture(t);
+  const retirementId = `${new Date(MIGRATED_AT_MS).toISOString().replace(/[-:]/gu, "").replace(/\.\d{3}Z$/u, "Z")}-${fixture.manifest.hash.slice(0, 12)}`;
+  const tempDir = path.join(fixture.archiveRoot, `.${retirementId}.tmp-${process.pid}`);
+  await mkdir(tempDir);
+  await writeFile(path.join(tempDir, "owned-by-other"), "keep", "utf8");
+  await assert.rejects(
+    archiveLegacyProductCatalog({ ...fixture.options, archiveRoot: fixture.archiveRoot }),
+    (error) => error.code === "RETIREMENT_TEMP_CONFLICT",
+  );
+  assert.equal(await readFile(path.join(tempDir, "owned-by-other"), "utf8"), "keep");
+
+  await rm(tempDir, { recursive: true, force: true });
+  const lockPath = `${fixture.repository.databasePath}.legacy-retirement.lock`;
+  let replaced = false;
+  await assert.rejects(
+    archiveLegacyProductCatalog({
+      ...fixture.options,
+      archiveRoot: fixture.archiveRoot,
+      runTar: async () => {
+        if (!replaced) {
+          replaced = true;
+          await rm(lockPath, { force: true });
+          await writeFile(lockPath, "replacement-lock", "utf8");
+        }
+        throw new Error("fixture tar failure");
+      },
+    }),
+    AggregateError,
+  );
+  assert.equal(await readFile(lockPath, "utf8"), "replacement-lock");
+  await rm(lockPath, { force: true });
+});
+
+test("existing archive is re-extracted and each member hash is verified", async (t) => {
+  const fixture = await createFixture(t);
+  const first = await archiveLegacyProductCatalog({ ...fixture.options, archiveRoot: fixture.archiveRoot });
+  const manifest = JSON.parse(await readFile(first.manifestPath, "utf8"));
+  const originalManifest = structuredClone(manifest);
+  manifest.files[0].sha256 = "0".repeat(64);
+  await writeFile(first.manifestPath, JSON.stringify(manifest), "utf8");
+  await assert.rejects(
+    archiveLegacyProductCatalog({ ...fixture.options, archiveRoot: fixture.archiveRoot }),
+    (error) => error.code === "ARCHIVE_CONFLICT",
+  );
+
+  await writeFile(first.manifestPath, JSON.stringify(originalManifest), "utf8");
+  const externalManifestPath = path.join(fixture.root, "external-retirement-manifest.json");
+  await writeFile(externalManifestPath, await readFile(first.manifestPath));
+  await rm(first.manifestPath);
+  await symlink(externalManifestPath, first.manifestPath);
+  await assert.rejects(
+    archiveLegacyProductCatalog({ ...fixture.options, archiveRoot: fixture.archiveRoot }),
+    (error) => error.code === "ARCHIVE_CONFLICT",
+  );
+});
+
+test("a partial deterministic archive directory fails as a conflict", async (t) => {
+  const fixture = await createFixture(t);
+  const retirementId = `${new Date(MIGRATED_AT_MS).toISOString().replace(/[-:]/gu, "").replace(/\.\d{3}Z$/u, "Z")}-${fixture.manifest.hash.slice(0, 12)}`;
+  const partialDir = path.join(fixture.archiveRoot, retirementId);
+  await mkdir(partialDir);
+  await writeFile(path.join(partialDir, "partial"), "do-not-replace", "utf8");
+  await assert.rejects(
+    archiveLegacyProductCatalog({ ...fixture.options, archiveRoot: fixture.archiveRoot }),
+    (error) => error.code === "ARCHIVE_CONFLICT",
+  );
+  assert.equal(await readFile(path.join(partialDir, "partial"), "utf8"), "do-not-replace");
+});
+
+test("CLI success and failure include controlled audit diagnostics", async (t) => {
+  const fixture = await createFixture(t);
+  const env = {
+    PRODUCT_CATALOG_APP_DIR: fixture.root,
+    PRODUCT_CATALOG_DATABASE_PATH: fixture.repository.databasePath,
+    PRODUCT_CATALOG_RELEASES_DIR: fixture.releasesDir,
+    PRODUCT_CATALOG_SQLITE_FIRST_LIVE_AT_MS: String(FIRST_LIVE_AT_MS),
+    PRODUCT_CATALOG_RETIREMENT_NOW_MS: String(NOW_MS),
+  };
+  const success = JSON.parse((await runCli(["--dry-run"], env)).stdout);
+  for (const key of ["checks", "maxMtimeMs", "migratedAtMs", "stableDays", "elapsedMs"]) {
+    assert.equal(Object.hasOwn(success, key), true, key);
+  }
+  const failure = JSON.parse((await runCli(["--archive"], {
+    ...env,
+    PRODUCT_CATALOG_LEGACY_ARCHIVE_ROOT: path.join(fixture.root, "unsafe"),
+  })).stderr);
+  assert.equal(failure.operation, "archive");
+  assert.equal(failure.code, "ARCHIVE_ROOT_UNSAFE");
+  assert.equal(Number.isFinite(failure.elapsedMs), true);
+
+  const binDir = await mkdtemp(path.join(os.tmpdir(), "legacy-retirement-bin-"));
+  t.after(() => rm(binDir, { recursive: true, force: true }));
+  const tarPath = path.join(binDir, "tar");
+  await writeFile(tarPath, "#!/bin/sh\nexit 7\n", "utf8");
+  await chmod(tarPath, 0o700);
+  const tarFailureResult = await runCli(["--archive"], {
+    ...env,
+    PATH: binDir,
+    PRODUCT_CATALOG_LEGACY_ARCHIVE_ROOT: fixture.archiveRoot,
+  });
+  const tarFailure = JSON.parse(tarFailureResult.stderr);
+  assert.equal(tarFailure.code, "LEGACY_RETIREMENT_FAILED");
+  assert.equal(tarFailure.operation, "archive");
+  assert.equal(tarFailure.causeCount >= 1, true);
+  assert.equal(Array.isArray(tarFailure.causes), true);
+  assert.doesNotMatch(tarFailureResult.stderr, new RegExp(fixture.root.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "u"));
 });

@@ -53,7 +53,7 @@ function parseMode(args) {
   return args[0] === "--archive" ? "archive" : "dry-run";
 }
 
-function safeSuccess(operation, result) {
+function safeSuccess(operation, result, elapsedMs) {
   return {
     ok: true,
     operation,
@@ -62,6 +62,11 @@ function safeSuccess(operation, result) {
     manifestHashPrefix: String(result.manifestHash || "").slice(0, 12),
     fileCount: result.fileCount,
     totalBytes: result.totalBytes,
+    elapsedMs,
+    ...(Array.isArray(result.checks) ? { checks: result.checks } : {}),
+    ...(Number.isFinite(result.maxMtimeMs) ? { maxMtimeMs: result.maxMtimeMs } : {}),
+    ...(Number.isFinite(result.migratedAtMs) ? { migratedAtMs: result.migratedAtMs } : {}),
+    ...(Number.isInteger(result.stableDays) ? { stableDays: result.stableDays } : {}),
     ...(Number.isInteger(result.releaseCount) ? { releaseCount: result.releaseCount } : {}),
     ...(Number.isInteger(result.sqliteRevision) ? { sqliteRevision: result.sqliteRevision } : {}),
     ...(result.retirementId ? { retirementId: result.retirementId } : {}),
@@ -70,7 +75,34 @@ function safeSuccess(operation, result) {
   };
 }
 
-function safeFailure(error, operation) {
+function safeErrorCode(value) {
+  const text = String(value ?? "").trim();
+  return /^[A-Za-z0-9_.:-]{1,64}$/u.test(text)
+    && !/(token|secret|password|payload|raw|body)/iu.test(text)
+    ? text
+    : null;
+}
+
+function safeCauseSummaries(error) {
+  const queue = error instanceof AggregateError ? [...error.errors] : [error];
+  const summaries = [];
+  while (queue.length && summaries.length < 8) {
+    const current = queue.shift();
+    if (current instanceof AggregateError) {
+      queue.push(...current.errors);
+      continue;
+    }
+    const code = safeErrorCode(current?.code);
+    summaries.push({
+      errorName: String(current?.name || "Error").slice(0, 80),
+      ...(code ? { code } : {}),
+    });
+  }
+  return summaries;
+}
+
+function safeFailure(error, operation, elapsedMs) {
+  const causes = safeCauseSummaries(error);
   return {
     ok: false,
     operation,
@@ -78,6 +110,10 @@ function safeFailure(error, operation) {
       ? error.code
       : "LEGACY_RETIREMENT_FAILED",
     errorName: error?.name || "Error",
+    elapsedMs,
+    causeCount: causes.length,
+    causes,
+    cleanupFailed: Boolean(error?.cleanupError),
     message: error instanceof ProductCatalogLegacyRetirementError
       ? error.message
       : "旧商品缓存退役操作失败。",
@@ -92,6 +128,7 @@ export async function runLegacyProductCatalogRetirementCli({
 } = {}) {
   let repository = null;
   let mode = "unknown";
+  const startedAt = Date.now();
   try {
     mode = parseMode(args);
     const appDir = requiredAbsolutePath(env.PRODUCT_CATALOG_APP_DIR || "/opt/tanjia-bi", "应用目录");
@@ -131,10 +168,10 @@ export async function runLegacyProductCatalogRetirementCli({
     const result = mode === "archive"
       ? await archiveLegacyProductCatalog({ ...options, archiveRoot })
       : await inspectLegacyProductCatalogRetirement(options);
-    stdout.write(`${JSON.stringify(safeSuccess(mode, result))}\n`);
+    stdout.write(`${JSON.stringify(safeSuccess(mode, result, Date.now() - startedAt))}\n`);
     return result;
   } catch (error) {
-    stderr.write(`${JSON.stringify(safeFailure(error, mode))}\n`);
+    stderr.write(`${JSON.stringify(safeFailure(error, mode, Date.now() - startedAt))}\n`);
     process.exitCode = 1;
     return null;
   } finally {
