@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { promisify } from "node:util";
 
 import { createProductCatalogRepository } from "../src/services/productCatalogRepository.js";
 import { buildLegacyProductCatalogManifest } from "../src/services/productCatalogLegacyMigrationService.js";
@@ -20,6 +21,7 @@ const MIGRATED_AT_MS = NOW_MS - 35 * DAY_MS;
 const FIRST_LIVE_AT_MS = NOW_MS - 40 * DAY_MS;
 const CAPABILITY = "product-catalog-sqlite-v1";
 const retirementCliPath = path.resolve(new URL("../scripts/retire-product-catalog-legacy-cache.js", import.meta.url).pathname);
+const execFileAsync = promisify(execFile);
 
 function runCli(args, env) {
   return new Promise((resolve, reject) => {
@@ -248,6 +250,9 @@ test("verified archive contains only legacy JSON and preserves source bytes", as
   const repeated = await archiveLegacyProductCatalog({ ...fixture.options, archiveRoot: fixture.archiveRoot });
   assert.equal(repeated.archiveSha256, result.archiveSha256);
   assert.equal(repeated.retirementId, result.retirementId);
+  for (const key of ["checks", "maxMtimeMs", "migratedAtMs", "stableDays", "releaseCount", "sqliteRevision"]) {
+    assert.equal(Object.hasOwn(repeated, key), true, key);
+  }
 });
 
 test("archive lock and unsafe archive roots fail before touching legacy files", async (t) => {
@@ -511,6 +516,35 @@ test("existing archive is re-extracted and each member hash is verified", async 
   await symlink(externalManifestPath, first.manifestPath);
   await assert.rejects(
     archiveLegacyProductCatalog({ ...fixture.options, archiveRoot: fixture.archiveRoot }),
+    (error) => error.code === "ARCHIVE_CONFLICT",
+  );
+
+  await rm(first.manifestPath);
+  await writeFile(first.manifestPath, JSON.stringify({
+    ...originalManifest,
+    retirementId: "wrong-retirement-id",
+    migratedAtMs: MIGRATED_AT_MS - DAY_MS,
+    sqliteRevision: originalManifest.sqliteRevision + 1,
+  }), "utf8");
+  await assert.rejects(
+    archiveLegacyProductCatalog({ ...fixture.options, archiveRoot: fixture.archiveRoot }),
+    (error) => error.code === "ARCHIVE_CONFLICT",
+  );
+});
+
+test("idempotent archive verification rescans the complete source set before returning", async (t) => {
+  const fixture = await createFixture(t);
+  await archiveLegacyProductCatalog({ ...fixture.options, archiveRoot: fixture.archiveRoot });
+  let injected = false;
+  const runTar = async (args, options) => {
+    if (!injected && args[0] === "-tzf") {
+      injected = true;
+      await fixture.writeLegacy(fixture.sharedDir, "added-during-verification.json", { data: { records: [] } });
+    }
+    return execFileAsync("tar", args, { ...options, encoding: "utf8" });
+  };
+  await assert.rejects(
+    archiveLegacyProductCatalog({ ...fixture.options, archiveRoot: fixture.archiveRoot, runTar }),
     (error) => error.code === "ARCHIVE_CONFLICT",
   );
 });

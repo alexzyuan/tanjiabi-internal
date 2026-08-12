@@ -361,12 +361,15 @@ async function assertSourceSnapshotsUnchanged(snapshots) {
   }
 }
 
-function assertRetirementManifestShape(manifest, inspection, sourceSnapshots) {
+function assertRetirementManifestShape(manifest, inspection, sourceSnapshots, expectedRetirementId) {
   if (
     !manifest || typeof manifest !== "object" || Array.isArray(manifest)
     || manifest.version !== 1
     || manifest.toolVersion !== RETIREMENT_TOOL_VERSION
+    || manifest.retirementId !== expectedRetirementId
     || manifest.manifestHash !== inspection.manifestHash
+    || manifest.migratedAtMs !== inspection.migratedAtMs
+    || manifest.sqliteRevision !== inspection.sqliteRevision
     || !Array.isArray(manifest.files)
     || manifest.files.length !== inspection.fileCount
     || manifest.fileCount !== manifest.files.length
@@ -419,7 +422,7 @@ async function readExistingArchiveResult(finalDir, inspection, {
       fail("ARCHIVE_CONFLICT", "既有归档复核期间旧商品缓存发生变化。 ");
     }
     const sourceSnapshots = await snapshotLegacyFiles(sourceManifest);
-    assertRetirementManifestShape(manifest, inspection, sourceSnapshots);
+    assertRetirementManifestShape(manifest, inspection, sourceSnapshots, path.basename(finalDir));
     if (
       manifest.archiveSha256 !== await fileSha256(archivePath)
     ) {
@@ -427,6 +430,10 @@ async function readExistingArchiveResult(finalDir, inspection, {
     }
     await verifyArchiveContents({ archivePath, manifest, runTar });
     await assertSourceSnapshotsUnchanged(sourceSnapshots);
+    const finalSourceManifest = await buildLegacyProductCatalogManifest({ sharedDir, supplierDir });
+    if (finalSourceManifest.hash !== inspection.manifestHash) {
+      fail("ARCHIVE_CONFLICT", "既有归档复核后旧商品缓存 manifest 发生变化。 ");
+    }
     return {
       archived: true,
       retirementId: manifest.retirementId,
@@ -437,6 +444,12 @@ async function readExistingArchiveResult(finalDir, inspection, {
       archivePath,
       manifestPath,
       idempotent: true,
+      checks: inspection.checks,
+      maxMtimeMs: inspection.maxMtimeMs,
+      migratedAtMs: inspection.migratedAtMs,
+      stableDays: inspection.stableDays,
+      releaseCount: inspection.releaseCount,
+      sqliteRevision: inspection.sqliteRevision,
     };
   } catch (error) {
     if (error?.code === "ENOENT") return null;
