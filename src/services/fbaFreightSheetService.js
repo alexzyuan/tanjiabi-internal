@@ -841,6 +841,8 @@ export async function getFbaFreightShipments(filters = {}, {
   sellers = [],
   productCatalogRequired = false,
   forceProductCatalogRefresh = false,
+  productCatalogRepository = null,
+  sharedCatalogOptions = {},
   jiufangOrderStore = {
     listByShipmentIds: (shipmentIds) => listJiufangOrdersByShipmentIds(shipmentIds),
   },
@@ -850,6 +852,8 @@ export async function getFbaFreightShipments(filters = {}, {
     sellers,
     productCatalogRequired,
     forceProductCatalogRefresh,
+    productCatalogRepository,
+    sharedCatalogOptions,
   });
   const shipmentIds = result.rows.map((row) => row.shipmentId).filter(Boolean);
   const jiufangOrdersByShipmentId = await jiufangOrderStore.listByShipmentIds(shipmentIds);
@@ -929,13 +933,20 @@ export async function convertFbaFreightShipmentsToForwarderTemplate({
   templateId,
   shipmentIds = [],
   filters = {},
-} = {}, { adapter = getLingxingAdapter(), sellers = [] } = {}) {
+} = {}, {
+  adapter = getLingxingAdapter(),
+  sellers = [],
+  productCatalogRepository = null,
+  sharedCatalogOptions = {},
+} = {}) {
   const template = resolveFbaForwarderTemplate(templateId);
   const result = await getFbaFreightShipments(filters, {
     adapter,
     sellers,
     productCatalogRequired: true,
     forceProductCatalogRefresh: true,
+    productCatalogRepository,
+    sharedCatalogOptions,
   });
   const rows = filterShipmentsByIds(result.rows, shipmentIds);
   if (!rows.length) throw new Error("请选择要转表格的货件。");
