@@ -143,6 +143,33 @@ test("folds row-set JSON by SID+MSKU/internal SKU and chooses newest non-empty f
   }
 });
 
+test("migrates legacy shared map product-only records without inventing a Listing", async (t) => {
+  const fixture = await createLegacyMigrationFixture(t);
+  await fixture.writeRawShared("product-only.json", JSON.stringify({
+    updatedAtMs: 1000,
+    data: {
+      records: [{
+        key: "TJ-PRODUCT-ONLY",
+        product: {
+          sku: "TJ-PRODUCT-ONLY",
+          productName: "历史产品",
+          purchasePrice: 12,
+          raw: { token: "must-not-persist" },
+        },
+      }],
+    },
+  }));
+
+  const result = await migrateLegacyProductCatalog(fixture.options);
+
+  assert.equal(result.productCount, 1);
+  assert.equal(result.listingCount, 0);
+  const [product] = fixture.repository.readProductsByInternalSkuKeys(["TJ-PRODUCT-ONLY"]);
+  assert.equal(product.internalSku, "TJ-PRODUCT-ONLY");
+  assert.equal(product.productName, "历史产品");
+  assert.equal(Object.hasOwn(product, "raw"), false);
+});
+
 test("same-timestamp rows choose the same canonical value regardless of array order", async (t) => {
   async function snapshot(records) {
     const fixture = await createLegacyMigrationFixture(t);

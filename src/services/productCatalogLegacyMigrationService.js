@@ -38,6 +38,16 @@ const PRODUCT_FIELDS = [
 const LEGACY_JSON_SOURCE = "legacy-json";
 const SAFE_REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/u;
 const SENSITIVE_REQUEST_ID_PATTERN = /(token|secret|password|payload|raw|body)/iu;
+const LEGACY_LISTING_MSKU_KEYS = [
+  "msku",
+  "MSKU",
+  "m_sku",
+  "seller_sku",
+  "sellerSku",
+  "sellerSkuStr",
+  "item_sku",
+  "fnsku",
+];
 
 const LISTING_FIELDS = [
   "sid",
@@ -234,13 +244,37 @@ function omitRaw(value) {
     .map(([key, child]) => [key, omitRaw(child)]));
 }
 
+function isLegacySharedMapRecord(record) {
+  if (!record || typeof record !== "object" || Array.isArray(record)) return false;
+  const keys = Object.keys(record).sort();
+  return keys.length === 2
+    && keys[0] === "key"
+    && keys[1] === "product"
+    && record.product
+    && typeof record.product === "object"
+    && !Array.isArray(record.product);
+}
+
+function explicitLegacyMsku(record) {
+  for (const key of LEGACY_LISTING_MSKU_KEYS) {
+    const value = String(record?.[key] ?? "").trim();
+    if (value) return value;
+  }
+  return "";
+}
+
 function normalizeLegacyRecord(record, file, rowIndex, sellerBySid) {
   if (!record || typeof record !== "object" || Array.isArray(record)) {
     throw new Error(`legacy JSON record schema invalid: ${file.name} row ${rowIndex + 1}`);
   }
   const sanitizedRecord = omitRaw(record);
-  const listing = normalizeCatalogListing(sanitizedRecord);
-  let product = normalizeCatalogProduct(sanitizedRecord);
+  const sharedMapRecord = isLegacySharedMapRecord(sanitizedRecord);
+  const normalizedSource = sharedMapRecord ? sanitizedRecord.product : sanitizedRecord;
+  const sharedMapMsku = sharedMapRecord ? explicitLegacyMsku(normalizedSource) : "";
+  const listing = sharedMapRecord && !sharedMapMsku
+    ? null
+    : normalizeCatalogListing(normalizedSource);
+  let product = normalizeCatalogProduct(normalizedSource);
   if (!listing && !product) {
     throw new Error(`legacy JSON record identity invalid: ${file.name} row ${rowIndex + 1}`);
   }
