@@ -151,6 +151,11 @@ test("deploy package explicitly contains both catalog scripts", async () => {
   assert.match(source, /scripts\/migrate-product-catalog\.js/);
 });
 
+test("deploy manifests advertise the SQLite product catalog capability", async () => {
+  const source = await readFile(packageDeployPath, "utf8");
+  assert.match(source, /capabilities:\s*\[\s*["']product-catalog-sqlite-v1["']\s*\]/);
+});
+
 test("deploy runs npm ci, SQLite smoke, migration, then PM2 restart in order", async () => {
   const source = await readFile(deployPath, "utf8");
   const installIndex = source.indexOf("npm ci");

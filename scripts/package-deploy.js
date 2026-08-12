@@ -141,6 +141,7 @@ function resolveDeployMetadata() {
     confirmedBranch: confirmedDeployBranch,
     clean: true,
     includeCss,
+    capabilities: ["product-catalog-sqlite-v1"],
     packagedAt: new Date().toISOString(),
   };
 }
