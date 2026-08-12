@@ -109,6 +109,15 @@ function assertRepository(repository) {
   }
 }
 
+async function readStableManifest({ buildManifest, sharedDir, supplierDir, maxAttempts = 3 }) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const initial = await buildManifest({ sharedDir, supplierDir });
+    const final = await buildManifest({ sharedDir, supplierDir });
+    if (initial?.hash && initial.hash === final?.hash) return initial;
+  }
+  fail("LEGACY_MANIFEST_UNSTABLE", `旧商品缓存连续 ${maxAttempts} 次检查均发生变化。 `);
+}
+
 export async function inspectLegacyProductCatalogRetirement({
   repository,
   sharedDir,
@@ -140,7 +149,7 @@ export async function inspectLegacyProductCatalogRetirement({
     assertLegacyDirectoryPolicy(sharedDir),
     assertLegacyDirectoryPolicy(supplierDir),
   ]);
-  const initialManifest = await buildManifest({ sharedDir, supplierDir });
+  const initialManifest = await readStableManifest({ buildManifest, sharedDir, supplierDir });
   if (!initialManifest || typeof initialManifest.hash !== "string" || !Array.isArray(initialManifest.files)) {
     fail("LEGACY_MANIFEST_INVALID", "旧商品缓存 manifest 无效。 ");
   }
@@ -185,11 +194,6 @@ export async function inspectLegacyProductCatalogRetirement({
       actualCount: compatibleReleases.length,
     });
   }
-  const finalManifest = await buildManifest({ sharedDir, supplierDir });
-  if (finalManifest.hash !== initialManifest.hash) {
-    fail("LEGACY_MANIFEST_UNSTABLE", "旧商品缓存检查期间发生变化。 ");
-  }
-
   const totalBytes = initialManifest.files.reduce((sum, file) => sum + Number(file.size || 0), 0);
   return {
     eligible: true,

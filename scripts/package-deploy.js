@@ -30,6 +30,7 @@ const explicitFiles = [
   "scripts/package-deploy.js",
   "scripts/product-catalog-sqlite-smoke.js",
   "scripts/migrate-product-catalog.js",
+  "scripts/retire-product-catalog-legacy-cache.js",
   "assets/favicon.svg",
   "assets/jm-logo.jpg",
   "assets/jm-favicon.png",

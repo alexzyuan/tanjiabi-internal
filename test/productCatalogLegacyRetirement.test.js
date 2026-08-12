@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, readdir, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -18,6 +19,22 @@ const NOW_MS = Date.UTC(2026, 7, 12, 6, 0, 0);
 const MIGRATED_AT_MS = NOW_MS - 35 * DAY_MS;
 const FIRST_LIVE_AT_MS = NOW_MS - 40 * DAY_MS;
 const CAPABILITY = "product-catalog-sqlite-v1";
+const retirementCliPath = path.resolve(new URL("../scripts/retire-product-catalog-legacy-cache.js", import.meta.url).pathname);
+
+function runCli(args, env) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [retirementCliPath, ...args], {
+      env: { ...process.env, ...env },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.once("error", reject);
+    child.once("close", (code) => resolve({ code, stdout, stderr }));
+  });
+}
 
 async function createFixture(t, { releaseCount = 3 } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "legacy-retirement-"));
@@ -161,6 +178,37 @@ test("retirement inspection rejects insufficient releases and symbolic links", a
   });
 });
 
+test("retirement inspection retries a changing manifest up to three scans", async (t) => {
+  const fixture = await createFixture(t);
+  let calls = 0;
+  const buildManifest = async (options) => {
+    calls += 1;
+    const manifest = await buildLegacyProductCatalogManifest(options);
+    if (calls === 2) return { ...manifest, hash: "f".repeat(64) };
+    return manifest;
+  };
+  const result = await inspectLegacyProductCatalogRetirement({
+    ...fixture.options,
+    buildManifest,
+  });
+  assert.equal(result.eligible, true);
+  assert.equal(calls, 4);
+
+  calls = 0;
+  await assert.rejects(
+    inspectLegacyProductCatalogRetirement({
+      ...fixture.options,
+      buildManifest: async (options) => {
+        calls += 1;
+        const manifest = await buildLegacyProductCatalogManifest(options);
+        return calls % 2 === 0 ? { ...manifest, hash: `${calls}`.padStart(64, "0") } : manifest;
+      },
+    }),
+    (error) => error.code === "LEGACY_MANIFEST_UNSTABLE",
+  );
+  assert.equal(calls, 6);
+});
+
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -235,4 +283,72 @@ test("archive operation failure cleans temporary output and releases its lock", 
   await assert.rejects(readFile(`${fixture.repository.databasePath}.legacy-retirement.lock`, "utf8"), {
     code: "ENOENT",
   });
+});
+
+test("retirement CLI exposes safe dry-run JSON and archive output", async (t) => {
+  const fixture = await createFixture(t);
+  const env = {
+    PRODUCT_CATALOG_APP_DIR: fixture.root,
+    PRODUCT_CATALOG_DATABASE_PATH: fixture.repository.databasePath,
+    PRODUCT_CATALOG_LEGACY_ARCHIVE_ROOT: fixture.archiveRoot,
+    PRODUCT_CATALOG_RELEASES_DIR: fixture.releasesDir,
+    PRODUCT_CATALOG_SQLITE_FIRST_LIVE_AT_MS: String(FIRST_LIVE_AT_MS),
+    PRODUCT_CATALOG_RETIREMENT_NOW_MS: String(NOW_MS),
+  };
+  const dryRun = await runCli(["--dry-run"], env);
+  assert.equal(dryRun.code, 0, dryRun.stderr);
+  const inspected = JSON.parse(dryRun.stdout);
+  assert.equal(inspected.ok, true);
+  assert.equal(inspected.operation, "dry-run");
+  assert.equal(inspected.fileCount, 2);
+  assert.equal(Object.hasOwn(inspected, "archivePath"), false);
+  assert.doesNotMatch(dryRun.stdout, /shared\.json|supplier\.json|data-cache/u);
+
+  const archive = await runCli(["--archive"], env);
+  assert.equal(archive.code, 0, archive.stderr);
+  const archived = JSON.parse(archive.stdout);
+  assert.equal(archived.ok, true);
+  assert.equal(archived.operation, "archive");
+  assert.match(archived.archiveSha256, /^[a-f0-9]{64}$/);
+  assert.doesNotMatch(archive.stdout, /data-cache|shared\.json|supplier\.json/u);
+});
+
+test("retirement CLI rejects unsafe arguments without leaking paths or payloads", async (t) => {
+  const fixture = await createFixture(t);
+  const baseEnv = {
+    PRODUCT_CATALOG_APP_DIR: fixture.root,
+    PRODUCT_CATALOG_DATABASE_PATH: fixture.repository.databasePath,
+    PRODUCT_CATALOG_LEGACY_ARCHIVE_ROOT: fixture.archiveRoot,
+    PRODUCT_CATALOG_RELEASES_DIR: fixture.releasesDir,
+    PRODUCT_CATALOG_SQLITE_FIRST_LIVE_AT_MS: String(FIRST_LIVE_AT_MS),
+    PRODUCT_CATALOG_RETIREMENT_NOW_MS: String(NOW_MS),
+  };
+  for (const args of [["--unknown"], ["--dry-run", "--archive"]]) {
+    const result = await runCli(args, baseEnv);
+    assert.notEqual(result.code, 0);
+    assert.match(result.stderr, /RETIREMENT_ARGUMENT_INVALID/u);
+    assert.doesNotMatch(result.stderr, new RegExp(fixture.root.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "u"));
+  }
+  const missingTime = await runCli(["--dry-run"], {
+    ...baseEnv,
+    PRODUCT_CATALOG_SQLITE_FIRST_LIVE_AT_MS: "",
+  });
+  assert.notEqual(missingTime.code, 0);
+  assert.match(missingTime.stderr, /SQLITE_FIRST_LIVE_TIME_INVALID/u);
+});
+
+test("retirement CLI does not create a missing SQLite database during inspection", async (t) => {
+  const fixture = await createFixture(t);
+  const missingDatabase = path.join(fixture.root, "missing", "catalog.sqlite");
+  const result = await runCli(["--dry-run"], {
+    PRODUCT_CATALOG_APP_DIR: fixture.root,
+    PRODUCT_CATALOG_DATABASE_PATH: missingDatabase,
+    PRODUCT_CATALOG_LEGACY_ARCHIVE_ROOT: fixture.archiveRoot,
+    PRODUCT_CATALOG_RELEASES_DIR: fixture.releasesDir,
+    PRODUCT_CATALOG_SQLITE_FIRST_LIVE_AT_MS: String(FIRST_LIVE_AT_MS),
+    PRODUCT_CATALOG_RETIREMENT_NOW_MS: String(NOW_MS),
+  });
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /SQLITE_DATABASE_MISSING/u);
+  await assert.rejects(readFile(missingDatabase), { code: "ENOENT" });
 });
