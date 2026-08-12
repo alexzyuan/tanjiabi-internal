@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, symlink, utimes, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -7,6 +8,7 @@ import test from "node:test";
 import { createProductCatalogRepository } from "../src/services/productCatalogRepository.js";
 import { buildLegacyProductCatalogManifest } from "../src/services/productCatalogLegacyMigrationService.js";
 import {
+  archiveLegacyProductCatalog,
   ProductCatalogLegacyRetirementError,
   inspectLegacyProductCatalogRetirement,
 } from "../src/services/productCatalogLegacyRetirementService.js";
@@ -19,6 +21,7 @@ const CAPABILITY = "product-catalog-sqlite-v1";
 
 async function createFixture(t, { releaseCount = 3 } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "legacy-retirement-"));
+  const archiveRoot = await mkdtemp(path.join(os.tmpdir(), "legacy-retirement-archives-"));
   const sharedDir = path.join(root, "data-cache", "shared-product-catalog");
   const supplierDir = path.join(root, "data-cache", "supplier-board-product-map");
   const releasesDir = path.join(root, "releases");
@@ -62,10 +65,14 @@ async function createFixture(t, { releaseCount = 3 } = {}) {
   });
   t.after(async () => {
     repository.close();
-    await rm(root, { recursive: true, force: true });
+    await Promise.all([
+      rm(root, { recursive: true, force: true }),
+      rm(archiveRoot, { recursive: true, force: true }),
+    ]);
   });
   return {
     root,
+    archiveRoot,
     sharedDir,
     supplierDir,
     releasesDir,
@@ -151,5 +158,81 @@ test("retirement inspection rejects insufficient releases and symbolic links", a
       inspectLegacyProductCatalogRetirement(fixture.options),
       (error) => error.code === "LEGACY_DIRECTORY_POLICY_VIOLATION",
     );
+  });
+});
+
+function sha256(value) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+test("verified archive contains only legacy JSON and preserves source bytes", async (t) => {
+  const fixture = await createFixture(t);
+  const sourceBefore = {
+    shared: await readFile(path.join(fixture.sharedDir, "shared.json")),
+    supplier: await readFile(path.join(fixture.supplierDir, "supplier.json")),
+  };
+
+  const result = await archiveLegacyProductCatalog({
+    ...fixture.options,
+    archiveRoot: fixture.archiveRoot,
+  });
+
+  assert.equal(result.archived, true);
+  assert.match(result.retirementId, /^\d{8}T\d{6}Z-[a-f0-9]{12}$/);
+  assert.equal(result.manifestHash, fixture.manifest.hash);
+  assert.equal(result.fileCount, 2);
+  assert.match(result.archiveSha256, /^[a-f0-9]{64}$/);
+  const manifest = JSON.parse(await readFile(result.manifestPath, "utf8"));
+  assert.deepEqual(manifest.files.map((file) => file.path), [
+    "shared-product-catalog/shared.json",
+    "supplier-board-product-map/supplier.json",
+  ]);
+  assert.deepEqual(manifest.files.map((file) => file.sha256), [
+    sha256(sourceBefore.shared),
+    sha256(sourceBefore.supplier),
+  ]);
+  assert.equal(manifest.archiveSha256, result.archiveSha256);
+  assert.deepEqual(await readFile(path.join(fixture.sharedDir, "shared.json")), sourceBefore.shared);
+  assert.deepEqual(await readFile(path.join(fixture.supplierDir, "supplier.json")), sourceBefore.supplier);
+  assert.deepEqual((await readdir(fixture.archiveRoot)).sort(), [result.retirementId]);
+
+  const repeated = await archiveLegacyProductCatalog({ ...fixture.options, archiveRoot: fixture.archiveRoot });
+  assert.equal(repeated.archiveSha256, result.archiveSha256);
+  assert.equal(repeated.retirementId, result.retirementId);
+});
+
+test("archive lock and unsafe archive roots fail before touching legacy files", async (t) => {
+  const fixture = await createFixture(t);
+  const lockPath = `${fixture.repository.databasePath}.legacy-retirement.lock`;
+  await writeFile(lockPath, "active", "utf8");
+  await assert.rejects(
+    archiveLegacyProductCatalog({ ...fixture.options, archiveRoot: fixture.archiveRoot }),
+    (error) => error.code === "RETIREMENT_LOCKED",
+  );
+  await rm(lockPath);
+  await assert.rejects(
+    archiveLegacyProductCatalog({
+      ...fixture.options,
+      archiveRoot: path.join(fixture.root, "data-cache", "archives"),
+    }),
+    (error) => error.code === "ARCHIVE_ROOT_UNSAFE",
+  );
+  assert.deepEqual((await readdir(fixture.sharedDir)).sort(), ["shared.json"]);
+  assert.deepEqual((await readdir(fixture.supplierDir)).sort(), ["supplier.json"]);
+});
+
+test("archive operation failure cleans temporary output and releases its lock", async (t) => {
+  const fixture = await createFixture(t);
+  await assert.rejects(
+    archiveLegacyProductCatalog({
+      ...fixture.options,
+      archiveRoot: fixture.archiveRoot,
+      runTar: async () => { throw new Error("fixture tar failure"); },
+    }),
+    /fixture tar failure/,
+  );
+  assert.deepEqual(await readdir(fixture.archiveRoot), []);
+  await assert.rejects(readFile(`${fixture.repository.databasePath}.legacy-retirement.lock`, "utf8"), {
+    code: "ENOENT",
   });
 });
