@@ -12,9 +12,11 @@ function createFeature(overrides = {}) {
   });
 }
 
-test("sales review quantity achievement classifies progress gaps and material lead", () => {
-  assert.equal(getQuantityAchievementTone(75, 80), "msku-achievement-warning");
-  assert.equal(getQuantityAchievementTone(74.99, 80), "msku-achievement-danger");
+test("sales review quantity achievement only flags material schedule gaps and lead", () => {
+  assert.equal(getQuantityAchievementTone(75, 80), "");
+  assert.equal(getQuantityAchievementTone(74.99, 80), "msku-achievement-warning");
+  assert.equal(getQuantityAchievementTone(70, 80), "msku-achievement-danger");
+  assert.equal(getQuantityAchievementTone(69.99, 80), "msku-achievement-danger");
   assert.equal(getQuantityAchievementTone(80, 80), "");
   assert.equal(getQuantityAchievementTone(95, 80), "");
   assert.equal(getQuantityAchievementTone(95.01, 80), "msku-achievement-info");
@@ -305,7 +307,7 @@ test("sales dashboard feature filters MSKU detail rows by current listing owner"
     assert.doesNotMatch(detailTable.innerHTML, /MSKU-LP/);
     assert.match(detailTable.innerHTML, /MSKU-XDX[\s\S]*?<td>28\.5天<\/td>/);
     assert.match(detailTable.innerHTML, /MSKU-MISSING[\s\S]*?<td>—<\/td>/);
-    assert.match(detailTable.innerHTML, /<td class="msku-achievement-danger">74%<\/td>/);
+    assert.match(detailTable.innerHTML, /<td class="msku-achievement-warning">74%<\/td>/);
     assert.notEqual(detailTable.innerHTML.indexOf("3%"), -1);
     assert.ok(detailTable.innerHTML.indexOf("3%") < detailTable.innerHTML.indexOf("5%"));
     assert.match(storeTabs.innerHTML, /探嘉加拿大/);

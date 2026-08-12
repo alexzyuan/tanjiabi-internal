@@ -8,8 +8,8 @@ export function getQuantityAchievementTone(quantityAchievement, timeProgress) {
   const progress = Number(timeProgress);
   if (!Number.isFinite(achievement) || !Number.isFinite(progress)) return "";
   const difference = achievement - progress;
-  if (difference < -5) return "msku-achievement-danger";
-  if (difference < 0) return "msku-achievement-warning";
+  if (difference <= -10) return "msku-achievement-danger";
+  if (difference < -5) return "msku-achievement-warning";
   if (difference > 15) return "msku-achievement-info";
   return "";
 }
