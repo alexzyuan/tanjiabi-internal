@@ -46,6 +46,7 @@ test("supplier board exposes separate semantic dashboard and product refresh act
   assert.match(featureCall, /fetchImpl:/);
   assert.match(featureCall, /setButtonBusy,/);
   assert.match(featureSource, /bind\(root, "#supplier-board-product-refresh", "click"/);
+  assert.match(featureSource, /bind\(root, "#supplier-board-product-refresh", "keydown"/);
   assert.match(featureSource, /refreshSupplierBoardProducts,/);
   assert.equal(appSource.includes('bind(document, "#supplier-board-product-refresh"'), false);
 });

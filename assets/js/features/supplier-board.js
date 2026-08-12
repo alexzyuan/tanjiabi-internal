@@ -367,6 +367,12 @@ export function createSupplierBoardFeature({
     }
   }
 
+  function handleSupplierBoardProductRefreshKeydown(event) {
+    if (event?.key !== "Enter" || event.repeat || event.isComposing) return undefined;
+    event.preventDefault?.();
+    return refreshSupplierBoardProducts();
+  }
+
   function renderSupplierBoardSortState() {
     setTableSortButtonGroupState("#supplier-board-table button[data-supplier-sort]", "supplierSort", supplierBoardSort.key, supplierBoardSort.direction);
   }
@@ -527,6 +533,7 @@ export function createSupplierBoardFeature({
     supplierBoardSetupDone = true;
     bind(root, "#supplier-board-refresh", "click", () => loadSupplierBoard({ forceRefresh: true }));
     bind(root, "#supplier-board-product-refresh", "click", refreshSupplierBoardProducts);
+    bind(root, "#supplier-board-product-refresh", "keydown", handleSupplierBoardProductRefreshKeydown);
     bind(root, "#supplier-board-export", "click", exportSupplierBoardExcel);
     bind(root, "#supplier-board-table thead", "click", (event) => {
       const header = closestTarget(event, "th[data-supplier-sort]");
@@ -552,6 +559,7 @@ export function createSupplierBoardFeature({
     exportSupplierBoardExcel,
     handleSupplierBoardCountryChange,
     handleSupplierBoardDimensionChange,
+    handleSupplierBoardProductRefreshKeydown,
     handleSupplierBoardStoreChange,
     loadSupplierBoard,
     refreshSupplierBoardProducts,
