@@ -562,7 +562,7 @@ flowchart LR
   Domain --> Nginx["Nginx :80"]
   Nginx --> Node["Node.js server.js :4173"]
   Node --> Static["静态资源 index.html / app.js / styles.css"]
-  Node --> Cache["data-cache 本地缓存"]
+  Node --> Cache["data-cache SQLite 领域缓存（旧 JSON 只读迁移源）"]
   Node --> Uploads["uploads 上传文件"]
   Node --> Lingxing["领星 OpenAPI"]
   Node --> AdminData["后台账号/知识库/预算配置"]
@@ -682,8 +682,9 @@ server {
 数据源优先级：
 
 1. 领星 ERP 同步结果。
-2. 本地 `data-cache/` 最近缓存。
-3. mock 数据或空态兜底。
+2. 已落地领域的 SQLite 派生缓存（当前阶段为 `data-cache/product-catalog/product-catalog-v1.sqlite`）；对应旧 JSON 仅作为只读迁移源，不再作为运行时写入目标。
+3. 其他尚未完成领域迁移的本地 `data-cache/` 缓存。
+4. mock 数据或空态兜底。
 
 同步策略：
 
@@ -852,7 +853,7 @@ DNS 应配置：
 
 建议：
 
-- 中期将核心数据落库，减少对 JSON 文件缓存的依赖。
+- 商品目录领域已进入 Stage 1 SQLite 派生缓存；销售事实和库存快照仍需各自完成独立设计后再迁移，旧 JSON 在观察期内保持只读。
 - 将前端模块拆分，按销售、库存、采购、财务、设置分文件维护。
 - 以当前可接受视觉截图作为回归基准，推进分层源补齐；生成式 CSS 达到视觉等价后，再解除临时视觉锁。
 - 增加 API 层权限测试。
