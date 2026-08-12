@@ -116,6 +116,7 @@ export async function runLegacyProductCatalogRetirementCli({
     await requireExistingDatabase(databasePath);
     repository = createProductCatalogRepository({
       databasePath,
+      readonly: true,
       logger: { info() {}, warn() {}, error() {} },
       requestId: `legacy-retirement-${mode}`,
     });

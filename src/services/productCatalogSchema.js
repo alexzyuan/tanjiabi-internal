@@ -94,3 +94,15 @@ export function applyProductCatalogSchema(db, { now = Date.now } = {}) {
     checksum: SCHEMA_CHECKSUM,
   };
 }
+
+export function validateProductCatalogSchema(db) {
+  const migrations = readExistingMigrations(db);
+  validateExistingMigrations(migrations);
+  const current = migrations.find(({ version }) => version === PRODUCT_CATALOG_SCHEMA_VERSION);
+  if (!current) throw new Error("商品目录数据库 schema 尚未初始化。");
+  return {
+    version: PRODUCT_CATALOG_SCHEMA_VERSION,
+    name: PRODUCT_CATALOG_SCHEMA_NAME,
+    checksum: SCHEMA_CHECKSUM,
+  };
+}

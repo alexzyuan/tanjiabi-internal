@@ -5,6 +5,7 @@ import Database from "better-sqlite3";
 import {
   applyProductCatalogSchema,
   PRODUCT_CATALOG_SCHEMA_VERSION,
+  validateProductCatalogSchema,
 } from "./productCatalogSchema.js";
 import {
   normalizeCatalogKey,
@@ -138,6 +139,16 @@ function configurePragmas(db) {
     }
   }
   return actual;
+}
+
+function configureReadonlyPragmas(db) {
+  db.pragma("foreign_keys = ON");
+  db.pragma("busy_timeout = 5000");
+  db.pragma("query_only = ON");
+  const journalMode = String(db.pragma("journal_mode", { simple: true })).toLowerCase();
+  if (journalMode !== "wal") {
+    throw new Error(`商品目录只读数据库 journal_mode 必须为 wal，实际为 ${journalMode}。`);
+  }
 }
 
 function resolveNow(now) {
@@ -532,13 +543,20 @@ export function createProductCatalogRepository({
   logger = console,
   now = Date.now,
   requestId,
+  readonly = false,
 } = {}) {
-  mkdirSync(path.dirname(databasePath), { recursive: true });
+  if (typeof readonly !== "boolean") throw new ProductCatalogInputError("readonly 必须为布尔值。");
+  if (!readonly) mkdirSync(path.dirname(databasePath), { recursive: true });
   let db;
   try {
-    db = new Database(databasePath);
-    configurePragmas(db);
-    applyProductCatalogSchema(db, { now });
+    db = new Database(databasePath, readonly ? { readonly: true, fileMustExist: true } : undefined);
+    if (readonly) {
+      configureReadonlyPragmas(db);
+      validateProductCatalogSchema(db);
+    } else {
+      configurePragmas(db);
+      applyProductCatalogSchema(db, { now });
+    }
   } catch (error) {
     try {
       writeLog(logger, "error", bootstrapErrorDetails(error, requestId));

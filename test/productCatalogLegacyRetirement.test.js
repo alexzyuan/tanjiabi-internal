@@ -352,3 +352,8 @@ test("retirement CLI does not create a missing SQLite database during inspection
   assert.match(result.stderr, /SQLITE_DATABASE_MISSING/u);
   await assert.rejects(readFile(missingDatabase), { code: "ENOENT" });
 });
+
+test("retirement CLI opens the existing catalog in readonly mode", async () => {
+  const source = await readFile(retirementCliPath, "utf8");
+  assert.match(source, /createProductCatalogRepository\(\{[\s\S]*?readonly:\s*true/u);
+});

@@ -88,6 +88,19 @@ Listing 以 `SID + 标准化 MSKU` 为身份，商品主数据以标准化内部
 
 旧的 `shared-product-catalog` 与 `supplier-board-product-map` JSON 在观察期内只读，用于迁移、回退和对账；未经单独清理批准不得删除或继续写入。
 
+旧商品 JSON 的第一阶段退役工具只提供检查和外部归档，不会移动或删除源目录：
+
+```bash
+PRODUCT_CATALOG_SQLITE_FIRST_LIVE_AT_MS=<首次上线毫秒时间戳> \
+npm run catalog:legacy:dry-run
+
+PRODUCT_CATALOG_SQLITE_FIRST_LIVE_AT_MS=<首次上线毫秒时间戳> \
+PRODUCT_CATALOG_LEGACY_ARCHIVE_ROOT=/opt/tanjia-bi-archives/product-catalog \
+npm run catalog:legacy:archive
+```
+
+执行前还必须满足 30 天稳定观察期，并保留至少三个带 `product-catalog-sqlite-v1` capability 的新版 release。归档目录必须位于应用目录之外。当前工具没有 quarantine、purge 或自动删除功能；这些不可逆能力需要生产归档验证后的独立批准。
+
 ## 安全部署与回退
 
 每次上传新版 `tanjia-bi-deploy.tar.gz` 后，在服务器执行：
