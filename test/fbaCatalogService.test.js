@@ -139,6 +139,19 @@ async function createFbaCatalogFixture(t, { seeded = false, getBoxTemplate } = {
   };
 }
 
+async function createIsolatedCatalogRepository(t) {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "fba-catalog-isolated-test-"));
+  const repository = createProductCatalogRepository({
+    databasePath: path.join(directory, "product-catalog-v1.sqlite"),
+    now: () => 1720000000000,
+  });
+  t.after(() => {
+    repository.close();
+    return rm(directory, { recursive: true, force: true });
+  });
+  return repository;
+}
+
 test("searchFbaMskus diagnoses Listing rows that exist but are not paired to ERP product data", async () => {
   const calls = [];
   const adapter = {
@@ -178,7 +191,8 @@ test("searchFbaMskus diagnoses Listing rows that exist but are not paired to ERP
   assert.equal(calls.some((params) => params.is_pair === undefined), true);
 });
 
-test("searchFbaMskus resolves an omitted SID scope from the runtime seller directory", async () => {
+test("searchFbaMskus resolves an omitted SID scope from the runtime seller directory", async (t) => {
+  const repository = await createIsolatedCatalogRepository(t);
   const calls = [];
   const adapter = {
     async fetchListings(params) {
@@ -210,6 +224,8 @@ test("searchFbaMskus resolves an omitted SID scope from the runtime seller direc
 
   const result = await searchFbaMskus({
     adapter,
+    productCatalogRepository: repository,
+    sharedCatalogOptions: { skipMigration: true },
     getDirectory: async () => ({
       sellers: [{ sid: 99001, name: "runtime-store-FR", country: "法国", displayName: "Runtime FR" }],
     }),
@@ -255,7 +271,8 @@ test("searchFbaMskus propagates runtime directory failures", async () => {
   );
 });
 
-test("resolveFbaMskuFromErp uses the injected runtime directory and adapter", async () => {
+test("resolveFbaMskuFromErp uses the injected runtime directory and adapter", async (t) => {
+  const repository = await createIsolatedCatalogRepository(t);
   const adapter = {
     async fetchListings(params) {
       return listingPayload([{
@@ -291,6 +308,8 @@ test("resolveFbaMskuFromErp uses the injected runtime directory and adapter", as
     msku: "runtime-msku-2",
     adapter,
     getDirectory,
+    productCatalogRepository: repository,
+    sharedCatalogOptions: { skipMigration: true },
   });
 
   assert.equal(result.sid, 99003);
@@ -320,7 +339,8 @@ test("resolveFbaMskuFromErp fails before Listing requests for an unknown runtime
   assert.equal(listingCalls, 0);
 });
 
-test("assertFbaMskuPackMatchesErp forwards runtime directory dependencies", async () => {
+test("assertFbaMskuPackMatchesErp forwards runtime directory dependencies", async (t) => {
+  const repository = await createIsolatedCatalogRepository(t);
   const adapter = {
     async fetchListings() {
       return listingPayload([{
@@ -353,6 +373,8 @@ test("assertFbaMskuPackMatchesErp forwards runtime directory dependencies", asyn
     quantity: 8,
     adapter,
     getDirectory: async () => ({ sellers: [{ sid: 99005, name: "runtime-store-US" }] }),
+    productCatalogRepository: repository,
+    sharedCatalogOptions: { skipMigration: true },
   });
 
   assert.equal(result.packQuantity, 4);
