@@ -366,6 +366,7 @@ function buildSharedCatalogPerformance(meta, {
   mapSize = 0,
   recordCount = 0,
   cacheHit = false,
+  compatibilityMapDurationMs = 0,
 } = {}) {
   const listingRequestCount = Number(meta?.listingRequestCount || 0);
   const productInfoRequestCount = Number(meta?.productInfoRequestCount || 0);
@@ -383,6 +384,7 @@ function buildSharedCatalogPerformance(meta, {
     productInfoRequestCount,
     productFallbackRequestCount: Number(meta?.productFallbackRequestCount || 0),
     listingSharedXlsxCount: Number(meta?.listingSharedXlsxCount || 0),
+    liveOwnedSkipCount: Number(meta?.liveOwnedSkipCount || 0),
     missingCount: Number(meta?.missingCount || 0),
     joinedInFlight: Number(meta?.joinedInFlight || 0),
     transactionDurationMs: Number(meta?.transactionDurationMs || 0),
@@ -394,10 +396,21 @@ function buildSharedCatalogPerformance(meta, {
   };
   return {
     scope: "shared-product-catalog",
+    ...(meta?.requestId ? { requestId: String(meta.requestId) } : {}),
     durationMs: Number(meta?.elapsedMs || 0),
     counters,
-    timings: {},
+    timings: {
+      ...(meta?.timings && typeof meta.timings === "object" ? meta.timings : {}),
+      compatibilityMapDurationMs: Math.max(0, Number(compatibilityMapDurationMs || 0)),
+    },
   };
+}
+
+function performanceNow(options = {}) {
+  const candidate = options.timingNow || options.clock;
+  const value = typeof candidate === "function" ? candidate() : Date.now();
+  const number = Number(value);
+  return Number.isFinite(number) ? number : Date.now();
 }
 
 function canonicalRecordsUpdatedAt(records = []) {
@@ -451,7 +464,9 @@ export async function getSharedProductCatalogMap(adapter = getLingxingAdapter(),
     ? await refreshProductCatalogScope({ feature: serviceOptions.feature, items: sourceRows }, serviceOptions)
     : await getProductCatalogForRows(sourceRows, serviceOptions);
   const records = Array.isArray(lookup.records) ? lookup.records : [];
+  const mapStartedAtMs = performanceNow(serviceOptions);
   const map = buildCanonicalProductCatalogMap(records, sourceRows);
+  const compatibilityMapDurationMs = Math.max(0, performanceNow(serviceOptions) - mapStartedAtMs);
   const meta = lookup.meta || {};
   const cacheHit = !forceRefresh
     && meta.source === "sqlite"
@@ -462,12 +477,14 @@ export async function getSharedProductCatalogMap(adapter = getLingxingAdapter(),
     mapSize: map.size,
     recordCount: records.length,
     cacheHit,
+    compatibilityMapDurationMs,
   });
   const updatedAt = String(meta.cacheUpdatedAt || canonicalRecordsUpdatedAt(records) || "").trim();
   const status = cacheHit
     ? `复用共享商品目录 ${records.length} 个索引`
     : `刷新共享商品目录 ${records.length} 个索引`;
   console.info("[shared-product-catalog] performance", {
+    requestId: meta.requestId,
     revision: Number(meta.revision || 0),
     cacheHit,
     sourceRows: sourceRows.length,
@@ -477,6 +494,7 @@ export async function getSharedProductCatalogMap(adapter = getLingxingAdapter(),
     listingRequestCount: Number(meta.listingRequestCount || 0),
     productInfoRequestCount: Number(meta.productInfoRequestCount || 0),
     joinedInFlight: Boolean(meta.joinedInFlight),
+    liveOwnedSkipCount: Number(meta.liveOwnedSkipCount || 0),
     transactionDurationMs: Number(meta.transactionDurationMs || 0),
   });
   return {

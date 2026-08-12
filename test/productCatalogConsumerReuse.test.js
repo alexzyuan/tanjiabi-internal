@@ -244,7 +244,8 @@ test("facade maps real loader batch counters and preserves source-row display fa
   assert.equal(result.performance.counters.productLookupBatchCount, 2);
   assert.equal(result.performance.counters.productInfoRequestCount, 2);
   assert.equal(result.performance.durationMs, result.meta.elapsedMs);
-  assert.deepEqual(result.performance.timings, {});
+  assert.equal(typeof result.performance.timings.compatibilityMapDurationMs, "number");
+  assert.equal(result.performance.timings.compatibilityMapDurationMs >= 0, true);
 
   const fallback = await getSharedProductCatalogMap(fixture.adapter, [{
     sid: 8708,

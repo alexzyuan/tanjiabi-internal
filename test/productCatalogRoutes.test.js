@@ -49,7 +49,41 @@ test("catalog refresh whitelists feature/items and exposes only safe result fiel
     }),
     refreshProductCatalogScope: async (input) => {
       calls.push(input);
-      return { ok: true, records: [{ token: "raw-secret" }], meta: { revision: 7, requestId: "safe-id" } };
+      return {
+        ok: true,
+        records: [{
+          sid: 8708,
+          msku: "A",
+          mskuKey: "a",
+          internalSku: "TJ001",
+          internalSkuKey: "tj001",
+          storeName: "店铺 A",
+          country: "美国",
+          productName: "商品 A",
+          purchasePrice: 38,
+          product: {
+            internalSku: "TJ001",
+            productName: "商品 A",
+            purchasePrice: 38,
+            raw: { token: "raw-secret" },
+          },
+          listing: {
+            sid: 8708,
+            msku: "A",
+            internalSku: "TJ001",
+            source: "lingxing-listing",
+            raw: { token: "raw-secret" },
+          },
+          raw: { token: "raw-secret" },
+        }],
+        meta: {
+          source: "sqlite",
+          requestId: "safe-id",
+          scopeCount: 1,
+          liveOwnedSkipCount: 2,
+          revision: 7,
+        },
+      };
     },
   });
 
@@ -57,7 +91,35 @@ test("catalog refresh whitelists feature/items and exposes only safe result fiel
 
   assert.deepEqual(calls, [{ feature: "supplier-board", items: [{ sid: 8708, msku: "A" }] }]);
   assert.equal(sent[0].statusCode, 200);
-  assert.deepEqual(sent[0].payload, { ok: true, meta: { revision: 7, requestId: "safe-id" } });
+  assert.deepEqual(sent[0].payload.meta, {
+    source: "sqlite",
+    requestId: "safe-id",
+    scopeCount: 1,
+    liveOwnedSkipCount: 2,
+    revision: 7,
+  });
+  assert.deepEqual(sent[0].payload.records, [{
+    sid: 8708,
+    msku: "A",
+    mskuKey: "a",
+    internalSku: "TJ001",
+    internalSkuKey: "tj001",
+    storeName: "店铺 A",
+    country: "美国",
+    productName: "商品 A",
+    purchasePrice: 38,
+    product: {
+      internalSku: "TJ001",
+      productName: "商品 A",
+      purchasePrice: 38,
+    },
+    listing: {
+      sid: 8708,
+      msku: "A",
+      internalSku: "TJ001",
+      source: "lingxing-listing",
+    },
+  }]);
   assert.equal(JSON.stringify(sent[0].payload).includes("raw-secret"), false);
 });
 
@@ -175,6 +237,45 @@ test("generic dispatch invokes route serializers with dynamic status and fail-cl
   assert.equal(invalidSent[0].payload.error.includes("arbitrary"), false);
 });
 
+test("generic dispatch logs serializer failures with route context before safe 500", async () => {
+  const sent = [];
+  const logs = [];
+  await dispatchApiRoute({
+    req: {},
+    res: {},
+    url: new URL("http://localhost/api/catalog"),
+    route: {
+      method: "POST",
+      path: "/api/catalog",
+      handler: async () => {
+        throw Object.assign(new Error("handler failure"), { statusCode: 422 });
+      },
+      serializeError: () => {
+        throw Object.assign(new Error("serializer exploded token raw-secret"), {
+          name: "SerializerError",
+          code: "SERIALIZER_FAILED",
+        });
+      },
+    },
+    params: {},
+    authorize: () => true,
+    sendJson: (_res, statusCode, payload) => sent.push({ statusCode, payload }),
+    logger: { error: (...args) => logs.push(args) },
+  });
+  assert.equal(sent[0]?.statusCode, 500);
+  assert.equal(sent[0]?.payload.ok, false);
+  assert.doesNotMatch(JSON.stringify(sent[0]?.payload), /serializer exploded|raw-secret|token/);
+  const serializerLog = logs.find(([prefix]) => prefix === "[api-serializer-error]");
+  assert.ok(serializerLog);
+  assert.deepEqual(serializerLog[1], {
+    path: "/api/catalog",
+    method: "POST",
+    statusCode: 500,
+    errorName: "SerializerError",
+    errorCode: "SERIALIZER_FAILED",
+  });
+});
+
 test("catalog health route always includes a nested degraded-safe productCatalog shape", async () => {
   const createHealthHarness = (getProductCatalogHealth) => {
     const sent = [];
@@ -218,4 +319,30 @@ test("catalog health route always includes a nested degraded-safe productCatalog
   assert.equal(degraded.sent[0]?.payload.ok, true);
   assert.equal(degraded.logs.length, 1);
   assert.equal(JSON.stringify(degraded.logs).includes("token"), false);
+});
+
+test("catalog health preserves a bounded quick-check diagnostic", async () => {
+  const sent = [];
+  const routes = createCoreRoutes({
+    config: { dataProvider: "mock", runtime: "test", dingtalk: { login: {} } },
+    getSyncState: () => ({ running: false }),
+    getProductCatalogHealth: () => ({
+      ok: false,
+      status: "degraded",
+      schemaVersion: 1,
+      quickCheck: "disk I/O error",
+      error: "SQLITE_IOERR",
+    }),
+    sendJson: (_res, statusCode, payload) => sent.push({ statusCode, payload }),
+    logger: { error() {} },
+    getSession: () => null,
+    isAuthEnabled: () => false,
+    isDingtalkLoginConfigured: () => false,
+    isPasswordLoginEnabled: () => false,
+  });
+  await routes.find((route) => route.path === "/api/health").handler({ req: {}, res: {} });
+  assert.equal(sent[0]?.statusCode, 200);
+  assert.equal(sent[0]?.payload.productCatalog.quickCheck, "disk I/O error");
+  assert.equal(sent[0]?.payload.productCatalog.error, "SQLITE_IOERR");
+  assert.doesNotMatch(JSON.stringify(sent[0]?.payload), /\/tmp|SELECT|token|raw|secret/i);
 });

@@ -2,6 +2,18 @@ export function validApiStatusCode(value) {
   const statusCode = Number(value);
   return Number.isInteger(statusCode) && statusCode >= 400 && statusCode <= 599 ? statusCode : null;
 }
+
+function safeErrorName(value) {
+  const name = String(value || "Error");
+  return /^[A-Za-z][A-Za-z0-9._-]{0,63}$/u.test(name) ? name : "Error";
+}
+
+function safeErrorCode(value) {
+  const code = String(value || "");
+  return /^[A-Za-z0-9_.:-]{1,64}$/u.test(code) && !/(token|secret|password|payload|raw|body)/iu.test(code)
+    ? code
+    : null;
+}
 export async function dispatchApiRoute({
   req,
   res,
@@ -23,7 +35,17 @@ export async function dispatchApiRoute({
       let serialized;
       try {
         serialized = route.serializeError(error, endpoint);
-      } catch {
+      } catch (serializerError) {
+        const writeSerializerError = logger?.error;
+        if (typeof writeSerializerError === "function") {
+          writeSerializerError.call(logger, "[api-serializer-error]", {
+            path: route.path || endpoint,
+            method: route.method || req?.method || "UNKNOWN",
+            statusCode: 500,
+            errorName: safeErrorName(serializerError?.name),
+            errorCode: safeErrorCode(serializerError?.code),
+          });
+        }
         serialized = null;
       }
       const statusCode = validApiStatusCode(serialized?.statusCode) || 500;

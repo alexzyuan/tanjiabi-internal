@@ -23,9 +23,17 @@ export const LIVE_LISTING_SOURCE = "lingxing-listing";
 export const SHARED_LISTING_XLSX_SOURCE = "listing-shared-xlsx";
 export const LIVE_PRODUCT_SOURCE = "lingxing-product";
 
-function elapsedMs(startedAtMs) {
+function timingNow(context) {
+  const candidate = context?.timingNow || context?.options?.timingNow || context?.options?.clock;
+  const value = typeof candidate === "function" ? candidate() : Date.now();
+  const number = Number(value);
+  if (!Number.isFinite(number)) throw new ProductCatalogInputError("商品目录计时无效。");
+  return number;
+}
+
+function elapsedMs(startedAtMs, context) {
   return typeof startedAtMs === "number"
-    ? Math.max(0, Date.now() - startedAtMs)
+    ? Math.max(0, timingNow(context) - startedAtMs)
     : 0;
 }
 
@@ -324,7 +332,6 @@ function buildRepositoryBatch(scope, listingByKey, productsByKey, context) {
 }
 
 export async function loadAndCommitScope(scope, context) {
-  const startedAtMs = Date.now();
   const stats = {
     listingFetchedCount: 0,
     listingSharedXlsxCount: 0,
@@ -335,13 +342,18 @@ export async function loadAndCommitScope(scope, context) {
     productInfoRequestCount: 0,
     productFallbackRequestCount: 0,
   };
+  const listingStartedAtMs = timingNow(context);
   const listingByKey = await fetchAllListings(scope, context, stats);
   await fillMissingInternalSkusFromSharedXlsx(scope, listingByKey, context, stats);
   assertCompleteListings(scope, listingByKey, context);
+  const listingFetchDurationMs = elapsedMs(listingStartedAtMs, context);
+  const productStartedAtMs = timingNow(context);
   const productsByKey = await fetchAllProducts(scope, listingByKey, context, stats);
   assertCompleteProducts(scope, listingByKey, productsByKey, context);
+  const productFetchDurationMs = elapsedMs(productStartedAtMs, context);
   const batch = buildRepositoryBatch(scope, listingByKey, productsByKey, context);
   let write;
+  const transactionStartedAtMs = timingNow(context);
   try {
     write = context.repository.upsertCatalog({
       ...batch,
@@ -354,9 +366,15 @@ export async function loadAndCommitScope(scope, context) {
     }
     throw context.databaseError(error, "商品目录数据库写入失败。", "catalog-commit");
   }
+  const transactionDurationMs = elapsedMs(transactionStartedAtMs, context);
   return {
     revision: write.revision,
-    transactionDurationMs: elapsedMs(startedAtMs),
+    transactionDurationMs,
+    timings: {
+      listingFetchDurationMs,
+      productFetchDurationMs,
+      transactionDurationMs,
+    },
     listingFetchedCount: stats.listingFetchedCount,
     listingSharedXlsxCount: stats.listingSharedXlsxCount,
     productFetchedCount: stats.productFetchedCount,

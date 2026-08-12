@@ -12,12 +12,23 @@ function safeHealthNumber(value) {
   return Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : null;
 }
 
+function safeHealthQuickCheck(value) {
+  const raw = String(value ?? "").replace(/[\r\n\t]+/gu, " ").replace(/\s+/gu, " ").trim();
+  const text = raw.replace(/\s+at\s+\/(?:tmp|Users|var|home|opt)\/.*$/iu, "").trim().slice(0, 120);
+  if (text === "ok") return "ok";
+  if (!text) return "unavailable";
+  if (/(token|secret|password|payload|raw|body|select|pragma|sqlite|\.sqlite|\\|(?:^|\s)\/(?:tmp|Users|var|home|opt)\/)/iu.test(text)) {
+    return "unavailable";
+  }
+  return /^[A-Za-z0-9][A-Za-z0-9 .,:()/'_-]*$/u.test(text) ? text : "unavailable";
+}
+
 function sanitizeProductCatalogHealth(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return degradedProductCatalogHealth({ code: "PRODUCT_CATALOG_HEALTH_INVALID" });
   }
   const ok = value.ok === true;
-  const quickCheck = value.quickCheck === "ok" ? "ok" : "unavailable";
+  const quickCheck = safeHealthQuickCheck(value.quickCheck);
   const result = {
     ok,
     status: ok ? "healthy" : "degraded",

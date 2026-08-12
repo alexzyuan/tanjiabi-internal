@@ -9,8 +9,15 @@ export const PRODUCT_CATALOG_REFRESH_MAX_BODY_BYTES = 256 * 1024;
 export const PRODUCT_CATALOG_REFRESH_PATH = "/api/product-catalog/refresh";
 
 const SAFE_META_FIELDS = {
+  source: "source",
   requestId: "string",
+  scopeCount: "number",
   revision: "number",
+  dbHitCount: "number",
+  legacyMigratedCount: "number",
+  liveOwnedSkipCount: "number",
+  missingCount: "number",
+  conflictCount: "number",
   refreshRequestedCount: "number",
   refreshCommittedCount: "number",
   joinedInFlight: "boolean",
@@ -26,8 +33,35 @@ const SAFE_META_FIELDS = {
   sharedListingItems: "number",
   migrationCompleted: "boolean",
   catalogRevisionBeforeRefresh: "number",
+  cacheUpdatedAt: "string",
   elapsedMs: "number",
 };
+
+const SAFE_TIMING_FIELDS = new Set([
+  "migrationDurationMs",
+  "dbLookupDurationMs",
+  "listingFetchDurationMs",
+  "productFetchDurationMs",
+  "transactionDurationMs",
+  "compatibilityMapDurationMs",
+]);
+
+const SAFE_RECORD_FIELDS = [
+  "sid", "msku", "mskuKey", "internalSku", "internalSkuKey", "listingSku", "asin",
+  "storeName", "country", "countryCode", "displayName", "productName", "imageUrl",
+  "supplier", "purchasePrice", "model", "brand", "material", "purpose", "customsCode",
+  "isBattery", "unit", "declaredValue", "packQuantity", "boxSpec", "productId", "skuIdentifier",
+  "source", "sourceUpdatedAtMs", "refreshedAtMs",
+];
+const SAFE_PRODUCT_FIELDS = [
+  "internalSkuKey", "internalSku", "productName", "imageUrl", "supplier", "purchasePrice",
+  "model", "brand", "material", "purpose", "customsCode", "isBattery", "unit", "declaredValue",
+  "packQuantity", "boxSpec", "productId", "skuIdentifier", "source", "sourceUpdatedAtMs", "refreshedAtMs",
+];
+const SAFE_LISTING_FIELDS = [
+  "sid", "mskuKey", "msku", "internalSkuKey", "internalSku", "listingSku", "asin", "storeName",
+  "country", "source", "sourceUpdatedAtMs", "refreshedAtMs",
+];
 
 const SAFE_REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/u;
 const SENSITIVE_VALUE_PATTERN = /(token|secret|password|payload|raw|body)/iu;
@@ -136,13 +170,81 @@ function safeMeta(meta) {
   for (const [field, type] of Object.entries(SAFE_META_FIELDS)) {
     const value = meta[field];
     if (value === undefined || value === null) continue;
+    if (type === "source") {
+      if (value === "sqlite") output[field] = value;
+      continue;
+    }
     if (type === "string") {
+      if (field === "source") {
+        if (value === "sqlite") output[field] = value;
+        continue;
+      }
       const requestId = field === "requestId" ? safeRequestId(value) : String(value);
       if (requestId !== undefined && requestId.length <= 128) output[field] = requestId;
       continue;
     }
     if (typeof value === type && (type !== "number" || Number.isFinite(value))) output[field] = value;
   }
+  if (meta.timings && typeof meta.timings === "object" && !Array.isArray(meta.timings)) {
+    const timings = {};
+    for (const field of SAFE_TIMING_FIELDS) {
+      const value = meta.timings[field];
+      if (typeof value === "number" && Number.isFinite(value) && value >= 0) timings[field] = value;
+    }
+    if (Object.keys(timings).length) output.timings = timings;
+  }
+  return output;
+}
+
+function safeBoxSpec(boxSpec) {
+  if (!boxSpec || typeof boxSpec !== "object" || Array.isArray(boxSpec)) return undefined;
+  const dimensions = boxSpec.dimensions;
+  const weight = boxSpec.weight;
+  const output = {};
+  if (dimensions && typeof dimensions === "object" && !Array.isArray(dimensions)) {
+    output.dimensions = {};
+    for (const field of ["length", "width", "height", "unitOfMeasurement"]) {
+      const value = dimensions[field];
+      if (value === null || typeof value === "string" || (typeof value === "number" && Number.isFinite(value))) {
+        output.dimensions[field] = value;
+      }
+    }
+  }
+  if (weight && typeof weight === "object" && !Array.isArray(weight)) {
+    output.weight = {};
+    for (const field of ["value", "unit"]) {
+      const value = weight[field];
+      if (value === null || typeof value === "string" || (typeof value === "number" && Number.isFinite(value))) {
+        output.weight[field] = value;
+      }
+    }
+  }
+  return Object.keys(output).length ? output : undefined;
+}
+
+function pickSafeFields(source, fields) {
+  if (!source || typeof source !== "object" || Array.isArray(source)) return {};
+  const output = {};
+  for (const field of fields) {
+    const value = source[field];
+    if (value === undefined) continue;
+    if (field === "boxSpec") {
+      const boxSpec = safeBoxSpec(value);
+      if (boxSpec) output.boxSpec = boxSpec;
+      continue;
+    }
+    if (value === null || typeof value === "string" || typeof value === "boolean"
+      || (typeof value === "number" && Number.isFinite(value))) output[field] = value;
+  }
+  return output;
+}
+
+function safeCanonicalRecord(record) {
+  const output = pickSafeFields(record, SAFE_RECORD_FIELDS);
+  const product = pickSafeFields(record?.product, SAFE_PRODUCT_FIELDS);
+  const listing = pickSafeFields(record?.listing, SAFE_LISTING_FIELDS);
+  if (Object.keys(product).length) output.product = product;
+  if (Object.keys(listing).length) output.listing = listing;
   return output;
 }
 
@@ -185,6 +287,7 @@ export function createProductCatalogRoutes({
         const result = await refreshProductCatalogScope(input);
         sendJson(res, 200, {
           ok: result?.ok === true,
+          records: Array.isArray(result?.records) ? result.records.map(safeCanonicalRecord) : [],
           meta: safeMeta(result?.meta),
         });
       },
