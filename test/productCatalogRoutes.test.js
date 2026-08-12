@@ -81,6 +81,7 @@ test("catalog refresh whitelists feature/items and exposes only safe result fiel
           requestId: "safe-id",
           scopeCount: 1,
           liveOwnedSkipCount: 2,
+          cacheUpdatedAt: "not-an-iso-date",
           revision: 7,
         },
       };
@@ -121,6 +122,24 @@ test("catalog refresh whitelists feature/items and exposes only safe result fiel
     },
   }]);
   assert.equal(JSON.stringify(sent[0].payload).includes("raw-secret"), false);
+});
+
+test("catalog meta keeps only valid ISO cache timestamps", async () => {
+  const { routes, sent } = createHarness({
+    readJsonBody: async () => ({ feature: "supplier-board", items: [] }),
+    refreshProductCatalogScope: async () => ({
+      ok: true,
+      records: [],
+      meta: {
+        source: "sqlite",
+        requestId: "timestamp-test",
+        scopeCount: 0,
+        cacheUpdatedAt: "2026-08-12T10:20:30.000Z",
+      },
+    }),
+  });
+  await routes[0].handler({ req: {}, res: {} });
+  assert.equal(sent[0].payload.meta.cacheUpdatedAt, "2026-08-12T10:20:30.000Z");
 });
 
 test("catalog refresh rejects invalid body or feature before service delegation", async () => {
@@ -190,6 +209,19 @@ test("catalog error serializer preserves typed status while redacting arbitrary 
   const invalid = serializeProductCatalogError(new Error("free text"), "/api/product-catalog/refresh");
   assert.equal(invalid.statusCode, 500);
   assert.equal(invalid.payload.error.includes("free text"), false);
+});
+
+test("catalog error serializer preserves reviewed database operation details", () => {
+  for (const operation of ["read-scope", "get-revision", "repository-bootstrap"]) {
+    const response = serializeProductCatalogError(Object.assign(new Error("database unavailable"), {
+      statusCode: 503,
+      code: "SQLITE_BUSY",
+      details: { requestId: "safe-db-request", operation },
+    }));
+    assert.equal(response.payload.details.operation, operation);
+    assert.equal(response.payload.details.requestId, "safe-db-request");
+    assert.equal(response.payload.details.code, "SQLITE_BUSY");
+  }
 });
 
 test("generic dispatch invokes route serializers with dynamic status and fail-closed payloads", async () => {
@@ -318,6 +350,11 @@ test("catalog health route always includes a nested degraded-safe productCatalog
   assert.equal(degraded.sent[0]?.statusCode, 200);
   assert.equal(degraded.sent[0]?.payload.ok, true);
   assert.equal(degraded.logs.length, 1);
+  assert.deepEqual(degraded.logs[0]?.[1], {
+    operation: "health",
+    status: "degraded",
+    code: "SQLITE_CORRUPT",
+  });
   assert.equal(JSON.stringify(degraded.logs).includes("token"), false);
 });
 

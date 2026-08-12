@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import Database from "better-sqlite3";
 
 import { createProductCatalogRepository } from "../src/services/productCatalogRepository.js";
 import {
@@ -594,7 +595,7 @@ test("revision errors normalize to redacted status 503 and are logged through th
     .find((details) => details.status === "error");
   assert.equal(errorLog.statusCode, 503);
   assert.equal(errorLog.requestId, "req-revision-normalization");
-  assert.equal(errorLog.operation, "revision");
+  assert.equal(errorLog.operation, "get-revision");
   assert.equal(errorLog.errorCode, "SQLITE_BUSY");
   assert.equal(errorLog.errorMessage, "商品目录数据库不可用。");
 });
@@ -615,6 +616,65 @@ test("database migration failures normalize to 503 instead of upstream 502", asy
       && error.details?.requestId === "req-migration-db"
       && error.details?.operation === "legacy-migration"
       && error.details?.code === "SQLITE_BUSY",
+  );
+});
+
+test("revision repository bootstrap failures normalize to a redacted 503 operation", async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "product-catalog-revision-bootstrap-test-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  await assert.rejects(
+    Promise.resolve().then(() => getProductCatalogRevision({
+      databasePath: directory,
+      requestId: "revision-bootstrap-request",
+    })),
+    (error) => error.statusCode === 503
+      && error.name === "ProductCatalogDatabaseError"
+      && error.details?.operation === "repository-bootstrap"
+      && error.details?.requestId === "revision-bootstrap-request"
+      && (!error.details?.code || /^[A-Za-z0-9_.:-]{1,64}$/u.test(error.details.code))
+      && !JSON.stringify(error.details).includes(directory),
+  );
+});
+
+test("revision schema checksum failures normalize to a redacted repository bootstrap 503", async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "product-catalog-revision-schema-test-"));
+  const databasePath = path.join(directory, "product-catalog-v1.sqlite");
+  const seedRepository = createProductCatalogRepository({ databasePath, now: () => NOW });
+  seedRepository.close();
+  const database = new Database(databasePath);
+  database.prepare("UPDATE schema_migrations SET checksum = ? WHERE version = 1").run("wrong-checksum");
+  database.close();
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  await assert.rejects(
+    Promise.resolve().then(() => getProductCatalogRevision({
+      databasePath,
+      requestId: "revision-schema-request",
+    })),
+    (error) => error.statusCode === 503
+      && error.name === "ProductCatalogDatabaseError"
+      && error.details?.operation === "repository-bootstrap"
+      && error.details?.requestId === "revision-schema-request"
+      && (!error.details?.code || /^[A-Za-z0-9_.:-]{1,64}$/u.test(error.details.code))
+      && !JSON.stringify(error).includes("wrong-checksum"),
+  );
+});
+
+test("adapter construction errors fail closed as generic 500 instead of database 503", async (t) => {
+  const fixture = await createCatalogServiceFixture();
+  t.after(fixture.cleanup);
+  const options = { ...fixture.options };
+  Object.defineProperty(options, "adapter", {
+    configurable: true,
+    get() {
+      throw new Error("adapter construction failed");
+    },
+  });
+  await assert.rejects(
+    getProductCatalogForRows(fixture.rows, options),
+    (error) => error.statusCode === 500
+      && error.name === "Error"
+      && error.message === "商品目录操作失败。"
+      && Boolean(error.details?.requestId),
   );
 });
 
@@ -659,7 +719,7 @@ test("health accessor logs degraded database errors without raw messages", () =>
     requestId: "health-request-1",
     repository: {
       getHealth() {
-        throw Object.assign(new Error("disk I/O error at /tmp/private.sqlite"), {
+        throw Object.assign(new Error("disk I/O error"), {
           code: "SQLITE_IOERR",
         });
       },

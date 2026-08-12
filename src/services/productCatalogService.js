@@ -14,6 +14,7 @@ import {
 } from "./productCatalogRepository.js";
 import { getSellerDirectory } from "./sellerDirectoryService.js";
 import { loadAndCommitScope } from "./productCatalogLiveLoader.js";
+import { safeQuickCheckDiagnostic } from "../utils/safeQuickCheckDiagnostic.js";
 
 let defaultRepository = null;
 let migrationPromises = new WeakMap();
@@ -137,17 +138,6 @@ function safeErrorMessage(error) {
   return "商品目录操作失败。";
 }
 
-function safeQuickCheckDiagnostic(value) {
-  const raw = String(value ?? "").replace(/[\r\n\t]+/gu, " ").replace(/\s+/gu, " ").trim();
-  const text = raw.replace(/\s+at\s+\/(?:tmp|Users|var|home|opt)\/.*$/iu, "").trim().slice(0, 120);
-  if (!text) return "unavailable";
-  if (/(token|secret|password|payload|raw|body|select|pragma|sqlite|\.sqlite|\\|(?:^|\s)\/(?:tmp|Users|var|home|opt)\/)/iu.test(text)) {
-    return "unavailable";
-  }
-  if (!/^[A-Za-z0-9][A-Za-z0-9 .,:()/'_-]*$/u.test(text)) return "unavailable";
-  return text;
-}
-
 function writeLog(logger, level, context, status, error = null, extra = {}) {
   const method = logger?.[level];
   if (typeof method !== "function") return;
@@ -238,6 +228,7 @@ function repositoryFor(options = {}) {
     databasePath,
     logger: options.logger || console,
     now: options.now || Date.now,
+    requestId: requestIdFrom(options),
   });
   return defaultRepository;
 }
@@ -556,10 +547,7 @@ export async function getProductCatalogForRows(rows, options = {}) {
     });
     return { records, meta };
   } catch (error) {
-    const repositoryFailure = !(error instanceof ProductCatalogUpstreamError)
-      && !(error instanceof ProductCatalogInputError)
-      && !(error instanceof ProductCatalogConflictError);
-    const attached = isDatabaseFailure(error) || repositoryFailure
+    const attached = isDatabaseFailure(error)
       ? databaseError(error, "商品目录数据库不可用。", context, error?.details?.operation || context.operation)
       : attachError(error, context);
     writeLog(options.logger || console, "error", context, "error", attached);
@@ -711,9 +699,17 @@ export async function refreshProductCatalogScope(input = {}, options = {}) {
 }
 
 export function getProductCatalogRevision(options = {}) {
-  const context = createRequestContext(options, options.feature || "catalog", "revision");
+  const context = createRequestContext(options, options.feature || "catalog", "get-revision");
+  let repository;
   try {
-    const revision = revisionFor(repositoryFor(options), context.requestId, context);
+    repository = repositoryFor(options);
+  } catch (error) {
+    const attached = databaseError(error, "商品目录数据库不可用。", context, "repository-bootstrap");
+    writeLog(options.logger || console, "error", context, "error", attached);
+    throw attached;
+  }
+  try {
+    const revision = revisionFor(repository, context.requestId, context, "get-revision");
     writeLog(options.logger || console, "info", context, "success", null, { revision });
     return revision;
   } catch (error) {

@@ -15,6 +15,7 @@ import {
   listingCountryMskuCatalogKey,
   listingMskuCatalogKey,
   listingStoreMskuCatalogKey,
+  performanceNow,
   productCatalogKey,
   readListingSharedCatalogRecords,
 } from "../src/services/sharedDataService.js";
@@ -476,6 +477,39 @@ test("共享商品目录 SQLite 命中返回性能元数据且不调用 Lingxing
   assert.equal(result.performance.counters.cacheHit, 1);
   assert.equal(result.performance.counters.outputRecords, result.map.size);
   assert.equal(result.performance.counters.lingxingListingRequests || 0, 0);
+});
+
+test("空商品目录范围返回完整稳定的零阶段 meta", async (t) => {
+  const fixture = await createScopedCatalogFixture();
+  t.after(fixture.cleanup);
+  const result = await getSharedProductCatalogMap({ fetchListings: async () => ({ data: [] }) }, [], {
+    ...fixture.options,
+    requestId: "empty-scope-request",
+  });
+  assert.deepEqual(result.meta, {
+    requestId: "empty-scope-request",
+    source: "sqlite",
+    scopeCount: 0,
+    revision: 0,
+    missingCount: 0,
+    timings: {
+      migrationDurationMs: 0,
+      dbLookupDurationMs: 0,
+      listingFetchDurationMs: 0,
+      productFetchDurationMs: 0,
+      transactionDurationMs: 0,
+      compatibilityMapDurationMs: 0,
+    },
+  });
+  assert.equal(result.performance.requestId, "empty-scope-request");
+  assert.equal(result.performance.timings.compatibilityMapDurationMs, 0);
+});
+
+test("invalid compatibility-map clock fails closed instead of falling back to wall time", () => {
+  assert.throws(
+    () => performanceNow({ timingNow: () => Number.NaN }),
+    (error) => error.statusCode === 400 && error.message === "商品目录计时无效。",
+  );
 });
 
 test("共享商品目录并发相同 SID+MSKU 范围时合并 SQLite 刷新请求", async (t) => {

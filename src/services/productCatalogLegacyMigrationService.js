@@ -36,6 +36,8 @@ const PRODUCT_FIELDS = [
 ];
 
 const LEGACY_JSON_SOURCE = "legacy-json";
+const SAFE_REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/u;
+const SENSITIVE_REQUEST_ID_PATTERN = /(token|secret|password|payload|raw|body)/iu;
 
 const LISTING_FIELDS = [
   "sid",
@@ -46,6 +48,11 @@ const LISTING_FIELDS = [
   "storeName",
   "country",
 ];
+
+function safeRequestId(value) {
+  const text = String(value ?? "").trim();
+  return SAFE_REQUEST_ID_PATTERN.test(text) && !SENSITIVE_REQUEST_ID_PATTERN.test(text) ? text : undefined;
+}
 
 function hasValue(value) {
   if (value === undefined || value === null) return false;
@@ -627,6 +634,7 @@ export async function migrateLegacyProductCatalog({
     manifestHash: manifest.hash,
   };
   logMigration(logger, "info", {
+    ...(safeRequestId(requestId) ? { requestId: safeRequestId(requestId) } : {}),
     fileCount: result.fileCount,
     listingCount: result.listingCount,
     productCount: result.productCount,

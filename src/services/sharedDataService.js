@@ -2,6 +2,7 @@ import { getLingxingAdapter } from "../adapters/lingxingAdapter.js";
 import {
   getProductCatalogForRows,
   getProductCatalogRevision,
+  ProductCatalogInputError,
   refreshProductCatalogScope,
 } from "./productCatalogService.js";
 import { getSellerDirectory } from "./sellerDirectoryService.js";
@@ -406,11 +407,19 @@ function buildSharedCatalogPerformance(meta, {
   };
 }
 
-function performanceNow(options = {}) {
+export function performanceNow(options = {}) {
   const candidate = options.timingNow || options.clock;
   const value = typeof candidate === "function" ? candidate() : Date.now();
   const number = Number(value);
-  return Number.isFinite(number) ? number : Date.now();
+  if (!Number.isFinite(number)) throw new ProductCatalogInputError("商品目录计时无效。");
+  return number;
+}
+
+function requestIdForEmptyScope(options = {}) {
+  const supplied = String(options.requestId ?? "").trim();
+  if (/^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/u.test(supplied)
+    && !/(token|secret|password|payload|raw|body)/iu.test(supplied)) return supplied;
+  return `shared-${Date.now().toString(36)}`;
 }
 
 function canonicalRecordsUpdatedAt(records = []) {
@@ -443,12 +452,38 @@ export async function getSharedProductCatalogMap(adapter = getLingxingAdapter(),
   }
   const sourceRows = rows;
   if (!sourceRows.length) {
-    const revision = getProductCatalogRevision(serviceOptions);
-    const performance = buildSharedCatalogPerformance({ revision, source: "sqlite" }, {
+    const requestId = requestIdForEmptyScope(serviceOptions);
+    const revision = getProductCatalogRevision({ ...serviceOptions, requestId });
+    const timings = {
+      migrationDurationMs: 0,
+      dbLookupDurationMs: 0,
+      listingFetchDurationMs: 0,
+      productFetchDurationMs: 0,
+      transactionDurationMs: 0,
+      compatibilityMapDurationMs: 0,
+    };
+    const emptyMeta = {
+      requestId,
+      source: "sqlite",
+      scopeCount: 0,
+      revision,
+      missingCount: 0,
+      timings,
+    };
+    const performance = buildSharedCatalogPerformance(emptyMeta, {
       sourceRows: 0,
       mapSize: 0,
       recordCount: 0,
       cacheHit: true,
+      compatibilityMapDurationMs: 0,
+    });
+    console.info("[shared-product-catalog] performance", {
+      requestId,
+      revision,
+      cacheHit: true,
+      sourceRows: 0,
+      outputRecords: 0,
+      timings,
     });
     return {
       map: new Map(),
@@ -456,7 +491,7 @@ export async function getSharedProductCatalogMap(adapter = getLingxingAdapter(),
       updatedAt: "",
       status: "共享商品目录无数据",
       revision,
-      meta: { revision, source: "sqlite", missingCount: 0 },
+      meta: emptyMeta,
       performance,
     };
   }
@@ -496,6 +531,7 @@ export async function getSharedProductCatalogMap(adapter = getLingxingAdapter(),
     joinedInFlight: Boolean(meta.joinedInFlight),
     liveOwnedSkipCount: Number(meta.liveOwnedSkipCount || 0),
     transactionDurationMs: Number(meta.transactionDurationMs || 0),
+    timings: performance.timings,
   });
   return {
     map,

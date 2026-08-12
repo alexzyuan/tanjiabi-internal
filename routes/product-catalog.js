@@ -66,11 +66,21 @@ const SAFE_LISTING_FIELDS = [
 const SAFE_REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/u;
 const SENSITIVE_VALUE_PATTERN = /(token|secret|password|payload|raw|body)/iu;
 const SAFE_API_CODE_PATTERN = /^[A-Za-z0-9_.:-]{1,64}$/u;
+const SAFE_ISO_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/u;
 const SAFE_PRODUCT_CATALOG_OPERATIONS = new Set([
   "scope-normalization",
   "seller-directory",
   "legacy-migration",
+  "bootstrap",
   "repository-bootstrap",
+  "read-scope",
+  "read-products",
+  "get-revision",
+  "get-metadata",
+  "health",
+  "schema-info",
+  "close",
+  "upsert-catalog",
   "resolution",
   "listing-fetch",
   "listing-shared-xlsx-read",
@@ -100,6 +110,12 @@ function safeApiCode(value) {
   return SAFE_API_CODE_PATTERN.test(code) && !SENSITIVE_VALUE_PATTERN.test(code)
     ? code
     : undefined;
+}
+
+function safeIsoTimestamp(value) {
+  const text = String(value ?? "").trim();
+  if (!text || !SAFE_ISO_TIMESTAMP_PATTERN.test(text) || !Number.isFinite(Date.parse(text))) return undefined;
+  return text;
 }
 
 function safeProductCatalogErrorDetails(error) {
@@ -177,6 +193,11 @@ function safeMeta(meta) {
     if (type === "string") {
       if (field === "source") {
         if (value === "sqlite") output[field] = value;
+        continue;
+      }
+      if (field === "cacheUpdatedAt") {
+        const timestamp = safeIsoTimestamp(value);
+        if (timestamp) output[field] = timestamp;
         continue;
       }
       const requestId = field === "requestId" ? safeRequestId(value) : String(value);

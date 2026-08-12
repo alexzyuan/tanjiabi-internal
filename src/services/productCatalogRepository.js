@@ -11,6 +11,7 @@ import {
   ProductCatalogConflictError,
   ProductCatalogInputError,
 } from "./productCatalogIdentity.js";
+import { safeQuickCheckDiagnostic } from "../utils/safeQuickCheckDiagnostic.js";
 
 const ALIAS_TYPES = new Set(["sku_identifier", "product_id", "listing_sku"]);
 const EXTERNAL_METADATA_KEYS = new Set(["legacy_manifest_hash", "legacy_migrated_at_ms"]);
@@ -46,7 +47,7 @@ function normalizeRequestId(value) {
 
 function sqliteErrorCode(error) {
   const code = String(error?.code || "").trim();
-  return /^[A-Za-z0-9_.:-]{1,64}$/u.test(code) ? code : null;
+  return /^[A-Za-z0-9_.:-]{1,64}$/u.test(code) && !SENSITIVE_REQUEST_ID_PATTERN.test(code) ? code : null;
 }
 
 function toDatabaseError(error, operation, requestId) {
@@ -64,17 +65,19 @@ function writeLog(logger, level, details) {
   if (typeof method === "function") method.call(logger, "[product-catalog-repository]", details);
 }
 
-function bootstrapErrorDetails(error) {
+function bootstrapErrorDetails(error, requestId) {
   const message = String(error?.message || "未知错误");
   const safeMessage = /schema checksum/iu.test(message)
     ? "商品目录数据库 schema checksum 与当前实现不一致。"
     : /商品目录数据库包含未知的更高 schema 版本 \d+。/u.test(message)
       ? message.match(/商品目录数据库包含未知的更高 schema 版本 \d+。/u)?.[0]
       : "商品目录数据库初始化失败。";
+  const normalizedRequestId = normalizeRequestId(requestId);
   return {
     operation: "bootstrap",
     errorName: error?.name || "Error",
     errorMessage: safeMessage,
+    ...(normalizedRequestId ? { requestId: normalizedRequestId } : {}),
   };
 }
 
@@ -524,20 +527,11 @@ function fileSize(filePath) {
   }
 }
 
-function safeQuickCheckDiagnostic(value) {
-  const raw = String(value ?? "").replace(/[\r\n\t]+/gu, " ").replace(/\s+/gu, " ").trim();
-  const text = raw.replace(/\s+at\s+\/(?:tmp|Users|var|home|opt)\/.*$/iu, "").trim().slice(0, 120);
-  if (!text) return "unavailable";
-  if (/(token|secret|password|payload|raw|body|select|pragma|sqlite|\.sqlite|\\|(?:^|\s)\/(?:tmp|Users|var|home|opt)\/)/iu.test(text)) {
-    return "unavailable";
-  }
-  return /^[A-Za-z0-9][A-Za-z0-9 .,:()/'_-]*$/u.test(text) ? text : "unavailable";
-}
-
 export function createProductCatalogRepository({
   databasePath = path.join(process.cwd(), "data-cache", "product-catalog", "product-catalog-v1.sqlite"),
   logger = console,
   now = Date.now,
+  requestId,
 } = {}) {
   mkdirSync(path.dirname(databasePath), { recursive: true });
   let db;
@@ -547,7 +541,7 @@ export function createProductCatalogRepository({
     applyProductCatalogSchema(db, { now });
   } catch (error) {
     try {
-      writeLog(logger, "error", bootstrapErrorDetails(error));
+      writeLog(logger, "error", bootstrapErrorDetails(error, requestId));
     } finally {
       if (db) db.close();
     }
@@ -766,7 +760,7 @@ export function createProductCatalogRepository({
       let quickCheck = "unavailable";
       let quickCheckCode = null;
       try {
-        quickCheck = String(db.pragma("quick_check", { simple: true })).toLowerCase();
+        quickCheck = safeQuickCheckDiagnostic(db.pragma("quick_check", { simple: true }));
       } catch (error) {
         quickCheck = safeQuickCheckDiagnostic(error?.message);
         quickCheckCode = sqliteErrorCode(error);

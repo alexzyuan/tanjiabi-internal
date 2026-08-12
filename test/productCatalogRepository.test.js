@@ -140,13 +140,14 @@ test("logs a redacted bootstrap failure and rethrows checksum mismatches", async
   const calls = [];
   const logger = { error: (...args) => calls.push(args) };
 
-  assert.throws(() => createProductCatalogRepository({ databasePath, logger }), /checksum/);
+  assert.throws(() => createProductCatalogRepository({ databasePath, logger, requestId: "bootstrap-request" }), /checksum/);
   assert.equal(calls.length, 1);
   assert.equal(calls[0][0], "[product-catalog-repository]");
   assert.deepEqual(calls[0][1], {
     operation: "bootstrap",
     errorName: "Error",
     errorMessage: "商品目录数据库 schema checksum 与当前实现不一致。",
+    requestId: "bootstrap-request",
   });
   const reopened = new Database(databasePath);
   reopened.close();

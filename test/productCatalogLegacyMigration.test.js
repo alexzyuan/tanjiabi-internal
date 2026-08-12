@@ -273,6 +273,18 @@ test("manifest changes never overwrite live-owned rows while importing a new leg
   assert.equal(fixture.readProduct("B").source, "legacy-json");
 });
 
+test("migration success logs the normalized request ID", async (t) => {
+  const fixture = await createLegacyMigrationFixture(t);
+  await fixture.writeShared("request-id.json", 1000, legacyRecord({ msku: "REQUEST-ID" }));
+  const entries = [];
+  await migrateLegacyProductCatalog({
+    ...fixture.options,
+    requestId: "migration-request-1",
+    logger: { info: (...args) => entries.push(args) },
+  });
+  assert.equal(entries[0]?.[1]?.requestId, "migration-request-1");
+});
+
 test("corrupt JSON fails without updating migration metadata", async (t) => {
   const fixture = await createLegacyMigrationFixture(t);
   await fixture.writeRawShared("broken.json", "{not-json");
