@@ -21,6 +21,10 @@ export const LISTING_MSKU_KEYS = [
   "sellerSkuStr",
   "item_sku",
   "fnsku",
+  // Some historical Listing responses expose the Amazon SKU as `sku`. Keep it
+  // as the final fallback, after the explicit MSKU/seller_sku fields. The ERP
+  // `local_sku` field is deliberately absent because it is never an MSKU.
+  "sku",
 ];
 
 export const LISTING_INTERNAL_SKU_KEYS = [
@@ -388,6 +392,11 @@ function readFirstWithKey(item, keys) {
   return found || { value: "", sourceField: "" };
 }
 
+/** Read an Amazon Listing MSKU using the canonical field precedence. */
+export function readCatalogListingMsku(record = {}) {
+  return textValue(readFirst(record, LISTING_MSKU_KEYS));
+}
+
 function readArrayText(value) {
   if (Array.isArray(value)) {
     return value
@@ -569,7 +578,7 @@ function normalizeListingContext(record, listing, internalSkuSourceField) {
  * is deliberately copied to listingSku; seller_sku/MSKU is never copied there.
  */
 export function normalizeCatalogListing(record = {}, { fallbackSid = 0 } = {}) {
-  const msku = textValue(readFirst(record, LISTING_MSKU_KEYS));
+  const msku = readCatalogListingMsku(record);
   if (!msku) return null;
   const internalSkuEntry = hasReadableValue(record.internalSku)
     ? {

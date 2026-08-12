@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   catalogProductToRepositoryRows,
   mergeCatalogProduct,
+  readCatalogListingMsku,
   normalizeCatalogListing,
   normalizeCatalogProduct,
 } from "../src/services/productCatalogNormalization.js";
@@ -40,6 +41,24 @@ test("does not expose raw upstream records or arbitrary fields", () => {
 
 test("does not treat local_sku as an Amazon MSKU fallback", () => {
   assert.equal(normalizeCatalogListing({ sid: 8708, local_sku: "TJ001" }), null);
+});
+
+test("canonical Listing MSKU reader prefers seller_sku/MSKU and excludes local_sku", () => {
+  assert.equal(readCatalogListingMsku({
+    local_sku: "TJ001",
+    sku: "HISTORICAL-SKU",
+    msku: "MSKU-CANONICAL",
+    seller_sku: "SELLER-SKU-CANONICAL",
+  }), "MSKU-CANONICAL");
+  assert.equal(readCatalogListingMsku({
+    local_sku: "TJ001",
+    sku: "HISTORICAL-SKU",
+    seller_sku: "SELLER-SKU-CANONICAL",
+  }), "SELLER-SKU-CANONICAL");
+  assert.equal(readCatalogListingMsku({
+    local_sku: "TJ001",
+    sku: "HISTORICAL-SKU",
+  }), "HISTORICAL-SKU");
 });
 
 test("keeps an ERP sku fallback separate from local_sku provenance", () => {

@@ -2,6 +2,7 @@ import { getLingxingAdapter } from "../adapters/lingxingAdapter.js";
 import { getFbaAddressProfile } from "../data/fbaAddressBook.js";
 import { getSellerDirectory } from "./sellerDirectoryService.js";
 import { getFbaBoxTemplate, hasCompleteBoxSpec } from "./fbaBoxTemplateService.js";
+import { normalizeCatalogListing } from "./productCatalogNormalization.js";
 import { getSharedProductCatalogMap } from "./sharedDataService.js";
 import { fetchLingxingListingRecords, lingxingSidVariants } from "./lingxingCatalogLookupService.js";
 
@@ -40,46 +41,6 @@ const PRODUCT_RESULT_FIELDS = [
   "boxSpec",
   "asin",
 ];
-const LISTING_MSKU_KEYS = [
-  "msku",
-  "m_sku",
-  "seller_sku",
-  "sellerSku",
-  "sellerSkuStr",
-  "fnsku",
-  "sku",
-  "item_sku",
-];
-
-function walkObject(value, visit, depth = 0) {
-  if (!value || depth > 3) return;
-  if (Array.isArray(value)) {
-    value.forEach((item) => walkObject(item, visit, depth + 1));
-    return;
-  }
-  if (typeof value !== "object") return;
-  Object.entries(value).forEach(([key, child]) => {
-    visit(key, child);
-    walkObject(child, visit, depth + 1);
-  });
-}
-
-function readFirst(record, keys) {
-  for (const key of keys) {
-    const value = record?.[key];
-    if (value !== undefined && value !== null && String(value).trim()) return String(value).trim();
-  }
-  const normalizedKeys = new Set(keys.map((key) => key.toLowerCase()));
-  let found = "";
-  walkObject(record, (key, value) => {
-    if (found) return;
-    if (!normalizedKeys.has(String(key).toLowerCase())) return;
-    if (value !== undefined && value !== null && String(value).trim()) found = String(value).trim();
-  });
-  if (found) return found;
-  return "";
-}
-
 function normalizeText(value) {
   return String(value || "").trim();
 }
@@ -138,13 +99,13 @@ async function resolveRuntimeShops({ sids = [], adapter, getDirectory = getSelle
 }
 
 function normalizeMskuDiscoveryRecord(record, shop) {
-  const msku = readFirst(record, LISTING_MSKU_KEYS);
-  if (!msku) return null;
+  const listing = normalizeCatalogListing(record, { fallbackSid: shop.sid });
+  if (!listing) return null;
 
   return {
-    msku,
-    asin: readFirst(record, ["asin", "ASIN"]),
-    title: readFirst(record, ["title", "item_name", "itemName", "product_name", "productName", "product_title", "name"]),
+    msku: listing.msku,
+    asin: listing.asin,
+    title: listing.productName,
     sid: shop.sid,
     shopName: shop.name,
     displayName: shop.displayName,
@@ -153,16 +114,20 @@ function normalizeMskuDiscoveryRecord(record, shop) {
 }
 
 function normalizeListingCatalogRecord(record, shop) {
-  const msku = readFirst(record, LISTING_MSKU_KEYS);
-  if (!msku) return null;
+  const listing = normalizeCatalogListing(record, { fallbackSid: shop.sid });
+  if (!listing) return null;
   return {
     sid: shop.sid,
-    seller_sku: msku,
-    local_sku: readFirst(record, ["local_sku", "localSku", "sku", "product_sku"]),
-    sku_identifier: readFirst(record, ["sku_identifier", "skuIdentifier", "local_sku_identifier", "localSkuIdentifier"]),
-    product_id: readFirst(record, ["product_id", "productId", "local_product_id", "localProductId"]),
-    asin: readFirst(record, ["asin", "ASIN"]),
-    title: readFirst(record, ["title", "item_name", "itemName", "product_name", "productName", "product_title", "name"]),
+    seller_sku: listing.msku,
+    // Preserve local_sku provenance. Generic `sku` remains an internal-SKU
+    // fallback, but must not be rewritten as local_sku or become a listing_sku
+    // alias downstream.
+    local_sku: listing.listingSku,
+    sku: listing.listingSku ? "" : listing.internalSku,
+    sku_identifier: listing.skuIdentifier,
+    product_id: listing.productId,
+    asin: listing.asin,
+    title: listing.productName,
   };
 }
 
