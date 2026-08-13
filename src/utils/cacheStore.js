@@ -9,7 +9,6 @@ const salesWeeklySourceDir = path.join(cacheDir, "sales-weekly-source");
 const lingxingSellersFile = path.join(cacheDir, "lingxing-sellers.json");
 const mskuDetailDir = path.join(cacheDir, "msku-detail");
 const orderProfitDir = path.join(cacheDir, "order-profit");
-const profitReportDir = path.join(cacheDir, "profit-report");
 const supplierBoardDir = path.join(cacheDir, "supplier-board");
 const supplierBoardProductDir = path.join(cacheDir, "supplier-board-product-map");
 const sharedProductCatalogDir = path.join(cacheDir, "shared-product-catalog");
@@ -41,20 +40,19 @@ function normalizedSnapshotDate(date) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
 }
 
-export async function saveSalesDashboardCache(data) {
-  await writeJsonAtomic(salesDashboardFile, data);
-}
-
-export async function readSalesDashboardCache() {
-  return readJsonWithRecovery(salesDashboardFile, null);
-}
-
-export async function saveSalesWeeklySourceCache(key, data) {
-  await saveNamedCache(salesWeeklySourceDir, key, data);
-}
-
-export async function readSalesWeeklySourceCache(key, ttlMs = 6 * 60 * 60 * 1000) {
-  return readNamedCache(salesWeeklySourceDir, key, ttlMs);
+/**
+ * Read legacy sales-weekly JSON only for an explicit reconciliation/retirement
+ * workflow.  The optional key selects the keyed source snapshot; omitting it
+ * reads the old dashboard snapshot.  There is intentionally no write partner.
+ */
+export async function readLegacySalesWeeklyForReconciliation(key = null, ttlMs = 6 * 60 * 60 * 1000) {
+  if (key && typeof key === "object") {
+    ttlMs = key.ttlMs ?? ttlMs;
+    key = key.key ?? null;
+  }
+  return key
+    ? readNamedCache(salesWeeklySourceDir, key, ttlMs)
+    : readJsonWithRecovery(salesDashboardFile, null);
 }
 
 export async function saveLingxingSellersCache(data) {
@@ -82,30 +80,9 @@ export async function readMskuDetailCache(key, ttlMs = 6 * 60 * 60 * 1000) {
   return cached;
 }
 
-export async function saveOrderProfitCache(key, data) {
-  await writeJsonAtomic(path.join(orderProfitDir, `${hashKey(key)}.json`), {
-    updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
-    updatedAtMs: Date.now(),
-    data,
-  });
-}
-
-export async function readOrderProfitCache(key, ttlMs = 30 * 60 * 1000) {
+/** Read legacy OrderProfit JSON for reconciliation only; never write it. */
+export async function readLegacyOrderProfitForReconciliation(key, ttlMs = 30 * 60 * 1000) {
   const cached = await readJsonWithRecovery(path.join(orderProfitDir, `${hashKey(key)}.json`), null);
-  if (!cached || !cached.updatedAtMs || Date.now() - cached.updatedAtMs > ttlMs) return null;
-  return cached;
-}
-
-export async function saveProfitReportCache(key, data) {
-  await writeJsonAtomic(path.join(profitReportDir, `${hashKey(key)}.json`), {
-    updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
-    updatedAtMs: Date.now(),
-    data,
-  });
-}
-
-export async function readProfitReportCache(key, ttlMs = 30 * 60 * 1000) {
-  const cached = await readJsonWithRecovery(path.join(profitReportDir, `${hashKey(key)}.json`), null);
   if (!cached || !cached.updatedAtMs || Date.now() - cached.updatedAtMs > ttlMs) return null;
   return cached;
 }

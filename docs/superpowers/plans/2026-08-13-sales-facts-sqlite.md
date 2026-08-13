@@ -913,22 +913,24 @@ git commit -m "refactor(finance): build monthly report from sales facts"
 - Modify: `test/cacheStore.test.js`
 - Modify: `test/syncService.test.js`
 - Modify: `test/frontendStructure.test.js`
+- Modify: `server.js`
+- Modify: `test/salesWeeklySourceCache.test.js`
 
-- [ ] **Step 1: Write structure RED**
+- [x] **Step 1: Write structure RED**
 
 Assert no runtime import/call of `readOrderProfitCache`, `saveOrderProfitCache`, `readSalesWeeklySourceCache`, `saveSalesWeeklySourceCache`, or `saveSalesDashboardCache` outside reconciliation/retirement helpers. Assert scheduled/manual sync uses facts service and reports revision/cacheState.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `node --test test/lingxingAdapterFailFast.test.js test/cacheStore.test.js test/syncService.test.js test/frontendStructure.test.js`
 
 Expected: FAIL on old adapter/sync cache ownership.
 
-- [ ] **Step 3: Remove runtime ownership**
+- [x] **Step 3: Remove runtime ownership**
 
 Delete `fetchMskuOrderProfitCached` and its in-flight map from the adapter. Preserve uncached `fetchMskuOrderProfit`. Rename old cacheStore reads to `readLegacyOrderProfitForReconciliation` / `readLegacySalesWeeklyForReconciliation`, make them read-only, and remove save exports once no runtime caller remains.
 
-- [ ] **Step 4: Run GREEN and commit**
+- [x] **Step 4: Run GREEN and commit**
 
 Run: `node --test test/lingxingAdapterFailFast.test.js test/cacheStore.test.js test/syncService.test.js test/frontendStructure.test.js test/salesFactsWeeklyConsumer.test.js test/salesFactsMonthlyConsumer.test.js`
 

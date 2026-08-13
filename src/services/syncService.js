@@ -1,21 +1,9 @@
 import { getConfig } from "../config/index.js";
-import { getLingxingAdapter } from "../adapters/lingxingAdapter.js";
-import { mapLingxingToSalesDashboard } from "./lingxingDashboardMapper.js";
+import { addSalesFactsDateDays, normalizeSalesFactsScope, normalizeSalesFactsRequestId } from "./salesFactsIdentity.js";
 import { SALES_WEEKLY_SOURCE_CACHE_VERSION } from "./salesWeeklySourceCache.js";
-import {
-  saveLingxingSellersCache,
-  saveSalesDashboardCache,
-  saveSalesWeeklySourceCache,
-} from "../utils/cacheStore.js";
-import { getBudgetTargetContext } from "./budgetTargetService.js";
-import {
-  fetchListingOwnerRows,
-  listingOwnerRowsFromRecords,
-  ownerLookupRowsFromBudgetTargets,
-  ownerLookupRowsFromRecords,
-} from "./listingOwnerService.js";
 import { captureInventoryProvisionSnapshot } from "./inventoryProvisionService.js";
 import { getSellerDirectory } from "./sellerDirectoryService.js";
+import { getPacificTodayText } from "../utils/pacificDate.js";
 import { acquireJobLock, releaseJobLock } from "../jobs/jobLock.js";
 import {
   appendSkippedSyncJob,
@@ -38,6 +26,35 @@ const syncState = {
 
 let timer = null;
 const SYNC_JOB_NAME = "lingxing-sync";
+let salesFactsRuntime = null;
+
+export function configureSalesFactsSyncService({
+  refreshOrderProfitScope,
+  getSellerDirectory: resolveSellerDirectory,
+  now = Date.now,
+  captureInventorySnapshot = captureInventoryProvisionSnapshot,
+  logger = console,
+} = {}) {
+  if (typeof refreshOrderProfitScope !== "function") {
+    throw new Error("销售事实同步运行时缺少 refreshOrderProfitScope。");
+  }
+  if (typeof resolveSellerDirectory !== "function") {
+    throw new Error("销售事实同步运行时缺少 seller directory。");
+  }
+  if (typeof now !== "function" && !Number.isFinite(Number(now))) {
+    throw new Error("销售事实同步运行时 now 无效。");
+  }
+  if (typeof captureInventorySnapshot !== "function") {
+    throw new Error("销售事实同步运行时库存快照依赖无效。");
+  }
+  salesFactsRuntime = {
+    refreshOrderProfitScope,
+    getSellerDirectory: resolveSellerDirectory,
+    now,
+    captureInventorySnapshot,
+    logger,
+  };
+}
 
 function nowText() {
   return new Date().toLocaleString("zh-CN", { hour12: false });
@@ -76,40 +93,75 @@ export function buildSalesWeeklySyncSource(data = {}, budgetTargets = {}, listin
   };
 }
 
-async function syncFromLingxing() {
-  const adapter = getLingxingAdapter();
-  const data = await adapter.fetchSalesWeeklyData();
-  const budgetTargets = await getBudgetTargetContext(data.range);
-  const sourceRecords = data.orderProfitRecords || data.sellerProfitRecords || [];
-  const directOwnerRows = listingOwnerRowsFromRecords(sourceRecords);
-  let listingOwnerRows = [];
-  try {
-    const fetchedOwnerRows = await fetchListingOwnerRows(adapter, [
-      ...ownerLookupRowsFromRecords(sourceRecords),
-      ...ownerLookupRowsFromBudgetTargets(budgetTargets, data.sellers || []),
-    ]);
-    listingOwnerRows = [...directOwnerRows, ...fetchedOwnerRows];
-  } catch {
-    listingOwnerRows = directOwnerRows;
+export async function syncFromLingxing() {
+  if (!salesFactsRuntime) {
+    throw new Error("销售事实同步运行时未配置，拒绝回退到旧 OrderProfit/周报缓存。");
   }
-  const source = buildSalesWeeklySyncSource(data, budgetTargets, listingOwnerRows);
-  const dashboard = mapLingxingToSalesDashboard({ ...source, filters: {} });
-  const sourceCacheKey = JSON.stringify(source.cacheScope);
-  await saveSalesWeeklySourceCache(sourceCacheKey, source);
-  await saveSalesDashboardCache(dashboard);
-  await saveLingxingSellersCache(data.sellers);
+  const currentMs = Number(typeof salesFactsRuntime.now === "function" ? salesFactsRuntime.now() : salesFactsRuntime.now);
+  if (!Number.isSafeInteger(currentMs) || currentMs < 0) {
+    throw new Error("销售事实同步当前时间无效。");
+  }
+  const directoryResult = await salesFactsRuntime.getSellerDirectory();
+  const sellers = Array.isArray(directoryResult) ? directoryResult : directoryResult?.sellers;
+  if (!Array.isArray(sellers) || !sellers.length) {
+    throw new Error("销售事实同步 seller directory 为空。");
+  }
+  const activeSellers = sellers.filter((seller) => {
+    const status = seller?.status;
+    return status === undefined || status === null || status === "" || Number(status) === 1
+      || ["active", "enabled", "正常", "启用"].includes(String(status).trim().toLocaleLowerCase("en-US"));
+  });
+  const sids = activeSellers.map((seller) => Number(seller?.sid ?? seller?.seller_id ?? seller?.sellerId));
+  if (!sids.length || sids.some((sid) => !Number.isSafeInteger(sid) || sid <= 0)) {
+    throw new Error("销售事实同步 seller directory 不包含有效 SID。");
+  }
+  const endDate = getPacificTodayText(new Date(currentMs));
+  const startDate = addSalesFactsDateDays(endDate, -29);
+  const scope = normalizeSalesFactsScope({
+    startDate,
+    endDate,
+    sids,
+    currencyMode: "CNY",
+    sellerDirectory: sellers,
+    now: new Date(currentMs),
+  });
+  const requestId = normalizeSalesFactsRequestId("sync-sales-facts", { fallback: "sync-sales-facts" });
+  salesFactsRuntime.logger?.info?.("[sync] sales facts refresh start", {
+    requestId,
+    rangeKey: scope.rangeKey,
+    dayCount: scope.dates.length,
+    sidCount: scope.sids.length,
+  });
+  const factsResult = await salesFactsRuntime.refreshOrderProfitScope(scope, {
+    forceRefresh: false,
+    requestId,
+  });
   let inventorySnapshotMessage = "";
   try {
-    const inventorySnapshot = await captureInventoryProvisionSnapshot({ sellers: data.sellers });
+    const inventorySnapshot = await salesFactsRuntime.captureInventorySnapshot({ sellers });
     inventorySnapshotMessage = `，库存快照 ${inventorySnapshot.date} 共 ${inventorySnapshot.rowCount} 条`;
   } catch (error) {
     inventorySnapshotMessage = `，库存快照失败：${error.message}`;
   }
+  const meta = factsResult?.meta || {};
+  const factCount = Array.isArray(factsResult?.facts) ? factsResult.facts.length : 0;
+  salesFactsRuntime.logger?.info?.("[sync] sales facts refresh complete", {
+    requestId,
+    rangeKey: scope.rangeKey,
+    cacheState: meta.cacheState || "unknown",
+    revision: Number.isSafeInteger(meta.revision) ? meta.revision : null,
+    factCount,
+  });
   return {
     ok: true,
     provider: "lingxing",
-    message: `领星同步完成：店铺 ${data.sellers.length} 个，订单利润 ${data.orderProfitRecords.length} 条${inventorySnapshotMessage}。`,
-    rows: data.orderProfitRecords.length,
+    message: `领星同步完成：店铺 ${sellers.length} 个，销售事实 ${factCount} 条${inventorySnapshotMessage}。`,
+    rows: factCount,
+    cacheState: meta.cacheState || "unknown",
+    revision: Number.isSafeInteger(meta.revision) ? meta.revision : null,
+    updatedAt: meta.updatedAt || null,
+    ageSeconds: Number.isFinite(Number(meta.ageSeconds)) ? Number(meta.ageSeconds) : null,
+    rangeKey: scope.rangeKey,
   };
 }
 

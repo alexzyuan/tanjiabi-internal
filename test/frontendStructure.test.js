@@ -14,6 +14,24 @@ test("sales dashboard keeps a single standard owner filter", async () => {
   assert.doesNotMatch(filters, /负责人快捷筛选/);
 });
 
+test("sales facts owns runtime OrderProfit and weekly cache persistence", async () => {
+  const adapterSource = await readFile(new URL("../src/adapters/lingxingAdapter.js", import.meta.url), "utf8");
+  const cacheSource = await readFile(new URL("../src/utils/cacheStore.js", import.meta.url), "utf8");
+  const syncSource = await readFile(new URL("../src/services/syncService.js", import.meta.url), "utf8");
+  const serverSource = await readFile(new URL("../server.js", import.meta.url), "utf8");
+
+  assert.doesNotMatch(adapterSource, /readOrderProfitCache|saveOrderProfitCache|fetchMskuOrderProfitCached|orderProfitInflight/);
+  assert.doesNotMatch(syncSource, /readSalesWeeklySourceCache|saveSalesWeeklySourceCache|saveSalesDashboardCache|fetchSalesWeeklyData/);
+  assert.match(cacheSource, /export async function readLegacyOrderProfitForReconciliation/);
+  assert.match(cacheSource, /export async function readLegacySalesWeeklyForReconciliation/);
+  assert.doesNotMatch(cacheSource, /export async function save(?:OrderProfit|SalesWeeklySource|SalesDashboard)Cache/);
+  assert.match(syncSource, /refreshOrderProfitScope/);
+  assert.match(syncSource, /cacheState/);
+  assert.match(syncSource, /revision/);
+  assert.match(serverSource, /configureSalesFactsSyncService/);
+  assert.match(serverSource, /refreshOrderProfitScope: salesFactsSyncService\.refreshOrderProfitScope/);
+});
+
 test("sales dashboard places time progress between date range and currency filters", async () => {
   const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
   const filtersStart = indexSource.indexOf('<section class="filters" id="sales-global-filters"');

@@ -1,20 +1,12 @@
 import { getConfig } from "../config/index.js";
-import { getDefaultWeekRange, listDateRange } from "../utils/dateRange.js";
-import { addDaysToDateText, withLingxingDateContract } from "../utils/lingxingDateRange.js";
-import {
-  readOrderProfitCache,
-  readProfitReportCache,
-  saveOrderProfitCache,
-  saveProfitReportCache,
-} from "../utils/cacheStore.js";
+import { listDateRange } from "../utils/dateRange.js";
+import { withLingxingDateContract } from "../utils/lingxingDateRange.js";
 import { createLingxingAuth, createLingxingClient, createTokenState, tokenConfigKey } from "./lingxing/index.js";
 
 const CORE_COUNTRY_NAMES = new Set(["美国", "加拿大", "澳洲", "澳大利亚", "德国", "US", "CA", "AU", "DE", "USA", "Canada", "Australia", "Germany", "Deutschland"]);
 const CORE_COUNTRY_CODES = new Set(["US", "CA", "AU", "DE"]);
 const tokenStates = new Map();
 const adapterInstances = new Map();
-const orderProfitInflight = new Map();
-const profitReportInflight = new Map();
 let defaultLingxingAdapter = null;
 let defaultLingxingAdapterKey = "";
 
@@ -43,43 +35,6 @@ function isCoreSeller(seller) {
 
 export function filterCoreSellers(sellers = []) {
   return sellers.filter(isCoreSeller);
-}
-
-function stableOrderProfitCacheKey({ startDate, endDate, sids = [], currencyCode = "CNY" }) {
-  return JSON.stringify({
-    source: "basicOpen/finance/mreport/OrderProfit",
-    startDate,
-    endDate,
-    currencyCode,
-    sids: uniqueNumbers(sids).sort((a, b) => a - b),
-  });
-}
-
-function stableProfitReportCacheValue(value, key = "") {
-  if (Array.isArray(value)) {
-    const normalized = value.map((item) => stableProfitReportCacheValue(item));
-    return ["sids", "seller_ids", "sellerIds", "store_ids", "storeIds"].includes(key)
-      ? normalized.slice().sort((left, right) => String(left).localeCompare(String(right)))
-      : normalized;
-  }
-  if (value && typeof value === "object") {
-    return Object.fromEntries(Object.keys(value)
-      .filter((itemKey) => value[itemKey] !== undefined)
-      .sort()
-      .map((itemKey) => [itemKey, stableProfitReportCacheValue(value[itemKey], itemKey)]));
-  }
-  return value;
-}
-
-function stableProfitReportCacheKey(endpoint, params = {}) {
-  return JSON.stringify({
-    source: endpoint,
-    params: stableProfitReportCacheValue(params),
-  });
-}
-
-function uniqueNumbers(values) {
-  return [...new Set(values.map(Number).filter(Boolean))];
 }
 
 function sleep(ms) {
@@ -169,8 +124,6 @@ export function getLingxingAdapter(config = getConfig().lingxing) {
 export function resetLingxingAdapterForTest() {
   tokenStates.clear();
   adapterInstances.clear();
-  orderProfitInflight.clear();
-  profitReportInflight.clear();
   defaultLingxingAdapter = null;
   defaultLingxingAdapterKey = "";
 }
@@ -1504,194 +1457,6 @@ export class LingxingAdapter {
     });
   }
 
-  async fetchMskuOrderProfitCached({
-    startDate,
-    endDate,
-    sids = [],
-    currencyCode = "CNY",
-    sellerList = [],
-    reportDate = endDate,
-  } = {}) {
-    const selectedSids = uniqueNumbers(sids);
-    const selectedSidSet = new Set(selectedSids);
-    const cacheKey = stableOrderProfitCacheKey({ startDate, endDate, sids: selectedSids, currencyCode });
-    const cached = await readOrderProfitCache(cacheKey);
-    if (cached?.data?.orderProfitRecords) {
-      const cachedRecords = cached.data.orderProfitRecords;
-      const needsNormalization = cachedRecords.some((record) => (
-        record?.salesProfit === undefined
-        && (record?.profit !== undefined || record?.amount !== undefined || record?.net_amount !== undefined)
-      ));
-      const records = needsNormalization
-        ? this.normalizeMskuOrderProfitRecords(cachedRecords, sellerList, reportDate)
-        : cachedRecords;
-      console.info("[lingxing-adapter] order profit cache hit", {
-        cacheKey,
-        startDate,
-        endDate,
-        currencyCode,
-        sidCount: selectedSids.length,
-        recordCount: records.length,
-      });
-      return {
-        records,
-        cacheKey,
-        cacheState: "hit",
-        cacheUpdatedAt: cached.updatedAt || "",
-      };
-    }
-
-    const existing = orderProfitInflight.get(cacheKey);
-    if (existing) {
-      console.info("[lingxing-adapter] order profit cache joined in-flight request", {
-        cacheKey,
-        startDate,
-        endDate,
-        currencyCode,
-        sidCount: selectedSids.length,
-      });
-      const result = await existing;
-      return { ...result, cacheState: "inflight" };
-    }
-
-    const loadPromise = (async () => {
-      const startedAt = Date.now();
-      try {
-        const payload = await this.fetchMskuOrderProfit({ startDate, endDate, sids: selectedSids, currencyCode });
-        const rawRecords = this.normalizeRecordList(payload);
-        const records = this.normalizeMskuOrderProfitRecords(rawRecords, sellerList, reportDate).filter((record) => {
-          if (!selectedSids.length) return true;
-          const recordSid = Number(record.sid || record.seller_id || record.sellerId || record.store_id || record.storeId);
-          return recordSid ? selectedSidSet.has(recordSid) : true;
-        });
-        await saveOrderProfitCache(cacheKey, { orderProfitRecords: records });
-        console.info("[lingxing-adapter] order profit cache miss loaded", {
-          cacheKey,
-          startDate,
-          endDate,
-          currencyCode,
-          sidCount: selectedSids.length,
-          recordCount: records.length,
-          elapsedMs: Date.now() - startedAt,
-        });
-        return { records, cacheKey, cacheState: "miss", cacheUpdatedAt: "" };
-      } catch (error) {
-        console.error("[lingxing-adapter] cached order profit fetch failed", {
-          cacheKey,
-          startDate,
-          endDate,
-          currencyCode,
-          sidCount: selectedSids.length,
-          elapsedMs: Date.now() - startedAt,
-          error: error.message,
-        });
-        throw error;
-      }
-    })();
-    orderProfitInflight.set(cacheKey, loadPromise);
-    try {
-      return await loadPromise;
-    } finally {
-      if (orderProfitInflight.get(cacheKey) === loadPromise) orderProfitInflight.delete(cacheKey);
-    }
-  }
-
-  async fetchProfitReportCachedInternal({ endpoint, requestParams, sellerList = [], reportDate = "", normalize, label }) {
-    const cacheKey = stableProfitReportCacheKey(endpoint, requestParams);
-    const cached = await readProfitReportCache(cacheKey);
-    if (cached?.data?.profitReportRecords) {
-      console.info("[lingxing-adapter] profit report cache hit", {
-        cacheKey,
-        endpoint,
-        label,
-        recordCount: cached.data.profitReportRecords.length,
-      });
-      return {
-        records: cached.data.profitReportRecords,
-        cacheKey,
-        cacheState: "hit",
-        cacheUpdatedAt: cached.updatedAt || "",
-      };
-    }
-
-    const existing = profitReportInflight.get(cacheKey);
-    if (existing) {
-      console.info("[lingxing-adapter] profit report cache joined in-flight request", {
-        cacheKey,
-        endpoint,
-        label,
-      });
-      const result = await existing;
-      return { ...result, cacheState: "inflight" };
-    }
-
-    const loadPromise = (async () => {
-      const startedAt = Date.now();
-      try {
-        const payload = await this.fetchProfitReportPayload(endpoint, requestParams);
-        const rawRecords = this.normalizeRecordList(payload);
-        const records = normalize
-          ? normalize.call(this, rawRecords, sellerList, reportDate)
-          : rawRecords;
-        await saveProfitReportCache(cacheKey, { profitReportRecords: records });
-        console.info("[lingxing-adapter] profit report cache miss loaded", {
-          cacheKey,
-          endpoint,
-          label,
-          recordCount: records.length,
-          elapsedMs: Date.now() - startedAt,
-        });
-        return { records, cacheKey, cacheState: "miss", cacheUpdatedAt: "" };
-      } catch (error) {
-        console.error("[lingxing-adapter] cached profit report fetch failed", {
-          cacheKey,
-          endpoint,
-          label,
-          elapsedMs: Date.now() - startedAt,
-          error: error.message,
-        });
-        throw error;
-      }
-    })();
-    profitReportInflight.set(cacheKey, loadPromise);
-    try {
-      return await loadPromise;
-    } finally {
-      if (profitReportInflight.get(cacheKey) === loadPromise) profitReportInflight.delete(cacheKey);
-    }
-  }
-
-  async fetchProfitReportPayload(endpoint, requestParams) {
-    if (endpoint === "/bd/profit/report/open/report/order/list") {
-      return this.fetchOrderProfitReport(requestParams);
-    }
-    if (endpoint === "/bd/profit/report/open/report/seller/list") {
-      return this.fetchSellerProfitReport(requestParams);
-    }
-    throw new Error(`不支持的利润报表缓存接口：${endpoint}`);
-  }
-
-  async fetchOrderProfitReportCached({ sellerList = [], reportDate = "", ...params } = {}) {
-    return this.fetchProfitReportCachedInternal({
-      endpoint: "/bd/profit/report/open/report/order/list",
-      requestParams: params,
-      sellerList,
-      reportDate,
-      label: "订单维度",
-    });
-  }
-
-  async fetchSellerProfitReportCached({ sellerList = [], reportDate = "", ...params } = {}) {
-    return this.fetchProfitReportCachedInternal({
-      endpoint: "/bd/profit/report/open/report/seller/list",
-      requestParams: params,
-      sellerList,
-      reportDate,
-      label: "店铺维度",
-      normalize: this.normalizeSellerProfitRecords,
-    });
-  }
-
   async fetchSellerProfitStatisticsChunks({ startDate, endDate, sids = [], currencyCode = "CNY", sellerList = [] }) {
     const dates = listDateRange(startDate, endDate, 31);
     if (!dates.length) return { records: [], payloads: [] };
@@ -1830,87 +1595,4 @@ export class LingxingAdapter {
     return Array.isArray(records) ? records : [];
   }
 
-  async fetchSalesWeeklyData(filters = {}) {
-    const sellers = await this.fetchSellers();
-    const sellerList = filterCoreSellers(sellers.data || []);
-    const defaultRange = getDefaultWeekRange(getConfig().dashboard);
-    const range = {
-      startDate: filters.startDate || defaultRange.startDate,
-      endDate: filters.endDate || defaultRange.endDate,
-    };
-    const recent30Range = {
-      startDate: addDaysToDateText(range.endDate, -29),
-      endDate: range.endDate,
-    };
-    const currencyCode = filters.currencyCode || "CNY";
-    const activeSids = sellerList
-      .filter((seller) => !seller.status || seller.status === 1)
-      .map((seller) => seller.sid);
-    const uniqueActiveSids = uniqueNumbers(activeSids);
-    const allowedSidSet = new Set(uniqueActiveSids);
-    const selectedSids = Array.isArray(filters.sids) && filters.sids.length
-      ? filters.sids.map(Number).filter((sid) => allowedSidSet.has(sid))
-      : uniqueActiveSids;
-    let orderProfitRecords = [];
-    let inventoryRecords = [];
-    let cacheState = "miss";
-    let cacheUpdatedAt = "";
-    let sourceWarning = "";
-    let inventoryWarning = "";
-
-    const [orderProfitResult, recent30OrderProfitResult] = await Promise.all([
-      this.fetchMskuOrderProfitCached({
-        startDate: range.startDate,
-        endDate: range.endDate,
-        sids: selectedSids,
-        currencyCode,
-        sellerList,
-        reportDate: range.startDate === range.endDate ? range.startDate : range.endDate,
-      }),
-      this.fetchMskuOrderProfitCached({
-        startDate: recent30Range.startDate,
-        endDate: recent30Range.endDate,
-        sids: selectedSids,
-        currencyCode,
-        sellerList,
-        reportDate: recent30Range.endDate,
-      }),
-    ]);
-    orderProfitRecords = orderProfitResult.records;
-    cacheState = orderProfitResult.cacheState;
-    cacheUpdatedAt = orderProfitResult.cacheUpdatedAt;
-
-    try {
-      inventoryRecords = await this.fetchAllFbaInventoryDetails(selectedSids);
-    } catch (error) {
-      inventoryWarning = error.message;
-    }
-
-    return {
-      range,
-      sellers: sellerList,
-      sellerProfitRecords: [],
-      orderProfitRecords,
-      recent30OrderProfitRecords: recent30OrderProfitResult.records,
-      dailyProfitRecords: orderProfitRecords,
-      inventoryRecords,
-      currencyCode,
-      raw: {
-        sellers,
-        source: "/basicOpen/finance/mreport/OrderProfit",
-        sourceName: "订单利润",
-        cacheState,
-        cacheUpdatedAt,
-        recent30: {
-          startDate: recent30Range.startDate,
-          endDate: recent30Range.endDate,
-          cacheState: recent30OrderProfitResult.cacheState,
-          cacheUpdatedAt: recent30OrderProfitResult.cacheUpdatedAt,
-          recordCount: recent30OrderProfitResult.records.length,
-        },
-        sourceWarning,
-        inventoryWarning,
-      },
-    };
-  }
 }

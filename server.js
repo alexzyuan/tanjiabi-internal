@@ -75,7 +75,14 @@ import {
   listSupplierDetails,
   saveSupplierDetail,
 } from "./src/services/supplierDetailService.js";
-import { startSyncScheduler, runManualSync, getSyncState, getSyncStatus, getLingxingShops } from "./src/services/syncService.js";
+import {
+  configureSalesFactsSyncService,
+  startSyncScheduler,
+  runManualSync,
+  getSyncState,
+  getSyncStatus,
+  getLingxingShops,
+} from "./src/services/syncService.js";
 import { createBudgetImportTemplate, listBudgetTargets, listBudgetUploads, saveBudgetUpload } from "./src/services/budgetTargetService.js";
 import { runStaWarehouseProbe } from "./src/services/fbaStaService.js";
 import { getFbaShopOptions, searchFbaMskus } from "./src/services/fbaCatalogService.js";
@@ -192,6 +199,12 @@ async function getSalesFactsSellerDirectory() {
   }
   return result.sellers;
 }
+
+configureSalesFactsSyncService({
+  refreshOrderProfitScope: salesFactsSyncService.refreshOrderProfitScope,
+  getSellerDirectory: getSalesFactsSellerDirectory,
+  logger: console,
+});
 
 async function normalizeSalesFactsRouteScope(body, requestId) {
   const sellers = await getSalesFactsSellerDirectory();

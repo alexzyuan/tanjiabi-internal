@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -21,8 +22,9 @@ test("cache store preserves missing-file fallbacks", async () => {
   await withTempProject(async (projectRoot) => {
     const cacheStore = await importFresh(projectRoot, "src/utils/cacheStore.js");
 
-    assert.equal(await cacheStore.readSalesDashboardCache(), null);
-    assert.equal(await cacheStore.readSalesWeeklySourceCache(JSON.stringify({ version: "sales-weekly-source-v1", startDate: "2026-07-01", endDate: "2026-07-23", currencyCode: "ORIGINAL", sids: [] })), null);
+    assert.equal(await cacheStore.readLegacySalesWeeklyForReconciliation(), null);
+    assert.equal(await cacheStore.readLegacySalesWeeklyForReconciliation(JSON.stringify({ version: "sales-weekly-source-v1", startDate: "2026-07-01", endDate: "2026-07-23", currencyCode: "ORIGINAL", sids: [] })), null);
+    assert.equal(await cacheStore.readLegacyOrderProfitForReconciliation("missing-order-profit"), null);
     assert.deepEqual(await cacheStore.readLingxingSellersCache(), { updatedAt: null, sellers: [] });
   });
 });
@@ -30,14 +32,11 @@ test("cache store preserves missing-file fallbacks", async () => {
 test("cache store fails fast on corrupted JSON instead of hiding it as a cache miss", async () => {
   await withTempProject(async (projectRoot, tempRoot) => {
     const cacheStore = await importFresh(projectRoot, "src/utils/cacheStore.js");
-    await writeFile(path.join(tempRoot, "data-cache", "sales-weekly-dashboard.json"), "{bad json", "utf8").catch(async (error) => {
-      if (error.code !== "ENOENT") throw error;
-      await cacheStore.saveSalesDashboardCache({ bootstrap: true });
-      await writeFile(path.join(tempRoot, "data-cache", "sales-weekly-dashboard.json"), "{bad json", "utf8");
-    });
+    await mkdir(path.join(tempRoot, "data-cache"), { recursive: true });
+    await writeFile(path.join(tempRoot, "data-cache", "sales-weekly-dashboard.json"), "{bad json", "utf8");
 
     await assert.rejects(
-      cacheStore.readSalesDashboardCache(),
+      cacheStore.readLegacySalesWeeklyForReconciliation(),
       (error) => error?.code === "JSON_PARSE_FAILED" && /sales-weekly-dashboard\.json/.test(error.filePath),
     );
   });
@@ -54,8 +53,15 @@ test("cache store writes and reads keyed sales weekly source cache", async () =>
       sids: [],
     });
 
-    await cacheStore.saveSalesWeeklySourceCache(cacheKey, { rows: [{ id: 1 }] });
-    const cached = await cacheStore.readSalesWeeklySourceCache(cacheKey);
+    const cacheDir = path.join("data-cache", "sales-weekly-source");
+    await mkdir(cacheDir, { recursive: true });
+    const cacheFile = path.join(cacheDir, `${crypto.createHash("sha1").update(cacheKey).digest("hex")}.json`);
+    await writeFile(cacheFile, JSON.stringify({
+      updatedAt: "2026-08-13 10:00:00",
+      updatedAtMs: Date.now(),
+      data: { rows: [{ id: 1 }] },
+    }), "utf8");
+    const cached = await cacheStore.readLegacySalesWeeklyForReconciliation(cacheKey);
 
     assert.deepEqual(cached?.data, { rows: [{ id: 1 }] });
   });

@@ -41,8 +41,6 @@ async function withTempLingxingProvider(run) {
 
 test("sales weekly ignores the legacy source cache and requires the sales facts dependency", async () => {
   await withTempLingxingProvider(async (projectRoot) => {
-    const cacheStore = await importFresh(projectRoot, "src/utils/cacheStore.js");
-    await cacheStore.saveSalesWeeklySourceCache(salesWeeklySourceCacheKey(), { orderProfitRecords: [{ totalSalesAmount: 999 }] });
     const { getSalesWeeklyDashboard } = await importFresh(projectRoot, "src/services/dashboardService.js");
     const error = new Error("facts unavailable");
     await assert.rejects(
@@ -102,11 +100,6 @@ test("sales review available days matches the sales forecast cache by exact sell
 
 test("sales weekly dashboard fails instead of falling back to a legacy dashboard when live OrderProfit loading fails", async () => {
   await withTempLingxingProvider(async (projectRoot) => {
-    const cacheStore = await importFresh(projectRoot, "src/utils/cacheStore.js");
-    await cacheStore.saveSalesDashboardCache({
-      meta: { source: "领星 ERP", updatedAt: "2026-08-09 10:00:00" },
-      detailRows: [{ msku: "LEGACY-MSKU", refundRate: 5 }],
-    });
     const { getSalesWeeklyDashboard } = await importFresh(projectRoot, "src/services/dashboardService.js");
 
     await assert.rejects(

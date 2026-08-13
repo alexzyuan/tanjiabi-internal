@@ -7,13 +7,13 @@ import test from "node:test";
 
 const serviceUrl = pathToFileURL(path.resolve("src/services/syncService.js"));
 
-async function withTempService(fn) {
+async function withTempService(fn, { provider = "mock" } = {}) {
   const originalCwd = process.cwd();
   const originalProvider = process.env.DATA_PROVIDER;
   const originalInterval = process.env.SYNC_INTERVAL_HOURS;
   const dir = await mkdtemp(path.join(os.tmpdir(), "bi-sync-service-"));
   process.chdir(dir);
-  process.env.DATA_PROVIDER = "mock";
+  process.env.DATA_PROVIDER = provider;
   process.env.SYNC_INTERVAL_HOURS = "6";
   try {
     const service = await import(`${serviceUrl.href}?case=${Date.now()}-${Math.random()}`);
@@ -122,4 +122,47 @@ test("runSync records scheduled trigger type and failed error summaries", async 
     assert.ok(failedJob);
     assert.equal(failedJob.errorSummary.includes("abc123"), false);
   });
+});
+
+test("lingxing sync refreshes the rolling sales-facts scope and reports cache metadata", async () => {
+  await withTempService(async ({ configureSalesFactsSyncService, runManualSync }) => {
+    const fixedMs = Date.parse("2026-08-13T12:00:00.000Z");
+    let requestedScope = null;
+    let requestedOptions = null;
+    configureSalesFactsSyncService({
+      now: () => fixedMs,
+      getSellerDirectory: async () => [
+        { sid: 1, name: "探嘉美国", countryCode: "US", status: 1 },
+        { sid: 2, name: "探嘉加拿大", countryCode: "CA", status: 1 },
+      ],
+      refreshOrderProfitScope: async (scope, options) => {
+        requestedScope = scope;
+        requestedOptions = options;
+        return {
+          facts: [{ factDate: scope.endDate, sid: 1 }, { factDate: scope.endDate, sid: 2 }],
+          meta: {
+            cacheState: "refreshed",
+            revision: 7,
+            updatedAt: "2026-08-13T12:00:00.000Z",
+            ageSeconds: 0,
+          },
+        };
+      },
+      captureInventorySnapshot: async () => ({ date: "2026-08-13", rowCount: 0 }),
+    });
+
+    const result = await runManualSync();
+
+    assert.equal(result.ok, true);
+    assert.equal(result.provider, "lingxing");
+    assert.equal(result.rows, 2);
+    assert.equal(result.cacheState, "refreshed");
+    assert.equal(result.revision, 7);
+    assert.equal(result.rangeKey, requestedScope.rangeKey);
+    assert.equal(requestedScope.dates.length, 30);
+    assert.deepEqual(requestedScope.sids, [1, 2]);
+    assert.equal(requestedScope.currencyMode, "CNY");
+    assert.equal(requestedOptions.forceRefresh, false);
+    assert.equal(requestedOptions.requestId, "sync-sales-facts");
+  }, { provider: "lingxing" });
 });
