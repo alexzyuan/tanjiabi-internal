@@ -92,6 +92,12 @@ test("server router no longer contains legacy API if-else branches", async () =>
   assert.equal(routerBody.includes("requireAdmin(req, res)"), false);
 });
 
+test("sales facts seller directory forwards the explicit force refresh option", async () => {
+  const source = await readFile(new URL("../server.js", import.meta.url), "utf8");
+  assert.match(source, /async function getSalesFactsSellerDirectory\(\{ forceRefresh = false \} = \{\}\)/u);
+  assert.match(source, /getSharedSellers\(\{[\s\S]*forceRefresh: forceRefresh === true/u);
+});
+
 test("slow-moving-risk live route forwards the confirmed filter fields", async () => {
   let received = null;
   let payload = null;

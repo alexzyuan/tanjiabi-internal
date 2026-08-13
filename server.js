@@ -189,8 +189,12 @@ const salesFactsUpstream = createSalesFactsUpstreamService({
 });
 const salesFactsSyncService = createSalesFactsSyncService({ repository: salesFactsRepository, upstream: salesFactsUpstream, logger: console });
 
-async function getSalesFactsSellerDirectory() {
-  const result = await getSharedSellers({ adapter: getLingxingAdapter(), logger: console });
+async function getSalesFactsSellerDirectory({ forceRefresh = false } = {}) {
+  const result = await getSharedSellers({
+    adapter: getLingxingAdapter(),
+    forceRefresh: forceRefresh === true,
+    logger: console,
+  });
   if (!Array.isArray(result?.sellers)) {
     const error = new Error("销售事实 seller directory 不可用。");
     error.statusCode = 503;
