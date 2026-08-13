@@ -236,6 +236,12 @@ function validatePeriods(periods) {
   }
 }
 
+function sortPeriods(periods) {
+  return periods.sort((left, right) => left.sid - right.sid
+    || left.mskuKey.localeCompare(right.mskuKey)
+    || left.effectiveFrom.localeCompare(right.effectiveFrom));
+}
+
 function fileSize(filePath) {
   try { return statSync(filePath).size; } catch (error) { if (error?.code === "ENOENT") return 0; throw error; }
 }
@@ -363,7 +369,7 @@ export function createSalesFactsRepository({
   function applyOwnerSnapshot(input = {}) {
     return operate(logger, "apply-owner-snapshot", input.requestId, () => {
       if (readonly) throw new SalesFactsInputError("销售事实只读仓储禁止写入。", { code: "SALES_FACTS_READONLY" });
-      const periods = (input.periods || []).map(normalizePeriod);
+      const periods = sortPeriods((input.periods || []).map(normalizePeriod));
       validatePeriods(periods);
       const current = readOwnerPeriods();
       if (JSON.stringify(current) === JSON.stringify(periods)) return { changed: false, ownerRevision: revision("owner_revision") };

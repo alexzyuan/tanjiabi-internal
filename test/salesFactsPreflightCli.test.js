@@ -60,6 +60,23 @@ test("owner audit CLI force-loads runtime sellers without writing seller cache",
   assert.deepEqual(JSON.parse(outputs[0]), report);
 });
 
+test("owner audit CLI remains read-only when a repository is supplied", async () => {
+  let writes = 0;
+  const result = await runSalesFactsOwnerAuditCli({
+    adapter: {},
+    repository: { applyOwnerSnapshot() { writes += 1; } },
+    getDirectory: async () => ({ sellers: [{ sid: 8708, status: 1 }] }),
+    auditOwners: async () => ({
+      sellerCount: 1, sidCount: 1, rowCount: 0, pageCount: 1,
+      counts: { assigned: 0, unassigned: 0, multiple: 0, malformed: 0, failedSidCount: 0, paginationIncomplete: 0 },
+      anomalies: [], failedSids: [],
+    }),
+    writeOutput() {},
+  });
+  assert.equal(result.ok, true);
+  assert.equal(writes, 0);
+});
+
 test("owner audit CLI returns nonzero for anomalies and never prints owner values or raw payloads", async () => {
   const outputs = [];
   const report = await runSalesFactsOwnerAuditCli({

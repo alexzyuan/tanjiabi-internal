@@ -249,6 +249,34 @@ test("owner periods reject overlap and increment owner revision only on change",
   assert.equal(repository.getRevisions().ownerRevision, 1);
 });
 
+test("owner snapshot canonicalizes order and rolls back an invalid replacement", async (t) => {
+  const { repository } = await fixture(t);
+  const periods = [
+    {
+      sid: 8708, msku: "MSKU-A", mskuKey: "msku-a", effectiveFrom: "0001-01-01", effectiveTo: "2026-08-12",
+      ownerIdentity: null, ownerPersonId: null, ownerNameSnapshot: null,
+      identitySource: "cutover-historical-unknown", status: "historical-unknown", updatedAtMs: 1000,
+    },
+    {
+      sid: 8708, msku: "MSKU-A", mskuKey: "msku-a", effectiveFrom: "2026-08-13", effectiveTo: null,
+      ownerIdentity: "id:101", ownerPersonId: "101", ownerNameSnapshot: "Alice",
+      identitySource: "lingxing-person-id", status: "assigned", updatedAtMs: 1000,
+    },
+  ];
+  assert.equal(repository.applyOwnerSnapshot({ periods }).ownerRevision, 1);
+  assert.deepEqual(repository.applyOwnerSnapshot({ periods: [...periods].reverse() }), { changed: false, ownerRevision: 1 });
+
+  assert.throws(
+    () => repository.applyOwnerSnapshot({ periods: [
+      periods[0],
+      { ...periods[1], effectiveFrom: "2026-08-12" },
+    ] }),
+    (error) => error.code === "SALES_FACTS_OWNER_PERIOD_OVERLAP",
+  );
+  assert.deepEqual(repository.readOwnerPeriods(), periods);
+  assert.equal(repository.getRevisions().ownerRevision, 1);
+});
+
 test("derived cache round-trips safe payloads and health exposes redacted counts", async (t) => {
   const { repository } = await fixture(t);
   repository.writeDerivedCache({

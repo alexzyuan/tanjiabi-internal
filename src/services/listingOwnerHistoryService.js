@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 import { fetchLingxingListingRecords } from "./lingxingCatalogLookupService.js";
 import { readCatalogListingMsku, SID_KEYS } from "./productCatalogNormalization.js";
+import { SalesFactsInputError } from "./salesFactsIdentity.js";
 
 const OWNER_FIELDS = Object.freeze([
   "asin_principal_list",
@@ -363,5 +364,185 @@ export async function auditAllListingOwners({
     counts,
     anomalies,
     failedSids,
+  };
+}
+
+const OWNER_HISTORY_START_DATE = "0001-01-01";
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
+
+function canonicalDate(value) {
+  const text = String(value || "").trim();
+  const parsed = new Date(`${text}T00:00:00Z`);
+  if (!DATE_PATTERN.test(text) || Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== text) {
+    throw new SalesFactsInputError("负责人检测日期无效。", { code: "SALES_FACTS_OWNER_DATE_INVALID" });
+  }
+  return text;
+}
+
+function shiftDate(value, days) {
+  const date = new Date(`${value}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function normalizedMskuKey(value) {
+  return String(value || "").trim().toLocaleLowerCase("en-US");
+}
+
+function ownerKey(row) {
+  return `${Number(row.sid)}|${normalizedMskuKey(row.mskuKey || row.msku)}`;
+}
+
+function ownerUpdatedAtMs(now) {
+  const value = typeof now === "function" ? now() : now;
+  const timestamp = Number(value);
+  if (!Number.isSafeInteger(timestamp) || timestamp < 0) {
+    throw new SalesFactsInputError("负责人同步时间无效。", { code: "SALES_FACTS_OWNER_NOW_INVALID" });
+  }
+  return timestamp;
+}
+
+function periodSort(left, right) {
+  return Number(left.sid) - Number(right.sid)
+    || left.mskuKey.localeCompare(right.mskuKey)
+    || left.effectiveFrom.localeCompare(right.effectiveFrom);
+}
+
+function snapshotStateChanged(current, snapshot) {
+  return current.status !== snapshot.status
+    || current.ownerIdentity !== snapshot.ownerIdentity
+    || current.ownerPersonId !== snapshot.ownerPersonId
+    || current.ownerNameSnapshot !== snapshot.ownerNameSnapshot
+    || current.identitySource !== snapshot.identitySource;
+}
+
+function historicalUnknownPeriod(snapshot, cutoverDate, updatedAtMs) {
+  return {
+    sid: snapshot.sid,
+    msku: snapshot.msku,
+    mskuKey: snapshot.mskuKey,
+    effectiveFrom: OWNER_HISTORY_START_DATE,
+    effectiveTo: shiftDate(cutoverDate, -1),
+    ownerIdentity: null,
+    ownerPersonId: null,
+    ownerNameSnapshot: null,
+    identitySource: "cutover-historical-unknown",
+    status: "historical-unknown",
+    updatedAtMs,
+  };
+}
+
+function snapshotPeriod(snapshot, effectiveFrom, updatedAtMs) {
+  return {
+    sid: snapshot.sid,
+    msku: snapshot.msku,
+    mskuKey: snapshot.mskuKey,
+    effectiveFrom,
+    effectiveTo: null,
+    ownerIdentity: snapshot.ownerIdentity,
+    ownerPersonId: snapshot.ownerPersonId,
+    ownerNameSnapshot: snapshot.ownerNameSnapshot,
+    identitySource: snapshot.identitySource,
+    status: snapshot.status,
+    updatedAtMs,
+  };
+}
+
+export async function syncListingOwnerHistory({
+  repository,
+  sellers,
+  adapter,
+  detectedDate,
+  requestId = "",
+  now = Date.now,
+} = {}) {
+  if (!repository || typeof repository.readOwnerPeriods !== "function" || typeof repository.applyOwnerSnapshot !== "function") {
+    throw new SalesFactsInputError("负责人仓储无效。", { code: "SALES_FACTS_OWNER_REPOSITORY_INVALID" });
+  }
+  const detectionDate = canonicalDate(detectedDate);
+  const scan = await scanAllListingOwners({ sellers, adapter, requestId });
+  const snapshots = scan.rows.map((row) => ({
+    ...row,
+    mskuKey: normalizedMskuKey(row.msku),
+  }));
+  const duplicateKeys = new Set();
+  const snapshotByKey = new Map();
+  for (const snapshot of snapshots) {
+    const key = ownerKey(snapshot);
+    if (snapshotByKey.has(key)) duplicateKeys.add(key);
+    snapshotByKey.set(key, snapshot);
+  }
+  if (duplicateKeys.size) {
+    throw new ListingOwnerAuditError("Listing 扫描返回重复身份。", {
+      code: "LISTING_OWNER_DUPLICATE_IDENTITY",
+      statusCode: 409,
+      details: { duplicateCount: duplicateKeys.size },
+    });
+  }
+
+  const existing = repository.readOwnerPeriods(null, { requestId }).map((period) => ({ ...period }));
+  const periodsByKey = new Map();
+  for (const period of existing) {
+    const key = ownerKey(period);
+    if (!periodsByKey.has(key)) periodsByKey.set(key, []);
+    periodsByKey.get(key).push(period);
+  }
+  const scannedSids = new Set(activeSellers(sellers).map((seller) => Number(seller.sid)));
+  const missingOpenIdentityCount = [...periodsByKey]
+    .filter(([key, periods]) => scannedSids.has(Number(periods[0]?.sid))
+      && periods.some((period) => period.effectiveTo === null)
+      && !snapshotByKey.has(key))
+    .length;
+  if (missingOpenIdentityCount) {
+    throw new ListingOwnerAuditError("完整 Listing 快照缺少已有开放负责人身份。", {
+      code: "LISTING_OWNER_SNAPSHOT_MISSING_OPEN_IDENTITY",
+      statusCode: 409,
+      details: { missingOpenIdentityCount },
+    });
+  }
+  const updatedAtMs = ownerUpdatedAtMs(now);
+  let changedListingCount = 0;
+  let transferCount = 0;
+  for (const [key, snapshot] of snapshotByKey) {
+    const periods = periodsByKey.get(key) || [];
+    const open = periods.find((period) => period.effectiveTo === null);
+    if (!periods.length) {
+      periods.push(historicalUnknownPeriod(snapshot, detectionDate, updatedAtMs));
+      periods.push(snapshotPeriod(snapshot, detectionDate, updatedAtMs));
+      periodsByKey.set(key, periods);
+      changedListingCount += 1;
+      continue;
+    }
+    if (!open) {
+      throw new ListingOwnerAuditError("Listing 负责人历史缺少开放期间。", {
+        code: "LISTING_OWNER_OPEN_PERIOD_MISSING",
+        statusCode: 409,
+        details: { missingOpenPeriodCount: 1 },
+      });
+    }
+    if (!snapshotStateChanged(open, snapshot)) continue;
+    const nextEffectiveFrom = shiftDate(detectionDate, 1);
+    if (open.effectiveFrom > detectionDate) {
+      throw new ListingOwnerAuditError("负责人检测日期早于当前开放期间。", {
+        code: "LISTING_OWNER_DETECTION_DATE_CONFLICT",
+        statusCode: 409,
+      });
+    }
+    open.effectiveTo = detectionDate;
+    periods.push(snapshotPeriod(snapshot, nextEffectiveFrom, updatedAtMs));
+    changedListingCount += 1;
+    if (open.status === "assigned" && snapshot.status === "assigned" && open.ownerIdentity !== snapshot.ownerIdentity) {
+      transferCount += 1;
+    }
+  }
+  const nextPeriods = [...periodsByKey.values()].flat().sort(periodSort);
+  const applied = repository.applyOwnerSnapshot({ periods: nextPeriods, requestId });
+  return {
+    changed: Boolean(applied.changed),
+    ownerRevision: Number(applied.ownerRevision),
+    scannedListingCount: snapshots.length,
+    periodCount: nextPeriods.length,
+    changedListingCount,
+    transferCount,
   };
 }

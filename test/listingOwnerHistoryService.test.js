@@ -6,7 +6,16 @@ import {
   auditAllListingOwners,
   parseListingOwnerRecord,
   scanAllListingOwners,
+  syncListingOwnerHistory,
 } from "../src/services/listingOwnerHistoryService.js";
+
+function listingAdapter(rows) {
+  return {
+    async fetchListings() {
+      return { data: { total: rows.length, list: rows } };
+    },
+  };
+}
 
 test("classifies one owner, explicit empty, malformed, and multiple owners", () => {
   const assigned = parseListingOwnerRecord({
@@ -217,4 +226,209 @@ test("audit scans every active SID and returns only redacted anomaly identities"
   assert.equal(result.anomalies[0].identityHashPrefixes.length, 2);
   assert.ok(result.anomalies[0].identityHashPrefixes.every((value) => /^[a-f0-9]{12}$/.test(value)));
   assert.doesNotMatch(JSON.stringify(result), /owner-secret|Secret Alice|Secret Bob/);
+});
+
+test("first owner cutover creates historical unknown and trusted snapshot periods atomically", async () => {
+  const applied = [];
+  const repository = {
+    readOwnerPeriods: () => [],
+    applyOwnerSnapshot(input) {
+      applied.push(input);
+      return { changed: true, ownerRevision: 1 };
+    },
+  };
+  const result = await syncListingOwnerHistory({
+    repository,
+    sellers: [{ sid: 8708, status: 1 }],
+    adapter: listingAdapter([{
+      sid: 8708,
+      seller_sku: "MSKU-A",
+      asin_principal_list: [{ principal_id: 101, principal_name: "Alice" }],
+    }]),
+    detectedDate: "2026-08-13",
+    requestId: "owner-cutover",
+  });
+
+  assert.equal(applied.length, 1);
+  assert.deepEqual(applied[0].periods.map(({ updatedAtMs, ...period }) => period), [
+    {
+      sid: 8708, msku: "MSKU-A", mskuKey: "msku-a",
+      effectiveFrom: "0001-01-01", effectiveTo: "2026-08-12",
+      ownerIdentity: null, ownerPersonId: null, ownerNameSnapshot: null,
+      identitySource: "cutover-historical-unknown", status: "historical-unknown",
+    },
+    {
+      sid: 8708, msku: "MSKU-A", mskuKey: "msku-a",
+      effectiveFrom: "2026-08-13", effectiveTo: null,
+      ownerIdentity: "id:101", ownerPersonId: "101", ownerNameSnapshot: "Alice",
+      identitySource: "lingxing-person-id", status: "assigned",
+    },
+  ]);
+  assert.deepEqual(result, {
+    changed: true, ownerRevision: 1, scannedListingCount: 1,
+    periodCount: 2, changedListingCount: 1, transferCount: 0,
+  });
+  assert.doesNotMatch(JSON.stringify(result), /Alice|id:101|MSKU-A/);
+});
+
+test("owner changes close on detection day and start on the next day without rewriting history", async () => {
+  const existing = [
+    {
+      sid: 8708, msku: "MSKU-A", mskuKey: "msku-a",
+      effectiveFrom: "0001-01-01", effectiveTo: "2026-07-31",
+      ownerIdentity: null, ownerPersonId: null, ownerNameSnapshot: null,
+      identitySource: "cutover-historical-unknown", status: "historical-unknown", updatedAtMs: 1,
+    },
+    {
+      sid: 8708, msku: "MSKU-A", mskuKey: "msku-a",
+      effectiveFrom: "2026-08-01", effectiveTo: null,
+      ownerIdentity: "id:101", ownerPersonId: "101", ownerNameSnapshot: "Alice",
+      identitySource: "lingxing-person-id", status: "assigned", updatedAtMs: 2,
+    },
+  ];
+  let applied;
+  const repository = {
+    readOwnerPeriods: () => structuredClone(existing),
+    applyOwnerSnapshot(input) {
+      applied = input.periods;
+      return { changed: true, ownerRevision: 2 };
+    },
+  };
+  const result = await syncListingOwnerHistory({
+    repository,
+    sellers: [{ sid: 8708, status: 1 }],
+    adapter: listingAdapter([{
+      sid: 8708, seller_sku: "MSKU-A",
+      asin_principal_list: [{ principal_id: 102, principal_name: "Bob" }],
+    }]),
+    detectedDate: "2026-08-13",
+  });
+
+  assert.deepEqual(applied.slice(0, 2), [existing[0], { ...existing[1], effectiveTo: "2026-08-13" }]);
+  assert.equal(applied[2].effectiveFrom, "2026-08-14");
+  assert.equal(applied[2].ownerIdentity, "id:102");
+  assert.equal(result.transferCount, 1);
+});
+
+test("owner status and name snapshot changes create only the required effective periods", async () => {
+  const cases = [
+    { current: { status: "assigned", ownerIdentity: "id:101", ownerPersonId: "101", ownerNameSnapshot: "Alice", identitySource: "lingxing-person-id" }, next: [], transferCount: 0 },
+    { current: { status: "unassigned", ownerIdentity: null, ownerPersonId: null, ownerNameSnapshot: null, identitySource: "lingxing-explicit-empty" }, next: [{ principal_id: 101, principal_name: "Alice" }], transferCount: 0 },
+    { current: { status: "assigned", ownerIdentity: "id:101", ownerPersonId: "101", ownerNameSnapshot: "Alice", identitySource: "lingxing-person-id" }, next: [{ principal_id: 101, principal_name: "Alice Renamed" }], transferCount: 0 },
+  ];
+  for (const scenario of cases) {
+    let applied;
+    const repository = {
+      readOwnerPeriods: () => [{
+        sid: 8708, msku: "MSKU-A", mskuKey: "msku-a", effectiveFrom: "2026-08-01", effectiveTo: null,
+        ...scenario.current, updatedAtMs: 1,
+      }],
+      applyOwnerSnapshot(input) {
+        applied = input.periods;
+        return { changed: true, ownerRevision: 2 };
+      },
+    };
+    const result = await syncListingOwnerHistory({
+      repository,
+      sellers: [{ sid: 8708, status: 1 }],
+      adapter: listingAdapter([{ sid: 8708, seller_sku: "MSKU-A", asin_principal_list: scenario.next }]),
+      detectedDate: "2026-08-13",
+    });
+    assert.equal(applied.length, 2);
+    assert.equal(applied[0].effectiveTo, "2026-08-13");
+    assert.equal(applied[1].effectiveFrom, "2026-08-14");
+    assert.equal(result.transferCount, scenario.transferCount);
+  }
+});
+
+test("unchanged owner snapshot does not add a period or increment revision", async () => {
+  const existing = [{
+    sid: 8708, msku: "MSKU-A", mskuKey: "msku-a", effectiveFrom: "2026-08-01", effectiveTo: null,
+    ownerIdentity: "id:101", ownerPersonId: "101", ownerNameSnapshot: "Alice",
+    identitySource: "lingxing-person-id", status: "assigned", updatedAtMs: 1,
+  }];
+  let applied;
+  const result = await syncListingOwnerHistory({
+    repository: {
+      readOwnerPeriods: () => structuredClone(existing),
+      applyOwnerSnapshot(input) {
+        applied = input.periods;
+        return { changed: false, ownerRevision: 1 };
+      },
+    },
+    sellers: [{ sid: 8708, status: 1 }],
+    adapter: listingAdapter([{
+      sid: 8708, seller_sku: " msku-a ",
+      asin_principal_list: [{ principal_id: 101, principal_name: "Alice" }],
+    }]),
+    detectedDate: "2026-08-13",
+  });
+  assert.deepEqual(applied, existing);
+  assert.equal(result.changed, false);
+  assert.equal(result.ownerRevision, 1);
+  assert.equal(result.changedListingCount, 0);
+});
+
+test("owner sync fails closed when a complete snapshot omits an open Listing identity", async () => {
+  let applies = 0;
+  await assert.rejects(
+    syncListingOwnerHistory({
+      repository: {
+        readOwnerPeriods: () => [{
+          sid: 8708, msku: "MSKU-MISSING", mskuKey: "msku-missing",
+          effectiveFrom: "2026-08-01", effectiveTo: null,
+          ownerIdentity: "id:101", ownerPersonId: "101", ownerNameSnapshot: "Alice",
+          identitySource: "lingxing-person-id", status: "assigned", updatedAtMs: 1,
+        }],
+        applyOwnerSnapshot() { applies += 1; },
+      },
+      sellers: [{ sid: 8708, status: 1 }],
+      adapter: listingAdapter([{
+        sid: 8708, seller_sku: "MSKU-PRESENT", asin_principal_list: [],
+      }]),
+      detectedDate: "2026-08-13",
+    }),
+    (error) => error.code === "LISTING_OWNER_SNAPSHOT_MISSING_OPEN_IDENTITY"
+      && error.details?.missingOpenIdentityCount === 1,
+  );
+  assert.equal(applies, 0);
+});
+
+test("owner sync uses the injected clock for new effective periods", async () => {
+  let applied;
+  await syncListingOwnerHistory({
+    repository: {
+      readOwnerPeriods: () => [],
+      applyOwnerSnapshot(input) {
+        applied = input.periods;
+        return { changed: true, ownerRevision: 1 };
+      },
+    },
+    sellers: [{ sid: 8708, status: 1 }],
+    adapter: listingAdapter([{
+      sid: 8708, seller_sku: "MSKU-A", asin_principal_list: [],
+    }]),
+    detectedDate: "2026-08-13",
+    now: () => 123456789,
+  });
+  assert.deepEqual(applied.map((period) => period.updatedAtMs), [123456789, 123456789]);
+});
+
+test("owner sync applies nothing when the full scan fails", async () => {
+  let reads = 0;
+  let applies = 0;
+  await assert.rejects(
+    syncListingOwnerHistory({
+      repository: {
+        readOwnerPeriods() { reads += 1; return []; },
+        applyOwnerSnapshot() { applies += 1; },
+      },
+      sellers: [{ sid: 8708, status: 1 }],
+      adapter: listingAdapter([{ sid: 8708, seller_sku: "MSKU-A" }]),
+      detectedDate: "2026-08-13",
+    }),
+    (error) => error.code === "LISTING_OWNER_FIELD_MISSING",
+  );
+  assert.equal(reads, 0);
+  assert.equal(applies, 0);
 });
