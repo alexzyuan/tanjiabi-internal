@@ -129,12 +129,16 @@ test("lingxing sync refreshes the rolling sales-facts scope and reports cache me
     const fixedMs = Date.parse("2026-08-13T12:00:00.000Z");
     let requestedScope = null;
     let requestedOptions = null;
+    let directoryOptions = null;
     configureSalesFactsSyncService({
       now: () => fixedMs,
-      getSellerDirectory: async () => [
-        { sid: 1, name: "探嘉美国", countryCode: "US", status: 1 },
-        { sid: 2, name: "探嘉加拿大", countryCode: "CA", status: 1 },
-      ],
+      getSellerDirectory: async (options) => {
+        directoryOptions = options;
+        return [
+          { sid: 1, name: "探嘉美国", countryCode: "US", status: 1 },
+          { sid: 2, name: "探嘉加拿大", countryCode: "CA", status: 1 },
+        ];
+      },
       refreshOrderProfitScope: async (scope, options) => {
         requestedScope = scope;
         requestedOptions = options;
@@ -164,5 +168,6 @@ test("lingxing sync refreshes the rolling sales-facts scope and reports cache me
     assert.equal(requestedScope.currencyMode, "CNY");
     assert.equal(requestedOptions.forceRefresh, false);
     assert.equal(requestedOptions.requestId, "sync-sales-facts");
+    assert.equal(directoryOptions.forceRefresh, true);
   }, { provider: "lingxing" });
 });

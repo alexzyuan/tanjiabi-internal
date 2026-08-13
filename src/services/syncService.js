@@ -101,7 +101,9 @@ export async function syncFromLingxing() {
   if (!Number.isSafeInteger(currentMs) || currentMs < 0) {
     throw new Error("销售事实同步当前时间无效。");
   }
-  const directoryResult = await salesFactsRuntime.getSellerDirectory();
+  // The scheduled facts sync is the authoritative runtime refresh boundary.
+  // Do not let an older seven-store seller cache silently narrow the active SID scope.
+  const directoryResult = await salesFactsRuntime.getSellerDirectory({ forceRefresh: true });
   const sellers = Array.isArray(directoryResult) ? directoryResult : directoryResult?.sellers;
   if (!Array.isArray(sellers) || !sellers.length) {
     throw new Error("销售事实同步 seller directory 为空。");
