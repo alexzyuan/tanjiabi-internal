@@ -115,11 +115,21 @@ DATA_PROVIDER=lingxing
 
 领星是唯一来源，SQLite 是按领域拆分的本机派生缓存。Listing 身份为 `SID + 标准化 MSKU`，商品主数据身份为标准化内部 SKU。已有行不会按年龄自动刷新；新身份可在首次查询时补录，已有资料只允许通过当前页面的显式商品资料刷新动作更新，且一次刷新必须全量成功后才提交。
 
-`sales-facts.sqlite` 与 `inventory-snapshots.sqlite` 是批准的后续阶段，目前尚未实现；在独立设计批准前不得创建或迁移这两个事实库。旧 `shared-product-catalog`、`supplier-board-product-map` JSON 在观察期内保持只读，用于迁移、回退和对账，未经单独清理批准不得删除或继续写入。
+销售事实第二阶段已经上线代码，数据库路径固定为：
+
+```text
+/opt/tanjia-bi/data-cache/sales-facts/sales-facts-v1.sqlite
+```
+
+它与商品目录 SQLite 独立，按 Pacific 自然日、SID、标准化 MSKU、`CNY|ORIGINAL` 保存 OrderProfit facts；自定义费用按自然月保存，Listing 负责人通过有效期历史关联。当前月 coverage TTL 为 12 小时，上月为 24 小时，更早月份冻结；缺失冻结月份只能通过显式 `forceRefresh: true` 刷新。销售周报和店铺经营月报不读取旧 JSON 成功兜底。`inventory-snapshots.sqlite` 仍属于后续阶段，必须先完成独立设计。
+
+销售事实刷新接口为 `POST /api/sales-facts/order-profit/refresh`（session）、`POST /api/sales-facts/monthly-report/refresh`（finance）和 `POST /api/sales-facts/owners/sync`（admin）。刷新范围必须显式传日期、SID 和币种；`ORIGINAL` 只能是单一国家，负责人不进入事实 key，也不进入刷新 single-flight key。
+
+旧 OrderProfit、销售周报和月报 JSON 目前仅用于只读对账/退休检查，不导入、不累加、不写回，也不作为错误兜底；未经单独 retirement 设计批准不得删除。
 
 ### 6.2 旧商品 JSON 退役预检与归档
 
-部署包从本版本开始在 `.deploy-manifest.json` 中声明 `product-catalog-sqlite-v1` capability。只有连续稳定运行至少 30 天、当前保留的至少三个 release 都带该 capability、SQLite health 正常，并且旧 JSON manifest 与数据库 `legacy_manifest_hash` 完全一致时，退役预检才会通过。旧版本 release 不应伪造或补写 capability。
+部署包在 `.deploy-manifest.json` 中声明 `product-catalog-sqlite-v1` 和 `sales-facts-sqlite-v1` capability。只有连续稳定运行至少 30 天、当前保留的至少三个 release 都带对应 capability、SQLite health 正常，并且旧 JSON manifest 与数据库 `legacy_manifest_hash` 完全一致时，商品目录退役预检才会通过。旧版本 release 不应伪造或补写 capability。
 
 首次 SQLite 上线时间必须由运维人员根据受控部署记录提供毫秒时间戳，不能从 JSON 或 SQLite 文件 mtime 猜测：
 
@@ -149,10 +159,12 @@ npm run catalog:legacy:archive
 ```bash
 npm ci
 node scripts/product-catalog-sqlite-smoke.js
+node scripts/sales-facts-sqlite-smoke.js
+node scripts/validate-sales-facts-schema.js
 node scripts/migrate-product-catalog.js
 ```
 
-确认依赖、SQLite 原生模块和旧 JSON 迁移都成功后，再启动应用：
+确认依赖、两套 SQLite 原生模块、销售事实 schema 和旧 JSON 迁移都成功后，再启动应用：
 
 ```bash
 node server.js
@@ -166,7 +178,30 @@ pm2 save
 pm2 startup
 ```
 
-每次上传新版压缩包后，推荐使用项目自带的安全部署脚本：
+每次上传新版压缩包后，推荐使用项目自带的安全部署脚本。先准备已批准的只读预检报告（部署不会自动调用领星）：
+
+预检必须在受控的运维环境执行，使用真实运行时目录和凭据读取领星，但只做读取、分页完整性、身份和指标对账，不写入生产 SQLite。范围应覆盖待发布的完整自然月；示例：
+
+```bash
+export SALES_FACTS_PREFLIGHT_START_DATE=2026-07-01
+export SALES_FACTS_PREFLIGHT_END_DATE=2026-07-31
+export SALES_FACTS_PREFLIGHT_SIDS=8708,8709
+export SALES_FACTS_PREFLIGHT_CURRENCY_MODE=CNY
+npm run sales-facts:preflight > /opt/tanjia-bi-approvals/sales-facts-preflight.json
+sha256sum /opt/tanjia-bi-approvals/sales-facts-preflight.json
+```
+
+上面的 SID 仅为命令格式示例；正式报告必须使用当时完整、已审核的 active SID 集合，不得按国家硬编码或静默缩小范围。
+
+人工确认报告中的 `ok=true`、`exitCode=0`、`approvedFetchMode=daily`、分页完整且差异计数为零后，再将报告路径和 SHA-256 提供给部署门禁：
+
+```bash
+cd /opt/tanjia-bi
+export SALES_FACTS_PREFLIGHT_ARTIFACT=/opt/tanjia-bi-approvals/sales-facts-preflight.json
+export SALES_FACTS_PREFLIGHT_ARTIFACT_SHA256=<报告文件 SHA-256>
+```
+
+然后执行：
 
 ```bash
 cd /opt/tanjia-bi
@@ -180,6 +215,9 @@ bash deploy.sh
 - 执行 `node --check` 检查前后端脚本语法
 - 执行 `npm ci`
 - 执行 `node scripts/product-catalog-sqlite-smoke.js`，失败立即停止
+- 执行 `node scripts/sales-facts-sqlite-smoke.js`，失败立即停止
+- 执行 `node scripts/validate-sales-facts-schema.js`，失败立即停止
+- 校验已批准销售事实 preflight artifact 的 SHA-256、`ok/exitCode`、daily 分页完整性和零差异门槛
 - 执行 `node scripts/migrate-product-catalog.js`，失败时不重启 PM2
 - 重启 PM2
 - 访问 `/api/health` 并执行部署完整性检查
@@ -323,7 +361,7 @@ AUTH_ALLOWED_OPEN_IDS=钉钉openId1,钉钉openId2
 `deploy.sh` 会在重启后自动执行两层检查：
 
 - `/api/health` 健康检查。
-- `/api/health` 根级响应保持 `ok: true`，并必须包含 `productCatalog.ok: true`；该节点报告受控的 schema、quick-check、revision、行数和 SQLite/WAL 大小诊断，不返回路径、SQL、token 或原始异常文本。
+- `/api/health` 根级响应保持 `ok: true`，并必须包含 `productCatalog.ok: true` 与 `salesFacts.ok: true`；两个节点报告受控的 schema、quick-check、revision、coverage/事实/费用/负责人/派生缓存行数和 SQLite/WAL 大小诊断，不返回路径、SQL、token 或原始异常文本。
 - `scripts/deploy-integrity.js verify-deployed` 完整性检查，逐项核对部署包 manifest 中的全部侧边栏板块、对应 `view-*` 页面容器、部署文件哈希和线上 `/app.js` 哈希。
 
 发布前必须在 clean、已提交的生产分支生成归档，并二次确认分支：

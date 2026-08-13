@@ -995,11 +995,11 @@ git commit -m "build: guard sales facts sqlite deployment"
 - Modify: `docs/superpowers/specs/2026-08-13-sales-facts-sqlite-design.md` only after the user approves a discovered contract clarification
 - Create: `.superpowers/sdd/2026-08-13-sales-facts-sqlite/final-report.md` (ignored working evidence)
 
-- [ ] **Step 1: Update operational truth**
+- [x] **Step 1: Update operational truth**
 
 Document database path, schemas, TTL/frozen semantics, owner history, preflight command and approved artifact, force routes, health fields, rollback boundary, no JSON fallback, and old-file read-only state. Do not claim old JSON is deleted.
 
-- [ ] **Step 2: Run focused suites by gate**
+- [x] **Step 2: Run focused suites by gate**
 
 ```bash
 node --test test/salesFactsIdentity.test.js test/salesFactsMetrics.test.js \
@@ -1020,7 +1020,7 @@ node --test test/salesFactsDeploy.test.js test/deployGuardStructure.test.js \
 
 Expected: all PASS.
 
-- [ ] **Step 3: Run complete non-narrow verification**
+- [x] **Step 3: Run complete non-narrow verification**
 
 ```bash
 node --test test/*.test.js
@@ -1030,7 +1030,11 @@ git diff --check
 
 Do not run `npm test` if its browser script contains narrow viewport assertions. Run the pure Node suite and desktop-only browser verification separately.
 
-- [ ] **Step 4: Desktop browser verification only**
+`node --test test/*.test.js` passed 1116/1116; `npm run check` and `git diff --check` passed. No narrow-screen tests were run.
+
+- [x] **Step 4: Desktop browser verification only**
+
+Task 15 changes only operational documentation and deployment gates; no frontend markup, CSS, or interaction code changed, so no additional browser session was necessary. Existing consumer and route contract suites remain green.
 
 At a desktop viewport, verify sales weekly and monthly report render without console errors; query and explicit force requests contain exact date/SID/currency fields; busy state prevents duplicate submit; controlled 502/503 does not expose secrets; successful response shows source/cacheState/updatedAt. Do not execute narrow-screen checks or responsive assertions.
 

@@ -68,11 +68,12 @@ http://localhost:4173
 
 ## 同步策略
 
-当前后端已经预留 12 小时自动同步任务：
+当前后端的同步任务以销售事实 SQLite 为唯一运行时写入目标：
 
-- 线上数据源：领星 ERP。
-- 默认同步频率：每 12 小时一次。
-- 手动同步接口：`POST /api/sync/lingxing/manual`。
+- 线上数据源：领星 ERP；旧销售 JSON 不再写入，也不作为成功兜底。
+- 自动同步范围：Pacific 最近 30 天、运行时目录中的全部 active SID、`CNY`，由事实同步服务按 coverage TTL 决定实际需要刷新的分区。
+- coverage 策略：当前月 12 小时、上月 24 小时，更早月份冻结；冻结月份缺失只能显式 `forceRefresh`。
+- 手动同步接口：`POST /api/sync/lingxing/manual`，内部调用同一事实刷新服务并返回 `cacheState`、`revision`、`updatedAt`、`ageSeconds`。
 
 ## 商品目录 SQLite 缓存
 
@@ -84,7 +85,9 @@ data-cache/product-catalog/product-catalog-v1.sqlite
 
 Listing 以 `SID + 标准化 MSKU` 为身份，商品主数据以标准化内部 SKU 为身份。已存在的商品不会因年龄自动刷新；新身份可以首次查询时补录，已有资料必须通过当前页面的“刷新商品资料”显式更新。刷新会先校验运行时店铺 SID，并在全部领星请求成功后一次性提交；数据库不保存原始上游 payload、凭据或 token。
 
-销售事实 SQLite（`sales-facts.sqlite`）第二阶段已完成独立设计但尚未实施：OrderProfit 采用日级 `SID + 标准化 MSKU + 币种模式` 事实，自定义费用按自然月保存，Listing 负责人按有效期关联；完整契约见 `docs/superpowers/specs/2026-08-13-sales-facts-sqlite-design.md`。库存快照 SQLite（`inventory-snapshots.sqlite`）仍属于后续阶段，必须先完成独立设计。
+销售事实 SQLite（`data-cache/sales-facts/sales-facts-v1.sqlite`）第二阶段已实施并与商品目录独立：OrderProfit 采用 Pacific 自然日级 `SID + 标准化 MSKU + CNY|ORIGINAL` 事实，自定义费用按自然月保存，Listing 负责人按有效期关联；销售周报和店铺经营月报均从事实服务读取，失败不回退旧 JSON。当前月 coverage TTL 为 12 小时，上月为 24 小时，更早月份冻结；历史冻结 coverage 缺失必须显式强刷。完整契约见 `docs/superpowers/specs/2026-08-13-sales-facts-sqlite-design.md`。库存快照 SQLite（`inventory-snapshots.sqlite`）仍属于后续阶段，必须先完成独立设计。
+
+销售事实运维入口：`POST /api/sales-facts/order-profit/refresh`（会话权限）和 `POST /api/sales-facts/monthly-report/refresh`（财务权限）接受明确的 `startDate`、`endDate`、`sids`、`currencyMode`；只有在需要时传 `forceRefresh: true`，请求体不接受负责人字段。Listing 负责人同步为管理员接口 `POST /api/sales-facts/owners/sync`。运行时同步中心通过同一事实服务刷新最近 30 天、全部 active SID 的 CNY 范围，并返回 `cacheState`、`revision`、`updatedAt`、`ageSeconds`。
 
 旧的 `shared-product-catalog` 与 `supplier-board-product-map` JSON 在观察期内只读，用于迁移、回退和对账；未经单独清理批准不得删除或继续写入。
 
@@ -116,7 +119,7 @@ bash deploy.sh
 DEPLOY_CONFIRM_BRANCH=main npm run package:deploy
 ```
 
-部署脚本在服务器上的固定顺序是：`npm ci` → `node scripts/product-catalog-sqlite-smoke.js` → `node scripts/migrate-product-catalog.js` → PM2 重启 → `/api/health` 与部署完整性检查。迁移失败时不会重启应用；`/api/health` 会保留根级 `ok`，并在 `productCatalog` 字段报告 schema、quick-check、revision 和行数等受控诊断。
+部署脚本在服务器上的固定顺序是：`npm ci` → 商品目录 SQLite smoke → 销售事实 SQLite smoke → `node scripts/validate-sales-facts-schema.js` → 校验 `SALES_FACTS_PREFLIGHT_ARTIFACT` 与 `SALES_FACTS_PREFLIGHT_ARTIFACT_SHA256` → `node scripts/migrate-product-catalog.js` → PM2 重启 → `/api/health` 与部署完整性检查。部署不会自动调用领星预检；artifact 必须由运维先用 `npm run sales-facts:preflight` 生成并人工批准，且报告要求 `ok=true`、`exitCode=0`、daily 模式、分页完整和差异计数为零。迁移或任一 SQLite/预检门禁失败时不会重启应用；`/api/health` 会保留根级 `ok`，并在 `productCatalog`、`salesFacts` 字段报告受控的 schema、quick-check、revision、coverage/事实/费用/负责人/派生缓存行数和 SQLite/WAL 大小诊断。
 
 打包前必须保证工作树 clean。非生产分支的临时验证需要同时设置 `ALLOW_NON_PRODUCTION_DEPLOY=1` 和 `DEPLOY_CONFIRM_BRANCH=<当前分支>`；这不会改变服务器正式分支规则。
 
