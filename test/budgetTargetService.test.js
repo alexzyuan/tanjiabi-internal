@@ -116,23 +116,35 @@ test("parsed workbook preserves absent report budget metrics instead of synthesi
 test("parsed workbook currency reaches a single-country original-currency report budget", async () => {
   await withTempService(async ({ saveBudgetUpload, getBudgetTargetContext }) => {
     await saveBudgetUpload(uploadPayload());
-    const adapter = {
-      async fetchSellers() { return { data: [{ sid: 1, name: "探嘉美国", country: "美国" }] }; },
-      normalizeRecordList(payload) { return payload.data || payload.records || []; },
-      async fetchMskuOrderProfit() {
-        return { records: [{ sid: 1, currencyCode: "USD", netSalesAmount: 180, totalAdsCost: -18, totalSalesRefunds: -4, grossProfit: 60 }] };
-      },
-      async fetchSellerProfitReport() {
-        return { data: [] };
-      },
-      normalizeSellerProfitOtherFeeRecords() { return []; },
-      normalizeMskuOrderProfitRecords(records, sellers, reportDate) {
-        return records.map((record) => ({ ...record, storeName: sellers[0].name, country: sellers[0].country, reportDate }));
+    const sellerDirectory = [{ sid: 1, name: "探嘉美国", country: "美国" }];
+    const salesFacts = {
+      sellerDirectory,
+      async refreshMonthlyReportScope() {
+        return {
+          facts: [{
+            factDate: "2026-07-01",
+            sid: 1,
+            msku: "SKU-1",
+            mskuKey: "sku-1",
+            currencyMode: "ORIGINAL",
+            actualCurrencyCode: "USD",
+            sourceUpdatedAtMs: 1,
+            metrics: {
+              totalSalesAmount: 1800000n,
+              netSalesAmount: 1800000n,
+              totalAdsCost: -180000n,
+              totalSalesRefunds: -40000n,
+              grossProfit: 600000n,
+            },
+          }],
+          customFees: [],
+          meta: { source: "sales-facts-sqlite", cacheState: "hit", updatedAt: "2026-08-13T00:00:00.000Z" },
+        };
       },
     };
     const report = await getStoreOperatingMonthlyReport(
       { startMonth: "2026-07", endMonth: "2026-07", countries: ["美国"], currencyCode: "ORIGINAL" },
-      { adapter, getBudgetTargetContext, logger: { info() {}, error() {} } },
+      { salesFacts, getBudgetTargetContext, logger: { info() {}, error() {} } },
     );
 
     assert.equal(report.meta.currencyMode, "ORIGINAL");
