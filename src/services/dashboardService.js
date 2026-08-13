@@ -26,6 +26,7 @@ import {
 } from "./listingOwnerService.js";
 import { getSharedSellers } from "./sharedDataService.js";
 import { getSalesForecastAvailableDaysBySellerMsku } from "./salesForecastService.js";
+import { runSalesFactsShadowRead } from "./salesFactsShadowService.js";
 
 function hasLiveFilters(filters) {
   return Boolean(filters.startDate || filters.endDate || filters.sids?.length);
@@ -151,6 +152,20 @@ function mapSalesWeeklySourceToDashboard(source = {}, filters = {}) {
       recent30: source.raw?.recent30 || null,
     },
     budgetTargets: source.budgetTargets || {},
+  });
+}
+
+function shadowSalesWeeklyDashboard(dashboard, source, shadow = {}) {
+  return runSalesFactsShadowRead({
+    enabled: shadow.enabled,
+    legacyResult: dashboard,
+    legacyRecords: source?.orderProfitRecords || [],
+    readNewFacts: shadow.readNewFacts,
+    compare: shadow.compare,
+    requestId: shadow.requestId,
+    logger: shadow.logger || console,
+    scope: shadow.scope,
+    now: shadow.now,
   });
 }
 
@@ -369,7 +384,7 @@ function normalizeCachedDashboard(cachedDashboard, syncState, syncStatus) {
   };
 }
 
-export async function getSalesWeeklyDashboard(filters = {}) {
+export async function getSalesWeeklyDashboard(filters = {}, { salesFactsShadow = {} } = {}) {
   const startedAt = nowMs();
   const syncState = getSyncState();
   const sourceCacheKey = salesWeeklySourceCacheKey(filters);
@@ -428,10 +443,10 @@ export async function getSalesWeeklyDashboard(filters = {}) {
       cacheKey: sourceCacheKey,
       updatedAt: cachedSource.updatedAt || cachedSource.data.updatedAt || "",
     });
-    return {
+    return shadowSalesWeeklyDashboard({
       ...dashboard,
       cacheHit: true,
-    };
+    }, cachedSource.data, salesFactsShadow);
   }
 
   try {
@@ -481,10 +496,10 @@ export async function getSalesWeeklyDashboard(filters = {}) {
         cacheKey: sourceCacheKey,
         recordStatus: dashboard?.meta?.syncStatus || "",
       });
-      return {
+      return shadowSalesWeeklyDashboard({
         ...dashboard,
         cacheHit: false,
-      };
+      }, source, salesFactsShadow);
     } catch (error) {
       logSalesWeeklyTiming("live-failed", startedAt, {
         defaultCacheEligible,

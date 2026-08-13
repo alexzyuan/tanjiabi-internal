@@ -728,21 +728,21 @@ git commit -m "feat(sales-facts): cache revisioned sales results"
 - Modify: `src/services/storeOperatingMonthlyReportService.js`
 - Modify: tests for both services
 
-- [ ] **Step 1: Write RED for non-authoritative shadow behavior**
+- [x] **Step 1: Write RED for non-authoritative shadow behavior**
 
 Prove the current response remains byte-for-byte from the old path, new facts are queried only when `SALES_FACTS_SHADOW_READ=1`, differences are logged as counts/fixed-point deltas, new failures are observable but cannot replace old success, and old JSON cannot repair new facts.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `node --test test/salesFactsShadowService.test.js test/salesWeeklySourceCache.test.js test/storeOperatingMonthlyReportService.test.js`
 
 Expected: FAIL because shadow service/wiring does not exist.
 
-- [ ] **Step 3: Implement shadow comparator**
+- [x] **Step 3: Implement shadow comparator**
 
 Compare canonical totals by date/SID/MSKU/currency mode for quantity, sales, refund, fees, and profit. Hash MSKU in logs; do not log values or owner names. Add timings and mismatch counts to a dedicated `[sales-facts-shadow]` event.
 
-- [ ] **Step 4: Run GREEN and commit**
+- [x] **Step 4: Run GREEN and commit**
 
 Run: `node --test test/salesFactsShadowService.test.js test/salesWeeklySourceCache.test.js test/storeOperatingMonthlyReportService.test.js`
 

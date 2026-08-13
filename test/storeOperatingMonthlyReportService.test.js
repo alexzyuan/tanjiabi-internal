@@ -60,6 +60,7 @@ function fakeAdapter({ sellers, recordsForCall, feeRecordsForCall = () => [], ca
 
 test("monthly report keeps OrderProfit as its primary source and reads custom fees from seller profit otherFeeStr", async () => {
   const calls = [];
+  let shadowCalls = 0;
   const adapter = fakeAdapter({
     calls,
     sellers: [{ sid: 1, name: "Store-US", country: "美国" }],
@@ -88,13 +89,22 @@ test("monthly report keeps OrderProfit as its primary source and reads custom fe
 
   const value = await getStoreOperatingMonthlyReport(
     { startMonth: "2026-07", endMonth: "2026-07" },
-    { adapter, getBudgetTargetContext: async () => ({ rows: [], totals: {}, matched: false }) },
+    {
+      adapter,
+      getBudgetTargetContext: async () => ({ rows: [], totals: {}, matched: false }),
+      salesFactsShadow: {
+        enabled: true,
+        readNewFacts: async () => { shadowCalls += 1; throw new Error("shadow facts unavailable"); },
+        logger: silentLogger,
+      },
+    },
   );
 
   assert.equal(calls.filter((call) => call.source === "order-profit").length, 1);
   assert.equal(calls.filter((call) => call.source === "seller-profit").length, 1);
   assert.equal(value.meta.source, "/basicOpen/finance/mreport/OrderProfit");
   assert.equal(value.rows.find((row) => row.key === "software-fee").actual, 8);
+  assert.equal(shadowCalls, 1);
 });
 
 test("monthly report sends exact partial-month boundaries for a date range", async () => {

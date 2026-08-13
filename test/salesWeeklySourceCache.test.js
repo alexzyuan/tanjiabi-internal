@@ -134,6 +134,18 @@ test("sales weekly source cache reuses the same base data across different listi
       currencyCode: "ORIGINAL",
       listingOwner: "林芃",
     });
+    const shadowedLinPeng = await getSalesWeeklyDashboard({
+      startDate: "2026-07-01",
+      endDate: "2026-07-23",
+      currencyCode: "ORIGINAL",
+      listingOwner: "林芃",
+    }, {
+      salesFactsShadow: {
+        enabled: true,
+        readNewFacts: async () => { throw new Error("shadow facts unavailable"); },
+        logger: { info() {}, error() {} },
+      },
+    });
     const xiong = await getSalesWeeklyDashboard({
       startDate: "2026-07-01",
       endDate: "2026-07-23",
@@ -149,6 +161,7 @@ test("sales weekly source cache reuses the same base data across different listi
     assert.equal(salesLinPeng, "100");
     assert.equal(salesXiong, "200");
     assert.equal(linPeng.detailRows[0].refundRate30d, 3);
+    assert.deepEqual(shadowedLinPeng, linPeng);
     assert.equal(xiong.detailRows[0].refundRate30d, 5);
     assert.deepEqual(linPeng.meta.recent30, {
       startDate: "2026-06-24",

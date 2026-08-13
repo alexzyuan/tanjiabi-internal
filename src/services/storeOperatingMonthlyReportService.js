@@ -11,6 +11,7 @@ import {
   normalizeStoreOperatingCountryKey,
   readStoreOperatingBudgetCurrencyCode,
 } from "./storeOperatingMonthlyReportMapper.js";
+import { runSalesFactsShadowRead } from "./salesFactsShadowService.js";
 
 const MONTH_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])$/;
 const DATE_PATTERN = /^\d{4}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
@@ -291,6 +292,7 @@ export async function getStoreOperatingMonthlyReport(filters, {
   getBudgetTargetContext = readBudgetTargetContext,
   now,
   logger = console,
+  salesFactsShadow = {},
 } = {}) {
   const requestId = randomUUID();
   const startedAt = Date.now();
@@ -493,7 +495,17 @@ export async function getStoreOperatingMonthlyReport(filters, {
       unmappedCustomFeeRecords,
       elapsedMs: Date.now() - startedAt,
     });
-    return result;
+    return runSalesFactsShadowRead({
+      enabled: salesFactsShadow.enabled,
+      legacyResult: result,
+      legacyRecords: records,
+      readNewFacts: salesFactsShadow.readNewFacts,
+      compare: salesFactsShadow.compare,
+      requestId: salesFactsShadow.requestId || requestId,
+      logger: salesFactsShadow.logger || logger,
+      scope: salesFactsShadow.scope,
+      now: salesFactsShadow.now || now,
+    });
   } catch (error) {
     writeLog(logger, "error", {
       requestId,
