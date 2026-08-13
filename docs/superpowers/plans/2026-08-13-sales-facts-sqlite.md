@@ -955,25 +955,25 @@ git commit -m "refactor(sales-facts): retire runtime json cache ownership"
 - Modify: `test/deployGuardStructure.test.js`
 - Modify: `test/deployIntegrity.test.js`
 
-- [ ] **Step 1: Write deploy RED**
+- [x] **Step 1: Write deploy RED**
 
 Tests require package capability `sales-facts-sqlite-v1`, explicit smoke entry, order `npm ci → product smoke → sales smoke → sales schema validation + approved preflight artifact check → PM2`, nested healthy salesFacts diagnostics, and cleanup on every smoke failure.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `node --test test/salesFactsDeploy.test.js test/deployGuardStructure.test.js test/deployIntegrity.test.js`
 
 Expected: FAIL with missing smoke/capability/order.
 
-- [ ] **Step 3: Implement reusable full SQLite smoke**
+- [x] **Step 3: Implement reusable full SQLite smoke**
 
 Smoke must verify and report: native module load, `sqlite_version()`, WAL, foreign keys, busy timeout, synchronous FULL, INSERT/SELECT, UPDATE, DELETE, committed transaction, forced rollback, `quick_check`, `integrity_check`, and all-settled cleanup of DB/WAL/SHM/temp directory. Use injected fs/database seams for failure tests and never touch `data-cache`.
 
-- [ ] **Step 4: Update deploy guard**
+- [x] **Step 4: Update deploy guard**
 
 Package the new script, add capability, and run sales smoke before PM2. Deployment must not call real Lingxing preflight automatically unless an operator supplies an already approved preflight artifact/hash; schema bootstrap and health are automatic, network preflight remains an explicit guarded operation to avoid surprise rate limits.
 
-- [ ] **Step 5: Run GREEN and commit**
+- [x] **Step 5: Run GREEN and commit**
 
 Run: `node --test test/salesFactsDeploy.test.js test/deployGuardStructure.test.js test/deployIntegrity.test.js`
 

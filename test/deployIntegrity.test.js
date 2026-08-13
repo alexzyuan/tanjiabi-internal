@@ -175,3 +175,17 @@ test("nested sales facts diagnostics do not echo sensitive text", () => {
   assert.equal(JSON.stringify(errors).includes("token"), false);
   assert.deepEqual(errors, ["销售事实数据库异常：schemaVersion=1 quickCheck=unavailable error=SALES_FACTS_HEALTH_ERROR"]);
 });
+
+test("healthy sales facts diagnostics retain schema, revision, and count fields", () => {
+  assert.deepEqual(validateSalesFactsHealth({
+    ok: true,
+    salesFacts: {
+      ok: true,
+      schemaVersion: 1,
+      quickCheck: "ok",
+      salesFactsRevision: 4,
+      dailyFactCount: 12,
+      factCoverageCount: 3,
+    },
+  }), []);
+});

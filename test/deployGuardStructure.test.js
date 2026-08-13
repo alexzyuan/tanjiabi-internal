@@ -36,6 +36,14 @@ test("deployment package source lists catalog smoke and migration scripts explic
   assert.match(source, /scripts\/migrate-product-catalog\.js/);
 });
 
+test("deployment package advertises and includes the sales facts SQLite capability", async () => {
+  const source = await readFile(new URL("../scripts/package-deploy.js", import.meta.url), "utf8");
+  assert.match(source, /capabilities:\s*\[[\s\S]*product-catalog-sqlite-v1[\s\S]*sales-facts-sqlite-v1/);
+  assert.match(source, /scripts\/sales-facts-sqlite-smoke\.js/);
+  assert.match(source, /scripts\/validate-sales-facts-schema\.js/);
+  assert.match(source, /scripts\/audit-sales-facts-preflight\.js/);
+});
+
 test("deployment source runs catalog checks before PM2 restart", async () => {
   const source = await readFile(new URL("../deploy.sh", import.meta.url), "utf8");
   const installIndex = source.indexOf("npm ci");
@@ -45,4 +53,21 @@ test("deployment source runs catalog checks before PM2 restart", async () => {
   assert.ok(installIndex >= 0 && installIndex < smokeIndex);
   assert.ok(smokeIndex < migrateIndex);
   assert.ok(migrateIndex < restartIndex);
+});
+
+test("deployment source installs, smokes, validates, checks approved preflight, then restarts PM2", async () => {
+  const source = await readFile(new URL("../deploy.sh", import.meta.url), "utf8");
+  const installIndex = source.indexOf("npm ci");
+  const productSmokeIndex = source.indexOf("node scripts/product-catalog-sqlite-smoke.js");
+  const salesSmokeIndex = source.indexOf("node scripts/sales-facts-sqlite-smoke.js");
+  const schemaIndex = source.indexOf("node scripts/validate-sales-facts-schema.js");
+  const preflightIndex = source.lastIndexOf("validate_sales_facts_preflight_artifact");
+  const restartIndex = source.indexOf("pm2 start");
+  assert.ok(installIndex >= 0 && installIndex < productSmokeIndex);
+  assert.ok(productSmokeIndex < salesSmokeIndex);
+  assert.ok(salesSmokeIndex < schemaIndex);
+  assert.ok(schemaIndex < preflightIndex);
+  assert.ok(preflightIndex < restartIndex);
+  assert.match(source, /SALES_FACTS_PREFLIGHT_ARTIFACT/);
+  assert.match(source, /SALES_FACTS_PREFLIGHT_ARTIFACT_SHA256/);
 });

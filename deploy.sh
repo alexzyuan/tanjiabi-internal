@@ -112,11 +112,49 @@ validate_deploy_manifest() {
   [ "$manifest_clean" = "true" ] || fail "部署包不是从干净工作区生成，拒绝部署。"
   [ "$manifest_confirmed_branch" = "$manifest_branch" ] || fail "部署包缺少分支二次确认：confirmedBranch=$manifest_confirmed_branch branch=$manifest_branch"
 
+  if ! tar -xOzf "$ARCHIVE" .deploy-manifest.json 2>/dev/null | node -e 'let input = ""; process.stdin.setEncoding("utf8"); process.stdin.on("data", (chunk) => input += chunk); process.stdin.on("end", () => { const manifest = JSON.parse(input); if (!Array.isArray(manifest.capabilities) || !manifest.capabilities.includes("sales-facts-sqlite-v1")) process.exit(1); });'; then
+    fail "部署包缺少 sales-facts-sqlite-v1 能力声明，拒绝部署。"
+  fi
+
   if [ "$manifest_branch" != "$PRODUCTION_DEPLOY_BRANCH" ] && [ "${ALLOW_NON_PRODUCTION_DEPLOY:-0}" != "1" ]; then
     fail "部署包来自分支 $manifest_branch，当前允许的正式部署分支是 $PRODUCTION_DEPLOY_BRANCH。如确需临时部署其他分支，请显式设置 ALLOW_NON_PRODUCTION_DEPLOY=1。"
   fi
 
   log "部署包来源确认：branch=$manifest_branch commit=${manifest_commit:0:12}"
+}
+
+validate_sales_facts_preflight_artifact() {
+  local artifact_path="${SALES_FACTS_PREFLIGHT_ARTIFACT:-}"
+  local expected_hash="${SALES_FACTS_PREFLIGHT_ARTIFACT_SHA256:-}"
+  [ -n "$artifact_path" ] || fail "缺少 SALES_FACTS_PREFLIGHT_ARTIFACT。部署不会自动调用领星预检，请提供已批准的只读报告。"
+  [ -f "$artifact_path" ] || fail "销售事实预检 artifact 不存在：$artifact_path"
+  [ -n "$expected_hash" ] || fail "缺少 SALES_FACTS_PREFLIGHT_ARTIFACT_SHA256。"
+
+  local actual_hash
+  actual_hash="$(node --input-type=module - "$artifact_path" <<'NODE'
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+const file = process.argv[2];
+process.stdout.write(createHash("sha256").update(readFileSync(file)).digest("hex"));
+NODE
+)"
+  [ "$actual_hash" = "$expected_hash" ] || fail "销售事实预检 artifact hash 不匹配。"
+
+  if ! node --input-type=module - "$artifact_path" <<'NODE'
+import { readFileSync } from "node:fs";
+const report = JSON.parse(readFileSync(process.argv[2], "utf8"));
+if (report?.ok !== true || Number(report?.exitCode ?? 0) !== 0) throw new Error("report is not approved");
+if (report?.approvedFetchMode !== undefined && report.approvedFetchMode !== "daily") throw new Error("runtime fetch mode is not daily");
+if (report?.dailyValidationComplete !== undefined && report.dailyValidationComplete !== true) throw new Error("daily validation is incomplete");
+const counts = report?.counts || {};
+for (const key of ["multiple", "malformed", "failedSidCount", "paginationIncomplete", "identityMismatchCount", "metricMismatchCount"]) {
+  if (Number(report?.[key] ?? counts[key] ?? 0) !== 0) throw new Error(`non-zero ${key}`);
+}
+NODE
+  then
+    fail "销售事实预检 artifact 未通过已批准报告门禁。"
+  fi
+  log "销售事实预检 artifact 已验证：sha256=${actual_hash:0:12}"
 }
 
 [ -d "$APP_DIR" ] || fail "目录不存在：$APP_DIR"
@@ -151,6 +189,8 @@ tar -xzf "$ARCHIVE" -C "$TMP_DIR"
 [ -f "$TMP_DIR/server.js" ] || fail "部署包缺少 server.js"
 [ -f "$TMP_DIR/app.js" ] || fail "部署包缺少 app.js"
 [ -f "$TMP_DIR/package.json" ] || fail "部署包缺少 package.json"
+[ -f "$TMP_DIR/scripts/sales-facts-sqlite-smoke.js" ] || fail "部署包缺少销售事实 SQLite smoke"
+[ -f "$TMP_DIR/scripts/validate-sales-facts-schema.js" ] || fail "部署包缺少销售事实 schema 校验脚本"
 rm -rf "$TMP_DIR"
 
 log "解压新版到线上目录"
@@ -170,6 +210,14 @@ npm ci
 
 log "检查 SQLite 原生模块和事务"
 node scripts/product-catalog-sqlite-smoke.js
+
+log "检查销售事实 SQLite 原生模块、事务和完整性"
+node scripts/sales-facts-sqlite-smoke.js
+
+log "校验销售事实 schema 和 quick_check"
+node scripts/validate-sales-facts-schema.js
+
+validate_sales_facts_preflight_artifact
 
 log "迁移共享商品目录缓存"
 node scripts/migrate-product-catalog.js

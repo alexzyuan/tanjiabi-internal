@@ -29,6 +29,9 @@ const explicitFiles = [
   "scripts/deploy-integrity.js",
   "scripts/package-deploy.js",
   "scripts/product-catalog-sqlite-smoke.js",
+  "scripts/sales-facts-sqlite-smoke.js",
+  "scripts/validate-sales-facts-schema.js",
+  "scripts/audit-sales-facts-preflight.js",
   "scripts/migrate-product-catalog.js",
   "scripts/retire-product-catalog-legacy-cache.js",
   "assets/favicon.svg",
@@ -142,7 +145,7 @@ function resolveDeployMetadata() {
     confirmedBranch: confirmedDeployBranch,
     clean: true,
     includeCss,
-    capabilities: ["product-catalog-sqlite-v1"],
+    capabilities: ["product-catalog-sqlite-v1", "sales-facts-sqlite-v1"],
     packagedAt: new Date().toISOString(),
   };
 }
