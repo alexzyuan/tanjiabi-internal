@@ -60,6 +60,26 @@ test("fetchLingxingListingRecords fails when the declared total exceeds the scan
   );
 });
 
+test("fetchLingxingListingRecords rejects a total that changes across pages", async () => {
+  const adapter = {
+    async fetchListings({ offset }) {
+      return {
+        data: {
+          total: offset === 0 ? 3 : 2,
+          list: [{ seller_sku: `MSKU-${offset}` }],
+        },
+      };
+    },
+  };
+
+  await assert.rejects(
+    fetchLingxingListingRecords(adapter, { sid: 8708 }, { pageSize: 1, requireTotal: true }),
+    (error) => error.code === "LISTING_PAGINATION_INCOMPLETE"
+      && error.details?.reason === "total-changed"
+      && error.details?.declaredTotal === 3,
+  );
+});
+
 test("fetchLingxingListingsBySidMskus tries supported SID variants and fuzzy fallback", async () => {
   const calls = [];
   const adapter = {

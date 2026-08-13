@@ -482,6 +482,8 @@ SALES_FACTS_PREFLIGHT_CURRENCY_MODE=CNY|ORIGINAL
 
 It fetches one complete month and each day serially, compares quantity exactly and fixed-point money within one metric-specific storage unit (`0.000001` for `otherIncome`, `0.0001` for other money fields by default), records page/row/mismatch counts, and recommends `monthly` only on complete equality. Inputs are never silently rounded and the fetch mode never silently changes.
 
+Gate A residual: the current OrderProfit adapter merges all pages before the preflight receives rows, so the report can include only pagination evidence that the adapter explicitly exposes. Persisting actual per-request page counts/declared totals in the preflight report remains a P2 adapter-instrumentation task; do not synthesize those values from row counts.
+
 - [ ] **Step 5: Run GREEN and commit**
 
 Run: `node --test test/salesFactsOrderProfitValidator.test.js test/salesFactsPreflightCli.test.js`

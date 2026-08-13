@@ -110,6 +110,59 @@ test("full scan rejects a truncated Listing total", async () => {
   );
 });
 
+test("full scan rejects a full Listing page without a reliable total", async () => {
+  const adapter = {
+    async fetchListings() {
+      return {
+        data: {
+          list: [{ sid: 8708, seller_sku: "MSKU-A", asin_principal_list: [] }],
+        },
+      };
+    },
+  };
+
+  await assert.rejects(
+    scanAllListingOwners({
+      sellers: [{ sid: 8708, status: 1 }],
+      adapter,
+      pageSize: 1,
+      requestId: "owners-missing-total-test",
+    }),
+    (error) => error.code === "LISTING_PAGINATION_INCOMPLETE"
+      && error.details?.sid === 8708
+      && error.details?.reason === "total-missing",
+  );
+});
+
+test("full scan rejects an empty Listing page before the declared total", async () => {
+  const adapter = {
+    async fetchListings({ offset }) {
+      return {
+        data: {
+          total: 2,
+          list: offset === 0
+            ? [{ sid: 8708, seller_sku: "MSKU-A", asin_principal_list: [] }]
+            : [],
+        },
+      };
+    },
+  };
+
+  await assert.rejects(
+    scanAllListingOwners({
+      sellers: [{ sid: 8708, status: 1 }],
+      adapter,
+      pageSize: 1,
+      requestId: "owners-empty-page-test",
+    }),
+    (error) => error.code === "LISTING_PAGINATION_INCOMPLETE"
+      && error.details?.sid === 8708
+      && error.details?.reason === "empty-before-total"
+      && error.details?.declaredTotal === 2
+      && error.details?.rowCount === 1,
+  );
+});
+
 test("audit scans every active SID and returns only redacted anomaly identities", async () => {
   const calls = [];
   const adapter = {

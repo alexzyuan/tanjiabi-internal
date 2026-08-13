@@ -55,17 +55,43 @@ function normalizeSellerMap(sellers) {
     .filter(([sid]) => Number.isInteger(sid) && sid > 0));
 }
 
+function presentValues(record, keys) {
+  return keys.flatMap((key) => {
+    const value = record?.[key];
+    return value === undefined || value === null || String(value).trim() === "" ? [] : [value];
+  });
+}
+
 function orderProfitSid(record) {
-  const direct = firstValue(record, SID_FIELDS);
-  if (direct !== "") return Number(direct);
-  return Number(Array.isArray(record?.sids) ? record.sids[0] : 0);
+  const values = [
+    ...presentValues(record, SID_FIELDS),
+    ...(Array.isArray(record?.sids) ? record.sids : []),
+  ];
+  const identities = new Set(values.map((value) => Number(value)));
+  if (identities.size > 1) {
+    throw new SalesFactsConflictError("OrderProfit 行包含多个不同 SID。", {
+      code: "SALES_FACTS_SID_CONFLICT",
+      details: { identityCount: identities.size },
+    });
+  }
+  return identities.size ? identities.values().next().value : 0;
 }
 
 function orderProfitMsku(record) {
-  const direct = firstValue(record, MSKU_FIELDS);
-  if (direct !== "") return String(direct).trim();
-  const priceInfo = Array.isArray(record?.price_list) ? record.price_list[0] : null;
-  return String(firstValue(priceInfo, MSKU_FIELDS)).trim();
+  const values = [
+    ...presentValues(record, MSKU_FIELDS),
+    ...(Array.isArray(record?.price_list)
+      ? record.price_list.flatMap((priceInfo) => presentValues(priceInfo, MSKU_FIELDS))
+      : []),
+  ].map((value) => String(value).trim());
+  const identities = new Set(values.map((value) => value.toLocaleLowerCase("en-US")));
+  if (identities.size > 1) {
+    throw new SalesFactsConflictError("OrderProfit 行包含多个不同 MSKU。", {
+      code: "SALES_FACTS_MSKU_CONFLICT",
+      details: { identityCount: identities.size },
+    });
+  }
+  return values[0] || "";
 }
 
 function normalizedCurrency(record, currencyMode) {

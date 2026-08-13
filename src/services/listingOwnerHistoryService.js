@@ -262,6 +262,7 @@ export async function scanAllListingOwners({
         pageSize,
         maxOffset,
         pagination,
+        requireTotal: true,
       });
     } catch (error) {
       if (error?.code === "LISTING_PAGINATION_INCOMPLETE") {
@@ -323,6 +324,7 @@ export async function auditAllListingOwners({
         pageSize,
         maxOffset,
         pagination,
+        requireTotal: true,
       });
     } catch (error) {
       if (error?.code === "LISTING_PAGINATION_INCOMPLETE") {

@@ -4,6 +4,8 @@ import test from "node:test";
 import { runSalesFactsOwnerAuditCli } from "../scripts/audit-sales-facts-preflight.js";
 import { runSalesFactsOrderProfitPreflightCli } from "../scripts/audit-sales-facts-preflight.js";
 
+const FEBRUARY_DATES = Array.from({ length: 28 }, (_, index) => `2026-02-${String(index + 1).padStart(2, "0")}`);
+
 test("owner audit CLI force-loads runtime sellers without writing seller cache", async () => {
   const directoryCalls = [];
   const outputs = [];
@@ -98,13 +100,103 @@ test("owner audit CLI reports a controlled failure without echoing the upstream 
   assert.doesNotMatch(outputs.join("\n"), /secret|payload|token=/i);
 });
 
+test("OrderProfit preflight rejects any invalid SID token before loading sellers", async () => {
+  let directoryCalled = false;
+  const report = await runSalesFactsOrderProfitPreflightCli({
+    env: {
+      SALES_FACTS_PREFLIGHT_START_DATE: "2026-02-01",
+      SALES_FACTS_PREFLIGHT_END_DATE: "2026-02-28",
+      SALES_FACTS_PREFLIGHT_SIDS: "8708,bad",
+      SALES_FACTS_PREFLIGHT_CURRENCY_MODE: "CNY",
+    },
+    getDirectory: async () => {
+      directoryCalled = true;
+      return { sellers: [{ sid: 8708, countryCode: "US", status: 1 }] };
+    },
+    adapter: {},
+    writeOutput() {},
+  });
+
+  assert.equal(report.error.code, "SALES_FACTS_PREFLIGHT_INPUT_INVALID");
+  assert.equal(directoryCalled, false);
+});
+
+test("OrderProfit preflight rejects a partial natural month before loading sellers", async () => {
+  let directoryCalled = false;
+  const report = await runSalesFactsOrderProfitPreflightCli({
+    env: {
+      SALES_FACTS_PREFLIGHT_START_DATE: "2026-02-01",
+      SALES_FACTS_PREFLIGHT_END_DATE: "2026-02-27",
+      SALES_FACTS_PREFLIGHT_SIDS: "8708",
+      SALES_FACTS_PREFLIGHT_CURRENCY_MODE: "CNY",
+    },
+    getDirectory: async () => {
+      directoryCalled = true;
+      return { sellers: [{ sid: 8708, countryCode: "US", status: 1 }] };
+    },
+    adapter: {},
+    writeOutput() {},
+  });
+
+  assert.equal(report.error.code, "SALES_FACTS_PREFLIGHT_INPUT_INVALID");
+  assert.equal(directoryCalled, false);
+});
+
+test("OrderProfit preflight uses canonical scope validation for ORIGINAL countries", async () => {
+  let loadCalled = false;
+  const report = await runSalesFactsOrderProfitPreflightCli({
+    env: {
+      SALES_FACTS_PREFLIGHT_START_DATE: "2026-02-01",
+      SALES_FACTS_PREFLIGHT_END_DATE: "2026-02-28",
+      SALES_FACTS_PREFLIGHT_SIDS: "8708,8709",
+      SALES_FACTS_PREFLIGHT_CURRENCY_MODE: "ORIGINAL",
+    },
+    getDirectory: async () => ({ sellers: [
+      { sid: 8708, countryCode: "US", status: 1 },
+      { sid: 8709, countryCode: "CA", status: 1 },
+    ] }),
+    adapter: {},
+    loadRange: async () => {
+      loadCalled = true;
+      return [];
+    },
+    writeOutput() {},
+  });
+
+  assert.equal(report.error.code, "SALES_FACTS_ORIGINAL_SCOPE_INVALID");
+  assert.equal(loadCalled, false);
+});
+
+test("OrderProfit preflight uses canonical scope validation for unknown SIDs", async () => {
+  let loadCalled = false;
+  const report = await runSalesFactsOrderProfitPreflightCli({
+    env: {
+      SALES_FACTS_PREFLIGHT_START_DATE: "2026-02-01",
+      SALES_FACTS_PREFLIGHT_END_DATE: "2026-02-28",
+      SALES_FACTS_PREFLIGHT_SIDS: "9999",
+      SALES_FACTS_PREFLIGHT_CURRENCY_MODE: "CNY",
+    },
+    getDirectory: async () => ({ sellers: [{ sid: 8708, countryCode: "US", status: 1 }] }),
+    adapter: {},
+    loadRange: async () => {
+      loadCalled = true;
+      return [];
+    },
+    writeOutput() {},
+  });
+
+  assert.equal(report.error.code, "SALES_FACTS_UNKNOWN_SID");
+  assert.equal(report.error.operation, "sales-facts-scope-validation");
+  assert.equal(loadCalled, false);
+});
+
 test("OrderProfit preflight compares one monthly request with serial daily requests without writes", async () => {
   const calls = [];
   const outputs = [];
   const report = await runSalesFactsOrderProfitPreflightCli({
     env: {
-      SALES_FACTS_PREFLIGHT_START_DATE: "2026-07-01",
-      SALES_FACTS_PREFLIGHT_END_DATE: "2026-07-02",
+      SALES_FACTS_PREFLIGHT_START_DATE: "2026-02-01",
+      SALES_FACTS_PREFLIGHT_END_DATE: "2026-02-28",
       SALES_FACTS_PREFLIGHT_SIDS: "8708",
       SALES_FACTS_PREFLIGHT_CURRENCY_MODE: "CNY",
     },
@@ -112,16 +204,15 @@ test("OrderProfit preflight compares one monthly request with serial daily reque
     adapter: {},
     loadRange: async ({ startDate, endDate }) => {
       calls.push([startDate, endDate]);
-      const dates = startDate === endDate ? [startDate] : ["2026-07-01", "2026-07-02"];
+      const dates = startDate === endDate ? [startDate] : FEBRUARY_DATES;
       return dates.map((factDate) => ({ sid: 8708, seller_sku: "A", report_date: factDate, currency_code: "CNY", amount: 10, volume: 1 }));
     },
     writeOutput: (text) => outputs.push(text),
   });
-  assert.deepEqual(calls, [
-    ["2026-07-01", "2026-07-02"],
-    ["2026-07-01", "2026-07-01"],
-    ["2026-07-02", "2026-07-02"],
-  ]);
+  assert.equal(calls.length, 29);
+  assert.deepEqual(calls[0], ["2026-02-01", "2026-02-28"]);
+  assert.deepEqual(calls[1], ["2026-02-01", "2026-02-01"]);
+  assert.deepEqual(calls.at(-1), ["2026-02-28", "2026-02-28"]);
   assert.equal(report.ok, true);
   assert.equal(report.exitCode, 0);
   assert.equal(report.approvedFetchMode, "monthly");
@@ -132,15 +223,15 @@ test("OrderProfit preflight approves daily for a complete mismatch and emits no 
   const outputs = [];
   const report = await runSalesFactsOrderProfitPreflightCli({
     env: {
-      SALES_FACTS_PREFLIGHT_START_DATE: "2026-07-01",
-      SALES_FACTS_PREFLIGHT_END_DATE: "2026-07-01",
+      SALES_FACTS_PREFLIGHT_START_DATE: "2026-02-01",
+      SALES_FACTS_PREFLIGHT_END_DATE: "2026-02-28",
       SALES_FACTS_PREFLIGHT_SIDS: "8708",
       SALES_FACTS_PREFLIGHT_CURRENCY_MODE: "CNY",
     },
     getDirectory: async () => ({ sellers: [{ sid: 8708, countryCode: "US", status: 1 }] }),
     adapter: {},
-    loadRange: async ({ requestKind }) => [{
-      sid: 8708, seller_sku: "SECRET-MSKU", report_date: "2026-07-01", currency_code: "CNY",
+    loadRange: async ({ requestKind, startDate }) => [{
+      sid: 8708, seller_sku: "SECRET-MSKU", report_date: startDate, currency_code: "CNY",
       amount: requestKind === "monthly" ? 10 : 9,
     }],
     writeOutput: (text) => outputs.push(text),
@@ -155,8 +246,8 @@ test("OrderProfit preflight exposes a controlled validation code without upstrea
   const outputs = [];
   const report = await runSalesFactsOrderProfitPreflightCli({
     env: {
-      SALES_FACTS_PREFLIGHT_START_DATE: "2026-07-01",
-      SALES_FACTS_PREFLIGHT_END_DATE: "2026-07-01",
+      SALES_FACTS_PREFLIGHT_START_DATE: "2026-02-01",
+      SALES_FACTS_PREFLIGHT_END_DATE: "2026-02-28",
       SALES_FACTS_PREFLIGHT_SIDS: "8708",
       SALES_FACTS_PREFLIGHT_CURRENCY_MODE: "CNY",
     },
@@ -186,8 +277,8 @@ test("OrderProfit preflight approves daily when monthly rows lack dates but ever
   const outputs = [];
   const report = await runSalesFactsOrderProfitPreflightCli({
     env: {
-      SALES_FACTS_PREFLIGHT_START_DATE: "2026-07-01",
-      SALES_FACTS_PREFLIGHT_END_DATE: "2026-07-02",
+      SALES_FACTS_PREFLIGHT_START_DATE: "2026-02-01",
+      SALES_FACTS_PREFLIGHT_END_DATE: "2026-02-28",
       SALES_FACTS_PREFLIGHT_SIDS: "8708",
       SALES_FACTS_PREFLIGHT_CURRENCY_MODE: "CNY",
     },
@@ -203,17 +294,16 @@ test("OrderProfit preflight approves daily when monthly rows lack dates but ever
     writeOutput: (text) => outputs.push(text),
   });
 
-  assert.deepEqual(calls, [
-    ["monthly", "2026-07-01", "2026-07-02"],
-    ["daily", "2026-07-01", "2026-07-01"],
-    ["daily", "2026-07-02", "2026-07-02"],
-  ]);
+  assert.equal(calls.length, 29);
+  assert.deepEqual(calls[0], ["monthly", "2026-02-01", "2026-02-28"]);
+  assert.deepEqual(calls[1], ["daily", "2026-02-01", "2026-02-01"]);
+  assert.deepEqual(calls.at(-1), ["daily", "2026-02-28", "2026-02-28"]);
   assert.equal(report.ok, true);
   assert.equal(report.exitCode, 0);
   assert.equal(report.approvedFetchMode, "daily");
   assert.equal(report.dailyValidationComplete, true);
   assert.equal(report.monthlyValidationCode, "SALES_FACTS_DATE_MISSING");
-  assert.equal(report.dailyRowCount, 2);
+  assert.equal(report.dailyRowCount, 28);
   assert.equal(outputs.length, 1);
 });
 
@@ -221,8 +311,8 @@ test("OrderProfit preflight rejects daily approval when any requested day is inv
   const outputs = [];
   const report = await runSalesFactsOrderProfitPreflightCli({
     env: {
-      SALES_FACTS_PREFLIGHT_START_DATE: "2026-07-01",
-      SALES_FACTS_PREFLIGHT_END_DATE: "2026-07-02",
+      SALES_FACTS_PREFLIGHT_START_DATE: "2026-02-01",
+      SALES_FACTS_PREFLIGHT_END_DATE: "2026-02-28",
       SALES_FACTS_PREFLIGHT_SIDS: "8708",
       SALES_FACTS_PREFLIGHT_CURRENCY_MODE: "CNY",
     },
@@ -230,7 +320,7 @@ test("OrderProfit preflight rejects daily approval when any requested day is inv
     adapter: {},
     loadRange: async ({ startDate, requestKind }) => {
       if (requestKind === "monthly") return [];
-      if (startDate === "2026-07-02") return [{ sid: 9999, seller_sku: "A", amount: 1 }];
+      if (startDate === "2026-02-02") return [{ sid: 9999, seller_sku: "A", amount: 1 }];
       return [{ sid: 8708, seller_sku: "A", amount: 1 }];
     },
     writeOutput: (text) => outputs.push(text),

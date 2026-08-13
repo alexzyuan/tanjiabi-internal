@@ -73,6 +73,49 @@ test("normalizes SID and MSKU from the real OrderProfit row shape", () => {
   assert.equal("price_list" in fact, false);
 });
 
+test("allows repeated normalized OrderProfit identities across direct and nested fields", () => {
+  const [fact] = normalizeOrderProfitRows([row({
+    sids: ["8708", 8708],
+    price_list: [{ seller_sku: " msku-a " }, { seller_sku: "MSKU-A" }],
+  })], {
+    requestedDateRange: { startDate: "2026-07-01", endDate: "2026-07-01" },
+    currencyMode: "CNY",
+    sellers,
+  });
+
+  assert.equal(fact.sid, 8708);
+  assert.equal(fact.mskuKey, "msku-a");
+});
+
+test("rejects conflicting direct and nested OrderProfit identities", () => {
+  assert.throws(
+    () => normalizeOrderProfitRows([row({ sids: [8708, 8709] })], {
+      requestedDateRange: { startDate: "2026-07-01", endDate: "2026-07-01" },
+      currencyMode: "CNY",
+      sellers: [...sellers, { sid: 8709, countryCode: "US", status: 1 }],
+    }),
+    (error) => error.code === "SALES_FACTS_SID_CONFLICT" && error.details?.identityCount === 2,
+  );
+
+  assert.throws(
+    () => normalizeOrderProfitRows([row({ sids: [8709] })], {
+      requestedDateRange: { startDate: "2026-07-01", endDate: "2026-07-01" },
+      currencyMode: "CNY",
+      sellers: [...sellers, { sid: 8709, countryCode: "US", status: 1 }],
+    }),
+    (error) => error.code === "SALES_FACTS_SID_CONFLICT" && error.details?.identityCount === 2,
+  );
+
+  assert.throws(
+    () => normalizeOrderProfitRows([row({ price_list: [{ seller_sku: "MSKU-B" }] })], {
+      requestedDateRange: { startDate: "2026-07-01", endDate: "2026-07-01" },
+      currencyMode: "CNY",
+      sellers,
+    }),
+    (error) => error.code === "SALES_FACTS_MSKU_CONFLICT" && error.details?.identityCount === 2,
+  );
+});
+
 test("approves monthly mode only when every daily metric reconciles", () => {
   const monthlyRows = normalizeOrderProfitRows([
     row(),

@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import { getLingxingAdapter } from "../src/adapters/lingxingAdapter.js";
 import { auditAllListingOwners } from "../src/services/listingOwnerHistoryService.js";
+import { normalizeSalesFactsScope } from "../src/services/salesFactsIdentity.js";
 import {
   compareMonthlyAndDailyFacts,
   normalizeOrderProfitRows,
@@ -101,16 +102,24 @@ function listDates(startDate, endDate) {
   return dates;
 }
 
+function isCompleteNaturalMonth(startDate, endDate, dates) {
+  if (!/^\d{4}-\d{2}-01$/u.test(startDate) || startDate.slice(0, 7) !== endDate.slice(0, 7)) return false;
+  const [year, month] = startDate.split("-").map(Number);
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return endDate === `${startDate.slice(0, 7)}-${String(lastDay).padStart(2, "0")}` && dates.length === lastDay;
+}
+
 function preflightInputs(env) {
   const startDate = requiredPreflightInput(env, "SALES_FACTS_PREFLIGHT_START_DATE");
   const endDate = requiredPreflightInput(env, "SALES_FACTS_PREFLIGHT_END_DATE");
-  const sids = requiredPreflightInput(env, "SALES_FACTS_PREFLIGHT_SIDS")
-    .split(",")
-    .map(Number)
-    .filter((sid) => Number.isInteger(sid) && sid > 0);
+  const sidTokens = requiredPreflightInput(env, "SALES_FACTS_PREFLIGHT_SIDS").split(",");
+  if (sidTokens.some((token) => !/^[1-9]\d*$/u.test(token.trim()))) throw new Error("invalid preflight SID");
+  const sids = sidTokens.map((token) => Number(token.trim()));
+  if (sids.some((sid) => !Number.isSafeInteger(sid))) throw new Error("invalid preflight SID");
   const currencyMode = requiredPreflightInput(env, "SALES_FACTS_PREFLIGHT_CURRENCY_MODE").toUpperCase();
   if (!sids.length || !["CNY", "ORIGINAL"].includes(currencyMode)) throw new Error("invalid preflight scope");
   const dates = listDates(startDate, endDate);
+  if (!isCompleteNaturalMonth(startDate, endDate, dates)) throw new Error("preflight range must be a complete natural month");
   return { startDate, endDate, dates, sids: [...new Set(sids)].sort((a, b) => a - b), currencyMode };
 }
 
@@ -177,8 +186,16 @@ export async function runSalesFactsOrderProfitPreflightCli({
     writeOutput(JSON.stringify(failure));
     return failure;
   }
-  if (scope.sids.some((sid) => !sellers.some((seller) => Number(seller.sid) === sid))) {
-    const failure = safePreflightFailure(requestId, "SALES_FACTS_PREFLIGHT_UNKNOWN_SID");
+  try {
+    scope = normalizeSalesFactsScope({
+      startDate: scope.startDate,
+      endDate: scope.endDate,
+      sids: scope.sids,
+      currencyMode: scope.currencyMode,
+      sellerDirectory: sellers,
+    });
+  } catch (error) {
+    const failure = safeValidationFailure(requestId, error, "sales-facts-scope-validation");
     writeOutput(JSON.stringify(failure));
     return failure;
   }

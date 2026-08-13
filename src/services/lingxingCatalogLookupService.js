@@ -1,8 +1,11 @@
 import { normalizeRecordList } from "../utils/recordAccess.js";
 
-function totalCountOf(payload, recordsLength = 0) {
+function totalCountOf(payload) {
   const data = payload?.data || payload || {};
-  return Number(data.total ?? data.count ?? data.totalCount ?? payload?.total ?? recordsLength) || recordsLength;
+  const value = data.total ?? data.count ?? data.totalCount ?? payload?.total;
+  if (value === undefined || value === null || value === "") return null;
+  const total = Number(value);
+  return Number.isInteger(total) && total >= 0 ? total : null;
 }
 
 function uniqueText(values = []) {
@@ -15,12 +18,12 @@ function chunkArray(values, size) {
   return chunks;
 }
 
-function paginationIncompleteError({ declaredTotal, rowCount, maxOffset, pageSize }) {
+function paginationIncompleteError({ declaredTotal, rowCount, maxOffset, pageSize, reason }) {
   const error = new Error("ERP Listing 分页不完整。");
   error.name = "LingxingListingPaginationError";
   error.code = "LISTING_PAGINATION_INCOMPLETE";
   error.statusCode = 502;
-  error.details = { declaredTotal, rowCount, maxOffset, pageSize };
+  error.details = { declaredTotal, rowCount, maxOffset, pageSize, reason };
   return error;
 }
 
@@ -30,21 +33,44 @@ export async function fetchLingxingListingRecords(adapter, baseParams, {
   normalize = normalizeRecordList,
   metrics = null,
   pagination = null,
+  requireTotal = false,
 } = {}) {
   if (!Number.isInteger(pageSize) || pageSize <= 0) throw new TypeError("Listing pageSize 必须是正整数。");
   if (!Number.isInteger(maxOffset) || maxOffset <= 0) throw new TypeError("Listing maxOffset 必须是正整数。");
   const records = [];
   let offset = 0;
   let pageCount = 0;
-  let declaredTotal = 0;
+  let declaredTotal = null;
   while (offset < maxOffset) {
     metrics?.increment?.("lingxingListingRequests");
     const payload = await adapter.fetchListings({ ...baseParams, offset, length: pageSize });
     const pageRows = normalize(payload);
     pageCount += 1;
+    const pageTotal = totalCountOf(payload);
+    if (requireTotal && pageTotal === null) {
+      throw paginationIncompleteError({ declaredTotal, rowCount: records.length, maxOffset, pageSize, reason: "total-missing" });
+    }
+    if (pageTotal !== null && declaredTotal !== null && pageTotal !== declaredTotal) {
+      throw paginationIncompleteError({ declaredTotal, rowCount: records.length, maxOffset, pageSize, reason: "total-changed" });
+    }
+    if (pageTotal !== null) declaredTotal = pageTotal;
     records.push(...pageRows);
-    declaredTotal = Math.max(declaredTotal, totalCountOf(payload, records.length));
-    if (!pageRows.length || pageRows.length < pageSize || records.length >= declaredTotal) break;
+    if (declaredTotal !== null && records.length > declaredTotal) {
+      throw paginationIncompleteError({ declaredTotal, rowCount: records.length, maxOffset, pageSize, reason: "rows-exceed-total" });
+    }
+    if (!pageRows.length) {
+      if (declaredTotal !== null && records.length < declaredTotal) {
+        throw paginationIncompleteError({ declaredTotal, rowCount: records.length, maxOffset, pageSize, reason: "empty-before-total" });
+      }
+      break;
+    }
+    if (declaredTotal !== null && records.length >= declaredTotal) break;
+    if (pageRows.length < pageSize) {
+      if (declaredTotal !== null && records.length < declaredTotal) {
+        throw paginationIncompleteError({ declaredTotal, rowCount: records.length, maxOffset, pageSize, reason: "short-before-total" });
+      }
+      break;
+    }
     offset += pageSize;
   }
   if (pagination && typeof pagination === "object") {
@@ -52,8 +78,8 @@ export async function fetchLingxingListingRecords(adapter, baseParams, {
     pagination.rowCount = records.length;
     pagination.declaredTotal = declaredTotal;
   }
-  if (records.length < declaredTotal) {
-    throw paginationIncompleteError({ declaredTotal, rowCount: records.length, maxOffset, pageSize });
+  if (declaredTotal !== null && records.length < declaredTotal) {
+    throw paginationIncompleteError({ declaredTotal, rowCount: records.length, maxOffset, pageSize, reason: "scan-limit" });
   }
   return records;
 }

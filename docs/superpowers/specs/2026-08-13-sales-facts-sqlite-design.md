@@ -73,6 +73,7 @@
 - 身份：`fact_date + sid + msku_key + currency_mode`；
 - `sid` 必须存在于运行时 seller directory；
 - `msku_key` 复用统一的 trim/lowercase 规则，原始 MSKU 只作展示和上游请求；
+- OrderProfit 行的顶层身份字段与 `sids[]`、`price_list[].seller_sku` 必须收集后规范化去重；重复的同一 SID/MSKU 允许，出现两个不同 SID 或 MSKU 时整行视为契约冲突，不得选择第一个；
 - 负责人不是事实字段，也不参与事实唯一性；
 - 数字 `0`、`null` 和字段缺失必须严格区分；缺失字段不得补零；
 - 金额和比率禁止直接以 SQLite `REAL` 作为事实真值；canonical metric registry 为每个字段声明固定精度，repository 以定点整数保存并在边界转换，避免二进制浮点累计误差；`otherIncome`（`total_other_granted`）按生产契约使用 6 位小数，其他金额默认 4 位，超出已声明精度必须失败，禁止静默舍入；
@@ -209,7 +210,7 @@ metadata 仅保存受控键，包括两个 revision、最近成功同步、owner
 ### 上线前强制只读预检
 
 1. 从运行时 seller directory 读取全部有效 SID，不使用静态店铺补全。
-2. 分页读取每个 SID 的全部 Listing，不限已有销售记录的 MSKU。
+2. 分页读取每个 SID 的全部 Listing，不限已有销售记录的 MSKU；owner 全量扫描要求每页携带合法且跨页稳定的声明 total，total 缺失/非法/变化、未达到 total 前空页或短页、达到扫描上限仍不完整均失败，禁止用已收行数伪造 total。
 3. 统一解析负责人列表，以人员 ID 去重；无 ID 时以规范化姓名去重。
 4. 统计单负责人、字段明确为空和多负责人异常。
 5. 多个重复条目若解析为同一身份，计为一个负责人；多个不同身份则失败。
@@ -231,7 +232,7 @@ metadata 仅保存受控键，包括两个 revision、最近成功同步、owner
 
 ### 样本与请求
 
-- 选择一个数据完整的历史自然月和若干有效 SID；
+- 选择一个数据完整的历史自然月和若干有效 SID；预检输入必须从该月 01 日到同月真实最后一天，SID token 必须全部为严格正整数；seller directory 加载后必须复用 canonical scope 校验未知/停用 SID 和单国家 `ORIGINAL`，禁止预检维护宽松旁路规则；
 - `CNY` 与合法的单国家 `ORIGINAL` 分别验证；
 - 对同一范围执行一次整月完整分页请求，以及该月每一天的完整分页请求；
 - 验证工具只能读取上游并生成脱敏报告，不写新事实库或旧 JSON。
