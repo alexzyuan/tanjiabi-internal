@@ -84,7 +84,7 @@ data-cache/product-catalog/product-catalog-v1.sqlite
 
 Listing 以 `SID + 标准化 MSKU` 为身份，商品主数据以标准化内部 SKU 为身份。已存在的商品不会因年龄自动刷新；新身份可以首次查询时补录，已有资料必须通过当前页面的“刷新商品资料”显式更新。刷新会先校验运行时店铺 SID，并在全部领星请求成功后一次性提交；数据库不保存原始上游 payload、凭据或 token。
 
-销售事实 SQLite（`sales-facts.sqlite`）和库存快照 SQLite（`inventory-snapshots.sqlite`）属于后续阶段，目前尚未实现，必须先完成独立设计。
+销售事实 SQLite（`sales-facts.sqlite`）第二阶段已完成独立设计但尚未实施：OrderProfit 采用日级 `SID + 标准化 MSKU + 币种模式` 事实，自定义费用按自然月保存，Listing 负责人按有效期关联；完整契约见 `docs/superpowers/specs/2026-08-13-sales-facts-sqlite-design.md`。库存快照 SQLite（`inventory-snapshots.sqlite`）仍属于后续阶段，必须先完成独立设计。
 
 旧的 `shared-product-catalog` 与 `supplier-board-product-map` JSON 在观察期内只读，用于迁移、回退和对账；未经单独清理批准不得删除或继续写入。
 

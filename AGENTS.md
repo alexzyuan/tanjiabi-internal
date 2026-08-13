@@ -62,7 +62,8 @@ Production deploys are package-based, so the deployment source branch must be gu
 - Stage 1 uses `data-cache/product-catalog/product-catalog-v1.sqlite` with `SID + normalized MSKU` Listing identity and normalized internal-SKU product identity.
 - Existing catalog rows never refresh by age. New missing identities may be filled once; updates require an explicit current-page product refresh.
 - Product refresh is all-or-nothing, validates runtime seller SID, and never persists raw upstream payloads or credentials.
-- `sales-facts.sqlite` and `inventory-snapshots.sqlite` are approved later stages but require separate detailed designs before implementation.
+- Stage 2 `sales-facts.sqlite` is governed by `docs/superpowers/specs/2026-08-13-sales-facts-sqlite-design.md`: daily `SID + normalized MSKU + currency mode` OrderProfit facts, monthly custom fees, effective-dated Listing owners, explicit coverage, atomic scope refresh, and revision-aware 12-hour derived caches. It remains a separate project from product catalog and must not be implemented until its written plan is approved.
+- Stage 3 `inventory-snapshots.sqlite` remains a later stage and requires its own detailed design before implementation.
 
 Operationally, the native `better-sqlite3` dependency is checked with the disposable WAL/write/read/rollback smoke immediately after `npm ci`. Deployment then runs the deterministic legacy JSON migration before the PM2 restart, followed by `/api/health` and deployed-integrity checks. The SQLite file and its WAL/SHM companions remain under `data-cache/` and are excluded from deploy archives while being preserved by rollback. Legacy `shared-product-catalog` and `supplier-board-product-map` JSON files remain read-only during the observation period; deleting or rewriting them requires a separate cleanup approval.
 
