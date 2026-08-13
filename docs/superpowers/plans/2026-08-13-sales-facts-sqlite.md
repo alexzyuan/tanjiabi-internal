@@ -605,7 +605,7 @@ git commit -m "feat(sales-facts): load uncached upstream facts"
 - Create: `src/services/salesFactsSyncService.js`
 - Create: `test/salesFactsSyncService.test.js`
 
-- [ ] **Step 1: Write policy and transaction RED tests**
+- [x] **Step 1: Write policy and transaction RED tests**
 
 Cover current month 12h, previous month 24h, frozen older months, missing frozen coverage requiring force, mixed-range stale partitions, zero rows, range replacement, monthly dual-source rollback, same-key single-flight, different-key isolation, retry failure cleanup, and no network inside repository transaction.
 
@@ -617,17 +617,17 @@ test("monthly refresh commits OrderProfit and custom fees once or not at all", a
 });
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `node --test test/salesFactsSyncService.test.js`
 
 Expected: FAIL with missing sync service.
 
-- [ ] **Step 3: Implement policy and orchestration**
+- [x] **Step 3: Implement policy and orchestration**
 
 Implement pure `classifyCoveragePartition({ naturalMonth, refreshedAtMs, nowPacific })` returning `fresh|stale|frozen|missing`. `refreshOrderProfitScope` and `refreshMonthlyReportScope` acquire an exact `rangeKey+operation` in-flight key, fetch/validate outside transaction, call one repository replacement, and clear in-flight in `finally`.
 
-- [ ] **Step 4: Run GREEN and commit**
+- [x] **Step 4: Run GREEN and commit**
 
 Run: `node --test test/salesFactsSyncService.test.js test/salesFactsRepository.test.js test/salesFactsUpstreamService.test.js`
 
@@ -646,17 +646,17 @@ git commit -m "feat(sales-facts): add atomic refresh policy"
 - Create: `src/services/salesFactsQueryService.js`
 - Create: `test/salesFactsQueryService.test.js`
 
-- [ ] **Step 1: Write RED for reads and joins**
+- [x] **Step 1: Write RED for reads and joins**
 
 Tests must prove: fresh SQLite zero-call; stale synchronous refresh; refresh error is returned not stale; frozen history returns `cacheState=frozen`; missing frozen coverage is 422 until force; owner joins by fact date; historical unknown remains unknown; owner filter is post-join and never changes range key; CNY/ORIGINAL isolation; safe meta fields.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `node --test test/salesFactsQueryService.test.js`
 
 Expected: FAIL with missing query service.
 
-- [ ] **Step 3: Implement query contract**
+- [x] **Step 3: Implement query contract**
 
 ```js
 getSalesFacts(scopeInput, {
@@ -667,7 +667,7 @@ getSalesFacts(scopeInput, {
 
 Return decoded numeric records with canonical names and no raw aliases. Meta must include `source`, `cacheState`, ISO `updatedAt`, integer `ageSeconds`, `revision`, `ownerRevision`, `requestId`, `scopeCount`, and phase timings.
 
-- [ ] **Step 4: Run GREEN and commit**
+- [x] **Step 4: Run GREEN and commit**
 
 Run: `node --test test/salesFactsQueryService.test.js test/salesFactsSyncService.test.js test/listingOwnerHistoryService.test.js`
 
