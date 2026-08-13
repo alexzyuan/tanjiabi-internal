@@ -75,7 +75,7 @@
 - `msku_key` 复用统一的 trim/lowercase 规则，原始 MSKU 只作展示和上游请求；
 - 负责人不是事实字段，也不参与事实唯一性；
 - 数字 `0`、`null` 和字段缺失必须严格区分；缺失字段不得补零；
-- 金额和比率禁止直接以 SQLite `REAL` 作为事实真值；canonical metric registry 为每个字段声明固定精度，repository 以定点整数保存并在边界转换，避免二进制浮点累计误差；
+- 金额和比率禁止直接以 SQLite `REAL` 作为事实真值；canonical metric registry 为每个字段声明固定精度，repository 以定点整数保存并在边界转换，避免二进制浮点累计误差；`otherIncome`（`total_other_granted`）按生产契约使用 6 位小数，其他金额默认 4 位，超出已声明精度必须失败，禁止静默舍入；
 - 同一身份返回多个实际币种时，本次刷新失败；
 - 不保存上游 raw payload。
 
@@ -150,7 +150,7 @@
 - 成本与利润：采购成本、头程成本、其他成本、毛利润，以及当前已批准 mapper 所需的单位成本/比例字段；
 - 追踪：`source_updated_at_ms`、`refreshed_at_ms`、`refresh_batch_id`。
 
-具体数据库列由一个后端 canonical metric registry 统一定义；适配器、repository、周报 mapper 和月报 mapper 不得各维护不同别名。registry 必须声明字段来源、nullable 规则、存储尺度和输出尺度；金额/比率以受控定点整数存储，数量字段按接口契约使用整数或已声明尺度。只允许已批准指标列，禁止 `raw_json` 或任意 payload JSON 列。主键为四个身份列。
+具体数据库列由一个后端 canonical metric registry 统一定义；适配器、repository、周报 mapper 和月报 mapper 不得各维护不同别名。registry 必须声明字段来源、nullable 规则、存储尺度和输出尺度；`otherIncome` 使用 scale 6，其他金额默认使用 scale 4，比率按 registry 使用 scale 6；金额/比率以受控定点整数存储，数量字段按接口契约使用整数或已声明尺度。任何输入超过对应尺度都视为数据契约错误，不得静默舍入。只允许已批准指标列，禁止 `raw_json` 或任意 payload JSON 列。主键为四个身份列。
 
 ### `fact_coverage_daily`
 
@@ -241,7 +241,7 @@ metadata 仅保存受控键，包括两个 revision、最近成功同步、owner
 1. 每条整月返回行都携带真实、可解析、位于请求月内的事实日期；不得由请求结束日或调用方参数代填。
 2. 以 `date + SID + MSKU + currencyMode` 聚合后无身份冲突或多实际币种。
 3. 数量类指标逐日合计与整月请求完全一致。
-4. 金额类指标按规范小数处理后，每个 `SID + MSKU` 的差异不超过 0.01；所有差异必须在报告中列出。
+4. 金额类指标按各自 registry 尺度比较，每个事实身份最多允许一个存储单位差异：`otherIncome` 为 `0.000001`，其他金额默认为 `0.0001`；不先舍入到统一小数位，所有超限差异必须在报告中列出。
 5. 分页 total/hasNext/空页契约全部完整，整月和逐日均未触及安全上限。
 
 全部通过时采用“整月请求后按真实日期拆分”；任一条件失败则正式同步采用逐日请求。逐日模式默认串行，只有压测和限流日志证明安全后才允许配置为最大并发 2，不得一次并发整月。仅对网络超时、HTTP 429 或领星明确的临时限流错误重试，每页最多 3 次总尝试；优先遵守上游 `Retry-After`，否则使用有抖动的指数退避。数据契约、身份、日期或分页完整性错误不重试。每次重试记录 requestId、endpoint、attempt、delay 和安全错误码。模式与并发选择写入 metadata 和部署审计，不能运行时静默切换。

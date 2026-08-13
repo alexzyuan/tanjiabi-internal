@@ -12,6 +12,8 @@ import {
 test("registry encodes fixed-point values and preserves null and zero", () => {
   assert.equal(encodeSalesMetric("totalSalesAmount", "12.3456"), 123456n);
   assert.equal(decodeSalesMetric("totalSalesAmount", 123456n), 12.3456);
+  assert.equal(encodeSalesMetric("otherIncome", "0.123456"), 123456n);
+  assert.equal(decodeSalesMetric("otherIncome", 123456n), 0.123456);
   assert.equal(encodeSalesMetric("totalSalesRefunds", 0), 0n);
   assert.equal(encodeSalesMetric("totalSalesRefunds", null), null);
   assert.throws(() => encodeSalesMetric("unknownField", 1), /未注册/);

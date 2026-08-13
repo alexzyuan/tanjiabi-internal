@@ -15,7 +15,7 @@ export const SALES_FACT_METRICS = Object.freeze({
   returnQuantity: { aliases: ["return_quantity", "returnQuantity"], scale: 4, kind: "quantity" },
   refundsQuantity: { aliases: ["refund_quantity", "refundsQuantity"], scale: 4, kind: "quantity" },
   fbaInventoryCompensation: { aliases: ["inventory_credit", "fbaInventoryCompensation"], scale: 4, kind: "money" },
-  otherIncome: { aliases: ["total_other_granted", "otherIncome"], scale: 4, kind: "money" },
+  otherIncome: { aliases: ["total_other_granted", "otherIncome"], scale: 6, kind: "money" },
   platformFee: { aliases: ["selling_fee", "platform_fee", "platformFee"], scale: 4, kind: "money" },
   fbaDeliveryFee: { aliases: ["fulfillment_fee", "fbaDeliveryFee"], scale: 4, kind: "money" },
   otherOrderFee: { aliases: ["other_order_fee", "otherOrderFee"], scale: 4, kind: "money" },

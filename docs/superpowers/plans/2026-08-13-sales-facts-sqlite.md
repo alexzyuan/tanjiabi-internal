@@ -16,7 +16,7 @@
 - Follow `docs/superpowers/specs/2026-08-13-sales-facts-sqlite-design.md` and `CONTEXT.md`; if code reality conflicts, stop and amend the spec before changing behavior.
 - Database path is `data-cache/sales-facts/sales-facts-v1.sqlite`. Do not add sales tables to product catalog SQLite.
 - Facts are keyed by Pacific business date, runtime SID, normalized MSKU, and `CNY|ORIGINAL`. `ORIGINAL` requires a single-country scope.
-- Financial values are fixed-point integers declared by the canonical metric registry. Do not persist facts in `REAL` columns and do not persist raw payload JSON.
+- Financial values are fixed-point integers declared by the canonical metric registry. `otherIncome` (`total_other_granted`) uses scale 6 from the verified production contract; all other money fields default to scale 4. Reject excess precision without silent rounding. Do not persist facts in `REAL` columns and do not persist raw payload JSON.
 - Every complete empty upstream result writes coverage. Missing coverage is not zero sales.
 - Current month coverage expires after 12 hours; previous month after 24 hours; older months are frozen and never auto-fetch.
 - Expired refresh failures are returned as failures. Never serve stale JSON or stale SQLite as a successful fallback.
@@ -303,7 +303,7 @@ export const SALES_FACT_METRICS = Object.freeze({
   returnQuantity: { aliases: ["return_quantity", "returnQuantity"], scale: 4, kind: "quantity" },
   refundsQuantity: { aliases: ["refund_quantity", "refundsQuantity"], scale: 4, kind: "quantity" },
   fbaInventoryCompensation: { aliases: ["inventory_credit", "fbaInventoryCompensation"], scale: 4, kind: "money" },
-  otherIncome: { aliases: ["total_other_granted", "otherIncome"], scale: 4, kind: "money" },
+  otherIncome: { aliases: ["total_other_granted", "otherIncome"], scale: 6, kind: "money" },
   platformFee: { aliases: ["selling_fee", "platform_fee", "platformFee"], scale: 4, kind: "money" },
   fbaDeliveryFee: { aliases: ["fulfillment_fee", "fbaDeliveryFee"], scale: 4, kind: "money" },
   otherOrderFee: { aliases: ["other_order_fee", "otherOrderFee"], scale: 4, kind: "money" },
@@ -480,7 +480,7 @@ SALES_FACTS_PREFLIGHT_SIDS=8708,8709
 SALES_FACTS_PREFLIGHT_CURRENCY_MODE=CNY|ORIGINAL
 ```
 
-It fetches one complete month and each day serially, compares quantity exactly and fixed-point money within one storage unit (`0.0001`), records page/row/mismatch counts, and recommends `monthly` only on complete equality. It never silently changes mode.
+It fetches one complete month and each day serially, compares quantity exactly and fixed-point money within one metric-specific storage unit (`0.000001` for `otherIncome`, `0.0001` for other money fields by default), records page/row/mismatch counts, and recommends `monthly` only on complete equality. Inputs are never silently rounded and the fetch mode never silently changes.
 
 - [ ] **Step 5: Run GREEN and commit**
 
