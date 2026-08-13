@@ -13,6 +13,7 @@
     "package:deploy": "node scripts/package-deploy.js",
     "catalog:legacy:dry-run": "node scripts/retire-product-catalog-legacy-cache.js --dry-run",
     "catalog:legacy:archive": "node scripts/retire-product-catalog-legacy-cache.js --archive",
+    "sales-facts:owners:audit": "node scripts/audit-sales-facts-preflight.js --owners",
     "check:js": "find routes src assets/js scripts -type f -name '*.js' -print0 | xargs -0 -n 1 node --check && node --check server.js && node --check app.js",
     "check": "npm run build:css -- --check && node scripts/check-css-standards.js && npm run check:js",
     "test": "node --test test/*.test.js && npm run test:store-operating-css-browser",

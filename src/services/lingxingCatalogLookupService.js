@@ -15,22 +15,45 @@ function chunkArray(values, size) {
   return chunks;
 }
 
+function paginationIncompleteError({ declaredTotal, rowCount, maxOffset, pageSize }) {
+  const error = new Error("ERP Listing 分页不完整。");
+  error.name = "LingxingListingPaginationError";
+  error.code = "LISTING_PAGINATION_INCOMPLETE";
+  error.statusCode = 502;
+  error.details = { declaredTotal, rowCount, maxOffset, pageSize };
+  return error;
+}
+
 export async function fetchLingxingListingRecords(adapter, baseParams, {
   pageSize = 1000,
   maxOffset = 5000,
   normalize = normalizeRecordList,
   metrics = null,
+  pagination = null,
 } = {}) {
+  if (!Number.isInteger(pageSize) || pageSize <= 0) throw new TypeError("Listing pageSize 必须是正整数。");
+  if (!Number.isInteger(maxOffset) || maxOffset <= 0) throw new TypeError("Listing maxOffset 必须是正整数。");
   const records = [];
   let offset = 0;
+  let pageCount = 0;
+  let declaredTotal = 0;
   while (offset < maxOffset) {
     metrics?.increment?.("lingxingListingRequests");
     const payload = await adapter.fetchListings({ ...baseParams, offset, length: pageSize });
     const pageRows = normalize(payload);
+    pageCount += 1;
     records.push(...pageRows);
-    const total = totalCountOf(payload, records.length);
-    if (!pageRows.length || pageRows.length < pageSize || records.length >= total) break;
+    declaredTotal = Math.max(declaredTotal, totalCountOf(payload, records.length));
+    if (!pageRows.length || pageRows.length < pageSize || records.length >= declaredTotal) break;
     offset += pageSize;
+  }
+  if (pagination && typeof pagination === "object") {
+    pagination.pageCount = pageCount;
+    pagination.rowCount = records.length;
+    pagination.declaredTotal = declaredTotal;
+  }
+  if (records.length < declaredTotal) {
+    throw paginationIncompleteError({ declaredTotal, rowCount: records.length, maxOffset, pageSize });
   }
   return records;
 }

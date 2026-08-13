@@ -39,6 +39,27 @@ test("fetchLingxingListingRecords follows Lingxing offset pagination", async () 
   ]);
 });
 
+test("fetchLingxingListingRecords fails when the declared total exceeds the scan limit", async () => {
+  const adapter = {
+    async fetchListings({ offset }) {
+      return {
+        data: {
+          total: 3,
+          list: [{ seller_sku: `MSKU-${offset}` }],
+        },
+      };
+    },
+  };
+
+  await assert.rejects(
+    fetchLingxingListingRecords(adapter, { sid: 8708 }, { pageSize: 1, maxOffset: 2 }),
+    (error) => error.code === "LISTING_PAGINATION_INCOMPLETE"
+      && error.details?.declaredTotal === 3
+      && error.details?.rowCount === 2
+      && error.details?.maxOffset === 2,
+  );
+});
+
 test("fetchLingxingListingsBySidMskus tries supported SID variants and fuzzy fallback", async () => {
   const calls = [];
   const adapter = {
