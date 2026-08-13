@@ -145,6 +145,46 @@ test("seller profit report rejects its pagination safety limit", async () => {
   assert.equal(pagination.at(-1).safetyLimitHit, true);
 });
 
+test("seller profit report rejects a page that crosses a non-multiple safety limit", async () => {
+  const adapter = new LingxingAdapter({
+    ...lingxingTestConfig, sellerProfitPageSize: 2, sellerProfitMaxRows: 3,
+  });
+  const pagination = [];
+  adapter.performSignedRequest = async () => ({
+    code: 0, data: { records: [{ sid: 11 }, { sid: 12 }], hasNext: true },
+  });
+  await assert.rejects(
+    () => adapter.fetchSellerProfitReport({}, { onPagination: (evidence) => pagination.push(evidence) }),
+    (error) => error.code === "SELLER_PROFIT_PAGINATION_SAFETY_LIMIT",
+  );
+  assert.equal(pagination.at(-1).safetyLimitHit, true);
+});
+
+for (const scenario of [
+  { name: "malformed total", data: { records: [{ sid: 11 }], total: "unknown" } },
+  { name: "fractional total", data: { records: [{ sid: 11 }], total: 1.5 } },
+  { name: "malformed hasNext", data: { records: [{ sid: 11 }], hasNext: "false" } },
+]) {
+  test(`seller profit report rejects ${scenario.name} pagination metadata`, async () => {
+    const adapter = new LingxingAdapter({ ...lingxingTestConfig, sellerProfitPageSize: 2 });
+    adapter.performSignedRequest = async () => ({ code: 0, data: scenario.data });
+    await assert.rejects(
+      () => adapter.fetchSellerProfitReport({}),
+      (error) => error.code === "SELLER_PROFIT_PAGINATION_CONTRACT_INVALID",
+    );
+  });
+}
+
+test("seller profit report rejects explicit zero pagination limits", async () => {
+  for (const config of [
+    { sellerProfitPageSize: 0 },
+    { sellerProfitPageSize: 1, sellerProfitMaxRows: 0 },
+  ]) {
+    const adapter = new LingxingAdapter({ ...lingxingTestConfig, ...config });
+    await assert.rejects(() => adapter.fetchSellerProfitReport({}));
+  }
+});
+
 test("LingxingAdapter keeps documented inclusive endpoint end dates unchanged", async () => {
   const adapter = new LingxingAdapter(lingxingTestConfig);
   const calls = [];
@@ -407,6 +447,26 @@ test("LingxingAdapter refreshes an invalid token and retries the signed request 
   }
 });
 
+test("sales-facts OrderProfit and seller-profit requests can disable token-expired retries", async () => {
+  for (const invoke of [
+    (adapter) => adapter.fetchMskuOrderProfit({}, { retryTokenExpired: false }),
+    (adapter) => adapter.fetchSellerProfitReport({}, { retryTokenExpired: false }),
+  ]) {
+    const adapter = new LingxingAdapter(lingxingTestConfig);
+    let requestCalls = 0;
+    let refreshCalls = 0;
+    adapter.performSignedRequest = async () => {
+      requestCalls += 1;
+      throw Object.assign(new Error("expired"), { tokenExpired: true });
+    };
+    adapter.refreshToken = async () => { refreshCalls += 1; };
+
+    await assert.rejects(() => invoke(adapter));
+    assert.equal(requestCalls, 1);
+    assert.equal(refreshCalls, 0);
+  }
+});
+
 test("getLingxingAdapter returns the process singleton for matching default config", () => {
   resetLingxingAdapterForTest();
   const first = getLingxingAdapter(lingxingTestConfig);
@@ -497,6 +557,43 @@ test("LingxingAdapter fails observably instead of truncating order profit at its
   assert.equal(pagination.at(-1)?.terminalReason, "safety-limit");
   assert.equal(pagination.at(-1)?.complete, false);
   assert.equal(pagination.at(-1)?.safetyLimitHit, true);
+});
+
+test("LingxingAdapter rejects an OrderProfit page that crosses a non-multiple safety limit", async () => {
+  const adapter = new LingxingAdapter({ ...lingxingTestConfig, orderProfitMaxRows: 7500 });
+  const pagination = [];
+  adapter.performSignedRequest = async () => ({
+    code: 0,
+    data: { records: Array.from({ length: 5000 }, (_, id) => ({ id })), hasNext: true },
+  });
+
+  await assert.rejects(
+    () => adapter.fetchMskuOrderProfit({}, { onPagination: (evidence) => pagination.push(evidence) }),
+    (error) => error.endpoint === "/basicOpen/finance/mreport/OrderProfit"
+      && error.details?.fetchedRows === 5000
+      && /安全上限/u.test(error.message),
+  );
+  assert.equal(pagination.at(-1)?.terminalReason, "safety-limit");
+});
+
+for (const scenario of [
+  { name: "malformed total", data: { records: [{ id: 1 }], total: "unknown" } },
+  { name: "fractional total", data: { records: [{ id: 1 }], total: 1.5 } },
+  { name: "malformed hasNext", data: { records: [{ id: 1 }], hasNext: "false" } },
+]) {
+  test(`LingxingAdapter rejects OrderProfit ${scenario.name} pagination metadata`, async () => {
+    const adapter = new LingxingAdapter(lingxingTestConfig);
+    adapter.performSignedRequest = async () => ({ code: 0, data: scenario.data });
+    await assert.rejects(
+      () => adapter.fetchMskuOrderProfit({}),
+      (error) => error.code === "ORDER_PROFIT_PAGINATION_CONTRACT_INVALID",
+    );
+  });
+}
+
+test("LingxingAdapter rejects explicit zero OrderProfit max rows", async () => {
+  const adapter = new LingxingAdapter({ ...lingxingTestConfig, orderProfitMaxRows: 0 });
+  await assert.rejects(() => adapter.fetchMskuOrderProfit({}), /orderProfitMaxRows/u);
 });
 
 test("LingxingAdapter reports incomplete pagination before rejecting an empty page", async () => {

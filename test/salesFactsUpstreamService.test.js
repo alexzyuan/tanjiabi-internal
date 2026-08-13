@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   createSalesFactsUpstreamService,
 } from "../src/services/salesFactsUpstreamService.js";
+import { SalesFactsContractError } from "../src/services/salesFactsIdentity.js";
 
 const sellers = [
   { sid: 8708, countryCode: "US", status: 1 },
@@ -55,8 +56,9 @@ test("loads inclusive OrderProfit days serially with explicit currency and compl
   let maxActive = 0;
   const adapter = {
     normalizeRecordList: (payload) => payload.data.records,
-    async fetchMskuOrderProfit(params, { onPagination }) {
+    async fetchMskuOrderProfit(params, { onPagination, retryTokenExpired }) {
       calls.push(params);
+      assert.equal(retryTokenExpired, false);
       active += 1;
       maxActive = Math.max(maxActive, active);
       await Promise.resolve();
@@ -208,6 +210,47 @@ test("rejects non-contiguous pagination evidence even when the final totals matc
   assert.equal(attempts, 1);
 });
 
+test("rejects OrderProfit facts outside the requested SID scope", async () => {
+  const adapter = {
+    normalizeRecordList: (payload) => payload.data.records,
+    async fetchMskuOrderProfit(_params, { onPagination }) {
+      onPagination(completeEvidence());
+      return { data: { records: [orderRow("2026-08-01", { sid: 8709 })] } };
+    },
+  };
+
+  await assert.rejects(
+    service(adapter).loadOrderProfitRange({
+      startDate: "2026-08-01", endDate: "2026-08-01", sids: [8708], currencyMode: "CNY",
+    }),
+    (error) => error.code === "SALES_FACTS_SCOPE_MISMATCH",
+  );
+});
+
+test("rejects invalid or contradictory pagination terminal reasons", async () => {
+  for (const evidence of [
+    completeEvidence({ terminalReason: "invented-terminal" }),
+    completeEvidence({ terminalReason: "empty-before-more" }),
+    completeEvidence({ terminalReason: "safety-limit", safetyLimitHit: false }),
+    completeEvidence({ terminalReason: "empty-page", pageRowCount: 1, cumulativeRowCount: 1 }),
+    completeEvidence({ terminalReason: "total-exhausted", declaredTotal: null }),
+  ]) {
+    const adapter = {
+      normalizeRecordList: (payload) => payload.data.records,
+      async fetchMskuOrderProfit(_params, { onPagination }) {
+        onPagination(evidence);
+        return { data: { records: [orderRow("2026-08-01")] } };
+      },
+    };
+    await assert.rejects(
+      service(adapter).loadOrderProfitRange({
+        startDate: "2026-08-01", endDate: "2026-08-01", sids: [8708], currencyMode: "CNY",
+      }),
+      (error) => error.code === "SALES_FACTS_PAGINATION_EVIDENCE_INVALID",
+    );
+  }
+});
+
 test("retries only reviewed temporary failures with at most three total attempts", async () => {
   const sleeps = [];
   const logs = [];
@@ -275,6 +318,19 @@ test("retries exact reviewed Lingxing limit codes but not similar unreviewed cod
   }
 });
 
+test("does not retry controlled contract errors even when their code resembles a temporary limit", async () => {
+  let attempts = 0;
+  await assert.rejects(service({
+    async fetchMskuOrderProfit() {
+      attempts += 1;
+      throw new SalesFactsContractError("contract", { code: "LIMIT" });
+    },
+  }).loadOrderProfitRange({
+    startDate: "2026-08-01", endDate: "2026-08-01", sids: [8708], currencyMode: "CNY",
+  }), (error) => error instanceof SalesFactsContractError);
+  assert.equal(attempts, 1);
+});
+
 test("failure logs preserve controlled classifications and redact untrusted names and codes", async () => {
   const logs = [];
   const logger = {
@@ -311,6 +367,34 @@ test("failure logs preserve controlled classifications and redact untrusted name
   assert.doesNotMatch(JSON.stringify(logs), /SECRET/iu);
 });
 
+test("canonicalizes hostile request IDs before logs and returned metadata", async () => {
+  const logs = [];
+  const adapter = {
+    normalizeRecordList: (payload) => payload.data.records,
+    async fetchMskuOrderProfit(_params, { onPagination }) {
+      onPagination(completeEvidence());
+      return { data: { records: [orderRow("2026-08-01")] } };
+    },
+  };
+  const result = await service(adapter, {
+    logger: {
+      info(message, details) { logs.push({ message, details }); },
+      warn(message, details) { logs.push({ message, details }); },
+      error(message, details) { logs.push({ message, details }); },
+    },
+  }).loadOrderProfitRange({
+    startDate: "2026-08-01",
+    endDate: "2026-08-01",
+    sids: [8708],
+    currencyMode: "CNY",
+    requestId: "SECRET_TOKEN\nforged-log",
+  });
+
+  assert.match(result.meta.requestId, /^sales-facts-/u);
+  assert.ok(logs.every(({ details }) => details.requestId === result.meta.requestId));
+  assert.doesNotMatch(JSON.stringify(logs), /SECRET|forged/iu);
+});
+
 test("does not retry contract, auth, or ordinary server failures", async () => {
   for (const error of [
     Object.assign(new Error("contract"), { code: "SALES_FACTS_ROW_MALFORMED", statusCode: 422 }),
@@ -341,8 +425,9 @@ test("loads monthly custom fees only from the complete seller-profit report", as
         fee: fee.feeAllocation,
       })));
     },
-    async fetchSellerProfitReport(params, { onPagination }) {
+    async fetchSellerProfitReport(params, { onPagination, retryTokenExpired }) {
       calls.push(params);
+      assert.equal(retryTokenExpired, false);
       onPagination(completeEvidence());
       return { data: { records: [{
         sid: 8708,

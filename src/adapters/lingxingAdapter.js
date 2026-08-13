@@ -92,11 +92,25 @@ function lingxingDateRangeParams(endpoint, params = {}) {
   return withLingxingDateContract(endpoint, params);
 }
 
-function orderProfitTotal(payload) {
+function paginationMetadata(payload) {
   const candidates = [payload?.data?.total, payload?.data?.totalCount, payload?.total, payload?.totalCount];
-  const value = candidates.find((candidate) => candidate !== undefined && candidate !== null && candidate !== "");
-  const number = Number(value);
-  return Number.isFinite(number) && number >= 0 ? number : null;
+  const presentTotals = candidates.filter((candidate) => candidate !== undefined && candidate !== null && candidate !== "");
+  const totals = presentTotals.map(Number);
+  if (totals.some((value) => !Number.isSafeInteger(value) || value < 0)
+    || new Set(totals).size > 1) {
+    throw new Error("pagination total invalid");
+  }
+  const hasNextCandidates = [];
+  if (payload?.data && Object.hasOwn(payload.data, "hasNext")) hasNextCandidates.push(payload.data.hasNext);
+  if (payload && Object.hasOwn(payload, "hasNext")) hasNextCandidates.push(payload.hasNext);
+  if (hasNextCandidates.some((value) => typeof value !== "boolean")
+    || new Set(hasNextCandidates).size > 1) {
+    throw new Error("pagination hasNext invalid");
+  }
+  return {
+    total: totals[0] ?? null,
+    hasNext: hasNextCandidates[0] ?? null,
+  };
 }
 
 function mergeOrderProfitPayload(firstPayload, records) {
@@ -205,11 +219,11 @@ export class LingxingAdapter {
     return this.client.performSignedRequest(endpoint, options);
   }
 
-  async signedRequest(endpoint, options = {}) {
+  async signedRequest(endpoint, options = {}, { retryTokenExpired = true } = {}) {
     try {
       return await this.performSignedRequest(endpoint, options);
     } catch (error) {
-      if (!error.tokenExpired) throw error;
+      if (!error.tokenExpired || !retryTokenExpired) throw error;
       await this.refreshToken();
       return this.performSignedRequest(endpoint, options);
     }
@@ -393,7 +407,7 @@ export class LingxingAdapter {
     });
   }
 
-  async fetchSellerProfitReport(params, { onPagination = null } = {}) {
+  async fetchSellerProfitReport(params, { onPagination = null, retryTokenExpired = true } = {}) {
     const {
       startDate: explicitStartDate,
       endDate: explicitEndDate,
@@ -407,8 +421,8 @@ export class LingxingAdapter {
     } = params || {};
     const startDate = explicitStartDate || start_date;
     const endDate = explicitEndDate || end_date;
-    const pageSize = Number(this.config.sellerProfitPageSize || 1000);
-    const maxRows = Number(this.config.sellerProfitMaxRows || 100000);
+    const pageSize = Number(this.config.sellerProfitPageSize ?? 1000);
+    const maxRows = Number(this.config.sellerProfitMaxRows ?? 100000);
     if (!Number.isInteger(pageSize) || pageSize <= 0) throw new Error("sellerProfitPageSize 必须是正整数");
     if (!Number.isInteger(maxRows) || maxRows < pageSize) throw new Error("sellerProfitMaxRows 必须不小于 pageSize");
     const requestParams = {
@@ -456,14 +470,25 @@ export class LingxingAdapter {
       const payload = await this.signedRequest(endpoint, {
         method: "POST",
         params: { ...apiParams, offset, length: pageSize },
-      });
+      }, { retryTokenExpired });
       if (!firstPayload) firstPayload = payload;
       const pageRecords = this.normalizeRecordList(payload);
-      records.push(...pageRecords);
       pageCount += 1;
-      const total = orderProfitTotal(payload);
-      const rawHasNext = payload?.data?.hasNext ?? payload?.hasNext;
-      const hasNext = rawHasNext === true ? true : rawHasNext === false ? false : null;
+      if (records.length + pageRecords.length > maxRows) {
+        fail("店铺利润分页超过安全上限，拒绝返回截断结果", "SELLER_PROFIT_PAGINATION_SAFETY_LIMIT", "safety-limit", {
+          offset, pageRowCount: pageRecords.length,
+        });
+      }
+      let metadata;
+      try {
+        metadata = paginationMetadata(payload);
+      } catch {
+        fail("店铺利润分页元数据无效，拒绝返回结果", "SELLER_PROFIT_PAGINATION_CONTRACT_INVALID", "pagination-contract-conflict", {
+          offset, pageRowCount: pageRecords.length, total: null, hasNext: null,
+        });
+      }
+      const { total, hasNext } = metadata;
+      records.push(...pageRecords);
       if ((lastTotal !== null && total !== null && total !== lastTotal)
         || (total !== null && records.length > total)
         || (hasNext === false && total !== null && records.length < total)
@@ -552,10 +577,10 @@ export class LingxingAdapter {
     });
   }
 
-  async fetchMskuOrderProfit(params, { onPagination = null } = {}) {
+  async fetchMskuOrderProfit(params, { onPagination = null, retryTokenExpired = true } = {}) {
     const { currencyCode, ...restParams } = params || {};
     const pageSize = 5000;
-    const maxRows = Number(this.config.orderProfitMaxRows || 100000);
+    const maxRows = Number(this.config.orderProfitMaxRows ?? 100000);
     if (!Number.isInteger(maxRows) || maxRows < pageSize) {
       throw new Error("orderProfitMaxRows 必须是不小于 5000 的整数");
     }
@@ -611,14 +636,35 @@ export class LingxingAdapter {
       const payload = await this.signedRequest("/basicOpen/finance/mreport/OrderProfit", {
         method: "POST",
         params: { ...requestParams, offset, length: pageSize },
-      });
+      }, { retryTokenExpired });
       if (!firstPayload) firstPayload = payload;
       const pageRecords = this.normalizeRecordList(payload);
-      records.push(...pageRecords);
       pageCount += 1;
-      const total = orderProfitTotal(payload);
-      const rawHasNext = payload?.data?.hasNext ?? payload?.hasNext;
-      const hasNext = rawHasNext === true ? true : rawHasNext === false ? false : null;
+      if (records.length + pageRecords.length > maxRows) {
+        observePagination({
+          pageIndex: pageCount,
+          offset,
+          pageRowCount: pageRecords.length,
+          cumulativeRowCount: records.length,
+          declaredTotal: lastTotal,
+          hasNext: lastHasNext,
+          terminalReason: "safety-limit",
+          complete: false,
+          safetyLimitHit: true,
+        });
+        const error = new Error(`订单利润分页超过安全上限 ${maxRows} 条，拒绝返回截断结果`);
+        error.endpoint = "/basicOpen/finance/mreport/OrderProfit";
+        error.details = { maxRows, pageSize, fetchedRows: records.length };
+        throw error;
+      }
+      let metadata;
+      try {
+        metadata = paginationMetadata(payload);
+      } catch {
+        rejectPaginationContract({ offset, pageRecords, total: null, hasNext: null });
+      }
+      const { total, hasNext } = metadata;
+      records.push(...pageRecords);
       if ((lastTotal !== null && total !== null && total !== lastTotal)
         || (total !== null && records.length > total)
         || (hasNext === false && total !== null && records.length < total)

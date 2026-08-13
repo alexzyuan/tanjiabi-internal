@@ -1,5 +1,6 @@
 import {
   normalizeSalesFactsScope,
+  normalizeSalesFactsRequestId,
   SalesFactsConflictError,
   SalesFactsContractError,
   SalesFactsInputError,
@@ -46,6 +47,9 @@ function safeErrorName(error) {
 }
 
 function isTemporaryFailure(error) {
+  if (error instanceof SalesFactsInputError
+    || error instanceof SalesFactsContractError
+    || error instanceof SalesFactsConflictError) return false;
   const code = String(error?.code || "").trim().toUpperCase();
   const status = Number(error?.statusCode || error?.status || error?.response?.status || 0);
   return TEMPORARY_NETWORK_CODES.has(code) || TEMPORARY_RATE_LIMIT_CODES.has(code) || status === 429;
@@ -201,6 +205,23 @@ function validatePaginationEvidence(evidenceRows, rawRowCount) {
     || terminal.hasNext === true) {
     throw new SalesFactsContractError("销售事实分页证据与结果矛盾。", { code: "SALES_FACTS_PAGINATION_EVIDENCE_INVALID" });
   }
+  const terminalValid = (terminal.terminalReason === "total-exhausted"
+      && terminal.declaredTotal !== null
+      && terminal.cumulativeRowCount === terminal.declaredTotal)
+    || (terminal.terminalReason === "has-next-false"
+      && terminal.declaredTotal === null
+      && terminal.hasNext === false)
+    || (terminal.terminalReason === "empty-page"
+      && terminal.declaredTotal === null
+      && terminal.hasNext === null
+      && terminal.pageRowCount === 0)
+    || (terminal.terminalReason === "short-page"
+      && terminal.declaredTotal === null
+      && terminal.hasNext === null
+      && terminal.pageRowCount > 0);
+  if (!terminalValid) {
+    throw new SalesFactsContractError("销售事实分页终止原因与证据矛盾。", { code: "SALES_FACTS_PAGINATION_EVIDENCE_INVALID" });
+  }
   return { pageCount: terminal.pageIndex, rowCount: rawRowCount };
 }
 
@@ -292,6 +313,7 @@ export function createSalesFactsUpstreamService({
     fetchMode = "daily",
     requestId = "",
   } = {}) {
+    requestId = normalizeSalesFactsRequestId(requestId);
     const startedAtMs = safeNow(now);
     try {
       if (fetchMode !== "daily") {
@@ -321,7 +343,10 @@ export function createSalesFactsUpstreamService({
               endDate: factDate,
               sids: scope.sids,
               currencyCode: scope.currencyMode,
-            }, { onPagination: (row) => evidence.push(safePaginationEvidence(row)) });
+            }, {
+              onPagination: (row) => evidence.push(safePaginationEvidence(row)),
+              retryTokenExpired: false,
+            });
             const rawRows = extractRows(adapter, payload);
             const pagination = validatePaginationEvidence(evidence, rawRows.length);
             const dayFacts = normalizeOrderProfitRows(rawRows, {
@@ -330,6 +355,10 @@ export function createSalesFactsUpstreamService({
               sellers,
               allowRequestedDateFallback: true,
             });
+            const requestedSids = new Set(scope.sids);
+            if (dayFacts.some((fact) => !requestedSids.has(fact.sid))) {
+              throw new SalesFactsContractError("OrderProfit 行超出请求 SID 范围。", { code: "SALES_FACTS_SCOPE_MISMATCH" });
+            }
             return { dayFacts, pagination };
           },
         });
@@ -361,6 +390,7 @@ export function createSalesFactsUpstreamService({
     currencyMode = "CNY",
     requestId = "",
   } = {}) {
+    requestId = normalizeSalesFactsRequestId(requestId);
     const startedAtMs = safeNow(now);
     try {
       if (typeof adapter.fetchSellerProfitReport !== "function"
@@ -399,7 +429,10 @@ export function createSalesFactsUpstreamService({
               currencyCode: scope.currencyMode,
               monthlyQuery: true,
               summaryEnabled: true,
-            }, { onPagination: (row) => evidence.push(safePaginationEvidence(row)) });
+            }, {
+              onPagination: (row) => evidence.push(safePaginationEvidence(row)),
+              retryTokenExpired: false,
+            });
             const rawRows = extractRows(adapter, payload);
             const pagination = validatePaginationEvidence(evidence, rawRows.length);
             const normalizedSourceRows = adapter.normalizeSellerProfitOtherFeeRecords(rawRows, sellers, naturalMonth);
