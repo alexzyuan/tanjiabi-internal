@@ -65,9 +65,16 @@ export function createFbaTaskFormFeature({
   }
 
   function fbaDateText(date = new Date()) {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Shanghai",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(date);
+    const values = Object.fromEntries(parts.filter((part) => part.type !== "literal").map((part) => [part.type, part.value]));
+    const year = values.year;
+    const month = values.month;
+    const day = values.day;
     return `${year}-${month}-${day}`;
   }
 
@@ -218,6 +225,9 @@ export function createFbaTaskFormFeature({
     if (!payload.deliveryPreferences?.shipDate) return "请选择发货时间。";
     if (!payload.deliveryPreferences?.deliveryDate) return "请选择送达时间。";
     if (payload.deliveryPreferences.deliveryDate < payload.deliveryPreferences.shipDate) return "送达时间不能早于发货时间。";
+    if (payload.scheduleEnabled && payload.activeEndDate && payload.activeEndDate < fbaDateText()) {
+      return `结束日期不能早于当前日期 ${fbaDateText()}，请修改结束日期。`;
+    }
     return "";
   }
 

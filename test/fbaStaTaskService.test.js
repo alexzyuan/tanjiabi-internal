@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { normalizeFbaStaTaskShop } from "../src/services/fbaStaTaskService.js";
+import { fbaStaTaskTestUtils, normalizeFbaStaTaskShop } from "../src/services/fbaStaTaskService.js";
 
 function runtimeDirectory() {
   return {
@@ -41,4 +41,21 @@ test("STA tasks reject a name/SID mismatch before scheduling work", async () => 
       return true;
     },
   );
+});
+
+test("STA task validation rejects scheduled tasks whose end date is before Beijing today", () => {
+  assert.throws(
+    () => fbaStaTaskTestUtils.validateTaskScheduleDates({
+      scheduleEnabled: true,
+      activeEndDate: "2026-07-31",
+    }, new Date("2026-08-13T09:50:00.000Z")),
+    /结束日期不能早于当前日期 2026-08-13/,
+  );
+});
+
+test("STA task validation allows scheduled tasks ending today in Beijing time", () => {
+  assert.doesNotThrow(() => fbaStaTaskTestUtils.validateTaskScheduleDates({
+    scheduleEnabled: true,
+    activeEndDate: "2026-08-13",
+  }, new Date("2026-08-13T09:50:00.000Z")));
 });

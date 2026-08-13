@@ -78,3 +78,41 @@ test("buildFbaPayload uses the selected canonical shop sid", () => {
   assert.equal(payload.shop.sid, 8708);
   assert.notEqual(payload.sid, 11501);
 });
+
+test("validateFbaPayload rejects scheduled tasks whose end date is before Beijing today", () => {
+  const feature = createFeature();
+  const payload = {
+    planName: "plan",
+    targetWarehouseCode: "GEU",
+    boxCount: 1,
+    positionType: "2",
+    scheduleEnabled: true,
+    activeEndDate: "2026-07-31",
+    deliveryPreferences: { shipDate: "2026-08-20", deliveryDate: "2026-08-30" },
+    inboundPlanItems: [{ msku: "MSKU-1" }],
+  };
+
+  assert.match(feature.validateFbaPayload(payload), /结束日期不能早于当前日期/);
+});
+
+test("validateFbaPayload allows scheduled tasks ending today in Beijing time", () => {
+  const feature = createFeature();
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+  const payload = {
+    planName: "plan",
+    targetWarehouseCode: "GEU",
+    boxCount: 1,
+    positionType: "2",
+    scheduleEnabled: true,
+    activeEndDate: today,
+    deliveryPreferences: { shipDate: "2026-08-20", deliveryDate: "2026-08-30" },
+    inboundPlanItems: [{ msku: "MSKU-1" }],
+  };
+
+  assert.equal(feature.validateFbaPayload(payload), "");
+});
