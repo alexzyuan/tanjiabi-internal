@@ -54,6 +54,25 @@ test("normalizes only real in-range dates and canonical identities", () => {
   );
 });
 
+test("normalizes SID and MSKU from the real OrderProfit row shape", () => {
+  const [fact] = normalizeOrderProfitRows([row({
+    sid: undefined,
+    seller_sku: undefined,
+    sids: ["8708"],
+    price_list: [{ seller_sku: "MSKU-NESTED" }],
+  })], {
+    requestedDateRange: { startDate: "2026-07-01", endDate: "2026-07-01" },
+    currencyMode: "CNY",
+    sellers,
+  });
+
+  assert.equal(fact.sid, 8708);
+  assert.equal(fact.msku, "MSKU-NESTED");
+  assert.equal(fact.mskuKey, "msku-nested");
+  assert.equal("sids" in fact, false);
+  assert.equal("price_list" in fact, false);
+});
+
 test("approves monthly mode only when every daily metric reconciles", () => {
   const monthlyRows = normalizeOrderProfitRows([
     row(),

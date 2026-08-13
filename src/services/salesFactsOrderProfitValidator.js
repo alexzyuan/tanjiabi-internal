@@ -55,6 +55,19 @@ function normalizeSellerMap(sellers) {
     .filter(([sid]) => Number.isInteger(sid) && sid > 0));
 }
 
+function orderProfitSid(record) {
+  const direct = firstValue(record, SID_FIELDS);
+  if (direct !== "") return Number(direct);
+  return Number(Array.isArray(record?.sids) ? record.sids[0] : 0);
+}
+
+function orderProfitMsku(record) {
+  const direct = firstValue(record, MSKU_FIELDS);
+  if (direct !== "") return String(direct).trim();
+  const priceInfo = Array.isArray(record?.price_list) ? record.price_list[0] : null;
+  return String(firstValue(priceInfo, MSKU_FIELDS)).trim();
+}
+
 function normalizedCurrency(record, currencyMode) {
   if (currencyMode === "CNY") return "CNY";
   const code = String(firstValue(record, CURRENCY_FIELDS)).trim().toUpperCase();
@@ -99,11 +112,11 @@ export function normalizeOrderProfitRows(rawRows, {
         code: "SALES_FACTS_DATE_OUT_OF_RANGE",
       });
     }
-    const sid = Number(firstValue(record, SID_FIELDS));
+    const sid = orderProfitSid(record);
     if (!Number.isInteger(sid) || sid <= 0 || !sellerBySid.has(sid)) {
       throw new SalesFactsContractError("OrderProfit 行引用未知 SID。", { code: "SALES_FACTS_UNKNOWN_SID" });
     }
-    const msku = String(firstValue(record, MSKU_FIELDS)).trim();
+    const msku = orderProfitMsku(record);
     const mskuKey = msku.toLocaleLowerCase("en-US");
     if (!mskuKey) throw new SalesFactsContractError("OrderProfit 行缺少 MSKU。", { code: "SALES_FACTS_MSKU_MISSING" });
     return {
