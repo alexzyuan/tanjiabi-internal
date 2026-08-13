@@ -14,7 +14,7 @@
 
 第二阶段采用独立的 `sales-facts.sqlite`。OrderProfit 的目标事实粒度固定为“自然日 + SID + MSKU + 币种模式”，自定义费用按自然月保存，Listing 负责人以独立有效期历史关联。销售周报和月报是派生结果，不是第二份事实源。
 
-旧销售 JSON 只用于上线前后对账，不导入、不累加、不作为错误兜底。实施前必须先只读验证领星 OrderProfit 的整月响应能否可靠拆成日事实；验证不通过时使用逐日请求。
+旧销售 JSON 只用于上线前后对账，不导入、不累加、不作为错误兜底。Gate A 已用只读整月/逐日对账验证上游契约；正式运行时固定使用逐日请求，整月请求只保留为预检诊断，不参与运行时模式选择或失败兜底。
 
 ## 目标
 
@@ -245,7 +245,7 @@ metadata 仅保存受控键，包括两个 revision、最近成功同步、owner
 4. 金额类指标按各自 registry 尺度比较，每个事实身份最多允许一个存储单位差异：`otherIncome` 为 `0.000001`，其他金额默认为 `0.0001`；不先舍入到统一小数位，所有超限差异必须在报告中列出。
 5. 分页 total/hasNext/空页契约全部完整，整月和逐日均未触及安全上限。OrderProfit adapter 通过独立的 `onPagination` observer 只发送 `pageIndex`、`offset`、页/累计行数、声明 total、hasNext、终止原因、complete 和 safety-limit 状态；不得发送 records、raw payload、金额、MSKU 或凭据。每个整月/逐日请求必须恰有一个最终 complete evidence；证据缺失、不完整、安全上限或 total/hasNext/行数互相矛盾时预检失败。
 
-全部通过时采用“整月请求后按真实日期拆分”；任一条件失败则正式同步采用逐日请求。逐日模式默认串行，只有压测和限流日志证明安全后才允许配置为最大并发 2，不得一次并发整月。仅对网络超时、HTTP 429 或领星明确的临时限流错误重试，每页最多 3 次总尝试；优先遵守上游 `Retry-After`，否则使用有抖动的指数退避。数据契约、身份、日期或分页完整性错误不重试。每次重试记录 requestId、endpoint、attempt、delay 和安全错误码。模式与并发选择写入 metadata 和部署审计，不能运行时静默切换。
+整月请求只用于 Gate A 只读诊断。正式同步固定逐日串行请求每个双闭区间自然日；运行时传入 `monthly` 必须显式失败，不能静默切换模式。仅对精确错误码 `TIMEOUT`、`ETIMEDOUT`、`ECONNRESET`、`EAI_AGAIN`、HTTP 429、`LIMIT`、`RATE_LIMIT`、`TOO_MANY_REQUESTS`、`REQUEST_TOO_FREQUENT` 重试，每次请求最多 3 次总尝试；优先遵守上游 `Retry-After`，否则使用有抖动的指数退避。相似但未审定的错误码、数据契约、身份、日期、鉴权、普通 5xx 或分页完整性错误不重试。每次重试只记录 requestId、endpoint、attempt、delay 和安全错误码，失败不得返回旧 JSON 或其他缓存。
 
 ## 刷新、TTL 与覆盖策略
 
@@ -289,6 +289,7 @@ metadata 仅保存受控键，包括两个 revision、最近成功同步、owner
 
 - 自定义费用只来自 `/bd/profit/report/open/report/seller/list` 的 `otherFeeStr[]`；
 - 不使用不完整的 fee management endpoint；
+- seller-profit 请求必须完整遍历分页并验证连续 page index、offset、累计行数、total/hasNext 和唯一最终 complete evidence；重复的 `month + SID + fee_type_id + currency_mode` 身份在持久化前显式失败；
 - 当前月 12 小时、上月 24 小时、更早月份冻结；
 - custom fee coverage 为空仍代表完整成功；
 - 月报查询把日级 OrderProfit 聚合到自然月，再合并该月 custom fee facts；

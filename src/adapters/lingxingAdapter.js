@@ -393,7 +393,7 @@ export class LingxingAdapter {
     });
   }
 
-  fetchSellerProfitReport(params) {
+  async fetchSellerProfitReport(params, { onPagination = null } = {}) {
     const {
       startDate: explicitStartDate,
       endDate: explicitEndDate,
@@ -407,9 +407,11 @@ export class LingxingAdapter {
     } = params || {};
     const startDate = explicitStartDate || start_date;
     const endDate = explicitEndDate || end_date;
+    const pageSize = Number(this.config.sellerProfitPageSize || 1000);
+    const maxRows = Number(this.config.sellerProfitMaxRows || 100000);
+    if (!Number.isInteger(pageSize) || pageSize <= 0) throw new Error("sellerProfitPageSize 必须是正整数");
+    if (!Number.isInteger(maxRows) || maxRows < pageSize) throw new Error("sellerProfitMaxRows 必须不小于 pageSize");
     const requestParams = {
-      offset: 0,
-      length: 1000,
       monthlyQuery,
       summaryEnabled,
       startDate,
@@ -419,10 +421,88 @@ export class LingxingAdapter {
     };
     if (currencyCode && currencyCode !== "ORIGINAL") requestParams.currencyCode = currencyCode;
     const apiParams = lingxingDateRangeParams("/bd/profit/report/open/report/seller/list", requestParams);
-    return this.signedRequest("/bd/profit/report/open/report/seller/list", {
-      method: "POST",
-      params: apiParams,
-    });
+    const endpoint = "/bd/profit/report/open/report/seller/list";
+    const records = [];
+    let firstPayload;
+    let pageCount = 0;
+    let lastTotal = null;
+    let lastHasNext = null;
+    const observe = (evidence) => {
+      if (typeof onPagination === "function") onPagination(evidence);
+    };
+    const fail = (message, code, terminalReason, context = {}) => {
+      observe({
+        pageIndex: pageCount,
+        offset: context.offset ?? records.length,
+        pageRowCount: context.pageRowCount ?? 0,
+        cumulativeRowCount: records.length,
+        declaredTotal: context.total ?? lastTotal,
+        hasNext: context.hasNext ?? lastHasNext,
+        terminalReason,
+        complete: false,
+        safetyLimitHit: terminalReason === "safety-limit",
+      });
+      const error = new Error(message);
+      error.name = "LingxingSellerProfitPaginationError";
+      error.code = code;
+      error.endpoint = endpoint;
+      error.details = { pageCount, fetchedRows: records.length, maxRows, pageSize };
+      throw error;
+    };
+    for (let offset = 0; ;) {
+      if (offset >= maxRows) {
+        fail("店铺利润分页达到安全上限，拒绝返回截断结果", "SELLER_PROFIT_PAGINATION_SAFETY_LIMIT", "safety-limit", { offset });
+      }
+      const payload = await this.signedRequest(endpoint, {
+        method: "POST",
+        params: { ...apiParams, offset, length: pageSize },
+      });
+      if (!firstPayload) firstPayload = payload;
+      const pageRecords = this.normalizeRecordList(payload);
+      records.push(...pageRecords);
+      pageCount += 1;
+      const total = orderProfitTotal(payload);
+      const rawHasNext = payload?.data?.hasNext ?? payload?.hasNext;
+      const hasNext = rawHasNext === true ? true : rawHasNext === false ? false : null;
+      if ((lastTotal !== null && total !== null && total !== lastTotal)
+        || (total !== null && records.length > total)
+        || (hasNext === false && total !== null && records.length < total)
+        || (hasNext === true && total !== null && records.length >= total)) {
+        fail("店铺利润分页元数据冲突，拒绝返回结果", "SELLER_PROFIT_PAGINATION_CONTRACT_INVALID", "pagination-contract-conflict", {
+          offset, pageRowCount: pageRecords.length, total, hasNext,
+        });
+      }
+      lastTotal = total;
+      lastHasNext = hasNext;
+      const totalExhausted = total !== null && records.length >= total;
+      const upstreamHasMore = hasNext === true || (total !== null && records.length < total);
+      if (!pageRecords.length && upstreamHasMore) {
+        fail("店铺利润分页返回空页但上游仍声明存在后续数据", "SELLER_PROFIT_PAGINATION_INCOMPLETE", "empty-before-more", {
+          offset, total, hasNext,
+        });
+      }
+      let terminalReason = null;
+      if (!upstreamHasMore) {
+        if (totalExhausted) terminalReason = "total-exhausted";
+        else if (hasNext === false) terminalReason = "has-next-false";
+        else if (!pageRecords.length) terminalReason = "empty-page";
+        else if (pageRecords.length < pageSize) terminalReason = "short-page";
+      }
+      observe({
+        pageIndex: pageCount,
+        offset,
+        pageRowCount: pageRecords.length,
+        cumulativeRowCount: records.length,
+        declaredTotal: total,
+        hasNext,
+        terminalReason,
+        complete: terminalReason !== null,
+        safetyLimitHit: false,
+      });
+      if (terminalReason) break;
+      offset += pageRecords.length;
+    }
+    return mergeOrderProfitPayload(firstPayload || { data: [] }, records);
   }
 
   async fetchOtherFeeList(params = {}) {

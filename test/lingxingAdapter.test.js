@@ -54,6 +54,97 @@ test("seller profit report requests one month using the API yyyy-MM date format"
   assert.equal(calls[0].params.currencyCode, "CNY");
 });
 
+test("seller profit report paginates completely and omits ORIGINAL from signed params", async () => {
+  const adapter = new LingxingAdapter({ ...lingxingTestConfig, sellerProfitPageSize: 1 });
+  const calls = [];
+  const pagination = [];
+  adapter.performSignedRequest = async (_endpoint, options) => {
+    calls.push(options.params);
+    return options.params.offset === 0
+      ? { code: 0, data: { records: [{ sid: 11 }], totalCount: 2, hasNext: true } }
+      : { code: 0, data: { records: [{ sid: 12 }], totalCount: 2, hasNext: false } };
+  };
+
+  const payload = await adapter.fetchSellerProfitReport({
+    startDate: "2026-07", endDate: "2026-07", sids: [11, 12], currencyCode: "ORIGINAL",
+  }, { onPagination: (evidence) => pagination.push(evidence) });
+
+  assert.deepEqual(calls.map(({ offset }) => offset), [0, 1]);
+  assert.ok(calls.every((params) => !("currencyCode" in params)));
+  assert.deepEqual(adapter.normalizeRecordList(payload).map(({ sid }) => sid), [11, 12]);
+  assert.equal(pagination.at(-1).complete, true);
+  assert.equal(pagination.at(-1).cumulativeRowCount, 2);
+  assert.equal(pagination.at(-1).declaredTotal, 2);
+  assert.deepEqual(Object.keys(pagination.at(-1)).sort(), [
+    "complete", "cumulativeRowCount", "declaredTotal", "hasNext", "offset", "pageIndex",
+    "pageRowCount", "safetyLimitHit", "terminalReason",
+  ]);
+});
+
+test("seller profit report accepts a metadata-free short page as complete", async () => {
+  const adapter = new LingxingAdapter({ ...lingxingTestConfig, sellerProfitPageSize: 2 });
+  const pagination = [];
+  adapter.performSignedRequest = async () => ({ code: 0, data: { records: [{ sid: 11 }] } });
+
+  const payload = await adapter.fetchSellerProfitReport({}, { onPagination: (evidence) => pagination.push(evidence) });
+
+  assert.equal(adapter.normalizeRecordList(payload).length, 1);
+  assert.equal(pagination.at(-1).terminalReason, "short-page");
+  assert.equal(pagination.at(-1).complete, true);
+});
+
+for (const scenario of [
+  {
+    name: "declared total changes",
+    responses: [
+      { records: [{ sid: 11 }], total: 3, hasNext: true },
+      { records: [{ sid: 12 }], total: 2, hasNext: false },
+    ],
+  },
+  {
+    name: "hasNext false before total",
+    responses: [{ records: [{ sid: 11 }], total: 2, hasNext: false }],
+  },
+  {
+    name: "empty page before more",
+    responses: [
+      { records: [{ sid: 11 }], total: 2, hasNext: true },
+      { records: [], total: 2, hasNext: true },
+    ],
+    code: "SELLER_PROFIT_PAGINATION_INCOMPLETE",
+    terminalReason: "empty-before-more",
+  },
+]) {
+  test(`seller profit report rejects incomplete pagination: ${scenario.name}`, async () => {
+    const adapter = new LingxingAdapter({ ...lingxingTestConfig, sellerProfitPageSize: 1 });
+    const pagination = [];
+    let index = 0;
+    adapter.performSignedRequest = async () => ({ code: 0, data: scenario.responses[index++] });
+    await assert.rejects(
+      () => adapter.fetchSellerProfitReport({}, { onPagination: (evidence) => pagination.push(evidence) }),
+      (error) => error.code === (scenario.code || "SELLER_PROFIT_PAGINATION_CONTRACT_INVALID"),
+    );
+    assert.equal(pagination.at(-1).terminalReason, scenario.terminalReason || "pagination-contract-conflict");
+    assert.equal(pagination.at(-1).complete, false);
+  });
+}
+
+test("seller profit report rejects its pagination safety limit", async () => {
+  const adapter = new LingxingAdapter({
+    ...lingxingTestConfig, sellerProfitPageSize: 1, sellerProfitMaxRows: 1,
+  });
+  const pagination = [];
+  adapter.performSignedRequest = async () => ({
+    code: 0, data: { records: [{ sid: 11 }], total: 2, hasNext: true },
+  });
+  await assert.rejects(
+    () => adapter.fetchSellerProfitReport({}, { onPagination: (evidence) => pagination.push(evidence) }),
+    (error) => error.code === "SELLER_PROFIT_PAGINATION_SAFETY_LIMIT",
+  );
+  assert.equal(pagination.at(-1).terminalReason, "safety-limit");
+  assert.equal(pagination.at(-1).safetyLimitHit, true);
+});
+
 test("LingxingAdapter keeps documented inclusive endpoint end dates unchanged", async () => {
   const adapter = new LingxingAdapter(lingxingTestConfig);
   const calls = [];

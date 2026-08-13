@@ -565,26 +565,28 @@ git commit -m "feat(sales-facts): track listing owner history"
 - Create: `test/salesFactsUpstreamService.test.js`
 - Modify: `test/lingxingAdapter.test.js`
 
-- [ ] **Step 1: Write RED for pagination, modes, and retry policy**
+- [x] **Step 1: Write RED for pagination, modes, and retry policy**
 
 Tests must prove: inclusive end date; CNY explicitly sent; ORIGINAL omits conversion but records actual currency; serial daily mode; complete pagination; retry only timeout/429/known temporary Lingxing limit; maximum 3 total attempts; no retry for contract errors; safe logs; custom fees from seller report only.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `node --test test/salesFactsUpstreamService.test.js test/lingxingAdapter.test.js`
 
 Expected: FAIL because the upstream service is absent.
 
-- [ ] **Step 3: Implement uncached loaders**
+- [x] **Step 3: Implement uncached loaders**
 
 ```js
 loadOrderProfitRange({ startDate, endDate, sids, currencyMode, fetchMode, requestId })
 loadCustomFeesByMonth({ naturalMonths, sids, currencyMode, requestId })
 ```
 
-Monthly mode requires validated real row dates. Daily mode requests each inclusive day serially. Network sleeps happen outside transactions. Preserve adapter compatibility methods for old consumers until Gate C/D, but the new service must never call `fetchMskuOrderProfitCached` or cacheStore.
+Gate A selected `daily` as the only runtime OrderProfit mode. `loadOrderProfitRange` rejects `monthly`; monthly requests remain read-only preflight diagnostics only and never become a runtime fallback. Daily mode requests every inclusive day serially. Network sleeps happen outside transactions. Preserve adapter compatibility methods for old consumers until Gate C/D, but the new service must never call `fetchMskuOrderProfitCached` or cacheStore.
 
-- [ ] **Step 4: Run GREEN and commit**
+The seller-profit custom-fee loader must exhaust and validate complete pagination before normalization, require one final complete evidence event, and reject duplicate canonical fee identities before persistence. Retry matching is exact and limited to `TIMEOUT`, `ETIMEDOUT`, `ECONNRESET`, `EAI_AGAIN`, HTTP 429, `LIMIT`, `RATE_LIMIT`, `TOO_MANY_REQUESTS`, and `REQUEST_TOO_FREQUENT`, with at most three total attempts. Contract/auth/ordinary 5xx failures do not retry, and no failure silently switches fetch mode or returns a legacy cache.
+
+- [x] **Step 4: Run GREEN and commit**
 
 Run: `node --test test/salesFactsUpstreamService.test.js test/lingxingAdapter.test.js test/lingxingAdapterFailFast.test.js`
 
@@ -1058,7 +1060,7 @@ Only after all task reviews are APPROVED:
 
 ## Plan Completion Criteria
 
-- Gate A preflight approved with zero multiple owners and an explicit `monthly|daily` fetch mode.
+- Gate A preflight approved with zero multiple owners; runtime OrderProfit fetch mode is explicitly fixed to `daily`, while monthly remains diagnostic only.
 - Facts/coverage/custom fees/owners/revisions have repository and rollback tests.
 - Weekly and monthly consumers share facts and no runtime JSON fallback remains.
 - Current/previous/frozen month policies and CNY/ORIGINAL isolation are executable tests.
