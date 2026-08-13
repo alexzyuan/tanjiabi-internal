@@ -218,10 +218,11 @@ test("owner periods reject overlap and increment owner revision only on change",
       status: "assigned",
       updatedAtMs: 1000,
     }],
+    expectedOwnerRevision: 0,
     requestId: "owner-1",
   });
   assert.equal(first.ownerRevision, 1);
-  const same = repository.applyOwnerSnapshot({ periods: repository.readOwnerPeriods(scopeFor()) });
+  const same = repository.applyOwnerSnapshot({ periods: repository.readOwnerPeriods(scopeFor()), expectedOwnerRevision: 1 });
   assert.equal(same.ownerRevision, 1);
   assert.equal(same.changed, false);
 
@@ -243,6 +244,7 @@ test("owner periods reject overlap and increment owner revision only on change",
           updatedAtMs: 2000,
         },
       ],
+      expectedOwnerRevision: 1,
     }),
     (error) => error.code === "SALES_FACTS_OWNER_PERIOD_OVERLAP",
   );
@@ -263,18 +265,62 @@ test("owner snapshot canonicalizes order and rolls back an invalid replacement",
       identitySource: "lingxing-person-id", status: "assigned", updatedAtMs: 1000,
     },
   ];
-  assert.equal(repository.applyOwnerSnapshot({ periods }).ownerRevision, 1);
-  assert.deepEqual(repository.applyOwnerSnapshot({ periods: [...periods].reverse() }), { changed: false, ownerRevision: 1 });
+  assert.equal(repository.applyOwnerSnapshot({ periods, expectedOwnerRevision: 0 }).ownerRevision, 1);
+  assert.deepEqual(repository.applyOwnerSnapshot({ periods: [...periods].reverse(), expectedOwnerRevision: 1 }), { changed: false, ownerRevision: 1 });
 
   assert.throws(
-    () => repository.applyOwnerSnapshot({ periods: [
-      periods[0],
-      { ...periods[1], effectiveFrom: "2026-08-12" },
-    ] }),
+    () => repository.applyOwnerSnapshot({
+      periods: [
+        periods[0],
+        { ...periods[1], effectiveFrom: "2026-08-12" },
+      ],
+      expectedOwnerRevision: 1,
+    }),
     (error) => error.code === "SALES_FACTS_OWNER_PERIOD_OVERLAP",
   );
   assert.deepEqual(repository.readOwnerPeriods(), periods);
   assert.equal(repository.getRevisions().ownerRevision, 1);
+});
+
+test("owner state is consistent and stale owner plans cannot overwrite committed history", async (t) => {
+  const { repository } = await fixture(t);
+  const originalState = repository.readOwnerState({ requestId: "owner-state-initial" });
+  assert.deepEqual(originalState, { periods: [], ownerRevision: 0 });
+  const firstPeriods = [{
+    sid: 8708, msku: "MSKU-A", mskuKey: "msku-a", effectiveFrom: "2026-08-13", effectiveTo: null,
+    ownerIdentity: "id:101", ownerPersonId: "101", ownerNameSnapshot: "Alice",
+    identitySource: "lingxing-person-id", status: "assigned", updatedAtMs: 1000,
+  }];
+  assert.deepEqual(repository.applyOwnerSnapshot({
+    periods: firstPeriods,
+    expectedOwnerRevision: originalState.ownerRevision,
+  }), { changed: true, ownerRevision: 1 });
+
+  assert.throws(
+    () => repository.applyOwnerSnapshot({
+      periods: [{ ...firstPeriods[0], ownerIdentity: "id:102", ownerPersonId: "102", ownerNameSnapshot: "Bob" }],
+      expectedOwnerRevision: originalState.ownerRevision,
+    }),
+    (error) => error.code === "SALES_FACTS_OWNER_REVISION_CONFLICT"
+      && error.details?.expectedOwnerRevision === 0
+      && error.details?.actualOwnerRevision === 1,
+  );
+  assert.deepEqual(repository.readOwnerState(), { periods: firstPeriods, ownerRevision: 1 });
+  assert.deepEqual(repository.applyOwnerSnapshot({
+    periods: firstPeriods,
+    expectedOwnerRevision: 1,
+  }), { changed: false, ownerRevision: 1 });
+});
+
+test("owner snapshot requires an explicit periods array", async (t) => {
+  const { repository } = await fixture(t);
+  for (const input of [{}, { periods: null }, { periods: {} }]) {
+    assert.throws(
+      () => repository.applyOwnerSnapshot(input),
+      (error) => error.code === "SALES_FACTS_OWNER_PERIODS_INVALID",
+    );
+  }
+  assert.deepEqual(repository.applyOwnerSnapshot({ periods: [], expectedOwnerRevision: 0 }), { changed: false, ownerRevision: 0 });
 });
 
 test("derived cache round-trips safe payloads and health exposes redacted counts", async (t) => {

@@ -62,7 +62,7 @@ export function normalizeSalesFactsRequestId(value, { fallback = "sales-facts" }
 }
 
 function parseDateParts(value) {
-  const match = DATE_PATTERN.exec(String(value || ""));
+  const match = DATE_PATTERN.exec(String(value || "").trim());
   if (!match) return null;
   const year = Number(match[1]);
   const month = Number(match[2]);
@@ -76,9 +76,27 @@ function dateText(date) {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
 }
 
+export function normalizeSalesFactsDate(value) {
+  const parts = parseDateParts(value);
+  if (!parts) {
+    throw new SalesFactsInputError("销售事实日期无效。", { code: "SALES_FACTS_DATE_INVALID" });
+  }
+  return dateText(parts.date);
+}
+
+export function addSalesFactsDateDays(value, days) {
+  const normalizedDate = normalizeSalesFactsDate(value);
+  if (!Number.isSafeInteger(days)) {
+    throw new SalesFactsInputError("销售事实日期偏移无效。", { code: "SALES_FACTS_DATE_SHIFT_INVALID" });
+  }
+  const date = new Date(`${normalizedDate}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
 function inclusiveDates(startDate, endDate) {
-  const start = parseDateParts(startDate);
-  const end = parseDateParts(endDate);
+  const start = parseDateParts(String(startDate || "").trim());
+  const end = parseDateParts(String(endDate || "").trim());
   if (!start || !end || start.date > end.date) {
     throw new SalesFactsInputError("销售事实日期范围无效。", { code: "SALES_FACTS_DATE_RANGE_INVALID" });
   }

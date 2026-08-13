@@ -17,6 +17,8 @@ function listingAdapter(rows) {
   };
 }
 
+const silentLogger = { info() {}, error() {} };
+
 test("classifies one owner, explicit empty, malformed, and multiple owners", () => {
   const assigned = parseListingOwnerRecord({
     sid: 8708,
@@ -231,7 +233,7 @@ test("audit scans every active SID and returns only redacted anomaly identities"
 test("first owner cutover creates historical unknown and trusted snapshot periods atomically", async () => {
   const applied = [];
   const repository = {
-    readOwnerPeriods: () => [],
+    readOwnerState: () => ({ periods: [], ownerRevision: 0 }),
     applyOwnerSnapshot(input) {
       applied.push(input);
       return { changed: true, ownerRevision: 1 };
@@ -247,9 +249,11 @@ test("first owner cutover creates historical unknown and trusted snapshot period
     }]),
     detectedDate: "2026-08-13",
     requestId: "owner-cutover",
+    logger: silentLogger,
   });
 
   assert.equal(applied.length, 1);
+  assert.equal(applied[0].expectedOwnerRevision, 0);
   assert.deepEqual(applied[0].periods.map(({ updatedAtMs, ...period }) => period), [
     {
       sid: 8708, msku: "MSKU-A", mskuKey: "msku-a",
@@ -267,8 +271,97 @@ test("first owner cutover creates historical unknown and trusted snapshot period
   assert.deepEqual(result, {
     changed: true, ownerRevision: 1, scannedListingCount: 1,
     periodCount: 2, changedListingCount: 1, transferCount: 0,
+    counts: { assigned: 1, unassigned: 0, multiple: 0, malformed: 0 },
   });
   assert.doesNotMatch(JSON.stringify(result), /Alice|id:101|MSKU-A/);
+});
+
+test("owner sync logs only safe lifecycle fields on success and failure", async () => {
+  const logs = [];
+  const logger = {
+    info(message, details) { logs.push({ level: "info", message, details }); },
+    error(message, details) { logs.push({ level: "error", message, details }); },
+  };
+  const repository = {
+    readOwnerState: () => ({ periods: [], ownerRevision: 0 }),
+    applyOwnerSnapshot: () => ({ changed: true, ownerRevision: 1 }),
+  };
+  await syncListingOwnerHistory({
+    repository,
+    sellers: [{ sid: 8708, status: 1 }],
+    adapter: listingAdapter([{
+      sid: 8708, seller_sku: "SECRET-MSKU",
+      asin_principal_list: [{ principal_id: "SECRET-ID", principal_name: "SECRET-NAME" }],
+    }]),
+    detectedDate: "2026-08-13",
+    requestId: "owner-observable",
+    logger,
+    now: () => 1000,
+  });
+  await assert.rejects(syncListingOwnerHistory({
+    repository,
+    sellers: [{ sid: 8708, status: 1 }],
+    adapter: listingAdapter([{ sid: 8708, seller_sku: "FAIL-MSKU" }]),
+    detectedDate: "2026-08-13",
+    requestId: "owner-failure",
+    logger,
+    now: () => 1000,
+  }));
+
+  assert.deepEqual(logs.map(({ level, message }) => ({ level, message })), [
+    { level: "info", message: "[sales-facts-owner-sync] start" },
+    { level: "info", message: "[sales-facts-owner-sync] success" },
+    { level: "info", message: "[sales-facts-owner-sync] start" },
+    { level: "error", message: "[sales-facts-owner-sync] failure" },
+  ]);
+  assert.deepEqual(logs[1].details, {
+    requestId: "owner-observable", sidCount: 1, rowCount: 1, pageCount: 1,
+    assignedCount: 1, unassignedCount: 0, changedListingCount: 1,
+    periodCount: 2, transferCount: 0, ownerRevision: 1, elapsedMs: 0,
+  });
+  assert.equal(logs[3].details.errorCode, "LISTING_OWNER_FIELD_MISSING");
+  assert.equal(logs[3].details.errorName, "ListingOwnerAuditError");
+  assert.doesNotMatch(JSON.stringify(logs), /SECRET-MSKU|SECRET-ID|SECRET-NAME|FAIL-MSKU/);
+});
+
+test("owner sync preserves the owner date error and sanitizes untrusted failure codes", async () => {
+  const invalidDateLogs = [];
+  await assert.rejects(
+    syncListingOwnerHistory({
+      repository: {
+        readOwnerState: () => ({ periods: [], ownerRevision: 0 }),
+        applyOwnerSnapshot: () => ({ changed: false, ownerRevision: 0 }),
+      },
+      sellers: [{ sid: 8708, status: 1 }],
+      adapter: listingAdapter([]),
+      detectedDate: "2026-02-29",
+      logger: { info() {}, error(message, details) { invalidDateLogs.push({ message, details }); } },
+      now: () => 1000,
+    }),
+    (error) => error.code === "SALES_FACTS_OWNER_DATE_INVALID",
+  );
+  assert.equal(invalidDateLogs[0].details.errorCode, "SALES_FACTS_OWNER_DATE_INVALID");
+
+  const upstreamLogs = [];
+  const upstreamError = new Error("SECRET-UPSTREAM-MESSAGE");
+  upstreamError.code = "token-secret-code";
+  upstreamError.name = "SecretCredentialError";
+  await assert.rejects(syncListingOwnerHistory({
+    repository: {
+      readOwnerState: () => ({ periods: [], ownerRevision: 0 }),
+      applyOwnerSnapshot: () => ({ changed: false, ownerRevision: 0 }),
+    },
+    sellers: [{ sid: 8708, status: 1 }],
+    adapter: { async fetchListings() { throw upstreamError; } },
+    detectedDate: "2026-08-13",
+    logger: { info() {}, error(message, details) { upstreamLogs.push({ message, details }); } },
+    now: () => 1000,
+  }));
+  assert.deepEqual(upstreamLogs[0].details, {
+    requestId: "", sidCount: 1, elapsedMs: 0,
+    errorCode: "LISTING_OWNER_SYNC_FAILED", errorName: "Error",
+  });
+  assert.doesNotMatch(JSON.stringify(upstreamLogs), /secret|token|credential|upstream-message/i);
 });
 
 test("owner changes close on detection day and start on the next day without rewriting history", async () => {
@@ -288,7 +381,7 @@ test("owner changes close on detection day and start on the next day without rew
   ];
   let applied;
   const repository = {
-    readOwnerPeriods: () => structuredClone(existing),
+    readOwnerState: () => ({ periods: structuredClone(existing), ownerRevision: 1 }),
     applyOwnerSnapshot(input) {
       applied = input.periods;
       return { changed: true, ownerRevision: 2 };
@@ -302,6 +395,7 @@ test("owner changes close on detection day and start on the next day without rew
       asin_principal_list: [{ principal_id: 102, principal_name: "Bob" }],
     }]),
     detectedDate: "2026-08-13",
+    logger: silentLogger,
   });
 
   assert.deepEqual(applied.slice(0, 2), [existing[0], { ...existing[1], effectiveTo: "2026-08-13" }]);
@@ -319,10 +413,13 @@ test("owner status and name snapshot changes create only the required effective 
   for (const scenario of cases) {
     let applied;
     const repository = {
-      readOwnerPeriods: () => [{
-        sid: 8708, msku: "MSKU-A", mskuKey: "msku-a", effectiveFrom: "2026-08-01", effectiveTo: null,
-        ...scenario.current, updatedAtMs: 1,
-      }],
+      readOwnerState: () => ({
+        periods: [{
+          sid: 8708, msku: "MSKU-A", mskuKey: "msku-a", effectiveFrom: "2026-08-01", effectiveTo: null,
+          ...scenario.current, updatedAtMs: 1,
+        }],
+        ownerRevision: 1,
+      }),
       applyOwnerSnapshot(input) {
         applied = input.periods;
         return { changed: true, ownerRevision: 2 };
@@ -333,6 +430,7 @@ test("owner status and name snapshot changes create only the required effective 
       sellers: [{ sid: 8708, status: 1 }],
       adapter: listingAdapter([{ sid: 8708, seller_sku: "MSKU-A", asin_principal_list: scenario.next }]),
       detectedDate: "2026-08-13",
+      logger: silentLogger,
     });
     assert.equal(applied.length, 2);
     assert.equal(applied[0].effectiveTo, "2026-08-13");
@@ -350,7 +448,7 @@ test("unchanged owner snapshot does not add a period or increment revision", asy
   let applied;
   const result = await syncListingOwnerHistory({
     repository: {
-      readOwnerPeriods: () => structuredClone(existing),
+      readOwnerState: () => ({ periods: structuredClone(existing), ownerRevision: 1 }),
       applyOwnerSnapshot(input) {
         applied = input.periods;
         return { changed: false, ownerRevision: 1 };
@@ -362,6 +460,7 @@ test("unchanged owner snapshot does not add a period or increment revision", asy
       asin_principal_list: [{ principal_id: 101, principal_name: "Alice" }],
     }]),
     detectedDate: "2026-08-13",
+    logger: silentLogger,
   });
   assert.deepEqual(applied, existing);
   assert.equal(result.changed, false);
@@ -374,12 +473,15 @@ test("owner sync fails closed when a complete snapshot omits an open Listing ide
   await assert.rejects(
     syncListingOwnerHistory({
       repository: {
-        readOwnerPeriods: () => [{
-          sid: 8708, msku: "MSKU-MISSING", mskuKey: "msku-missing",
-          effectiveFrom: "2026-08-01", effectiveTo: null,
-          ownerIdentity: "id:101", ownerPersonId: "101", ownerNameSnapshot: "Alice",
-          identitySource: "lingxing-person-id", status: "assigned", updatedAtMs: 1,
-        }],
+        readOwnerState: () => ({
+          periods: [{
+            sid: 8708, msku: "MSKU-MISSING", mskuKey: "msku-missing",
+            effectiveFrom: "2026-08-01", effectiveTo: null,
+            ownerIdentity: "id:101", ownerPersonId: "101", ownerNameSnapshot: "Alice",
+            identitySource: "lingxing-person-id", status: "assigned", updatedAtMs: 1,
+          }],
+          ownerRevision: 1,
+        }),
         applyOwnerSnapshot() { applies += 1; },
       },
       sellers: [{ sid: 8708, status: 1 }],
@@ -387,6 +489,7 @@ test("owner sync fails closed when a complete snapshot omits an open Listing ide
         sid: 8708, seller_sku: "MSKU-PRESENT", asin_principal_list: [],
       }]),
       detectedDate: "2026-08-13",
+      logger: silentLogger,
     }),
     (error) => error.code === "LISTING_OWNER_SNAPSHOT_MISSING_OPEN_IDENTITY"
       && error.details?.missingOpenIdentityCount === 1,
@@ -398,7 +501,7 @@ test("owner sync uses the injected clock for new effective periods", async () =>
   let applied;
   await syncListingOwnerHistory({
     repository: {
-      readOwnerPeriods: () => [],
+      readOwnerState: () => ({ periods: [], ownerRevision: 0 }),
       applyOwnerSnapshot(input) {
         applied = input.periods;
         return { changed: true, ownerRevision: 1 };
@@ -410,6 +513,7 @@ test("owner sync uses the injected clock for new effective periods", async () =>
     }]),
     detectedDate: "2026-08-13",
     now: () => 123456789,
+    logger: silentLogger,
   });
   assert.deepEqual(applied.map((period) => period.updatedAtMs), [123456789, 123456789]);
 });
@@ -420,12 +524,13 @@ test("owner sync applies nothing when the full scan fails", async () => {
   await assert.rejects(
     syncListingOwnerHistory({
       repository: {
-        readOwnerPeriods() { reads += 1; return []; },
+        readOwnerState() { reads += 1; return { periods: [], ownerRevision: 0 }; },
         applyOwnerSnapshot() { applies += 1; },
       },
       sellers: [{ sid: 8708, status: 1 }],
       adapter: listingAdapter([{ sid: 8708, seller_sku: "MSKU-A" }]),
       detectedDate: "2026-08-13",
+      logger: silentLogger,
     }),
     (error) => error.code === "LISTING_OWNER_FIELD_MISSING",
   );

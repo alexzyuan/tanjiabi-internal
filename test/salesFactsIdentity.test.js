@@ -5,6 +5,8 @@ import {
   SALES_FACTS_CURRENCY_MODES,
   SalesFactsContractError,
   SalesFactsInputError,
+  addSalesFactsDateDays,
+  normalizeSalesFactsDate,
   normalizeSalesFactsScope,
 } from "../src/services/salesFactsIdentity.js";
 
@@ -13,6 +15,20 @@ const sellers = [
   { sid: 8709, country: "美国", countryCode: "US", status: "active" },
   { sid: 8710, country: "加拿大", countryCode: "CA", status: 1 },
 ];
+
+test("normalizes and shifts canonical sales fact dates", () => {
+  assert.equal(normalizeSalesFactsDate(" 2028-02-29 "), "2028-02-29");
+  assert.equal(addSalesFactsDateDays("2028-02-29", 1), "2028-03-01");
+  assert.equal(addSalesFactsDateDays("2026-01-01", -1), "2025-12-31");
+  assert.throws(
+    () => normalizeSalesFactsDate("2026-02-29"),
+    (error) => error.code === "SALES_FACTS_DATE_INVALID",
+  );
+  assert.throws(
+    () => addSalesFactsDateDays("2026-08-13", 1.5),
+    (error) => error.code === "SALES_FACTS_DATE_SHIFT_INVALID",
+  );
+});
 
 test("normalizes a Pacific inclusive range and stable SID/currency scope", () => {
   const scope = normalizeSalesFactsScope({

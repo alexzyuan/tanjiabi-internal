@@ -347,12 +347,28 @@ export function createSalesFactsRepository({
   }
 
   const ownerInsert = db.prepare("INSERT INTO listing_owner_period(sid,msku_key,msku,effective_from,effective_to,owner_identity,owner_person_id,owner_name_snapshot,identity_source,status,updated_at_ms) VALUES(@sid,@mskuKey,@msku,@effectiveFrom,@effectiveTo,@ownerIdentity,@ownerPersonId,@ownerNameSnapshot,@identitySource,@status,@updatedAtMs)");
-  const writeOwners = db.transaction((periods) => {
+  const mapOwnerPeriod = (row) => ({ sid: Number(row.sid), mskuKey: row.msku_key, msku: row.msku, effectiveFrom: row.effective_from, effectiveTo: row.effective_to, ownerIdentity: row.owner_identity, ownerPersonId: row.owner_person_id, ownerNameSnapshot: row.owner_name_snapshot, identitySource: row.identity_source, status: row.status, updatedAtMs: Number(row.updated_at_ms) });
+  const selectAllOwnerPeriods = () => db.prepare("SELECT * FROM listing_owner_period ORDER BY sid,msku_key,effective_from").all().map(mapOwnerPeriod);
+  const readOwnerStateTransaction = db.transaction(() => ({
+    periods: selectAllOwnerPeriods(),
+    ownerRevision: revision("owner_revision"),
+  }));
+  const applyOwnerTransaction = db.transaction(({ periods, expectedOwnerRevision }) => {
+    const actualOwnerRevision = revision("owner_revision");
+    if (actualOwnerRevision !== expectedOwnerRevision) {
+      throw new SalesFactsConflictError("Listing 负责人 revision 已变化。", {
+        code: "SALES_FACTS_OWNER_REVISION_CONFLICT",
+        details: { expectedOwnerRevision, actualOwnerRevision },
+      });
+    }
+    validatePeriods(periods);
+    const current = selectAllOwnerPeriods();
+    if (JSON.stringify(current) === JSON.stringify(periods)) return { changed: false, ownerRevision: actualOwnerRevision };
     db.prepare("DELETE FROM listing_owner_period").run();
     for (const period of periods) ownerInsert.run(period);
-    const next = revision("owner_revision") + 1;
+    const next = actualOwnerRevision + 1;
     writeMetadata.run("owner_revision", String(next), safeNow(now));
-    return next;
+    return { changed: true, ownerRevision: next };
   });
 
   function readOwnerPeriods(scopeInput = null, options = {}) {
@@ -361,19 +377,27 @@ export function createSalesFactsRepository({
       if (scopeInput) {
         const scope = normalizeScope(scopeInput);
         rows = db.prepare(`SELECT * FROM listing_owner_period WHERE sid IN (${scope.sids.map(() => "?").join(",")}) ORDER BY sid,msku_key,effective_from`).all(...scope.sids);
-      } else rows = db.prepare("SELECT * FROM listing_owner_period ORDER BY sid,msku_key,effective_from").all();
-      return rows.map((row) => ({ sid: Number(row.sid), mskuKey: row.msku_key, msku: row.msku, effectiveFrom: row.effective_from, effectiveTo: row.effective_to, ownerIdentity: row.owner_identity, ownerPersonId: row.owner_person_id, ownerNameSnapshot: row.owner_name_snapshot, identitySource: row.identity_source, status: row.status, updatedAtMs: Number(row.updated_at_ms) }));
+      } else return selectAllOwnerPeriods();
+      return rows.map(mapOwnerPeriod);
     });
+  }
+
+  function readOwnerState(options = {}) {
+    return operate(logger, "read-owner-state", options.requestId, () => readOwnerStateTransaction());
   }
 
   function applyOwnerSnapshot(input = {}) {
     return operate(logger, "apply-owner-snapshot", input.requestId, () => {
       if (readonly) throw new SalesFactsInputError("销售事实只读仓储禁止写入。", { code: "SALES_FACTS_READONLY" });
-      const periods = sortPeriods((input.periods || []).map(normalizePeriod));
-      validatePeriods(periods);
-      const current = readOwnerPeriods();
-      if (JSON.stringify(current) === JSON.stringify(periods)) return { changed: false, ownerRevision: revision("owner_revision") };
-      return { changed: true, ownerRevision: writeOwners(periods) };
+      if (!Object.hasOwn(input, "periods") || !Array.isArray(input.periods)) {
+        throw new SalesFactsInputError("Listing 负责人期间必须是显式数组。", { code: "SALES_FACTS_OWNER_PERIODS_INVALID" });
+      }
+      if (!Object.hasOwn(input, "expectedOwnerRevision")) {
+        throw new SalesFactsInputError("Listing 负责人 expected revision 缺失。", { code: "SALES_FACTS_OWNER_REVISION_INVALID" });
+      }
+      const expectedOwnerRevision = integer(input.expectedOwnerRevision, "Listing 负责人 expected revision 无效。");
+      const periods = sortPeriods(input.periods.map(normalizePeriod));
+      return applyOwnerTransaction({ periods, expectedOwnerRevision });
     });
   }
 
@@ -420,6 +444,7 @@ export function createSalesFactsRepository({
     replaceMonthlyReportScope,
     readCustomFees,
     readOwnerPeriods,
+    readOwnerState,
     applyOwnerSnapshot,
     readDerivedCache,
     writeDerivedCache,
