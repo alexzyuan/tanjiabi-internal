@@ -162,6 +162,9 @@ test("seller profit report rejects a page that crosses a non-multiple safety lim
 
 for (const scenario of [
   { name: "malformed total", data: { records: [{ sid: 11 }], total: "unknown" } },
+  { name: "empty total", data: { records: [{ sid: 11 }], total: "" } },
+  { name: "null total", data: { records: [{ sid: 11 }], total: null } },
+  { name: "whitespace total", data: { records: [{ sid: 11 }], total: " " } },
   { name: "fractional total", data: { records: [{ sid: 11 }], total: 1.5 } },
   { name: "malformed hasNext", data: { records: [{ sid: 11 }], hasNext: "false" } },
 ]) {
@@ -578,6 +581,9 @@ test("LingxingAdapter rejects an OrderProfit page that crosses a non-multiple sa
 
 for (const scenario of [
   { name: "malformed total", data: { records: [{ id: 1 }], total: "unknown" } },
+  { name: "empty total", data: { records: [{ id: 1 }], total: "" } },
+  { name: "null total", data: { records: [{ id: 1 }], total: null } },
+  { name: "whitespace total", data: { records: [{ id: 1 }], total: " " } },
   { name: "fractional total", data: { records: [{ id: 1 }], total: 1.5 } },
   { name: "malformed hasNext", data: { records: [{ id: 1 }], hasNext: "false" } },
 ]) {

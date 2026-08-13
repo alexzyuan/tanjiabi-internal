@@ -93,10 +93,22 @@ function lingxingDateRangeParams(endpoint, params = {}) {
 }
 
 function paginationMetadata(payload) {
-  const candidates = [payload?.data?.total, payload?.data?.totalCount, payload?.total, payload?.totalCount];
-  const presentTotals = candidates.filter((candidate) => candidate !== undefined && candidate !== null && candidate !== "");
-  const totals = presentTotals.map(Number);
-  if (totals.some((value) => !Number.isSafeInteger(value) || value < 0)
+  const presentTotals = [];
+  for (const target of [payload?.data, payload]) {
+    if (!target || typeof target !== "object") continue;
+    for (const key of ["total", "totalCount"]) {
+      if (Object.hasOwn(target, key)) presentTotals.push(target[key]);
+    }
+  }
+  const totals = presentTotals.map((value) => {
+    if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return value;
+    if (typeof value === "string" && /^\d+$/u.test(value)) {
+      const number = Number(value);
+      if (Number.isSafeInteger(number)) return number;
+    }
+    return null;
+  });
+  if (totals.some((value) => value === null)
     || new Set(totals).size > 1) {
     throw new Error("pagination total invalid");
   }
