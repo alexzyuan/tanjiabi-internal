@@ -6,6 +6,18 @@ const BODY_FIELDS = new Set(["startDate", "endDate", "sids", "currencyMode", "fo
 const OWNER_BODY_FIELDS = new Set(["detectedDate"]);
 const SAFE_CODE = /^[A-Za-z0-9_.:-]{1,64}$/u;
 const SENSITIVE = /(token|secret|password|payload|raw|body|path|stack|message)/iu;
+const SAFE_REFRESH_META_FIELDS = new Set([
+  "source",
+  "cacheState",
+  "updatedAt",
+  "ageSeconds",
+  "revision",
+  "requestId",
+  "refreshedPartitionCount",
+  "refreshedRangeCount",
+  "singleFlight",
+  "operation",
+]);
 
 function requestIdFrom(value, fallback = "sales-facts-route") {
   const text = String(value || "").trim();
@@ -51,6 +63,86 @@ function validateBody(body, allowedFields) {
   if (Object.hasOwn(result, "forceRefresh") && result.forceRefresh !== true) throw routeBodyError("forceRefresh 只能显式为 true。");
   if (Object.hasOwn(result, "currencyMode") && !["CNY", "ORIGINAL"].includes(String(result.currencyMode).trim().toUpperCase())) throw routeBodyError("销售事实币种无效。");
   return result;
+}
+
+function safeRefreshMeta(meta) {
+  if (!meta || typeof meta !== "object" || Array.isArray(meta)) return {};
+  const output = {};
+  for (const field of SAFE_REFRESH_META_FIELDS) {
+    const value = meta[field];
+    if (value === undefined || value === null) continue;
+    if (field === "requestId" || field === "updatedAt" || field === "operation" || field === "source" || field === "cacheState" || field === "singleFlight") {
+      const text = String(value);
+      if (text.length <= 128 && !SENSITIVE.test(text)) output[field] = text;
+      continue;
+    }
+    if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) output[field] = value;
+  }
+  if (meta.scopeCount && typeof meta.scopeCount === "object" && !Array.isArray(meta.scopeCount)) {
+    const dates = Number(meta.scopeCount.dates);
+    const sids = Number(meta.scopeCount.sids);
+    if (Number.isSafeInteger(dates) && dates >= 0 && Number.isSafeInteger(sids) && sids >= 0) {
+      output.scopeCount = { dates, sids };
+    }
+  }
+  return output;
+}
+
+function safeCount(value) {
+  const count = Number(value);
+  return Number.isSafeInteger(count) && count >= 0 ? count : null;
+}
+
+function summarizeRefreshResult(result) {
+  if (!result || typeof result !== "object" || Array.isArray(result)) {
+    throw new Error("销售事实刷新结果结构无效。");
+  }
+  const counts = {};
+  for (const [field, source] of [
+    ["factCount", result.facts],
+    ["coverageCount", result.coverage],
+    ["customFeeCount", result.customFees],
+    ["customFeeCoverageCount", result.customFeeCoverage],
+  ]) {
+    const count = Array.isArray(source) ? source.length : safeCount(result[field]);
+    if (count !== null) counts[field] = count;
+  }
+  return {
+    meta: safeRefreshMeta(result.meta),
+    counts,
+  };
+}
+
+function summarizeOwnerSyncResult(result) {
+  if (!result || typeof result !== "object" || Array.isArray(result)) {
+    throw new Error("销售事实负责人同步结果结构无效。");
+  }
+  const output = {};
+  for (const field of [
+    "changed",
+    "ownerRevision",
+    "scannedListingCount",
+    "periodCount",
+    "changedListingCount",
+    "transferCount",
+  ]) {
+    const value = result[field];
+    if (field === "changed" && typeof value === "boolean") output[field] = value;
+    if (field !== "changed" && safeCount(value) !== null) output[field] = safeCount(value);
+  }
+  if (result.counts && typeof result.counts === "object" && !Array.isArray(result.counts)) {
+    const counts = {};
+    for (const field of ["assigned", "unassigned", "multiple", "malformed"]) {
+      const value = safeCount(result.counts[field]);
+      if (value !== null) counts[field] = value;
+    }
+    if (Object.keys(counts).length) output.counts = counts;
+  }
+  return output;
+}
+
+function summarizeResult(operation, result) {
+  return operation === "owners/sync" ? summarizeOwnerSyncResult(result) : summarizeRefreshResult(result);
 }
 
 export function serializeSalesFactsError(error, endpoint = "sales-facts") {
@@ -100,7 +192,7 @@ export function createSalesFactsRoutes({
       const body = validateBody(await readBody(readJsonBody, req), allowedFields);
       if (typeof service !== "function") throw routeBodyError("销售事实服务未配置。", { operation });
       const result = await service(body, { requestId: requestIdForRequest(req, operation) });
-      sendJson(res, 200, { ok: true, operation, result });
+      sendJson(res, 200, { ok: true, operation, result: summarizeResult(operation, result) });
     },
   });
   return [

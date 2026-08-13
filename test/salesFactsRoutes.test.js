@@ -3,6 +3,7 @@ import { Readable } from "node:stream";
 import test from "node:test";
 
 import { createSalesFactsRoutes, sanitizeSalesFactsHealth, serializeSalesFactsError } from "../routes/sales-facts.js";
+import { dispatchApiRoute } from "../routes/api-dispatch.js";
 import { createCoreRoutes } from "../routes/core.js";
 
 function bodyRequest(value) {
@@ -86,6 +87,81 @@ test("owner sync has an admin-only descriptor and forwards the detected date", a
   await route.handler({ req: bodyRequest({ detectedDate: "2026-08-13" }), res });
   assert.equal(res.status, 200);
   assert.deepEqual(calls, [{ detectedDate: "2026-08-13" }]);
+});
+
+test("refresh success response is JSON-safe and exposes counts instead of BigInt fact rows", async () => {
+  const sent = [];
+  const route = createSalesFactsRoutes(deps({
+    sendJson: (_res, status, payload) => {
+      const body = JSON.stringify(payload);
+      sent.push({ status, payload, body });
+    },
+    refreshMonthlyReportScope: async () => ({
+      facts: [{ sid: 8708, metrics: { totalSalesAmount: 123n } }],
+      coverage: [{ factDate: "2026-08-01", sid: 8708 }],
+      customFees: [{ naturalMonth: "2026-08", sid: 8708, feeAmount: 456n }],
+      customFeeCoverage: [{ naturalMonth: "2026-08", sid: 8708 }],
+      meta: {
+        source: "sales-facts-sqlite",
+        cacheState: "refreshed",
+        updatedAt: "2026-08-13T08:00:00.000Z",
+        ageSeconds: 0,
+        revision: 7,
+        requestId: "monthly-test",
+        scopeCount: { dates: 1, sids: 1 },
+        refreshedPartitionCount: 1,
+        refreshedRangeCount: 1,
+        operation: "monthly-report",
+      },
+    }),
+  })).find((item) => item.path === "/api/sales-facts/monthly-report/refresh");
+
+  await route.handler({ req: bodyRequest({}), res: {} });
+
+  assert.equal(sent[0].status, 200);
+  assert.deepEqual(sent[0].payload.result, {
+    meta: {
+      source: "sales-facts-sqlite",
+      cacheState: "refreshed",
+      updatedAt: "2026-08-13T08:00:00.000Z",
+      ageSeconds: 0,
+      revision: 7,
+      requestId: "monthly-test",
+      scopeCount: { dates: 1, sids: 1 },
+      refreshedPartitionCount: 1,
+      refreshedRangeCount: 1,
+      operation: "monthly-report",
+    },
+    counts: {
+      factCount: 1,
+      coverageCount: 1,
+      customFeeCount: 1,
+      customFeeCoverageCount: 1,
+    },
+  });
+  assert.doesNotMatch(sent[0].body, /totalSalesAmount|123|456/u);
+});
+
+test("generic dispatch does not write a second response after the handler committed one", async () => {
+  const sent = [];
+  const logs = [];
+  const res = { headersSent: true, writableEnded: true };
+  await dispatchApiRoute({
+    req: {},
+    res,
+    url: new URL("http://localhost/api/sales-facts/monthly-report/refresh"),
+    route: {
+      method: "POST",
+      path: "/api/sales-facts/monthly-report/refresh",
+      handler: async () => { throw new Error("late handler failure"); },
+      serializeError: serializeSalesFactsError,
+    },
+    authorize: () => true,
+    sendJson: (_res, status, payload) => sent.push({ status, payload }),
+    logger: { error: (...args) => logs.push(args) },
+  });
+  assert.deepEqual(sent, []);
+  assert.equal(logs[0]?.[0], "[api-error-after-response]");
 });
 
 test("sales facts error serializer redacts raw details and permits only controlled statuses", () => {

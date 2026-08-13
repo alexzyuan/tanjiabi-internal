@@ -14,6 +14,11 @@ function safeErrorCode(value) {
     ? code
     : null;
 }
+
+function responseStarted(res) {
+  return Boolean(res?.headersSent || res?.writableEnded || res?.destroyed);
+}
+
 export async function dispatchApiRoute({
   req,
   res,
@@ -31,6 +36,18 @@ export async function dispatchApiRoute({
     await route.handler({ req, res, url, params });
   } catch (error) {
     const endpoint = error?.endpoint || route.path || String(route.pattern);
+    if (responseStarted(res)) {
+      const writeAfterResponse = logger?.error;
+      if (typeof writeAfterResponse === "function") {
+        writeAfterResponse.call(logger, "[api-error-after-response]", {
+          endpoint,
+          method: route.method || req?.method || "UNKNOWN",
+          errorName: safeErrorName(error?.name),
+          errorCode: safeErrorCode(error?.code),
+        });
+      }
+      return true;
+    }
     if (typeof route.serializeError === "function") {
       let serialized;
       try {

@@ -293,8 +293,9 @@ const mimeTypes = {
 };
 
 function sendJson(res, statusCode, payload) {
+  const body = JSON.stringify(payload);
   res.writeHead(statusCode, { "content-type": "application/json; charset=utf-8" });
-  res.end(JSON.stringify(payload));
+  res.end(body);
 }
 
 function buildStaticEtag(fileStat) {
@@ -1105,6 +1106,7 @@ startSlowMovingRiskWeeklyScheduler();
 const server = http.createServer((req, res) => {
   router(req, res).catch((error) => {
     console.error(error);
+    if (res.headersSent || res.writableEnded || res.destroyed) return;
     sendJson(res, 500, {
       ok: false,
       error: error.message || "Internal server error",
