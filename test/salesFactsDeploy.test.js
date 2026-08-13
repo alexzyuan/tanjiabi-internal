@@ -105,10 +105,47 @@ test("deployment package advertises the sales facts capability and smoke/schema 
   assert.match(packageSource, /sales-facts-sqlite-v1/);
   assert.match(packageSource, /scripts\/sales-facts-sqlite-smoke\.js/);
   assert.match(packageSource, /scripts\/validate-sales-facts-schema\.js/);
+  assert.match(packageSource, /scripts\/validate-sales-facts-preflight-artifact\.js/);
   assert.match(deploySource, /node scripts\/sales-facts-sqlite-smoke\.js/);
   assert.match(deploySource, /node scripts\/validate-sales-facts-schema\.js/);
+  assert.match(deploySource, /node scripts\/validate-sales-facts-preflight-artifact\.js/);
   assert.match(deploySource, /SALES_FACTS_PREFLIGHT_ARTIFACT/);
   assert.match(deploySource, /SALES_FACTS_PREFLIGHT_ARTIFACT_SHA256/);
   assert.match(packageJson, /sales-facts:sqlite:smoke/);
   assert.match(packageJson, /sales-facts:schema:check/);
+});
+
+test("sales facts preflight artifact requires the complete approved daily contract", async () => {
+  const { validateSalesFactsPreflightArtifact } = await import("../scripts/validate-sales-facts-preflight-artifact.js");
+  const valid = {
+    ok: true,
+    exitCode: 0,
+    approvedFetchMode: "daily",
+    dailyValidationComplete: true,
+    monthlyRequestCount: 1,
+    dailyRequestCount: 31,
+    sidCount: 18,
+    identityMismatchCount: 0,
+    metricMismatchCount: 0,
+    actualPagination: {
+      requestCount: 32,
+      pageCount: 32,
+      incompleteRequestCount: 0,
+      safetyLimitHitCount: 0,
+    },
+  };
+
+  assert.doesNotThrow(() => validateSalesFactsPreflightArtifact(valid));
+  for (const [label, mutate] of [
+    ["approved fetch mode", (report) => { delete report.approvedFetchMode; }],
+    ["daily completeness", (report) => { delete report.dailyValidationComplete; }],
+    ["identity mismatch count", (report) => { delete report.identityMismatchCount; }],
+    ["metric mismatch count", (report) => { delete report.metricMismatchCount; }],
+    ["pagination completeness", (report) => { delete report.actualPagination.incompleteRequestCount; }],
+    ["pagination safety limit", (report) => { report.actualPagination.safetyLimitHitCount = 1; }],
+  ]) {
+    const report = structuredClone(valid);
+    mutate(report);
+    assert.throws(() => validateSalesFactsPreflightArtifact(report), new RegExp(label.replaceAll(" ", ".*"), "iu"));
+  }
 });

@@ -31,6 +31,7 @@ const explicitFiles = [
   "scripts/product-catalog-sqlite-smoke.js",
   "scripts/sales-facts-sqlite-smoke.js",
   "scripts/validate-sales-facts-schema.js",
+  "scripts/validate-sales-facts-preflight-artifact.js",
   "scripts/audit-sales-facts-preflight.js",
   "scripts/migrate-product-catalog.js",
   "scripts/retire-product-catalog-legacy-cache.js",

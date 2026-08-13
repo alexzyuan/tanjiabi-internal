@@ -140,18 +140,7 @@ NODE
 )"
   [ "$actual_hash" = "$expected_hash" ] || fail "销售事实预检 artifact hash 不匹配。"
 
-  if ! node --input-type=module - "$artifact_path" <<'NODE'
-import { readFileSync } from "node:fs";
-const report = JSON.parse(readFileSync(process.argv[2], "utf8"));
-if (report?.ok !== true || Number(report?.exitCode ?? 0) !== 0) throw new Error("report is not approved");
-if (report?.approvedFetchMode !== undefined && report.approvedFetchMode !== "daily") throw new Error("runtime fetch mode is not daily");
-if (report?.dailyValidationComplete !== undefined && report.dailyValidationComplete !== true) throw new Error("daily validation is incomplete");
-const counts = report?.counts || {};
-for (const key of ["multiple", "malformed", "failedSidCount", "paginationIncomplete", "identityMismatchCount", "metricMismatchCount"]) {
-  if (Number(report?.[key] ?? counts[key] ?? 0) !== 0) throw new Error(`non-zero ${key}`);
-}
-NODE
-  then
+  if ! node scripts/validate-sales-facts-preflight-artifact.js "$artifact_path" >/dev/null; then
     fail "销售事实预检 artifact 未通过已批准报告门禁。"
   fi
   log "销售事实预检 artifact 已验证：sha256=${actual_hash:0:12}"
@@ -191,6 +180,7 @@ tar -xzf "$ARCHIVE" -C "$TMP_DIR"
 [ -f "$TMP_DIR/package.json" ] || fail "部署包缺少 package.json"
 [ -f "$TMP_DIR/scripts/sales-facts-sqlite-smoke.js" ] || fail "部署包缺少销售事实 SQLite smoke"
 [ -f "$TMP_DIR/scripts/validate-sales-facts-schema.js" ] || fail "部署包缺少销售事实 schema 校验脚本"
+[ -f "$TMP_DIR/scripts/validate-sales-facts-preflight-artifact.js" ] || fail "部署包缺少销售事实 preflight artifact 校验脚本"
 rm -rf "$TMP_DIR"
 
 log "解压新版到线上目录"
