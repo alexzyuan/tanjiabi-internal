@@ -15,7 +15,7 @@
 - Execute only in `/Users/maclex/Documents/Codex/2026-04-29/bi-erp/.worktrees/sales-facts-sqlite` on `codex/sales-facts-sqlite`; never implement on `main`.
 - Follow `docs/superpowers/specs/2026-08-13-sales-facts-sqlite-design.md` and `CONTEXT.md`; if code reality conflicts, stop and amend the spec before changing behavior.
 - Database path is `data-cache/sales-facts/sales-facts-v1.sqlite`. Do not add sales tables to product catalog SQLite.
-- Facts are keyed by Pacific business date, runtime SID, normalized MSKU, and `CNY|ORIGINAL`. `ORIGINAL` requires a single-country scope.
+- Facts are keyed by Pacific business date, runtime SID, normalized MSKU, and `CNY|ORIGINAL`. `ORIGINAL` requires a single-country scope. Seller country uses the first non-empty canonical directory country field, normalizes the approved US/CA/AU/DE names and aliases, never infers from store names, and rejects an empty country.
 - Financial values are fixed-point integers declared by the canonical metric registry. `otherIncome` (`total_other_granted`) uses scale 6 from the verified production contract; all other money fields default to scale 4. Reject excess precision without silent rounding. Do not persist facts in `REAL` columns and do not persist raw payload JSON.
 - Every complete empty upstream result writes coverage. Missing coverage is not zero sales.
 - Current month coverage expires after 12 hours; previous month after 24 hours; older months are frozen and never auto-fetch.

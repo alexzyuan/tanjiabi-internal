@@ -85,7 +85,7 @@
 `currency_mode` 只有两个值：
 
 - `CNY`：金额按人民币聚合，`actual_currency_code` 必须为 `CNY`；
-- `ORIGINAL`：金额保持领星返回的实际币种，查询范围必须属于单一国家。
+- `ORIGINAL`：金额保持领星返回的实际币种，查询范围必须属于单一国家。国家从 seller directory 的 `countryCode`、`country_code`、`marketplaceCode`、`country` 按首个非空字段读取；已知 `美国/USA/US`、`加拿大/CA`、`澳洲/澳大利亚/AU`、`德国/DE` 分别规范为 `US/CA/AU/DE`，其他非空标识稳定大写。不得从店铺名猜国家，国家为空仍拒绝 ORIGINAL。
 
 `actual_currency_code` 是必填事实属性，不进入主键。对同一事实身份观察到多个实际币种，说明上游聚合范围或数据结构不可信，必须整次失败，禁止混合求和。
 

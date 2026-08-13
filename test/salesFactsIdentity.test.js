@@ -60,6 +60,70 @@ test("rejects cross-country ORIGINAL and unknown runtime SIDs", () => {
   );
 });
 
+test("normalizes seller countries from the first non-empty directory field", () => {
+  const scope = normalizeSalesFactsScope({
+    startDate: "2026-08-01",
+    endDate: "2026-08-01",
+    sids: [8708, 8709],
+    currencyMode: "ORIGINAL",
+    sellerDirectory: [
+      { sid: 8708, countryCode: "", country: "美国", status: 1 },
+      { sid: 8709, countryCode: "US", country: "", status: 1 },
+    ],
+  });
+
+  assert.equal(scope.countryCode, "US");
+});
+
+test("normalizes known country names and code aliases without reading store names", () => {
+  const cases = [
+    ["美国", "US"],
+    ["USA", "US"],
+    ["加拿大", "CA"],
+    ["澳洲", "AU"],
+    ["澳大利亚", "AU"],
+    ["德国", "DE"],
+    ["de", "DE"],
+    ["mx", "MX"],
+  ];
+  for (const [country, expected] of cases) {
+    const scope = normalizeSalesFactsScope({
+      startDate: "2026-08-01",
+      endDate: "2026-08-01",
+      sids: [8708],
+      currencyMode: "ORIGINAL",
+      sellerDirectory: [{ sid: 8708, countryCode: "", country, name: "misleading-US", status: 1 }],
+    });
+    assert.equal(scope.countryCode, expected);
+  }
+
+  assert.throws(
+    () => normalizeSalesFactsScope({
+      startDate: "2026-08-01",
+      endDate: "2026-08-01",
+      sids: [8708],
+      currencyMode: "ORIGINAL",
+      sellerDirectory: [{ sid: 8708, countryCode: "", country: "", name: "store-US", status: 1 }],
+    }),
+    (error) => error.code === "SALES_FACTS_ORIGINAL_SCOPE_INVALID" && error.details?.countryCount === 0,
+  );
+
+  assert.throws(
+    () => normalizeSalesFactsScope({
+      startDate: "2026-08-01",
+      endDate: "2026-08-01",
+      sids: [8708, 8709],
+      currencyMode: "ORIGINAL",
+      sellerDirectory: [
+        { sid: 8708, countryCode: "US", status: 1 },
+        { sid: 8709, countryCode: "", country: "", status: 1 },
+      ],
+    }),
+    (error) => error.code === "SALES_FACTS_ORIGINAL_SCOPE_INVALID"
+      && error.details?.missingCountryCount === 1,
+  );
+});
+
 test("rejects invalid dates, empty scopes, and inactive sellers instead of broadening", () => {
   assert.throws(
     () => normalizeSalesFactsScope({

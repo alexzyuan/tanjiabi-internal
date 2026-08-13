@@ -2,6 +2,18 @@ export const SALES_FACTS_CURRENCY_MODES = Object.freeze(["CNY", "ORIGINAL"]);
 
 const DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/u;
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/u;
+const COUNTRY_CODE_ALIASES = Object.freeze({
+  US: "US",
+  USA: "US",
+  美国: "US",
+  CA: "CA",
+  加拿大: "CA",
+  AU: "AU",
+  澳洲: "AU",
+  澳大利亚: "AU",
+  DE: "DE",
+  德国: "DE",
+});
 
 export class SalesFactsError extends Error {
   constructor(message, { name = "SalesFactsError", statusCode = 500, code, details = null, cause } = {}) {
@@ -121,9 +133,12 @@ function isActiveSeller(seller) {
 }
 
 function sellerCountryCode(seller) {
-  return String(seller?.countryCode ?? seller?.country_code ?? seller?.marketplaceCode ?? seller?.country ?? "")
-    .trim()
-    .toUpperCase();
+  const fields = ["countryCode", "country_code", "marketplaceCode", "country"];
+  const value = fields
+    .map((field) => String(seller?.[field] ?? "").trim())
+    .find(Boolean) || "";
+  const normalized = value.toUpperCase();
+  return COUNTRY_CODE_ALIASES[normalized] || normalized;
 }
 
 export function normalizeSalesFactsScope({
@@ -156,11 +171,13 @@ export function normalizeSalesFactsScope({
       details: { unknownSidCount: unknownSids.length },
     });
   }
-  const countries = [...new Set(normalizedSids.map((sid) => sellerCountryCode(sellerBySid.get(sid))).filter(Boolean))];
-  if (normalizedMode === "ORIGINAL" && countries.length !== 1) {
+  const sellerCountries = normalizedSids.map((sid) => sellerCountryCode(sellerBySid.get(sid)));
+  const missingCountryCount = sellerCountries.filter((country) => !country).length;
+  const countries = [...new Set(sellerCountries.filter(Boolean))];
+  if (normalizedMode === "ORIGINAL" && (missingCountryCount > 0 || countries.length !== 1)) {
     throw new SalesFactsContractError("原币模式只允许单一国家范围。", {
       code: "SALES_FACTS_ORIGINAL_SCOPE_INVALID",
-      details: { countryCount: countries.length },
+      details: { countryCount: countries.length, missingCountryCount },
     });
   }
   return {
