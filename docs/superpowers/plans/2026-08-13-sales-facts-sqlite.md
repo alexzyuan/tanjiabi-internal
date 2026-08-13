@@ -686,17 +686,17 @@ git commit -m "feat(sales-facts): query facts with owner history"
 - Create: `src/services/salesDerivedCacheService.js`
 - Create: `test/salesDerivedCacheService.test.js`
 
-- [ ] **Step 1: Write RED**
+- [x] **Step 1: Write RED**
 
 Cover 12-hour hit, expiry recompute without unnecessary upstream refresh, sales revision invalidation, owner revision invalidation, mapper version invalidation, malformed payload fail-fast, exact-key single-flight, and no owner filter in the base key.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `node --test test/salesDerivedCacheService.test.js`
 
 Expected: FAIL with missing derived cache service.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```js
 getOrBuildSalesDerived({ scope, mapperVersion, repository, build, now, requestId })
@@ -706,7 +706,7 @@ getOrBuildSalesDerived({ scope, mapperVersion, repository, build, now, requestId
 
 Do not store upstream records in `payload_json`; store only the dashboard DTO needed by the consumer. The build callback must return JSON-safe decoded numbers/strings/nulls, and the service must reject BigInt, functions, prototypes, or unregistered object keys before serialization.
 
-- [ ] **Step 4: Run GREEN and commit**
+- [x] **Step 4: Run GREEN and commit**
 
 Run: `node --test test/salesDerivedCacheService.test.js test/salesFactsRepository.test.js`
 
