@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { runSalesFactsOwnerAuditCli } from "../scripts/audit-sales-facts-preflight.js";
+import { runSalesFactsOrderProfitPreflightCli } from "../scripts/audit-sales-facts-preflight.js";
 
 test("owner audit CLI force-loads runtime sellers without writing seller cache", async () => {
   const directoryCalls = [];
@@ -95,4 +96,57 @@ test("owner audit CLI reports a controlled failure without echoing the upstream 
   assert.equal(report.ok, false);
   assert.equal(report.error.code, "SELLER_DIRECTORY_FAILED");
   assert.doesNotMatch(outputs.join("\n"), /secret|payload|token=/i);
+});
+
+test("OrderProfit preflight compares one monthly request with serial daily requests without writes", async () => {
+  const calls = [];
+  const outputs = [];
+  const report = await runSalesFactsOrderProfitPreflightCli({
+    env: {
+      SALES_FACTS_PREFLIGHT_START_DATE: "2026-07-01",
+      SALES_FACTS_PREFLIGHT_END_DATE: "2026-07-02",
+      SALES_FACTS_PREFLIGHT_SIDS: "8708",
+      SALES_FACTS_PREFLIGHT_CURRENCY_MODE: "CNY",
+    },
+    getDirectory: async () => ({ sellers: [{ sid: 8708, countryCode: "US", status: 1 }] }),
+    adapter: {},
+    loadRange: async ({ startDate, endDate }) => {
+      calls.push([startDate, endDate]);
+      const dates = startDate === endDate ? [startDate] : ["2026-07-01", "2026-07-02"];
+      return dates.map((factDate) => ({ sid: 8708, seller_sku: "A", report_date: factDate, currency_code: "CNY", amount: 10, volume: 1 }));
+    },
+    writeOutput: (text) => outputs.push(text),
+  });
+  assert.deepEqual(calls, [
+    ["2026-07-01", "2026-07-02"],
+    ["2026-07-01", "2026-07-01"],
+    ["2026-07-02", "2026-07-02"],
+  ]);
+  assert.equal(report.ok, true);
+  assert.equal(report.exitCode, 0);
+  assert.equal(report.approvedFetchMode, "monthly");
+  assert.equal(outputs.length, 1);
+});
+
+test("OrderProfit preflight is nonzero for mismatch and emits no business values", async () => {
+  const outputs = [];
+  const report = await runSalesFactsOrderProfitPreflightCli({
+    env: {
+      SALES_FACTS_PREFLIGHT_START_DATE: "2026-07-01",
+      SALES_FACTS_PREFLIGHT_END_DATE: "2026-07-01",
+      SALES_FACTS_PREFLIGHT_SIDS: "8708",
+      SALES_FACTS_PREFLIGHT_CURRENCY_MODE: "CNY",
+    },
+    getDirectory: async () => ({ sellers: [{ sid: 8708, countryCode: "US", status: 1 }] }),
+    adapter: {},
+    loadRange: async ({ requestKind }) => [{
+      sid: 8708, seller_sku: "SECRET-MSKU", report_date: "2026-07-01", currency_code: "CNY",
+      amount: requestKind === "monthly" ? 10 : 9,
+    }],
+    writeOutput: (text) => outputs.push(text),
+  });
+  assert.equal(report.ok, false);
+  assert.equal(report.exitCode, 1);
+  assert.equal(report.approvedFetchMode, "daily");
+  assert.doesNotMatch(outputs.join("\n"), /SECRET-MSKU|"amount"|token|raw/i);
 });
