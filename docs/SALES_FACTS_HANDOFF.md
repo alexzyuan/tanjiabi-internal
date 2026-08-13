@@ -91,6 +91,8 @@ export SALES_FACTS_PREFLIGHT_ARTIFACT_SHA256=<sha256>
 bash deploy.sh
 ```
 
+如本次发布已明确批准跳过销售事实业务预检，可改为设置 `SKIP_SALES_FACTS_PREFLIGHT=1` 后执行 `bash deploy.sh`。该开关只跳过预检 artifact 校验，不跳过部署包来源、分支确认、SQLite smoke/schema、迁移、PM2、健康检查和部署完整性门禁。
+
 部署门禁会验证 branch/commit/manifest、两套 SQLite smoke、schema、artifact 的 daily 模式、分页完整、请求计数和零差异字段，然后才迁移商品目录和重启 PM2。
 
 ## 当前已知事项

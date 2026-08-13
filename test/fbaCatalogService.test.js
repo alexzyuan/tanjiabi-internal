@@ -28,7 +28,12 @@ function seedFbaCatalog(repository, {
   imageUrl = "https://img.example.com/v1.jpg",
   packQuantity = 6,
   boxLength = 40,
+  boxSpec,
 } = {}) {
+  const effectiveBoxSpec = boxSpec === undefined ? {
+    dimensions: { length: boxLength, width: 30, height: 20, unitOfMeasurement: "CM" },
+    weight: { value: 8, unit: "KG" },
+  } : boxSpec;
   repository.upsertCatalog({
     operation: "fba-catalog-test-seed",
     products: [{
@@ -37,10 +42,7 @@ function seedFbaCatalog(repository, {
       productName,
       imageUrl,
       packQuantity,
-      boxSpec: {
-        dimensions: { length: boxLength, width: 30, height: 20, unitOfMeasurement: "CM" },
-        weight: { value: 8, unit: "KG" },
-      },
+      boxSpec: effectiveBoxSpec,
       brand: "JOI MEW",
       material: "塑料",
       purpose: "kids toy",
@@ -423,6 +425,44 @@ test("FBA seeded SQLite catalog avoids product-management calls and preserves pa
   assert.equal(fixture.productCalls, 0);
 });
 
+test("FBA refreshes stale SQLite packaging fields before returning the MSKU", async (t) => {
+  const fixture = await createFbaCatalogFixture(t, { seeded: true });
+  seedFbaCatalog(fixture.repository, { packQuantity: null, boxSpec: null });
+
+  const result = await fixture.search();
+
+  assert.equal(result.ok, true);
+  assert.equal(result.items[0].packQuantity, 6);
+  assert.deepEqual(result.items[0].boxDimensions, {
+    length: 40,
+    width: 30,
+    height: 20,
+    unitOfMeasurement: "CM",
+  });
+  assert.deepEqual(result.items[0].boxWeight, { value: 8, unit: "KG" });
+  assert.equal(fixture.productCalls, 1);
+});
+
+test("FBA does not repeatedly refresh packaging when Lingxing confirms it is missing", async (t) => {
+  const fixture = await createFbaCatalogFixture(t, { seeded: true, getBoxTemplate: async () => null });
+  seedFbaCatalog(fixture.repository, { packQuantity: null, boxSpec: null });
+  let noPackagingCalls = 0;
+  fixture.adapter.fetchLocalProductInfos = async () => {
+    noPackagingCalls += 1;
+    return {
+    data: { rows: [{ sku: "ERP-RUNTIME-10", product_name: "Catalog boat without packaging" }] },
+    };
+  };
+
+  const first = await fixture.search();
+  const second = await fixture.search();
+
+  assert.equal(first.items[0].packQuantity, null);
+  assert.equal(first.items[0].boxSource, "missing");
+  assert.equal(second.items[0].boxSource, "missing");
+  assert.equal(noPackagingCalls, 1);
+});
+
 test("FBA warm Listing discovery rehydrates changed SQLite catalog fields", async (t) => {
   const fixture = await createFbaCatalogFixture(t, { seeded: true });
   const first = await fixture.search();
@@ -461,7 +501,7 @@ test("manual FBA box template overrides canonical ERP box values", async (t) => 
   assert.deepEqual(result.items[0].boxWeight, { value: 12, unit: "LB" });
 });
 
-test("FBA preserves canonical numeric zero/null and box units during hydration", async (t) => {
+test("FBA replaces stale cached packaging with current ERP packaging", async (t) => {
   const fixture = await createFbaCatalogFixture(t, { seeded: true });
   fixture.repository.upsertCatalog({
     operation: "fba-catalog-null-pack-test",
@@ -483,9 +523,9 @@ test("FBA preserves canonical numeric zero/null and box units during hydration",
   });
   const result = await fixture.search();
 
-  assert.equal(result.items[0].packQuantity, null);
-  assert.equal(result.items[0].boxDimensions.unitOfMeasurement, "IN");
-  assert.equal(result.items[0].boxWeight.unit, "LB");
+  assert.equal(result.items[0].packQuantity, 6);
+  assert.equal(result.items[0].boxDimensions.unitOfMeasurement, "CM");
+  assert.equal(result.items[0].boxWeight.unit, "KG");
 });
 
 test("strict FBA ERP resolution preserves an unpaired Listing diagnostic and never invents packaging", async (t) => {
@@ -513,7 +553,7 @@ test("strict FBA ERP resolution preserves an unpaired Listing diagnostic and nev
   );
 });
 
-test("FBA tolerates a canonical null boxSpec and keeps a missing manual override explicit", async (t) => {
+test("FBA keeps an ERP-confirmed missing boxSpec explicit", async (t) => {
   const fixture = await createFbaCatalogFixture(t, { seeded: true });
   fixture.repository.upsertCatalog({
     operation: "fba-catalog-null-box-test",
@@ -530,9 +570,12 @@ test("FBA tolerates a canonical null boxSpec and keeps a missing manual override
     aliases: [],
     listings: [],
   });
+  fixture.adapter.fetchLocalProductInfos = async () => ({
+    data: { rows: [{ sku: "ERP-RUNTIME-10", product_name: "Catalog boat without box" }] },
+  });
   const result = await fixture.search({ getBoxTemplate: async () => null });
 
-  assert.equal(result.items[0].packQuantity, 0);
+  assert.equal(result.items[0].packQuantity, null);
   assert.equal(result.items[0].boxDimensions, null);
   assert.equal(result.items[0].boxWeight, null);
   assert.equal(result.items[0].boxSource, "missing");

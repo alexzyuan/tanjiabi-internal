@@ -360,6 +360,7 @@ async function hydrateMskuDiscovery(adapter, shop, discoveryItems, listingRecord
   const catalogOptions = {
     ...sharedCatalogOptions,
     strict: true,
+    requireFbaBoxSpec: true,
     feature: "fba-catalog",
     sellers: [shop],
     getDirectory,

@@ -12,6 +12,7 @@ import {
   createProductCatalogRepository,
   ProductCatalogDatabaseError,
 } from "./productCatalogRepository.js";
+import { hasCompleteBoxSpec } from "./fbaBoxTemplateService.js";
 import { getSellerDirectory } from "./sellerDirectoryService.js";
 import { loadAndCommitScope } from "./productCatalogLiveLoader.js";
 import { safeQuickCheckDiagnostic } from "../utils/safeQuickCheckDiagnostic.js";
@@ -22,6 +23,8 @@ let dependencyTokens = new WeakMap();
 const refreshInFlight = new Map();
 let requestSequence = 0;
 let dependencyTokenSequence = 0;
+
+const DEFAULT_FBA_BOX_SPEC_RECHECK_TTL_MS = 24 * 60 * 60 * 1000;
 
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/;
 const REQUEST_ID_SENSITIVE_PATTERN = /(token|secret|password|payload|raw|body)/i;
@@ -319,6 +322,8 @@ function flightKey(scope, context) {
     options.listingSharedCatalogRecords || "default-shared-xlsx-records",
     options.listingLookupOptions || "default-listing-options",
     options.productLookupOptions || "default-product-options",
+    options.requireFbaBoxSpec === true ? "fba-box-spec-required" : "fba-box-spec-optional",
+    options.fbaBoxSpecRecheckTtlMs ?? DEFAULT_FBA_BOX_SPEC_RECHECK_TTL_MS,
   ].map(identityToken).join("|");
   return `${context.feature}:${scopeKey(scope)}:${dependencies}`;
 }
@@ -438,11 +443,51 @@ function latestRefreshedAt(records) {
   return values.length ? new Date(Math.max(...values)).toISOString() : "";
 }
 
-function ensureRowsComplete(scope, repository, requestId, context) {
+function hasCompleteFbaPackaging(product) {
+  return Number(product?.packQuantity || 0) > 0 && hasCompleteBoxSpec(product?.boxSpec || {});
+}
+
+function shouldRefreshMissingFbaPackaging(product, now, ttlMs) {
+  if (hasCompleteFbaPackaging(product)) return false;
+
+  // Legacy/imported rows have never been checked against the current ERP
+  // response. They must be hydrated on the first FBA lookup.
+  const source = String(product?.source || "").trim().toLowerCase();
+  if (!source.startsWith("lingxing")) return true;
+
+  // A live ERP response without packaging is still a valid negative result.
+  // Recheck it after the bounded TTL so later ERP maintenance is picked up.
+  const refreshedAtMs = Number(product?.refreshedAtMs);
+  return !Number.isFinite(refreshedAtMs) || now - refreshedAtMs >= ttlMs;
+}
+
+function inspectScopeCompleteness(scope, repository, requestId, context, {
+  requireFbaBoxSpec = false,
+  fbaBoxSpecRecheckTtlMs = DEFAULT_FBA_BOX_SPEC_RECHECK_TTL_MS,
+} = {}) {
   try {
     const rows = repository.readScope(scope, { requestId });
-    const complete = new Set(rows.filter((row) => row?.listing && row?.product).map((row) => listingKey(row.listing)));
-    return scope.filter((item) => !complete.has(item.key));
+    const rowsByKey = new Map(rows.map((row) => [listingKey(row?.listing), row]));
+    const missing = scope.filter((item) => {
+      const row = rowsByKey.get(item.key);
+      return !row?.listing || !row?.product;
+    });
+    const missingBoxSpec = [];
+    let recentlyCheckedMissingBoxSpecCount = 0;
+    if (requireFbaBoxSpec) {
+      const now = nowMs(context.options);
+      const ttlMs = Number(fbaBoxSpecRecheckTtlMs);
+      if (!Number.isFinite(ttlMs) || ttlMs < 0) {
+        throw new ProductCatalogInputError("FBA 箱规复查时间窗口无效。");
+      }
+      scope.forEach((item) => {
+        const row = rowsByKey.get(item.key);
+        if (!row?.listing || !row?.product || hasCompleteFbaPackaging(row.product)) return;
+        if (shouldRefreshMissingFbaPackaging(row.product, now, ttlMs)) missingBoxSpec.push(item);
+        else recentlyCheckedMissingBoxSpecCount += 1;
+      });
+    }
+    return { missing, missingBoxSpec, recentlyCheckedMissingBoxSpecCount };
   } catch (error) {
     throw databaseError(error, "商品目录数据库不可用。", context, "read-scope");
   }
@@ -486,7 +531,11 @@ export async function getProductCatalogForRows(rows, options = {}) {
     const migration = await ensureMigrated(built.repository, built.sellers, built);
     const migrationDurationMs = measureDuration(context, migrationStarted);
     const dbLookupStarted = timingNow(options);
-    const missing = ensureRowsComplete(scope, built.repository, context.requestId, built);
+    let completeness = inspectScopeCompleteness(scope, built.repository, context.requestId, built, {
+      requireFbaBoxSpec: options.requireFbaBoxSpec === true,
+      fbaBoxSpecRecheckTtlMs: options.fbaBoxSpecRecheckTtlMs,
+    });
+    const missing = completeness.missing;
     const dbLookupDurationMs = measureDuration(context, dbLookupStarted);
     const meta = {
       requestId: context.requestId,
@@ -509,6 +558,10 @@ export async function getProductCatalogForRows(rows, options = {}) {
       transactionDurationMs: 0,
       missingCount: missing.length,
       conflictCount: Number(migration?.conflictCount || 0),
+      boxSpecRefreshRequestedCount: 0,
+      boxSpecRefreshCommittedCount: 0,
+      boxSpecRefreshUnresolvedCount: 0,
+      boxSpecRefreshSkippedRecentCount: completeness.recentlyCheckedMissingBoxSpecCount,
       timings: {
         migrationDurationMs,
         dbLookupDurationMs,
@@ -537,13 +590,54 @@ export async function getProductCatalogForRows(rows, options = {}) {
         ...load.timings,
       };
     }
+    if (options.requireFbaBoxSpec === true) {
+      completeness = inspectScopeCompleteness(scope, built.repository, context.requestId, built, {
+        requireFbaBoxSpec: true,
+        fbaBoxSpecRecheckTtlMs: options.fbaBoxSpecRecheckTtlMs,
+      });
+      const boxSpecScope = completeness.missingBoxSpec;
+      meta.boxSpecRefreshRequestedCount = boxSpecScope.length;
+      meta.boxSpecRefreshSkippedRecentCount = completeness.recentlyCheckedMissingBoxSpecCount;
+      if (boxSpecScope.length) {
+        const load = await runScopeSingleFlight(boxSpecScope, built, "fba-box-spec-refresh");
+        meta.boxSpecRefreshCommittedCount = boxSpecScope.length;
+        meta.boxSpecRefreshJoinedInFlight = Boolean(load.joinedInFlight);
+        meta.revision = load.revision;
+        meta.listingFetchedCount += load.listingFetchedCount;
+        meta.listingSharedXlsxCount += load.listingSharedXlsxCount;
+        meta.sharedListingItems += load.listingSharedXlsxCount;
+        meta.productFetchedCount += load.productFetchedCount;
+        meta.listingBatchCount += load.listingBatchCount;
+        meta.listingRequestCount += load.listingRequestCount;
+        meta.productLookupBatchCount += load.productLookupBatchCount;
+        meta.productInfoRequestCount += load.productInfoRequestCount;
+        meta.productFallbackRequestCount += load.productFallbackRequestCount;
+        meta.joinedInFlight = meta.joinedInFlight || load.joinedInFlight;
+        meta.transactionDurationMs += load.transactionDurationMs;
+        meta.timings = {
+          ...meta.timings,
+          listingFetchDurationMs: meta.timings.listingFetchDurationMs + Number(load.timings?.listingFetchDurationMs || 0),
+          productFetchDurationMs: meta.timings.productFetchDurationMs + Number(load.timings?.productFetchDurationMs || 0),
+          transactionDurationMs: meta.timings.transactionDurationMs + Number(load.timings?.transactionDurationMs || 0),
+        };
+      }
+    }
     const records = recordsForScope(scope, built.repository, built.sellers, context.requestId, built);
+    if (options.requireFbaBoxSpec === true) {
+      const requestedKeys = new Set(completeness.missingBoxSpec.map((item) => item.key));
+      meta.boxSpecRefreshUnresolvedCount = records.filter((record) => requestedKeys.has(listingKey(record.listing))
+        && !hasCompleteFbaPackaging(record.product)).length;
+    }
     meta.cacheUpdatedAt = latestRefreshedAt(records);
     meta.elapsedMs = elapsedMs(context.startedAtMs);
     writeLog(options.logger || console, "info", context, "success", null, {
       listingCount: meta.listingFetchedCount,
       productCount: meta.productFetchedCount,
       liveOwnedSkipCount: meta.liveOwnedSkipCount,
+      boxSpecRefreshRequestedCount: meta.boxSpecRefreshRequestedCount,
+      boxSpecRefreshCommittedCount: meta.boxSpecRefreshCommittedCount,
+      boxSpecRefreshUnresolvedCount: meta.boxSpecRefreshUnresolvedCount,
+      boxSpecRefreshSkippedRecentCount: meta.boxSpecRefreshSkippedRecentCount,
     });
     return { records, meta };
   } catch (error) {

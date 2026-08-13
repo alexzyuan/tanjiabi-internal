@@ -111,6 +111,7 @@ test("deployment package advertises the sales facts capability and smoke/schema 
   assert.match(deploySource, /node scripts\/validate-sales-facts-preflight-artifact\.js/);
   assert.match(deploySource, /SALES_FACTS_PREFLIGHT_ARTIFACT/);
   assert.match(deploySource, /SALES_FACTS_PREFLIGHT_ARTIFACT_SHA256/);
+  assert.match(deploySource, /SKIP_SALES_FACTS_PREFLIGHT/);
   assert.match(packageJson, /sales-facts:sqlite:smoke/);
   assert.match(packageJson, /sales-facts:schema:check/);
 });

@@ -124,6 +124,18 @@ validate_deploy_manifest() {
 }
 
 validate_sales_facts_preflight_artifact() {
+  case "${SKIP_SALES_FACTS_PREFLIGHT:-0}" in
+    1)
+      log "按显式配置跳过销售事实业务预检：SKIP_SALES_FACTS_PREFLIGHT=1"
+      return
+      ;;
+    0|"")
+      ;;
+    *)
+      fail "SKIP_SALES_FACTS_PREFLIGHT 只能设置为 0 或 1。"
+      ;;
+  esac
+
   local artifact_path="${SALES_FACTS_PREFLIGHT_ARTIFACT:-}"
   local expected_hash="${SALES_FACTS_PREFLIGHT_ARTIFACT_SHA256:-}"
   [ -n "$artifact_path" ] || fail "缺少 SALES_FACTS_PREFLIGHT_ARTIFACT。部署不会自动调用领星预检，请提供已批准的只读报告。"

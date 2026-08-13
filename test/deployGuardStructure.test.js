@@ -24,6 +24,7 @@ test("server deployment rejects packages without a confirmed production branch m
   assert.match(source, /tar -xOzf "\$ARCHIVE" \.deploy-manifest\.json/);
   assert.match(source, /manifest_confirmed_branch.*manifest_branch/);
   assert.match(source, /ALLOW_NON_PRODUCTION_DEPLOY/);
+  assert.match(source, /SKIP_SALES_FACTS_PREFLIGHT/);
   assert.match(source, /deploy_integrity_check\(\)/);
   assert.match(source, /node scripts\/deploy-integrity\.js verify-deployed/);
   assert.match(source, /validate_deploy_manifest[\s\S]*if \[ "\$\{ALLOW_CSS_DEPLOY:-0\}" != "1" \]/);
@@ -70,4 +71,17 @@ test("deployment source installs, smokes, validates, checks approved preflight, 
   assert.ok(preflightIndex < restartIndex);
   assert.match(source, /SALES_FACTS_PREFLIGHT_ARTIFACT/);
   assert.match(source, /SALES_FACTS_PREFLIGHT_ARTIFACT_SHA256/);
+});
+
+test("deployment can explicitly skip only the sales facts business preflight", async () => {
+  const source = await readFile(new URL("../deploy.sh", import.meta.url), "utf8");
+  const skipIndex = source.indexOf("SKIP_SALES_FACTS_PREFLIGHT");
+  const artifactIndex = source.indexOf("SALES_FACTS_PREFLIGHT_ARTIFACT");
+  const schemaIndex = source.indexOf("node scripts/validate-sales-facts-schema.js");
+  const restartIndex = source.indexOf("pm2 start");
+  assert.ok(skipIndex >= 0);
+  assert.ok(artifactIndex > skipIndex);
+  assert.ok(schemaIndex >= 0 && schemaIndex < restartIndex);
+  assert.ok(restartIndex > skipIndex);
+  assert.match(source, /只能设置为 0 或 1/);
 });

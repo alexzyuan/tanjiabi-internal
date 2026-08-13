@@ -53,6 +53,8 @@ function liveProduct(internalSku, {
   supplier = "新工厂",
   purchasePrice = 38,
   skuIdentifier = "sku-id-101",
+  packQuantity = null,
+  boxSpec = null,
 } = {}) {
   return {
     sku: internalSku,
@@ -61,6 +63,13 @@ function liveProduct(internalSku, {
     product_name: "实时商品",
     supplier,
     purchase_price: purchasePrice,
+    ...(packQuantity !== null ? { cg_box_pcs: packQuantity } : {}),
+    ...(boxSpec ? {
+      cg_box_length: boxSpec.dimensions.length,
+      cg_box_width: boxSpec.dimensions.width,
+      cg_box_height: boxSpec.dimensions.height,
+      cg_box_weight: boxSpec.weight.value,
+    } : {}),
   };
 }
 
@@ -238,6 +247,37 @@ test("complete SQLite hit performs zero Lingxing requests regardless of record a
   assert.equal(result.meta.dbHitCount, 1);
   assert.equal(result.records[0].storeName, "runtime-8708");
   assert.equal(result.records[0].country, "美国");
+});
+
+test("FBA packaging completeness refreshes an existing SQLite row from Lingxing", async (t) => {
+  const fixture = await createCatalogServiceFixture({
+    seeded: true,
+    productRecords: [liveProduct("A", {
+      packQuantity: 12,
+      boxSpec: {
+        dimensions: { length: 54.5, width: 54.5, height: 43.5 },
+        weight: { value: 18.2 },
+      },
+    })],
+  });
+  t.after(fixture.cleanup);
+
+  const result = await getProductCatalogForRows(fixture.rows, {
+    ...fixture.options,
+    requireFbaBoxSpec: true,
+    feature: "fba-catalog",
+  });
+
+  assert.equal(fixture.listingCalls, 1);
+  assert.equal(fixture.productCalls, 1);
+  assert.equal(result.records[0].product.packQuantity, 12);
+  assert.deepEqual(result.records[0].product.boxSpec, {
+    dimensions: { length: 54.5, width: 54.5, height: 43.5, unitOfMeasurement: "CM" },
+    weight: { value: 18.2, unit: "KG" },
+  });
+  assert.equal(result.meta.boxSpecRefreshRequestedCount, 1);
+  assert.equal(result.meta.boxSpecRefreshCommittedCount, 1);
+  assert.equal(result.meta.boxSpecRefreshUnresolvedCount, 0);
 });
 
 test("normal lookup fetches only identities missing after legacy migration", async (t) => {
