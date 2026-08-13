@@ -11,6 +11,7 @@ function bodyRequest(value) {
 }
 
 function deps(overrides = {}) {
+  const defaultRefreshMeta = { source: "sales-facts-sqlite", cacheState: "hit" };
   return {
     readJsonBody: async (req, options) => JSON.parse(await new Promise((resolve, reject) => {
       let text = "";
@@ -20,9 +21,9 @@ function deps(overrides = {}) {
       assert.equal(options.maxBytes, 256 * 1024);
     })),
     sendJson: (_res, status, payload) => { _res.status = status; _res.payload = payload; },
-    refreshOrderProfitScope: async (payload) => ({ operation: "order-profit", payload }),
-    refreshMonthlyReportScope: async (payload) => ({ operation: "monthly-report", payload }),
-    syncListingOwnerHistory: async (payload) => ({ operation: "owners", payload }),
+    refreshOrderProfitScope: async (payload) => ({ facts: [], coverage: [], meta: defaultRefreshMeta, operation: "order-profit", payload }),
+    refreshMonthlyReportScope: async (payload) => ({ facts: [], coverage: [], customFees: [], customFeeCoverage: [], meta: defaultRefreshMeta, operation: "monthly-report", payload }),
+    syncListingOwnerHistory: async (payload) => ({ changed: false, ownerRevision: 0, scannedListingCount: 0, periodCount: 0, changedListingCount: 0, transferCount: 0, counts: { assigned: 0, unassigned: 0, multiple: 0, malformed: 0 }, operation: "owners", payload }),
     ...overrides,
   };
 }
@@ -42,7 +43,7 @@ test("sales facts exposes the exact authenticated refresh descriptors", () => {
 test("refresh routes accept only the explicit scope contract and never accept listing owner", async () => {
   const calls = [];
   const routes = createSalesFactsRoutes(deps({
-    refreshOrderProfitScope: async (payload) => { calls.push(payload); return { ok: true }; },
+    refreshOrderProfitScope: async (payload) => { calls.push(payload); return { facts: [], coverage: [], meta: { source: "sales-facts-sqlite", cacheState: "refreshed" } }; },
   }));
   const route = routes[0];
   const req = bodyRequest({
@@ -81,12 +82,21 @@ test("request body cap is 256 KiB and errors stay controlled", async () => {
 test("owner sync has an admin-only descriptor and forwards the detected date", async () => {
   const calls = [];
   const route = createSalesFactsRoutes(deps({
-    syncListingOwnerHistory: async (payload) => { calls.push(payload); return { ok: true }; },
+    syncListingOwnerHistory: async (payload) => { calls.push(payload); return { changed: false, ownerRevision: 0, scannedListingCount: 0, periodCount: 0, changedListingCount: 0, transferCount: 0, counts: { assigned: 0, unassigned: 0, multiple: 0, malformed: 0 } }; },
   }))[2];
   const res = {};
   await route.handler({ req: bodyRequest({ detectedDate: "2026-08-13" }), res });
   assert.equal(res.status, 200);
   assert.deepEqual(calls, [{ detectedDate: "2026-08-13" }]);
+  assert.deepEqual(res.payload.result, {
+    changed: false,
+    ownerRevision: 0,
+    scannedListingCount: 0,
+    periodCount: 0,
+    changedListingCount: 0,
+    transferCount: 0,
+    counts: { assigned: 0, unassigned: 0, multiple: 0, malformed: 0 },
+  });
 });
 
 test("refresh success response is JSON-safe and exposes counts instead of BigInt fact rows", async () => {
@@ -162,6 +172,53 @@ test("generic dispatch does not write a second response after the handler commit
   });
   assert.deepEqual(sent, []);
   assert.equal(logs[0]?.[0], "[api-error-after-response]");
+  assert.equal(logs[0]?.[1]?.endpoint, "/api/sales-facts/monthly-report/refresh");
+  assert.equal(logs[0]?.[1]?.responseState, "already-closed");
+});
+
+test("generic dispatch closes a response after headers were sent but before it ended", async () => {
+  const logs = [];
+  let endCount = 0;
+  const res = {
+    headersSent: true,
+    writableEnded: false,
+    destroyed: false,
+    end: () => { endCount += 1; res.writableEnded = true; },
+  };
+  await dispatchApiRoute({
+    req: {},
+    res,
+    url: new URL("http://localhost/api/sales-facts/monthly-report/refresh"),
+    route: {
+      method: "POST",
+      path: "/api/sales-facts/monthly-report/refresh",
+      handler: async () => { throw Object.assign(new Error("late handler failure"), { endpoint: "https://secret.example/?token=leak" }); },
+      serializeError: serializeSalesFactsError,
+    },
+    authorize: () => true,
+    sendJson: () => { throw new Error("must not write a second response"); },
+    logger: { error: (...args) => logs.push(args) },
+  });
+  assert.equal(endCount, 1);
+  assert.equal(logs[0]?.[1]?.endpoint, "/api/sales-facts/monthly-report/refresh");
+  assert.doesNotMatch(JSON.stringify(logs), /token|secret\.example/u);
+  assert.equal(logs[0]?.[1]?.responseState, "ended");
+});
+
+test("sales facts routes fail closed when a service returns an incomplete result", async () => {
+  const routes = createSalesFactsRoutes(deps({
+    refreshMonthlyReportScope: async () => ({}),
+  }));
+  await assert.rejects(
+    routes.find((route) => route.path === "/api/sales-facts/monthly-report/refresh").handler({ req: bodyRequest({}), res: {} }),
+    /刷新结果缺少必需/u,
+  );
+  const ownerRoute = createSalesFactsRoutes(deps({ syncListingOwnerHistory: async () => ({}) }))
+    .find((route) => route.path === "/api/sales-facts/owners/sync");
+  await assert.rejects(
+    ownerRoute.handler({ req: bodyRequest({}), res: {} }),
+    /缺少必需字段/u,
+  );
 });
 
 test("sales facts error serializer redacts raw details and permits only controlled statuses", () => {

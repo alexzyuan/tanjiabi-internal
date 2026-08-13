@@ -79,8 +79,8 @@ function safeRefreshMeta(meta) {
     if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) output[field] = value;
   }
   if (meta.scopeCount && typeof meta.scopeCount === "object" && !Array.isArray(meta.scopeCount)) {
-    const dates = Number(meta.scopeCount.dates);
-    const sids = Number(meta.scopeCount.sids);
+    const dates = meta.scopeCount.dates;
+    const sids = meta.scopeCount.sids;
     if (Number.isSafeInteger(dates) && dates >= 0 && Number.isSafeInteger(sids) && sids >= 0) {
       output.scopeCount = { dates, sids };
     }
@@ -89,13 +89,22 @@ function safeRefreshMeta(meta) {
 }
 
 function safeCount(value) {
-  const count = Number(value);
-  return Number.isSafeInteger(count) && count >= 0 ? count : null;
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
 }
 
-function summarizeRefreshResult(result) {
+function summarizeRefreshResult(operation, result) {
   if (!result || typeof result !== "object" || Array.isArray(result)) {
     throw new Error("销售事实刷新结果结构无效。");
+  }
+  if (!result.meta || typeof result.meta !== "object" || Array.isArray(result.meta)
+    || typeof result.meta.source !== "string" || typeof result.meta.cacheState !== "string") {
+    throw new Error("销售事实刷新结果缺少必需元数据。");
+  }
+  const requiredFields = operation === "monthly-report/refresh"
+    ? ["facts", "coverage", "customFees", "customFeeCoverage"]
+    : ["facts", "coverage"];
+  if (requiredFields.some((field) => !Array.isArray(result[field]))) {
+    throw new Error("销售事实刷新结果缺少必需数组。");
   }
   const counts = {};
   for (const [field, source] of [
@@ -116,6 +125,13 @@ function summarizeRefreshResult(result) {
 function summarizeOwnerSyncResult(result) {
   if (!result || typeof result !== "object" || Array.isArray(result)) {
     throw new Error("销售事实负责人同步结果结构无效。");
+  }
+  if (typeof result.changed !== "boolean"
+    || ["ownerRevision", "scannedListingCount", "periodCount", "changedListingCount", "transferCount"]
+      .some((field) => safeCount(result[field]) === null)
+    || !result.counts || typeof result.counts !== "object" || Array.isArray(result.counts)
+    || ["assigned", "unassigned", "multiple", "malformed"].some((field) => safeCount(result.counts[field]) === null)) {
+    throw new Error("销售事实负责人同步结果缺少必需字段。");
   }
   const output = {};
   for (const field of [
@@ -142,7 +158,7 @@ function summarizeOwnerSyncResult(result) {
 }
 
 function summarizeResult(operation, result) {
-  return operation === "owners/sync" ? summarizeOwnerSyncResult(result) : summarizeRefreshResult(result);
+  return operation === "owners/sync" ? summarizeOwnerSyncResult(result) : summarizeRefreshResult(operation, result);
 }
 
 export function serializeSalesFactsError(error, endpoint = "sales-facts") {

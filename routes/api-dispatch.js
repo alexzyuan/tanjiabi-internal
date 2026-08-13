@@ -19,6 +19,27 @@ function responseStarted(res) {
   return Boolean(res?.headersSent || res?.writableEnded || res?.destroyed);
 }
 
+function closePartialResponse(res) {
+  if (!res?.headersSent || res.writableEnded || res.destroyed) return "already-closed";
+  if (typeof res.end === "function") {
+    try {
+      res.end();
+      return "ended";
+    } catch {
+      // Fall through to destroy when the response cannot be ended cleanly.
+    }
+  }
+  if (typeof res.destroy === "function") {
+    try {
+      res.destroy();
+      return "destroyed";
+    } catch {
+      return "unclosable";
+    }
+  }
+  return "unclosable";
+}
+
 export async function dispatchApiRoute({
   req,
   res,
@@ -37,11 +58,13 @@ export async function dispatchApiRoute({
   } catch (error) {
     const endpoint = error?.endpoint || route.path || String(route.pattern);
     if (responseStarted(res)) {
+      const responseState = closePartialResponse(res);
       const writeAfterResponse = logger?.error;
       if (typeof writeAfterResponse === "function") {
         writeAfterResponse.call(logger, "[api-error-after-response]", {
-          endpoint,
+          endpoint: route.path || "api-route",
           method: route.method || req?.method || "UNKNOWN",
+          responseState,
           errorName: safeErrorName(error?.name),
           errorCode: safeErrorCode(error?.code),
         });
