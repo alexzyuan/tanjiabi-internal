@@ -128,7 +128,7 @@ function safePreflightFailure(requestId, code) {
   return { ok: false, exitCode: 1, requestId, error: { code } };
 }
 
-function safeValidationFailure(requestId, error) {
+function safeValidationFailure(requestId, error, operation = "order-profit-validation") {
   const errorName = String(error?.name || "Error");
   const code = String(error?.code || "");
   const statusCode = Number(error?.statusCode);
@@ -144,7 +144,7 @@ function safeValidationFailure(requestId, error) {
     exitCode: 1,
     requestId,
     error: {
-      operation: "order-profit-validation",
+      operation,
       errorName: safeName,
       code: safeCode,
       statusCode: Number.isInteger(statusCode) && statusCode >= 400 && statusCode <= 599 ? statusCode : 502,
@@ -194,8 +194,9 @@ export async function runSalesFactsOrderProfitPreflightCli({
       requestKind: "monthly",
     });
     const dailyRaw = [];
+    const dailyRows = [];
     for (const factDate of scope.dates) {
-      dailyRaw.push(...await loadRange({
+      const dayRaw = await loadRange({
         adapter,
         startDate: factDate,
         endDate: factDate,
@@ -203,25 +204,47 @@ export async function runSalesFactsOrderProfitPreflightCli({
         currencyMode: scope.currencyMode,
         requestId,
         requestKind: "daily",
-      }));
+      });
+      dailyRaw.push(...dayRaw);
+      try {
+        dailyRows.push(...normalizeOrderProfitRows(dayRaw, {
+          requestedDateRange: { startDate: factDate, endDate: factDate },
+          currencyMode: scope.currencyMode,
+          sellers,
+          allowRequestedDateFallback: true,
+        }));
+      } catch (error) {
+        const failure = safeValidationFailure(requestId, error, "order-profit-daily-validation");
+        writeOutput(JSON.stringify(failure));
+        return failure;
+      }
     }
-    const monthlyRows = normalizeOrderProfitRows(monthlyRaw, {
-      requestedDateRange: scope,
-      currencyMode: scope.currencyMode,
-      sellers,
-      allowRequestedDateFallback: false,
-    });
-    const dailyRows = normalizeOrderProfitRows(dailyRaw, {
-      requestedDateRange: scope,
-      currencyMode: scope.currencyMode,
-      sellers,
-      allowRequestedDateFallback: true,
-    });
-    const comparison = compareMonthlyAndDailyFacts({ monthlyRows, dailyRows });
-    const ok = comparison.approvedFetchMode === "monthly";
+    let monthlyRows = [];
+    let monthlyValidationCode = null;
+    try {
+      monthlyRows = normalizeOrderProfitRows(monthlyRaw, {
+        requestedDateRange: scope,
+        currencyMode: scope.currencyMode,
+        sellers,
+        allowRequestedDateFallback: false,
+      });
+    } catch (error) {
+      monthlyValidationCode = safeValidationFailure(requestId, error).error.code;
+    }
+    const comparison = monthlyValidationCode
+      ? {
+        approvedFetchMode: "daily",
+        monthlyFactCount: 0,
+        dailyFactCount: dailyRows.length,
+        identityCount: 0,
+        identityMismatchCount: 0,
+        metricMismatchCount: 0,
+        mismatches: [],
+      }
+      : compareMonthlyAndDailyFacts({ monthlyRows, dailyRows });
     const report = {
-      ok,
-      exitCode: ok ? 0 : 1,
+      ok: true,
+      exitCode: 0,
       requestId,
       startDate: scope.startDate,
       endDate: scope.endDate,
@@ -231,12 +254,14 @@ export async function runSalesFactsOrderProfitPreflightCli({
       dailyRequestCount: scope.dates.length,
       monthlyRowCount: monthlyRaw.length,
       dailyRowCount: dailyRaw.length,
+      dailyValidationComplete: true,
+      ...(monthlyValidationCode ? { monthlyValidationCode } : {}),
       ...comparison,
     };
     writeOutput(JSON.stringify(report));
     return report;
   } catch (error) {
-    const failure = safeValidationFailure(requestId, error);
+    const failure = safeValidationFailure(requestId, error, "order-profit-fetch");
     writeOutput(JSON.stringify(failure));
     return failure;
   }
