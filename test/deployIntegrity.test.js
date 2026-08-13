@@ -5,6 +5,7 @@ import {
   extractNavigationModules,
   extractViewIds,
   validateProductCatalogHealth,
+  validateSalesFactsHealth,
   validateFrontendIntegrity,
   verifySalesReviewSmoke,
 } from "../scripts/deploy-integrity.js";
@@ -143,4 +144,34 @@ test("nested product catalog health diagnostics do not echo sensitive text", () 
   assert.equal(JSON.stringify(errors).includes("raw-secret"), false);
   assert.equal(JSON.stringify(errors).includes("token"), false);
   assert.deepEqual(errors, ["商品目录数据库异常：schemaVersion=1 quickCheck=unavailable error=PRODUCT_CATALOG_HEALTH_ERROR"]);
+});
+
+test("deploy integrity requires healthy nested sales facts diagnostics", () => {
+  assert.deepEqual(validateSalesFactsHealth({ ok: true }), ["/api/health 缺少 salesFacts 健康状态"]);
+  assert.deepEqual(validateSalesFactsHealth({
+    ok: true,
+    salesFacts: {
+      ok: false,
+      schemaVersion: 1,
+      quickCheck: "disk I/O error",
+      error: "SALES_FACTS_DATABASE_ERROR",
+    },
+  }), ["销售事实数据库异常：schemaVersion=1 quickCheck=disk I/O error error=SALES_FACTS_DATABASE_ERROR"]);
+  assert.deepEqual(validateSalesFactsHealth({ ok: true, salesFacts: { ok: true } }), []);
+});
+
+test("nested sales facts diagnostics do not echo sensitive text", () => {
+  const errors = validateSalesFactsHealth({
+    ok: true,
+    salesFacts: {
+      ok: false,
+      schemaVersion: 1,
+      quickCheck: "/opt/tanjia-bi/data-cache/sales-facts/sales-facts-v1.sqlite token",
+      error: "token raw-secret",
+    },
+  });
+  assert.equal(JSON.stringify(errors).includes("/opt/tanjia-bi"), false);
+  assert.equal(JSON.stringify(errors).includes("raw-secret"), false);
+  assert.equal(JSON.stringify(errors).includes("token"), false);
+  assert.deepEqual(errors, ["销售事实数据库异常：schemaVersion=1 quickCheck=unavailable error=SALES_FACTS_HEALTH_ERROR"]);
 });

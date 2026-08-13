@@ -11,10 +11,12 @@ import { createWebhookAssistantRoutes } from "./webhook-assistant.js";
 import { createSyncStoreInspectionRoutes } from "./sync-store-inspection.js";
 import { createDebugKnowledgeRoutes } from "./debug-knowledge.js";
 import { createProductCatalogRoutes } from "./product-catalog.js";
+import { createSalesFactsRoutes } from "./sales-facts.js";
 
 export function buildApiRoutes(deps) {
   return [
     ...createCoreRoutes(deps),
+    ...createSalesFactsRoutes(deps),
     ...createProductCatalogRoutes(deps),
     ...createAuthRoutes(deps),
     ...createSalesRoutes(deps),

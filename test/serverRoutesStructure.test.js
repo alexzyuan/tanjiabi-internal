@@ -18,6 +18,7 @@ const routeFiles = [
   "sync-store-inspection.js",
   "debug-knowledge.js",
   "product-catalog.js",
+  "sales-facts.js",
 ];
 
 test("API routes are split into domain route modules", async () => {
@@ -56,6 +57,9 @@ test("route table requires every API route to declare auth", () => {
   assert.equal(routes.find((route) => route.method === "POST" && route.path === "/api/fba/jiufang/orders/dry-run")?.auth, "session");
   assert.equal(routes.find((route) => route.method === "POST" && route.path === "/api/fba/jiufang/orders/create")?.auth, "session");
   assert.equal(routes.find((route) => route.method === "POST" && route.path === "/api/product-catalog/refresh")?.auth, "session");
+  assert.equal(routes.find((route) => route.method === "POST" && route.path === "/api/sales-facts/order-profit/refresh")?.auth, "session");
+  assert.equal(routes.find((route) => route.method === "POST" && route.path === "/api/sales-facts/monthly-report/refresh")?.auth, "finance");
+  assert.equal(routes.find((route) => route.method === "POST" && route.path === "/api/sales-facts/owners/sync")?.auth, "admin");
   assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/webhook-assistant/tasks")?.auth, "admin");
   assert.equal(routes.find((route) => route.method === "POST" && route.path === "/api/webhook-assistant/tasks")?.auth, "admin");
   assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/dashboard/clearance-inventory"), undefined);

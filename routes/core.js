@@ -1,4 +1,5 @@
 import { safeQuickCheckDiagnostic } from "../src/utils/safeQuickCheckDiagnostic.js";
+import { sanitizeSalesFactsHealth } from "../src/utils/salesFactsHealth.js";
 
 const SAFE_HEALTH_CODE_PATTERN = /^[A-Za-z0-9_.:-]{1,64}$/u;
 const SENSITIVE_HEALTH_CODE_PATTERN = /(token|secret|password|payload|raw|body|path)/iu;
@@ -58,6 +59,7 @@ export function createCoreRoutes({
   config,
   getSyncState,
   getProductCatalogHealth,
+  getSalesFactsHealth,
   logger = console,
   getSyncStatus,
   getSession,
@@ -93,6 +95,18 @@ export function createCoreRoutes({
     }
   };
 
+  const readSalesFactsHealth = () => {
+    try {
+      if (typeof getSalesFactsHealth !== "function") return sanitizeSalesFactsHealth(null);
+      return sanitizeSalesFactsHealth(getSalesFactsHealth());
+    } catch (error) {
+      const degraded = sanitizeSalesFactsHealth({ ok: false, error: error?.code || error?.name });
+      const log = logger?.error;
+      if (typeof log === "function") log.call(logger, "[sales-facts-health]", { operation: "health", status: "degraded", code: degraded.error });
+      return degraded;
+    }
+  };
+
   return [
     {
       method: "GET",
@@ -106,6 +120,7 @@ export function createCoreRoutes({
           runtime: config.runtime,
           sync: getSyncState(),
           productCatalog: readProductCatalogHealth(),
+          salesFacts: readSalesFactsHealth(),
         });
       },
     },

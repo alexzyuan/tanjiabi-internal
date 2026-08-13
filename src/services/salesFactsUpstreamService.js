@@ -296,6 +296,7 @@ function normalizeFeeRows(rows, { naturalMonth, scope }) {
 export function createSalesFactsUpstreamService({
   adapter,
   sellers = [],
+  getSellers,
   logger = console,
   sleep = (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)),
   random = Math.random,
@@ -303,6 +304,12 @@ export function createSalesFactsUpstreamService({
 } = {}) {
   if (!adapter || typeof adapter !== "object") {
     throw new SalesFactsInputError("销售事实上游 adapter 无效。", { code: "SALES_FACTS_ADAPTER_INVALID" });
+  }
+
+  async function resolveSellers() {
+    const value = typeof getSellers === "function" ? await getSellers() : sellers;
+    if (!Array.isArray(value)) throw new SalesFactsInputError("销售事实 seller directory 结果无效。", { code: "SALES_FACTS_SELLER_DIRECTORY_INVALID" });
+    return value;
   }
 
   async function loadOrderProfitRange({
@@ -322,7 +329,8 @@ export function createSalesFactsUpstreamService({
       if (typeof adapter.fetchMskuOrderProfit !== "function") {
         throw new SalesFactsInputError("领星 adapter 缺少未缓存 OrderProfit loader。", { code: "SALES_FACTS_ADAPTER_INVALID" });
       }
-      const scope = normalizeScopeInput({ startDate, endDate, sids, currencyMode, sellers, now });
+      const activeSellers = await resolveSellers();
+      const scope = normalizeScopeInput({ startDate, endDate, sids, currencyMode, sellers: activeSellers, now });
       log(logger, "info", "order-profit-start", { requestId, endpoint: ORDER_PROFIT_ENDPOINT, dayCount: scope.dates.length, sidCount: scope.sids.length, fetchMode: "daily" });
       const facts = [];
       const coverage = [];
@@ -352,7 +360,7 @@ export function createSalesFactsUpstreamService({
             const dayFacts = normalizeOrderProfitRows(rawRows, {
               requestedDateRange: { startDate: factDate, endDate: factDate },
               currencyMode: scope.currencyMode,
-              sellers,
+              sellers: activeSellers,
               allowRequestedDateFallback: true,
             });
             const requestedSids = new Set(scope.sids);
@@ -397,6 +405,7 @@ export function createSalesFactsUpstreamService({
         || typeof adapter.normalizeSellerProfitOtherFeeRecords !== "function") {
         throw new SalesFactsInputError("领星 adapter 缺少店铺利润费用 loader。", { code: "SALES_FACTS_ADAPTER_INVALID" });
       }
+      const activeSellers = await resolveSellers();
       const months = [...new Set((Array.isArray(naturalMonths) ? naturalMonths : []).map(canonicalMonth))].sort();
       if (!months.length) throw new SalesFactsInputError("销售事实自然月范围不能为空。", { code: "SALES_FACTS_MONTH_SCOPE_EMPTY" });
       const scope = normalizeScopeInput({
@@ -404,7 +413,7 @@ export function createSalesFactsUpstreamService({
         endDate: monthEnd(months.at(-1)),
         sids,
         currencyMode,
-        sellers,
+        sellers: activeSellers,
         now,
       });
       log(logger, "info", "custom-fees-start", { requestId, endpoint: SELLER_PROFIT_ENDPOINT, monthCount: months.length, sidCount: scope.sids.length });
@@ -435,7 +444,7 @@ export function createSalesFactsUpstreamService({
             });
             const rawRows = extractRows(adapter, payload);
             const pagination = validatePaginationEvidence(evidence, rawRows.length);
-            const normalizedSourceRows = adapter.normalizeSellerProfitOtherFeeRecords(rawRows, sellers, naturalMonth);
+            const normalizedSourceRows = adapter.normalizeSellerProfitOtherFeeRecords(rawRows, activeSellers, naturalMonth);
             if (!Array.isArray(normalizedSourceRows)) {
               throw new SalesFactsContractError("店铺利润费用 normalizer 返回无效。", { code: "SALES_FACTS_CUSTOM_FEE_ROWS_INVALID" });
             }

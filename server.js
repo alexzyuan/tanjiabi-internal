@@ -160,6 +160,13 @@ import {
   getProductCatalogHealth,
   refreshProductCatalogScope,
 } from "./src/services/productCatalogService.js";
+import { getSharedSellers } from "./src/services/sharedDataService.js";
+import { getPacificTodayText } from "./src/utils/pacificDate.js";
+import { normalizeSalesFactsScope } from "./src/services/salesFactsIdentity.js";
+import { createSalesFactsRepository } from "./src/services/salesFactsRepository.js";
+import { createSalesFactsUpstreamService } from "./src/services/salesFactsUpstreamService.js";
+import { createSalesFactsSyncService } from "./src/services/salesFactsSyncService.js";
+import { syncListingOwnerHistory } from "./src/services/listingOwnerHistoryService.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -167,6 +174,65 @@ const config = getConfig();
 const aftersalesMailSettingsService = createAftersalesMailSettingsService();
 const slowMovingRiskSnapshotStore = createSlowMovingRiskSnapshotStore();
 const storeOperatingMonthlyReportRowVisibilityService = createStoreOperatingMonthlyReportRowVisibilityService();
+const salesFactsRepository = createSalesFactsRepository({ logger: console });
+const salesFactsUpstream = createSalesFactsUpstreamService({
+  adapter: getLingxingAdapter(),
+  getSellers: async () => (await getSharedSellers({ adapter: getLingxingAdapter() })).sellers,
+  logger: console,
+});
+const salesFactsSyncService = createSalesFactsSyncService({ repository: salesFactsRepository, upstream: salesFactsUpstream, logger: console });
+
+async function getSalesFactsSellerDirectory() {
+  const result = await getSharedSellers({ adapter: getLingxingAdapter(), logger: console });
+  if (!Array.isArray(result?.sellers)) {
+    const error = new Error("销售事实 seller directory 不可用。");
+    error.statusCode = 503;
+    error.code = "SALES_FACTS_SELLER_DIRECTORY_INVALID";
+    throw error;
+  }
+  return result.sellers;
+}
+
+async function normalizeSalesFactsRouteScope(body, requestId) {
+  const sellers = await getSalesFactsSellerDirectory();
+  return normalizeSalesFactsScope({
+    startDate: body.startDate,
+    endDate: body.endDate,
+    sids: body.sids,
+    currencyMode: body.currencyMode || "CNY",
+    sellerDirectory: sellers,
+    now: new Date(),
+    requestId,
+  });
+}
+
+async function refreshSalesFactsOrderProfit(body, { requestId } = {}) {
+  const scope = await normalizeSalesFactsRouteScope(body, requestId);
+  return salesFactsSyncService.refreshOrderProfitScope(scope, {
+    forceRefresh: body.forceRefresh === true,
+    requestId,
+  });
+}
+
+async function refreshSalesFactsMonthlyReport(body, { requestId } = {}) {
+  const scope = await normalizeSalesFactsRouteScope(body, requestId);
+  return salesFactsSyncService.refreshMonthlyReportScope(scope, {
+    forceRefresh: body.forceRefresh === true,
+    requestId,
+  });
+}
+
+async function syncSalesFactsOwners(body, { requestId } = {}) {
+  const sellers = await getSalesFactsSellerDirectory();
+  return syncListingOwnerHistory({
+    repository: salesFactsRepository,
+    sellers,
+    adapter: getLingxingAdapter(),
+    detectedDate: body.detectedDate || getPacificTodayText(),
+    requestId,
+    logger: console,
+  });
+}
 const sessionCookieName = "tanjia_session";
 const oauthStateCookieName = "tanjia_oauth_state";
 const sessionTtlMs = 12 * 60 * 60 * 1000;
@@ -795,6 +861,10 @@ const apiRoutes = createApiRoutes(buildApiRoutes({
   getSyncStatus,
   getProductCatalogHealth,
   refreshProductCatalogScope,
+  getSalesFactsHealth: (options) => salesFactsRepository.getHealth(options),
+  refreshOrderProfitScope: refreshSalesFactsOrderProfit,
+  refreshMonthlyReportScope: refreshSalesFactsMonthlyReport,
+  syncListingOwnerHistory: syncSalesFactsOwners,
   getLingxingShops,
   getLingxingAdapter,
   getAiProviderStatus,

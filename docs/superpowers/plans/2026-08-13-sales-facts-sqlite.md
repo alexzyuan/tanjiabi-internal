@@ -761,6 +761,7 @@ git commit -m "feat(sales-facts): add shadow reconciliation"
 
 **Files:**
 - Create: `routes/sales-facts.js`
+- Create: `src/utils/salesFactsHealth.js`
 - Create: `test/salesFactsRoutes.test.js`
 - Modify: `routes/index.js`
 - Modify: `routes/core.js`
@@ -768,7 +769,7 @@ git commit -m "feat(sales-facts): add shadow reconciliation"
 - Modify: `test/serverRoutesStructure.test.js`
 - Modify: `test/deployIntegrity.test.js`
 
-- [ ] **Step 1: Write route RED**
+- [x] **Step 1: Write route RED**
 
 Add tests for exact descriptors:
 
@@ -780,17 +781,17 @@ POST /api/sales-facts/owners/sync            auth=admin
 
 Request body cap is 256 KiB. Bodies contain only date range, SID list, currency mode, and `forceRefresh:true`; serializer allows controlled 400/409/413/422/502/503/504 and redacted requestId/operation/code/counts. Nested `/api/health.salesFacts` remains root HTTP 200 and redacts path/SQL/stack.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `node --test test/salesFactsRoutes.test.js test/serverRoutesStructure.test.js test/deployIntegrity.test.js`
 
 Expected: FAIL with missing route/health descriptor.
 
-- [ ] **Step 3: Implement focused route and generic composition**
+- [x] **Step 3: Implement focused route and generic composition**
 
 Use the existing generic `routes/api-dispatch.js`; do not add sales-specific policy to `server.js`. `server.js` only imports/wires repository service functions. Extend `routes/core.js` with a generic safe sales health sanitizer or move both SQLite health sanitizers into a shared utility if duplication would otherwise grow.
 
-- [ ] **Step 4: Run GREEN and commit**
+- [x] **Step 4: Run GREEN and commit**
 
 Run: `node --test test/salesFactsRoutes.test.js test/serverRoutesStructure.test.js test/serverSecurity.test.js test/deployIntegrity.test.js`
 

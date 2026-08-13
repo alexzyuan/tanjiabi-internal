@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { getConfig, readEnv } from "../src/config/index.js";
 import { getDefaultWeekRange } from "../src/utils/dateRange.js";
+import { safeQuickCheckDiagnostic } from "../src/utils/safeQuickCheckDiagnostic.js";
 
 export const DEPLOY_INTEGRITY_VERSION = 1;
 
@@ -310,6 +311,28 @@ export function validateProductCatalogHealth(health) {
   return [`商品目录数据库异常：schemaVersion=${schemaVersion} quickCheck=${quickCheck} error=${error}`];
 }
 
+function redactSalesFactsError(value) {
+  const code = String(value ?? "").trim();
+  return SAFE_HEALTH_ERROR_PATTERN.test(code) && !SENSITIVE_HEALTH_ERROR_PATTERN.test(code)
+    ? code
+    : "SALES_FACTS_HEALTH_ERROR";
+}
+
+export function validateSalesFactsHealth(health) {
+  const salesFacts = health?.salesFacts;
+  if (!salesFacts || typeof salesFacts !== "object" || Array.isArray(salesFacts)) {
+    return ["/api/health 缺少 salesFacts 健康状态"];
+  }
+  if (salesFacts.ok === true) return [];
+
+  const schemaVersion = Number.isInteger(salesFacts.schemaVersion) && salesFacts.schemaVersion >= 0
+    ? String(salesFacts.schemaVersion)
+    : "unknown";
+  const quickCheck = safeQuickCheckDiagnostic(salesFacts.quickCheck);
+  const error = redactSalesFactsError(salesFacts.error);
+  return [`销售事实数据库异常：schemaVersion=${schemaVersion} quickCheck=${quickCheck} error=${error}`];
+}
+
 async function verifyLocalFiles(root, manifest) {
   const errors = [];
   const expectedFiles = manifest.integrity?.files || [];
@@ -343,6 +366,7 @@ export async function verifyDeployedApp({ root = process.cwd(), baseUrl }) {
     errors.push(`/api/health 返回异常：${JSON.stringify(health).slice(0, 200)}`);
   }
   errors.push(...validateProductCatalogHealth(health));
+  errors.push(...validateSalesFactsHealth(health));
 
   let salesReviewSmoke = null;
   try {
