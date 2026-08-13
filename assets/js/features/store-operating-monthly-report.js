@@ -65,6 +65,7 @@ function normalizeStoreOption(item = {}, {
   const selectedCountry = pickSellerCountry(item);
   const normalizedCountry = normalizeCountryName(selectedCountry === "-" ? "" : selectedCountry);
   return {
+    sid: Number(item.sid ?? item.seller_id ?? item.sellerId ?? item.store_id ?? item.storeId) || 0,
     name,
     label: String(item.label || name).trim(),
     country: normalizedCountry === "-" ? "" : String(normalizedCountry || "").trim(),
@@ -143,6 +144,7 @@ export function createStoreOperatingMonthlyReportFeature({
   const expandedReportCategories = new Set();
   let currentReportData = null;
   let currentReportFilters = null;
+  let forceRefreshInFlight = null;
   let rowVisibility = { hiddenMetricIds: new Set(), metrics: [], loaded: false };
   let rowVisibilityDraft = null;
   const reportSortState = { key: "", direction: "asc" };
@@ -170,6 +172,26 @@ export function createStoreOperatingMonthlyReportFeature({
     filters.stores.forEach((value) => params.append("stores", value));
     filters.countries.forEach((value) => params.append("countries", value));
     return params.toString();
+  }
+
+  function currentSalesFactsSids(filters = readFilters()) {
+    const selectedStores = new Set(filters.stores || []);
+    const selectedCountries = new Set(filters.countries || []);
+    return [...new Set(storeOptions
+      .filter((item) => item.sid > 0)
+      .filter((item) => !selectedStores.size || selectedStores.has(item.name))
+      .filter((item) => !selectedCountries.size || selectedCountries.has(item.country))
+      .map((item) => item.sid))].sort((left, right) => left - right);
+  }
+
+  function forceRefreshPayload(filters = readFilters()) {
+    return {
+      startDate: filters.startDate,
+      endDate: filters.endDate,
+      sids: currentSalesFactsSids(filters),
+      currencyMode: filters.currencyCode || "CNY",
+      forceRefresh: true,
+    };
   }
 
   function replaceLocationSearch(params) {
@@ -795,6 +817,59 @@ export function createStoreOperatingMonthlyReportFeature({
     }
   }
 
+  async function forceRefreshStoreOperatingMonthlyReport() {
+    if (forceRefreshInFlight) return forceRefreshInFlight;
+    const filters = readFilters();
+    const validation = validateDateRange(filters.startDate, filters.endDate);
+    if (!validation.ok) {
+      setText("#store-operating-report-status", validation.error, root);
+      return null;
+    }
+    const sids = currentSalesFactsSids(filters);
+    if (!sids.length) {
+      const error = new Error("当前筛选范围没有可刷新的店铺");
+      setText("#store-operating-report-status", `强制刷新失败：${error.message}`, root);
+      return null;
+    }
+    const button = query("#store-operating-report-force-refresh");
+    const restoreButton = typeof setButtonBusy === "function"
+      ? setButtonBusy(button, "刷新中…", "强制刷新")
+      : (() => {
+        if (button) button.disabled = true;
+        return () => { if (button) button.disabled = false; };
+      })();
+    const task = (async () => {
+      try {
+        setText("#store-operating-report-status", "正在强制刷新销售事实与自定义费用…", root);
+        const response = await fetchImpl("/api/sales-facts/monthly-report/refresh", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(forceRefreshPayload(filters)),
+          cache: "no-store",
+        });
+        await readApiResponse(response);
+        setText("#store-operating-report-status", "刷新已提交，正在重新读取经营月报…", root);
+        return await loadStoreOperatingMonthlyReport();
+      } catch (error) {
+        const message = error?.status === 401 ? "登录已失效，请重新登录。" : `强制刷新失败：${error?.message || String(error)}`;
+        setText("#store-operating-report-status", message, root);
+        console.error("[store-operating-monthly-report] force refresh failed", {
+          errorName: error?.name || "Error",
+          status: Number(error?.status) || 0,
+        });
+        return null;
+      } finally {
+        restoreButton();
+      }
+    })();
+    forceRefreshInFlight = task;
+    try {
+      return await task;
+    } finally {
+      if (forceRefreshInFlight === task) forceRefreshInFlight = null;
+    }
+  }
+
   function handleDateRangeChange() {
     const filters = readFilters();
     const validation = validateDateRange(filters.startDate, filters.endDate);
@@ -923,6 +998,7 @@ export function createStoreOperatingMonthlyReportFeature({
     bind(root, "#store-operating-report-currency", "change", handleCurrencyChange);
     bind(root, "#store-operating-report-query", "click", loadStoreOperatingMonthlyReport);
     bind(root, "#store-operating-report-reset", "click", resetStoreOperatingMonthlyReport);
+    bind(root, "#store-operating-report-force-refresh", "click", forceRefreshStoreOperatingMonthlyReport);
     bind(root, "#store-operating-report-export", "click", exportStoreOperatingMonthlyReport);
     bind(root, "#store-operating-report-budget", "click", openBudgetTargets);
     bind(root, "#store-operating-report-body", "click", toggleReportCategory);
@@ -954,6 +1030,7 @@ export function createStoreOperatingMonthlyReportFeature({
     openBudgetTargets,
     readFilters,
     resetStoreOperatingMonthlyReport,
+    forceRefreshStoreOperatingMonthlyReport,
     setupStoreOperatingMonthlyReport,
     toggleReportCategory,
     applyStoreOperatingMonthlyReportSort,

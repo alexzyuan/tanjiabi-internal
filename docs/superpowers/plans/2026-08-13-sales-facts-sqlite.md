@@ -872,25 +872,25 @@ git commit -m "refactor(sales): read weekly reports from sales facts"
 - Modify: `test/storeOperatingMonthlyReportFeature.test.js`
 - Create: `test/salesFactsMonthlyConsumer.test.js`
 
-- [ ] **Step 1: Write monthly RED**
+- [x] **Step 1: Write monthly RED**
 
 Cover multi-month query aggregation, current 12h/previous 24h/frozen policy, CNY and single-country ORIGINAL, custom fee facts by month/type, unknown types in meta, OrderProfit+fee atomic force refresh, source failure zero-write, unchanged approved field tree/order/formulas, and the explicit refresh control's exact POST/busy/reload/partial-failure behavior.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `node --test test/salesFactsMonthlyConsumer.test.js test/storeOperatingMonthlyReportService.test.js test/storeOperatingMonthlyReportMapper.test.js test/storeOperatingMonthlyReportRoutes.test.js`
 
 Expected: FAIL because monthly service still calls cached adapter and live fee endpoint independently.
 
-- [ ] **Step 3: Switch monthly service**
+- [x] **Step 3: Switch monthly service**
 
 Export `STORE_OPERATING_MONTHLY_MAPPER_VERSION = "store-operating-facts-v1"`. Query day facts aggregated per requested natural month and merge `custom_fee_monthly`. Remove the `fetchMskuOrderProfitCached` compatibility fallback and direct custom-fee request from the consumer; those calls belong only to `salesFactsSyncService`.
 
-- [ ] **Step 4: Wire explicit finance refresh**
+- [x] **Step 4: Wire explicit finance refresh**
 
 The existing query GET remains read/TTL-aware. Add `#store-operating-report-force-refresh` beside the existing query/reset controls with `secondary-button`; it POSTs the exact current range/store-derived SIDs/currency to the sales-facts monthly refresh route, disables only itself while pending, then performs one normal report reload after commit. Keep all state/error logic in `assets/js/features/store-operating-monthly-report.js`; add no CSS.
 
-- [ ] **Step 5: Run GREEN and commit**
+- [x] **Step 5: Run GREEN and commit**
 
 Run: `node --test test/salesFactsMonthlyConsumer.test.js test/storeOperatingMonthlyReportService.test.js test/storeOperatingMonthlyReportMapper.test.js test/storeOperatingMonthlyReportRoutes.test.js test/storeOperatingMonthlyReportFeature.test.js`
 

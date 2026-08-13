@@ -92,8 +92,10 @@ export function createFinancePurchaseRoutes(deps = {}) {
       path: "/api/finance/store-operating-monthly-report",
       auth: "finance",
       errorStatusCode: 502,
-      handler: async ({ res, url }) => {
-        sendJson(res, 200, await getStoreOperatingMonthlyReport(monthlyReportFilters(url)));
+      handler: async ({ req, res, url }) => {
+        sendJson(res, 200, await getStoreOperatingMonthlyReport(monthlyReportFilters(url), {
+          requestId: req?.headers?.["x-request-id"] || "finance-store-operating-monthly-report",
+        }));
       },
     },
     {

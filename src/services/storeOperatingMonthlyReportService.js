@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { getLingxingAdapter } from "../adapters/lingxingAdapter.js";
 import { getBudgetTargetContext as readBudgetTargetContext } from "./budgetTargetService.js";
+import { normalizeSalesFactsRequestId, normalizeSalesFactsScope } from "./salesFactsIdentity.js";
+import { reconstructSalesFactMapperRecord, SALES_FACT_METRICS } from "./salesFactsMetrics.js";
 import {
   buildStoreOperatingReportRows,
   mapStoreOperatingBudgetRowScope,
@@ -10,8 +12,8 @@ import {
   mergeStoreOperatingCustomFeeRecords,
   normalizeStoreOperatingCountryKey,
   readStoreOperatingBudgetCurrencyCode,
+  STORE_OPERATING_MONTHLY_MAPPER_VERSION,
 } from "./storeOperatingMonthlyReportMapper.js";
-import { runSalesFactsShadowRead } from "./salesFactsShadowService.js";
 
 const MONTH_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])$/;
 const DATE_PATTERN = /^\d{4}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
@@ -74,14 +76,6 @@ function monthRangeForDates(startDate, endDate) {
   return listInclusiveMonths(monthFromDate(startDate), monthFromDate(endDate));
 }
 
-function monthRequestBounds(month, startDate, endDate) {
-  const full = monthBounds(month);
-  return {
-    startDate: month === monthFromDate(startDate) ? startDate : full.startDate,
-    endDate: month === monthFromDate(endDate) ? endDate : full.endDate,
-  };
-}
-
 function monthDayCount(month) {
   const [, year, monthNumber] = month.match(MONTH_PATTERN) || [];
   return year ? new Date(Date.UTC(Number(year), Number(monthNumber), 0)).getUTCDate() : 0;
@@ -97,7 +91,7 @@ function filterSellers(sellers, filters) {
 }
 
 function generatedAt(now) {
-  const value = typeof now === "function" ? now() : new Date();
+  const value = typeof now === "function" ? now() : (now ?? new Date());
   return (value instanceof Date ? value : new Date(value)).toISOString();
 }
 
@@ -211,8 +205,8 @@ function buildEmptyResult(normalizedFilters, now) {
       currencyCodes: [],
       recordCount: 0,
       budgetMatchCount: 0,
-      source: "/basicOpen/finance/mreport/OrderProfit",
-      customFeeSource: "/bd/profit/report/open/report/seller/list.otherFeeStr",
+      source: "sales-facts-sqlite",
+      customFeeSource: "sales-facts-sqlite.custom_fee_monthly",
       customFeeRecordCount: 0,
       unmappedCustomFeeCount: 0,
       unavailableMetrics: [],
@@ -240,6 +234,112 @@ function requireBudgetRows(budget) {
     throw new Error("预算上下文 rows 必须是数组");
   }
   return budget;
+}
+
+function salesFactsNowValue(salesFacts, fallbackNow) {
+  const candidate = salesFacts?.now ?? fallbackNow ?? Date.now;
+  const value = typeof candidate === "function" ? candidate() : candidate;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) throw reportInputError("销售事实当前时间无效");
+  return date;
+}
+
+function positiveSid(value) {
+  const sid = Number(value);
+  if (!Number.isSafeInteger(sid) || sid <= 0) throw reportInputError("销售事实 SID 无效");
+  return sid;
+}
+
+function fixedMoneyToNumber(value, label) {
+  if (typeof value === "bigint") {
+    const number = Number(value) / 10000;
+    if (!Number.isFinite(number)) throw new Error(`${label}超出安全输出范围`);
+    return number;
+  }
+  const number = Number(value);
+  if (!Number.isFinite(number)) throw new Error(`${label}金额无效`);
+  return number;
+}
+
+function factMapperRecord(fact, sellerBySid) {
+  if (!fact || typeof fact !== "object" || Array.isArray(fact)) throw new Error("销售事实行结构无效");
+  const sid = positiveSid(fact.sid);
+  const seller = sellerBySid.get(sid);
+  if (!seller) throw new Error(`销售事实引用未知 SID：${sid}`);
+  const metricSource = fact.metrics && typeof fact.metrics === "object" && !Array.isArray(fact.metrics)
+    ? fact.metrics
+    : fact;
+  const knownMetrics = Object.fromEntries(Object.entries(metricSource)
+    .filter(([key]) => Object.hasOwn(SALES_FACT_METRICS, key)));
+  const metrics = Object.values(knownMetrics).some((value) => typeof value === "bigint")
+    ? reconstructSalesFactMapperRecord(knownMetrics)
+    : knownMetrics;
+  const factDate = String(fact.factDate || fact.date || "").trim();
+  if (!DATE_PATTERN.test(factDate)) throw new Error("销售事实 factDate 无效");
+  const currencyCode = String(fact.actualCurrencyCode || fact.currencyCode || "").trim().toUpperCase();
+  if (!currencyCode) throw new Error("销售事实实际币种缺失");
+  return {
+    ...metrics,
+    ...Object.fromEntries(["exchangeRate", "cnyAmount", "grossRate", "netGrossMargin", "customOrderFeePrincipal", "customOrderFeeCommission"]
+      .filter((key) => Object.hasOwn(fact, key))
+      .map((key) => [key, fact[key]])),
+    factDate,
+    reportDate: factDate.slice(0, 7),
+    date: factDate,
+    sid,
+    msku: String(fact.msku || "").trim(),
+    mskuKey: String(fact.mskuKey || fact.msku || "").trim().toLocaleLowerCase("en-US"),
+    storeName: seller.name,
+    country: seller.country,
+    currencyCode,
+  };
+}
+
+function feeMapperRecord(fee, sellerBySid) {
+  if (!fee || typeof fee !== "object" || Array.isArray(fee)) throw new Error("自定义费用事实行结构无效");
+  const sid = positiveSid(fee.sid);
+  const seller = sellerBySid.get(sid);
+  if (!seller) throw new Error(`自定义费用引用未知 SID：${sid}`);
+  const naturalMonth = String(fee.naturalMonth || "").trim();
+  if (!MONTH_PATTERN.test(naturalMonth)) throw new Error("自定义费用 naturalMonth 无效");
+  return {
+    sid,
+    storeName: seller.name,
+    country: seller.country,
+    currencyCode: String(fee.actualCurrencyCode || fee.currencyCode || "").trim().toUpperCase(),
+    reportDate: naturalMonth,
+    other_fee_type: String(fee.feeName || fee.otherFeeType || "").trim(),
+    other_fee_type_id: String(fee.feeTypeId || "").trim(),
+    fee: fixedMoneyToNumber(fee.feeAmount, `自定义费用 ${naturalMonth}/${sid}`),
+  };
+}
+
+function resolveFactsRows(result) {
+  if (Array.isArray(result?.records)) return result.records;
+  if (Array.isArray(result?.facts)) return result.facts;
+  throw new Error("销售事实月报刷新结果缺少 facts 数组");
+}
+
+function resolveCustomFeeRows(result) {
+  if (Array.isArray(result?.customFees)) return result.customFees;
+  throw new Error("销售事实月报刷新结果缺少 customFees 数组");
+}
+
+async function resolveMonthlySellers({ adapter, salesFacts }) {
+  if (Array.isArray(salesFacts?.sellerDirectory)) {
+    return salesFacts.sellerDirectory.map(mapStoreOperatingSellerScope);
+  }
+  if (typeof salesFacts?.getSellerDirectory === "function") {
+    const value = await salesFacts.getSellerDirectory();
+    const rows = Array.isArray(value) ? value : value?.sellers;
+    if (!Array.isArray(rows)) throw new Error("销售事实 seller directory 结果无效");
+    return rows.map(mapStoreOperatingSellerScope);
+  }
+  if (!adapter || typeof adapter.fetchSellers !== "function" || typeof adapter.normalizeRecordList !== "function") {
+    throw new Error("店铺经营月报缺少 seller directory 读取能力");
+  }
+  const payload = await adapter.fetchSellers();
+  return adapter.normalizeRecordList(payload).map(mapStoreOperatingSellerScope);
 }
 
 export function normalizeStoreOperatingMonthlyReportFilters({
@@ -292,17 +392,23 @@ export async function getStoreOperatingMonthlyReport(filters, {
   getBudgetTargetContext = readBudgetTargetContext,
   now,
   logger = console,
-  salesFactsShadow = {},
+  salesFacts = {},
+  forceRefresh = false,
+  requestId: requestedRequestId,
 } = {}) {
-  const requestId = randomUUID();
+  const requestId = normalizeSalesFactsRequestId(requestedRequestId || randomUUID(), { fallback: "store-operating-monthly" });
   const startedAt = Date.now();
   let normalizedFilters;
   try {
     normalizedFilters = normalizeStoreOperatingMonthlyReportFilters(filters);
-    const sellerPayload = await adapter.fetchSellers();
-    const sellers = filterSellers(adapter.normalizeRecordList(sellerPayload).map(mapStoreOperatingSellerScope), normalizedFilters);
+    const directory = await resolveMonthlySellers({ adapter, salesFacts });
+    const sellers = filterSellers(directory, normalizedFilters);
     if (!sellers.length) {
       const empty = buildEmptyResult(normalizedFilters, now);
+      empty.meta.source = "sales-facts-sqlite";
+      empty.meta.customFeeSource = "sales-facts-sqlite.custom_fee_monthly";
+      empty.meta.cacheState = "hit";
+      empty.meta.mapperVersion = STORE_OPERATING_MONTHLY_MAPPER_VERSION;
       writeLog(logger, "info", {
         requestId,
         range: `${normalizedFilters.startMonth}/${normalizedFilters.endMonth}`,
@@ -323,61 +429,69 @@ export async function getStoreOperatingMonthlyReport(filters, {
     if (currencyMode === "ORIGINAL" && effectiveCountries.length > 1) {
       throw reportInputError("跨国家只能使用人民币，请将币种切换为 CNY");
     }
-    const reportScopes = buildReportScopes(sellers, normalizedFilters);
-    const recordsByMonthResults = [];
-    for (const month of normalizedFilters.months) {
-      const { startDate, endDate } = monthRequestBounds(month, normalizedFilters.startDate, normalizedFilters.endDate);
-      const request = {
-        startDate,
-        endDate,
-        sids: sellers.map((seller) => seller.sid),
-        currencyCode: currencyMode === "CNY" ? "CNY" : "ORIGINAL",
-      };
-      const orderProfitResult = typeof adapter.fetchMskuOrderProfitCached === "function"
-        ? await adapter.fetchMskuOrderProfitCached({ ...request, sellerList: sellers, reportDate: month })
-        : await adapter.fetchMskuOrderProfit(request);
-      const orderProfitRecords = orderProfitResult?.records || adapter.normalizeRecordList(orderProfitResult);
-      const normalizedOrderProfitRecords = typeof adapter.normalizeMskuOrderProfitRecords === "function"
-        ? adapter.normalizeMskuOrderProfitRecords(orderProfitRecords, sellers, month)
-        : orderProfitRecords.map((record) => {
-          const seller = sellers.find((candidate) => Number(candidate.sid) === Number(record.sid || record.seller_id || record.sellerId));
-          return {
-            ...record,
-            sid: Number(record.sid || record.seller_id || record.sellerId || seller?.sid || 0),
-            storeName: record.storeName || record.store_name || seller?.name || "",
-            country: record.country || record.country_name || seller?.country || "",
-            currencyCode: record.currencyCode || record.currency_code || "",
-            reportDate: record.reportDate || month,
-          };
-        });
-      if (typeof adapter.fetchSellerProfitReport !== "function" || typeof adapter.normalizeSellerProfitOtherFeeRecords !== "function") {
-        throw new Error("领星适配器缺少店铺利润自定义费用读取能力");
-      }
-      const sellerProfitPayload = await adapter.fetchSellerProfitReport({
-        // 店铺利润接口的 monthlyQuery 只接受 yyyy-MM；订单利润仍使用精确日范围。
-        startDate: month,
-        endDate: month,
-        sids: sellers.map((seller) => seller.sid),
-        currencyCode: currencyMode === "CNY" ? "CNY" : "ORIGINAL",
-        monthlyQuery: true,
-        summaryEnabled: true,
-      });
-      const sellerProfitRecords = adapter.normalizeRecordList(sellerProfitPayload);
-      const feeRecords = adapter.normalizeSellerProfitOtherFeeRecords(sellerProfitRecords, sellers, month);
-      const mergedFees = mergeStoreOperatingCustomFeeRecords(normalizedOrderProfitRecords, feeRecords, sellers);
-      const result = {
-        month,
-        records: mergedFees.records,
-        customFeeRecordCount: feeRecords.length,
-        unmappedCustomFeeRecords: mergedFees.unmapped,
-        cacheState: orderProfitResult?.cacheState || "unsupported",
-        cacheUpdatedAt: orderProfitResult?.cacheUpdatedAt || "",
-      };
-      recordsByMonthResults.push(result);
+    if (typeof salesFacts.refreshMonthlyReportScope !== "function") {
+      throw new Error("店铺经营月报缺少销售事实月报刷新接口");
     }
-    const recordsByMonth = recordsByMonthResults.map((result) => result.records);
+    const currentNow = salesFactsNowValue(salesFacts, now);
+    const scope = normalizeSalesFactsScope({
+      startDate: normalizedFilters.startDate,
+      endDate: normalizedFilters.endDate,
+      sids: sellers.map((seller) => seller.sid),
+      currencyMode,
+      sellerDirectory: directory,
+      now: currentNow,
+    });
+    const refreshed = await salesFacts.refreshMonthlyReportScope(scope, {
+      forceRefresh: forceRefresh === true || salesFacts.forceRefresh === true,
+      requestId,
+    });
+    const sellerBySid = new Map(sellers.map((seller) => [Number(seller.sid), seller]));
+    const facts = resolveFactsRows(refreshed);
+    const customFees = resolveCustomFeeRows(refreshed);
+    const dateSet = new Set(scope.dates);
+    const sidSet = new Set(scope.sids);
+    const monthSet = new Set(normalizedFilters.months);
+    const factsByMonth = new Map(normalizedFilters.months.map((month) => [month, []]));
+    facts.forEach((fact) => {
+      const record = factMapperRecord(fact, sellerBySid);
+      if (!dateSet.has(record.factDate) || !sidSet.has(record.sid)) {
+        throw new Error("销售事实月报读取行超出明确范围");
+      }
+      const factCurrencyMode = String(fact.currencyMode || currencyMode).trim().toUpperCase();
+      if (factCurrencyMode !== currencyMode || (currencyMode === "CNY" && record.currencyCode !== "CNY")) {
+        throw new Error("销售事实月报实际币种与请求范围不一致");
+      }
+      factsByMonth.get(record.reportDate)?.push(record);
+    });
+    const feesByMonth = new Map(normalizedFilters.months.map((month) => [month, []]));
+    customFees.forEach((fee) => {
+      const record = feeMapperRecord(fee, sellerBySid);
+      if (!monthSet.has(record.reportDate) || !sidSet.has(record.sid)) {
+        throw new Error("自定义费用月报读取行超出明确范围");
+      }
+      if (String(fee.currencyMode || currencyMode).trim().toUpperCase() !== currencyMode
+        || (currencyMode === "CNY" && record.currencyCode !== "CNY")) {
+        throw new Error("自定义费用月报实际币种与请求范围不一致");
+      }
+      feesByMonth.get(record.reportDate)?.push(record);
+    });
+    const recordsByMonthResults = normalizedFilters.months.map((month) => {
+      const merged = mergeStoreOperatingCustomFeeRecords(
+        factsByMonth.get(month) || [],
+        feesByMonth.get(month) || [],
+        sellers,
+      );
+      return {
+        month,
+        records: merged.records,
+        customFeeRecordCount: (feesByMonth.get(month) || []).length,
+        unmappedCustomFeeRecords: merged.unmapped,
+        cacheState: refreshed?.meta?.cacheState || "hit",
+        cacheUpdatedAt: refreshed?.meta?.updatedAt || "",
+      };
+    });
+    const records = recordsByMonthResults.flatMap((result) => result.records);
     const cacheStates = Object.fromEntries(recordsByMonthResults.map((result) => [result.month, result.cacheState]));
-    const records = recordsByMonth.flat();
     const customFeeRecordCount = recordsByMonthResults.reduce((sum, result) => sum + result.customFeeRecordCount, 0);
     const unmappedCustomFeeRecords = recordsByMonthResults.flatMap((result) => result.unmappedCustomFeeRecords || []);
     const budget = await getBudgetTargetContext({
@@ -386,12 +500,13 @@ export async function getStoreOperatingMonthlyReport(filters, {
       countries: effectiveCountries,
     });
     const budgetRows = requireBudgetRows(budget).rows;
+    const reportScopes = buildReportScopes(sellers, normalizedFilters);
     const groups = [];
     let missingExchangeRateCount = 0;
-    reportScopes.forEach((scope) => {
-      const scopeSidSet = new Set(scope.sellers.map((seller) => Number(seller.sid)));
+    reportScopes.forEach((reportScope) => {
+      const scopeSidSet = new Set(reportScope.sellers.map((seller) => Number(seller.sid)));
       const scopeRecords = records.filter((record) => scopeSidSet.has(Number(record.sid)));
-      const scopeBudgetRows = filterBudgetRowsForScope(budgetRows, scope);
+      const scopeBudgetRows = filterBudgetRowsForScope(budgetRows, reportScope);
       const groupedRecords = currencyMode === "CNY"
         ? new Map([["CNY", scopeRecords]])
         : new Map([...new Set(scopeRecords.map((record) => String(record.currencyCode ?? "").trim()))]
@@ -406,23 +521,23 @@ export async function getStoreOperatingMonthlyReport(filters, {
       const originalBudgets = currencyMode === "ORIGINAL"
         ? originalBudgetByCurrency(scopeBudgetRows, currencyCodes)
         : new Map();
-      [...groupedRecords].forEach(([currencyCode, groupRecords]) => {
+      [...groupedRecords].forEach(([groupCurrencyCode, groupRecords]) => {
         const budgetByMetric = currencyMode === "CNY"
           ? cnyBudget.budgetByMetric
-          : originalBudgets.get(currencyCode) || {};
+          : originalBudgets.get(groupCurrencyCode) || {};
         const mapped = buildStoreOperatingReportRows({
           records: groupRecords,
           budgetByMetric,
-          currencyCode,
-          storeName: scope.storeName,
-          country: scope.countries.length === 1 ? scope.countries[0] : "全部国家",
+          currencyCode: groupCurrencyCode,
+          storeName: reportScope.storeName,
+          country: reportScope.countries.length === 1 ? reportScope.countries[0] : "全部国家",
           periodDays: normalizedFilters.months.reduce((sum, month) => sum + monthDayCount(month), 0),
         });
         groups.push({
-          storeName: scope.storeName,
-          storeScope: scope.storeNames,
-          currencyCode,
-          currencyAvailable: Boolean(currencyCode),
+          storeName: reportScope.storeName,
+          storeScope: reportScope.storeNames,
+          currencyCode: groupCurrencyCode,
+          currencyAvailable: Boolean(groupCurrencyCode),
           recordCount: groupRecords.length,
           rows: mapped.rows,
           unavailableMetrics: mapped.unavailableMetrics,
@@ -449,12 +564,21 @@ export async function getStoreOperatingMonthlyReport(filters, {
       missingExchangeRateCount,
       currencyMode,
     });
+    const factsMeta = refreshed?.meta || {};
     const result = {
       ok: true,
       meta: {
         currencyMode,
-        source: "/basicOpen/finance/mreport/OrderProfit",
-        customFeeSource: "/bd/profit/report/open/report/seller/list.otherFeeStr",
+        source: "sales-facts-sqlite",
+        customFeeSource: "sales-facts-sqlite.custom_fee_monthly",
+        cacheState: factsMeta.cacheState || "hit",
+        updatedAt: factsMeta.updatedAt || null,
+        ageSeconds: factsMeta.ageSeconds ?? null,
+        revision: factsMeta.revision ?? null,
+        ownerRevision: factsMeta.ownerRevision ?? null,
+        mapperVersion: STORE_OPERATING_MONTHLY_MAPPER_VERSION,
+        requestId,
+        rangeKey: scope.rangeKey,
         currencyCodes,
         recordCount: records.length,
         customFeeRecordCount,
@@ -465,7 +589,7 @@ export async function getStoreOperatingMonthlyReport(filters, {
         unavailableMetricNames: unavailableMetricDetails.map((detail) => detail.name),
         unavailableMetricDetails,
         missingExchangeRateCount,
-        generatedAt: generatedAt(now),
+        generatedAt: generatedAt(currentNow),
       },
       filters: normalizedFilters,
       rows,
@@ -492,20 +616,9 @@ export async function getStoreOperatingMonthlyReport(filters, {
       cacheStates,
       customFeeRecordCount,
       unmappedCustomFeeCount: unmappedCustomFeeRecords.length,
-      unmappedCustomFeeRecords,
       elapsedMs: Date.now() - startedAt,
     });
-    return runSalesFactsShadowRead({
-      enabled: salesFactsShadow.enabled,
-      legacyResult: result,
-      legacyRecords: records,
-      readNewFacts: salesFactsShadow.readNewFacts,
-      compare: salesFactsShadow.compare,
-      requestId: salesFactsShadow.requestId || requestId,
-      logger: salesFactsShadow.logger || logger,
-      scope: salesFactsShadow.scope,
-      now: salesFactsShadow.now || now,
-    });
+    return result;
   } catch (error) {
     writeLog(logger, "error", {
       requestId,
@@ -594,8 +707,9 @@ function storeOperatingMonthlyReportExportLayout(report) {
 
 export async function exportStoreOperatingMonthlyReportXlsx(filters = {}, {
   getStoreOperatingMonthlyReport: loadReport = getStoreOperatingMonthlyReport,
+  reportOptions = {},
 } = {}) {
-  const report = requireStoreOperatingMonthlyReportExportResult(await loadReport(filters));
+  const report = requireStoreOperatingMonthlyReportExportResult(await loadReport(filters, reportOptions));
   const module = await import("xlsx");
   const XLSX = module.default || module;
   const workbook = XLSX.utils.book_new();

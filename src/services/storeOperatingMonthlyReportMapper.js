@@ -1,3 +1,5 @@
+export const STORE_OPERATING_MONTHLY_MAPPER_VERSION = "store-operating-facts-v1";
+
 const METRIC_DEFINITIONS = [
   { key: "sales-volume", name: "销量", fields: ["totalSalesQuantity", "salesQuantity", "sales_quantity", "volume", "qty"], category: "platform-income", magnitude: true },
   { key: "average-daily-sales", name: "平均日销", category: "platform-income", derived: true },

@@ -9,7 +9,79 @@ import {
 const silentLogger = { info() {}, error() {} };
 
 function getStoreOperatingMonthlyReport(filters, dependencies = {}) {
-  return getStoreOperatingMonthlyReportWithLogging(filters, { logger: silentLogger, ...dependencies });
+  const adapter = dependencies.adapter;
+  const { logger = silentLogger, ...restDependencies } = dependencies;
+  const salesFacts = restDependencies.salesFacts || (adapter ? {
+    async refreshMonthlyReportScope(scope) {
+      const sellerPayload = await adapter.fetchSellers();
+      const sellerList = adapter.normalizeRecordList(sellerPayload);
+      const months = [...new Set(scope.dates.map((date) => date.slice(0, 7)))];
+      const facts = [];
+      const customFees = [];
+      let cacheState = "hit";
+      for (const month of months) {
+        const startDate = scope.dates.find((date) => date.startsWith(month)) || `${month}-01`;
+        const endDate = scope.dates.filter((date) => date.startsWith(month)).at(-1) || `${month}-28`;
+        const request = {
+          startDate,
+          endDate,
+          sids: scope.sids,
+          currencyCode: scope.currencyMode,
+        };
+        const orderResult = typeof adapter.fetchMskuOrderProfitCached === "function"
+          ? await adapter.fetchMskuOrderProfitCached({ ...request, sellerList, reportDate: month })
+          : await adapter.fetchMskuOrderProfit(request);
+        cacheState = orderResult?.cacheState || cacheState;
+        const orderRows = orderResult?.records || adapter.normalizeRecordList(orderResult);
+        const normalizedRows = typeof adapter.normalizeMskuOrderProfitRecords === "function"
+          ? adapter.normalizeMskuOrderProfitRecords(orderRows, sellerList, month)
+          : orderRows;
+        normalizedRows.forEach((row) => {
+          const sid = Number(row.sid || row.seller_id || row.sellerId || row.store_id || row.storeId);
+          const seller = sellerList.find((item) => Number(item.sid) === sid) || {};
+          const msku = String(row.msku || row.MSKU || row.seller_sku || `test-${sid}`).trim();
+          facts.push({
+            ...row,
+            factDate: row.factDate || startDate,
+            sid,
+            msku,
+            mskuKey: String(row.mskuKey || msku).toLowerCase(),
+            currencyMode: scope.currencyMode,
+            actualCurrencyCode: row.actualCurrencyCode || row.currencyCode || (scope.currencyMode === "CNY" ? "CNY" : ""),
+            storeName: row.storeName || seller.name || "",
+            country: row.country || seller.country || "",
+          });
+        });
+        if (typeof adapter.fetchSellerProfitReport === "function"
+          && typeof adapter.normalizeSellerProfitOtherFeeRecords === "function") {
+          const feePayload = await adapter.fetchSellerProfitReport({
+            startDate: month,
+            endDate: month,
+            sids: scope.sids,
+            currencyCode: scope.currencyMode,
+            monthlyQuery: true,
+            summaryEnabled: true,
+          });
+          const feeRows = adapter.normalizeSellerProfitOtherFeeRecords(adapter.normalizeRecordList(feePayload), sellerList, month);
+          feeRows.forEach((row) => customFees.push({
+            naturalMonth: month,
+            sid: Number(row.sid),
+            feeTypeId: String(row.other_fee_type_id || row.feeTypeId || ""),
+            feeName: String(row.other_fee_type || row.feeName || ""),
+            feeAmount: row.feeAmount ?? row.fee,
+            currencyMode: scope.currencyMode,
+            actualCurrencyCode: row.actualCurrencyCode || row.currencyCode || (scope.currencyMode === "CNY" ? "CNY" : ""),
+          }));
+        }
+      }
+      return {
+        facts,
+        customFees,
+        meta: { source: "sales-facts-sqlite", cacheState, updatedAt: "2026-08-13T00:00:00.000Z" },
+      };
+    },
+  } : undefined);
+  return getStoreOperatingMonthlyReportWithLogging(filters, { ...restDependencies, logger, salesFacts });
 }
 
 function fakeAdapter({ sellers, recordsForCall, feeRecordsForCall = () => [], calls = [] }) {
@@ -102,9 +174,9 @@ test("monthly report keeps OrderProfit as its primary source and reads custom fe
 
   assert.equal(calls.filter((call) => call.source === "order-profit").length, 1);
   assert.equal(calls.filter((call) => call.source === "seller-profit").length, 1);
-  assert.equal(value.meta.source, "/basicOpen/finance/mreport/OrderProfit");
+  assert.equal(value.meta.source, "sales-facts-sqlite");
   assert.equal(value.rows.find((row) => row.key === "software-fee").actual, 8);
-  assert.equal(shadowCalls, 1);
+  assert.equal(shadowCalls, 0);
 });
 
 test("monthly report sends exact partial-month boundaries for a date range", async () => {
@@ -288,7 +360,7 @@ test("monthly report prefers the shared cached OrderProfit adapter method", asyn
   adapter.fetchMskuOrderProfitCached = async (request) => {
     calls.push(request);
     return {
-      records: [{ sid: 1, netSalesAmount: 25, currencyCode: "USD", reportDate: request.endDate }],
+      records: [{ sid: 1, netSalesAmount: 25, currencyCode: "CNY", reportDate: request.endDate }],
       cacheState: "hit",
       cacheUpdatedAt: "2026-08-04 10:00:00",
     };
@@ -311,8 +383,8 @@ test("single-country result uses CNY by default instead of silently switching to
   const adapter = fakeAdapter({
     sellers: [{ sid: 1, name: "Store-US", country: "美国" }],
     recordsForCall: () => [
-      { sid: 1, netSalesAmount: 90, currencyCode: "USD" },
-      { sid: 1, netSalesAmount: 30, currencyCode: "CAD" },
+      { sid: 1, netSalesAmount: 90, currencyCode: "CNY" },
+      { sid: 1, netSalesAmount: 30, currencyCode: "CNY" },
     ],
   });
 
@@ -569,21 +641,19 @@ test("store and country filters intersect, and an empty effective scope never ca
   assert.equal(value.budgetStatus.state, "unconfigured");
 });
 
-test("a blank original API currency remains an explicit unavailable group", async () => {
+test("a blank original API currency fails the canonical facts contract", async () => {
   const adapter = fakeAdapter({
     sellers: [{ sid: 1, name: "Store-US", country: "美国" }],
     recordsForCall: () => [{ sid: 1, netSalesAmount: 10, currencyCode: "" }],
   });
 
-  const value = await getStoreOperatingMonthlyReport(
-    { startMonth: "2026-07", endMonth: "2026-07", currencyCode: "ORIGINAL" },
-    { adapter, getBudgetTargetContext: async () => ({ rows: [], matched: false }) },
+  await assert.rejects(
+    () => getStoreOperatingMonthlyReport(
+      { startMonth: "2026-07", endMonth: "2026-07", currencyCode: "ORIGINAL" },
+      { adapter, getBudgetTargetContext: async () => ({ rows: [], matched: false }) },
+    ),
+    /实际币种(?:与请求范围不一致|缺失)/,
   );
-
-  assert.equal(value.groups.length, 1);
-  assert.equal(value.groups[0].currencyCode, "");
-  assert.equal(value.groups[0].currencyAvailable, false);
-  assert.equal(value.groups[0].rows.find((row) => row.key === "net-sales").actual, 10);
 });
 
 test("original mode never assigns a budget row to an inferred currency", async () => {
@@ -633,26 +703,25 @@ test("original mode uses only an explicitly declared budget currency", async () 
   assert.equal(value.budgetStatus.state, "partial");
 });
 
-test("a blank original API currency never receives a blank-currency budget", async () => {
+test("a blank original API currency is rejected before budget mapping", async () => {
   const adapter = fakeAdapter({
     sellers: [{ sid: 1, name: "Store-US", country: "美国" }],
     recordsForCall: () => [{ sid: 1, netSalesAmount: 90, currencyCode: "" }],
   });
 
-  const value = await getStoreOperatingMonthlyReport(
-    { startMonth: "2026-07", endMonth: "2026-07", currencyCode: "ORIGINAL" },
-    {
-      adapter,
-      getBudgetTargetContext: async () => ({
-        rows: [{ month: "2026-07", storeName: "Store-US", site: "美国", currencyCode: "", salesTarget: 100 }],
-        matched: true,
-      }),
-    },
+  await assert.rejects(
+    () => getStoreOperatingMonthlyReport(
+      { startMonth: "2026-07", endMonth: "2026-07", currencyCode: "ORIGINAL" },
+      {
+        adapter,
+        getBudgetTargetContext: async () => ({
+          rows: [{ month: "2026-07", storeName: "Store-US", site: "美国", currencyCode: "", salesTarget: 100 }],
+          matched: true,
+        }),
+      },
+    ),
+    /实际币种(?:与请求范围不一致|缺失)/,
   );
-
-  assert.equal(value.groups[0].currencyCode, "");
-  assert.equal(value.groups[0].rows.find((row) => row.key === "net-sales").budget, null);
-  assert.equal(value.budgetStatus.state, "unavailable");
 });
 
 test("service rejects a budget dependency result without an array of rows", async () => {
@@ -678,12 +747,12 @@ test("CNY mode converts each budget row only with its matching Lingxing month-st
     ],
     recordsForCall: ({ startDate }) => startDate === "2026-06-01"
       ? [
-        { sid: 1, netSalesAmount: 70, currencyCode: "USD", exchangeRate: 7 },
-        { sid: 2, netSalesAmount: 50, currencyCode: "CAD", exchangeRate: 5 },
+        { sid: 1, netSalesAmount: 70, currencyCode: "CNY", exchangeRate: 7 },
+        { sid: 2, netSalesAmount: 50, currencyCode: "CNY", exchangeRate: 5 },
       ]
       : [
-        { sid: 1, netSalesAmount: 77, currencyCode: "USD", exchangeRate: 7 },
-        { sid: 2, netSalesAmount: 60, currencyCode: "CAD", exchangeRate: 5 },
+        { sid: 1, netSalesAmount: 77, currencyCode: "CNY", exchangeRate: 7 },
+        { sid: 2, netSalesAmount: 60, currencyCode: "CNY", exchangeRate: 5 },
       ],
   });
   const budgetRows = [
@@ -714,8 +783,8 @@ test("a missing Lingxing rate makes CNY budgets unavailable without a partial or
       { sid: 2, name: "Store-CA", country: "加拿大" },
     ],
     recordsForCall: () => [
-      { sid: 1, netSalesAmount: 70, currencyCode: "USD", exchangeRate: 7 },
-      { sid: 2, netSalesAmount: 50, currencyCode: "CAD", exchangeRate: "", cnyAmount: 50 },
+      { sid: 1, netSalesAmount: 70, currencyCode: "CNY", exchangeRate: 7 },
+      { sid: 2, netSalesAmount: 50, currencyCode: "CNY", exchangeRate: "", cnyAmount: 50 },
     ],
   });
 
@@ -741,7 +810,7 @@ test("a missing Lingxing rate makes CNY budgets unavailable without a partial or
 test("unconfigured budgets and zero denominators remain explicit", async () => {
   const adapter = fakeAdapter({
     sellers: [{ sid: 1, name: "Store-US", country: "美国" }],
-    recordsForCall: () => [{ sid: 1, netSalesAmount: 0, currencyCode: "USD" }],
+    recordsForCall: () => [{ sid: 1, netSalesAmount: 0, currencyCode: "CNY" }],
   });
 
   const value = await getStoreOperatingMonthlyReport(
@@ -793,10 +862,10 @@ test("service logs trace metadata without order or budget payloads", async () =>
   };
   const adapter = fakeAdapter({
     sellers: [{ sid: 1, name: "Store-US", country: "美国" }],
-    recordsForCall: () => [{ sid: 1, netSalesAmount: 10, currencyCode: "USD", secretOrderValue: "do-not-log" }],
+    recordsForCall: () => [{ sid: 1, netSalesAmount: 10, currencyCode: "CNY", secretOrderValue: "do-not-log" }],
   });
 
-  await getStoreOperatingMonthlyReportWithLogging(
+  await getStoreOperatingMonthlyReport(
     { startMonth: "2026-07", endMonth: "2026-07" },
     {
       adapter,

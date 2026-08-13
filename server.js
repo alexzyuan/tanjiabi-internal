@@ -233,6 +233,21 @@ async function syncSalesFactsOwners(body, { requestId } = {}) {
     logger: console,
   });
 }
+
+const getStoreOperatingMonthlyReportWithFacts = (filters, options = {}) => getStoreOperatingMonthlyReport(filters, {
+  ...options,
+  salesFacts: {
+    ...(options.salesFacts || {}),
+    repository: salesFactsRepository,
+    getSellerDirectory: getSalesFactsSellerDirectory,
+    refreshMonthlyReportScope: salesFactsSyncService.refreshMonthlyReportScope,
+  },
+});
+
+const exportStoreOperatingMonthlyReportXlsxWithFacts = (filters, options = {}) => exportStoreOperatingMonthlyReportXlsx(filters, {
+  ...options,
+  getStoreOperatingMonthlyReport: getStoreOperatingMonthlyReportWithFacts,
+});
 const sessionCookieName = "tanjia_session";
 const oauthStateCookieName = "tanjia_oauth_state";
 const sessionTtlMs = 12 * 60 * 60 * 1000;
@@ -943,8 +958,8 @@ const apiRoutes = createApiRoutes(buildApiRoutes({
   getPlatformCashflowDashboard,
   getPayablesDashboard,
   getSupplierBoardDashboard,
-  getStoreOperatingMonthlyReport,
-  exportStoreOperatingMonthlyReportXlsx,
+  getStoreOperatingMonthlyReport: getStoreOperatingMonthlyReportWithFacts,
+  exportStoreOperatingMonthlyReportXlsx: exportStoreOperatingMonthlyReportXlsxWithFacts,
   readStoreOperatingMonthlyReportRowVisibility: storeOperatingMonthlyReportRowVisibilityService.read,
   saveStoreOperatingMonthlyReportRowVisibility: storeOperatingMonthlyReportRowVisibilityService.save,
   runPlatformCashflowCapture,

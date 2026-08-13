@@ -77,8 +77,8 @@ function makeFeatureHarness({
   groups,
   fetchImpl,
   storeOptions = [
-    { name: "A", country: "美国" },
-    { name: "B", country: "加拿大" },
+    { sid: 1, name: "A", country: "美国" },
+    { sid: 2, name: "B", country: "加拿大" },
   ],
 } = {}) {
   const elements = {
@@ -92,6 +92,8 @@ function makeFeatureHarness({
     "#store-operating-report-head": makeElement(),
     "#store-operating-report-body": makeElement(),
     "#store-operating-report-export": makeElement(),
+    "#store-operating-report-force-refresh": makeElement(),
+    "#store-operating-report-force-refresh-status": makeElement(),
     "#store-operating-report-table": makeElement(),
   };
   elements["#store-operating-report-store"].selectedValues = stores.slice();
@@ -105,6 +107,7 @@ function makeFeatureHarness({
   const refreshes = [];
   const optionUpdates = [];
   const countryStoreSyncCalls = [];
+  const boundHandlers = {};
   const navTargets = [];
   const location = { pathname: "/dashboard", search: "" };
   const history = {
@@ -114,7 +117,9 @@ function makeFeatureHarness({
   };
   const feature = createStoreOperatingMonthlyReportFeature({
     root,
-    bind() {},
+    bind(_root, selector, event, handler) {
+      boundHandlers[`${selector}:${event}`] = handler;
+    },
     bindBackdropClose() {},
     clickVisibleNavItem(target) {
       navTargets.push(target);
@@ -164,7 +169,7 @@ function makeFeatureHarness({
     },
     syncAllOptionSelection() {},
   });
-  return { elements, feature, location, navTargets, optionUpdates, refreshes, requests, countryStoreSyncCalls };
+  return { elements, feature, location, navTargets, optionUpdates, refreshes, requests, countryStoreSyncCalls, boundHandlers };
 }
 
 test("seller aliases are normalized through the shared shop identity helpers", () => {
@@ -753,6 +758,67 @@ test("selected stores render one four-metric group per store and merge rows hori
   assert.equal((body.match(/销售收入净额/g) || []).length, 1);
   assert.match(body, /data-report-group-index="0" data-report-metric="actual">100/);
   assert.match(body, /data-report-group-index="1" data-report-metric="actual">80/);
+});
+
+test("monthly force refresh posts exact current scope, prevents duplicate clicks, and reloads once", async () => {
+  const postCalls = [];
+  const getCalls = [];
+  let resolvePost;
+  const postDeferred = new Promise((resolve) => { resolvePost = resolve; });
+  const { feature, elements, boundHandlers } = makeFeatureHarness({
+    startDate: "2026-07-01",
+    endDate: "2026-07-31",
+    stores: ["A"],
+    storeOptions: [
+      { sid: 101, name: "A", country: "美国" },
+      { sid: 202, name: "B", country: "加拿大" },
+    ],
+    createDateRangePickerImpl: () => ({ setup() {}, refresh() {} }),
+    fetchImpl: async (url, options = {}) => {
+      if (String(url) === "/api/sales-facts/monthly-report/refresh") {
+        postCalls.push({ url: String(url), options });
+        await postDeferred;
+        return { ok: true, status: 200, async json() { return { ok: true }; } };
+      }
+      getCalls.push(String(url));
+      return makeReportResponse();
+    },
+  });
+
+  feature.setupStoreOperatingMonthlyReport();
+  const handler = boundHandlers["#store-operating-report-force-refresh:click"];
+  assert.equal(typeof handler, "function");
+  const first = handler();
+  const second = handler();
+  assert.equal(postCalls.length, 1);
+  const body = JSON.parse(postCalls[0].options.body);
+  assert.deepEqual(body, {
+    startDate: "2026-07-01",
+    endDate: "2026-07-31",
+    sids: [101],
+    currencyMode: "CNY",
+    forceRefresh: true,
+  });
+  assert.equal(Object.hasOwn(body, "listingOwner"), false);
+  resolvePost();
+  await Promise.all([first, second]);
+  assert.equal(getCalls.length, 1);
+  assert.equal(elements["#store-operating-report-force-refresh"].disabled, false);
+});
+
+test("monthly force refresh keeps the report error visible and does not reload after a partial failure", async () => {
+  const { feature, elements, boundHandlers } = makeFeatureHarness({
+    createDateRangePickerImpl: () => ({ setup() {}, refresh() {} }),
+    fetchImpl: async (url) => {
+      if (String(url) === "/api/sales-facts/monthly-report/refresh") {
+        return { ok: false, status: 502, async json() { return { ok: false, error: "上游失败", code: "SALES_FACTS_UPSTREAM" }; } };
+      }
+      throw new Error("GET should not run after refresh failure");
+    },
+  });
+  feature.setupStoreOperatingMonthlyReport();
+  await boundHandlers["#store-operating-report-force-refresh:click"]();
+  assert.match(elements["#store-operating-report-status"].textContent, /强制刷新失败：上游失败/);
 });
 
 test("budget targets consume report months, stores, and countries once as their initial scope", () => {

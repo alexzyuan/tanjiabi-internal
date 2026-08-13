@@ -122,6 +122,7 @@ test("store operating monthly report is a finance-owned feature with shared cont
   assert.match(indexSource, /id="store-operating-report-country"[^>]*multiple/);
   assert.match(indexSource, /id="store-operating-report-country"[^>]*data-filter-clear-target="#store-operating-report-store"/);
   assert.match(indexSource, /id="store-operating-report-currency"[^>]*>\s*<option value="CNY" selected>人民币/);
+  assert.match(indexSource, /id="store-operating-report-force-refresh"[^>]*class="secondary-button"/);
   assert.match(indexSource, /id="store-operating-report-row-visibility"/);
   assert.match(indexSource, /class="modal-backdrop" id="store-operating-report-row-visibility-modal"/);
   assert.match(indexSource, /id="store-operating-report-row-visibility-groups"/);
@@ -148,6 +149,8 @@ test("store operating monthly report is a finance-owned feature with shared cont
   assert.match(appSource, /clickVisibleNavItem\(requestedView\)/);
   assert.match(appSource, /requestedView === "store-operating-monthly-report"[\s\S]*params\.delete\("view"\)/);
   assert.match(featureSource, /refreshTable\(query\("#store-operating-report-table"\)\)/);
+  assert.match(featureSource, /\/api\/sales-facts\/monthly-report\/refresh/);
+  assert.match(featureSource, /forceRefresh: true/);
   assert.equal(appSource.includes("function renderStoreOperatingMonthlyReport"), false);
   assert.equal(appSource.includes('bind(document, "#store-operating-report'), false);
 
