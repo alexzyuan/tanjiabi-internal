@@ -128,6 +128,30 @@ function safePreflightFailure(requestId, code) {
   return { ok: false, exitCode: 1, requestId, error: { code } };
 }
 
+function safeValidationFailure(requestId, error) {
+  const errorName = String(error?.name || "Error");
+  const code = String(error?.code || "");
+  const statusCode = Number(error?.statusCode);
+  const safeName = /^(?:Error|SalesFacts(?:Input|Contract|Conflict|Upstream)Error)$/u.test(errorName)
+    ? errorName
+    : "Error";
+  const safeCode = /^[A-Z][A-Z0-9_]{2,63}$/u.test(code)
+    && !/(TOKEN|SECRET|PASSWORD|PAYLOAD|RAW|BODY)/u.test(code)
+    ? code
+    : "SALES_FACTS_PREFLIGHT_VALIDATION_FAILED";
+  return {
+    ok: false,
+    exitCode: 1,
+    requestId,
+    error: {
+      operation: "order-profit-validation",
+      errorName: safeName,
+      code: safeCode,
+      statusCode: Number.isInteger(statusCode) && statusCode >= 400 && statusCode <= 599 ? statusCode : 502,
+    },
+  };
+}
+
 export async function runSalesFactsOrderProfitPreflightCli({
   env = process.env,
   adapter = getLingxingAdapter(),
@@ -211,8 +235,8 @@ export async function runSalesFactsOrderProfitPreflightCli({
     };
     writeOutput(JSON.stringify(report));
     return report;
-  } catch {
-    const failure = safePreflightFailure(requestId, "SALES_FACTS_PREFLIGHT_VALIDATION_FAILED");
+  } catch (error) {
+    const failure = safeValidationFailure(requestId, error);
     writeOutput(JSON.stringify(failure));
     return failure;
   }

@@ -150,3 +150,33 @@ test("OrderProfit preflight is nonzero for mismatch and emits no business values
   assert.equal(report.approvedFetchMode, "daily");
   assert.doesNotMatch(outputs.join("\n"), /SECRET-MSKU|"amount"|token|raw/i);
 });
+
+test("OrderProfit preflight exposes a controlled validation code without upstream text", async () => {
+  const outputs = [];
+  const report = await runSalesFactsOrderProfitPreflightCli({
+    env: {
+      SALES_FACTS_PREFLIGHT_START_DATE: "2026-07-01",
+      SALES_FACTS_PREFLIGHT_END_DATE: "2026-07-01",
+      SALES_FACTS_PREFLIGHT_SIDS: "8708",
+      SALES_FACTS_PREFLIGHT_CURRENCY_MODE: "CNY",
+    },
+    getDirectory: async () => ({ sellers: [{ sid: 8708, countryCode: "US", status: 1 }] }),
+    adapter: {},
+    loadRange: async () => {
+      const error = new Error("token=secret raw payload");
+      error.name = "SalesFactsContractError";
+      error.code = "SALES_FACTS_DATE_MISSING";
+      error.statusCode = 422;
+      throw error;
+    },
+    writeOutput: (text) => outputs.push(text),
+  });
+
+  assert.deepEqual(report.error, {
+    operation: "order-profit-validation",
+    errorName: "SalesFactsContractError",
+    code: "SALES_FACTS_DATE_MISSING",
+    statusCode: 422,
+  });
+  assert.doesNotMatch(outputs.join("\n"), /secret|payload|token=/i);
+});
