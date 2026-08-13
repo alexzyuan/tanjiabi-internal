@@ -44,6 +44,66 @@ test("sales dashboard feature loads the sales weekly endpoint with the dashboard
   assert.deepEqual(requests[0].options, { cache: "no-store", credentials: "same-origin" });
 });
 
+test("sales dashboard force refresh posts the current scope without owner and prevents duplicate clicks", async () => {
+  const bindings = [];
+  const requests = [];
+  let releaseRefresh;
+  const refreshPending = new Promise((resolve) => { releaseRefresh = resolve; });
+  const button = { disabled: false, textContent: "强制刷新销售事实", dataset: {} };
+  const root = {
+    querySelector(selector) {
+      if (selector === "#sales-facts-force-refresh") return button;
+      return null;
+    },
+  };
+  const feature = createSalesDashboardFeature({
+    root,
+    bind: (...args) => { bindings.push(args); },
+    bindAll: () => [],
+    buildDashboardQuery: () => "startDate=2026-07-01&endDate=2026-07-07&currencyCode=ORIGINAL&sids=8708,8709&listingOwner=林芃",
+    getSelectedFrontSids: () => [8708, 8709],
+    setButtonBusy: (target, busy) => { target.disabled = busy; },
+    setText: () => {},
+    formatActualMoney: (value) => String(value),
+    formatNumber: (value) => String(value),
+    parseDisplayPercent: (value) => Number.parseFloat(value) || 0,
+    parseNumber: (value) => Number(value) || 0,
+    escapeHtml: (value) => String(value),
+    renderDataValueButtonsHtml: () => "",
+    setTableSortButtonGroupState: () => {},
+    fetchImpl: async (url, options) => {
+      requests.push({ url, options });
+      if (url === "/api/sales-facts/order-profit/refresh") {
+        await refreshPending;
+        return { ok: true, status: 200, json: async () => ({ ok: true }) };
+      }
+      return { ok: true, status: 200, json: async () => ({ meta: { source: "sales-facts-sqlite" } }) };
+    },
+  });
+
+  feature.setupSalesDashboard();
+  const refreshBinding = bindings.find((args) => args[1] === "#sales-facts-force-refresh");
+  assert.ok(refreshBinding, "force refresh must be owned by sales dashboard feature");
+  const first = refreshBinding[3]({ preventDefault() {} });
+  const second = refreshBinding[3]({ preventDefault() {} });
+  await Promise.resolve();
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].url, "/api/sales-facts/order-profit/refresh");
+  assert.deepEqual(JSON.parse(requests[0].options.body), {
+    startDate: "2026-07-01",
+    endDate: "2026-07-07",
+    sids: [8708, 8709],
+    currencyMode: "ORIGINAL",
+    forceRefresh: true,
+  });
+  assert.equal(requests[0].options.method, "POST");
+  assert.equal(button.disabled, true);
+  releaseRefresh();
+  await Promise.all([first, second]);
+  assert.equal(requests.length, 2, "one normal dashboard reload follows the refresh commit");
+  assert.equal(button.disabled, false);
+});
+
 test("sales dashboard feature shows a scoped content overlay while slow data is loading", async () => {
   const bodyChildren = [];
   const contentChildren = [];

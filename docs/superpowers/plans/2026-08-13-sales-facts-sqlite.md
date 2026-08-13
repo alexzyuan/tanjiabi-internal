@@ -819,17 +819,17 @@ git commit -m "feat(sales-facts): expose refresh and health routes"
 - Modify: `test/salesDashboardFeature.test.js`
 - Modify: `test/frontendStructure.test.js`
 
-- [ ] **Step 1: Write consumer RED**
+- [x] **Step 1: Write consumer RED**
 
 Prove weekly dashboard reads facts once, different owner filters reuse the same facts/derived base, mapper version invalidates cache, the explicit refresh button POSTs the current date/SID/currency scope without owner, keyboard activation works through native button semantics, busy state prevents duplicates, 30-day refund still works, old dashboard/source JSON is never read or written on runtime success/failure, and response meta contains unified fields.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run: `node --test test/salesFactsWeeklyConsumer.test.js test/salesWeeklySourceCache.test.js test/salesReview30dRefundRate.test.js`
 
 Expected: FAIL because dashboard still owns JSON source cache.
 
-- [ ] **Step 3: Export mapper version and switch service**
+- [x] **Step 3: Export mapper version and switch service**
 
 ```js
 export const SALES_WEEKLY_MAPPER_VERSION = "sales-weekly-facts-v1";
@@ -839,11 +839,11 @@ export const SALES_WEEKLY_MAPPER_VERSION = "sales-weekly-facts-v1";
 
 Add `#sales-facts-force-refresh` to the existing sales filter action area using `secondary-button`. `sales-dashboard.js` owns POST `/api/sales-facts/order-profit/refresh`, safe error rendering, button busy/restore, then one normal dashboard reload. Do not bind this flow in `app.js` and do not add CSS.
 
-- [ ] **Step 4: Remove runtime cache calls**
+- [x] **Step 4: Remove runtime cache calls**
 
 Delete imports/calls to `readSalesDashboardCache`, `readSalesWeeklySourceCache`, `saveSalesDashboardCache`, and `saveSalesWeeklySourceCache` from dashboard runtime paths. Keep explicitly named read-only reconciliation helpers in `cacheStore.js` until retirement; mark old generic writes deprecated and prove no runtime references with structure tests.
 
-- [ ] **Step 5: Run GREEN and commit**
+- [x] **Step 5: Run GREEN and commit**
 
 Run: `node --test test/salesFactsWeeklyConsumer.test.js test/salesWeeklySourceCache.test.js test/salesReview30dRefundRate.test.js test/salesDashboardFeature.test.js`
 

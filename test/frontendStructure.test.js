@@ -28,6 +28,20 @@ test("sales dashboard places time progress between date range and currency filte
   assert.ok(dateIndex < progressIndex && progressIndex < currencyIndex, "time progress must sit between date and currency filters");
 });
 
+test("sales dashboard owns a native sales-facts force refresh control", async () => {
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const featureSource = await readFile(new URL("../assets/js/features/sales-dashboard.js", import.meta.url), "utf8");
+  const appSource = await readFile(new URL("../app.js", import.meta.url), "utf8");
+  assert.match(indexSource, /<button class="secondary-button" id="sales-facts-force-refresh" type="button">强制刷新销售事实<\/button>/);
+  assert.match(indexSource, /id="sales-facts-force-refresh-status"[^>]*aria-live="polite"/);
+  assert.match(featureSource, /bind\(root, "#sales-facts-force-refresh", "click"/);
+  assert.match(featureSource, /forceRefresh:\s*true/);
+  assert.match(featureSource, /method:\s*"POST"/);
+  assert.match(featureSource, /setButtonBusy\(button, true\)/);
+  assert.match(appSource, /getSelectedFrontSids,/);
+  assert.equal(appSource.includes('bind(document, "#sales-facts-force-refresh"'), false);
+});
+
 test("supplier board exposes separate semantic dashboard and product refresh actions", async () => {
   const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
   const appSource = await readFile(new URL("../app.js", import.meta.url), "utf8");

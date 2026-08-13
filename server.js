@@ -897,7 +897,16 @@ const apiRoutes = createApiRoutes(buildApiRoutes({
   validatePasswordLogin,
   adminSeed,
   isFinanceUser,
-  getSalesWeeklyDashboard,
+  getSalesWeeklyDashboard: (filters, options = {}) => getSalesWeeklyDashboard(filters, {
+    ...options,
+    salesFacts: {
+      ...(options.salesFacts || {}),
+      repository: salesFactsRepository,
+      getSellerDirectory: getSalesFactsSellerDirectory,
+      refreshOrderProfitScope: salesFactsSyncService.refreshOrderProfitScope,
+      getAvailableDays: options.salesFacts?.getAvailableDays,
+    },
+  }),
   resolveActiveAiProviderConfig,
   generateAiListingCopy,
   getMskuDetailDashboard,

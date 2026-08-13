@@ -24,11 +24,13 @@ export function createSalesDashboardFeature({
   fetchImpl = globalThis.fetch,
   formatActualMoney,
   formatNumber,
+  getSelectedFrontSids = () => [],
   parseDisplayPercent,
   parseNumber,
   renderDataValueButtonsHtml,
   redirectToLogin,
   setTableSortButtonGroupState,
+  setButtonBusy = (button, busy) => { if (button) button.disabled = busy; },
   setText,
   canAccessFinance,
   getCurrentAuthUser,
@@ -90,6 +92,7 @@ export function createSalesDashboardFeature({
   let mskuDetailStoreFilter = "";
   let mskuDetailSort = { key: "budgetQuantity", direction: "desc" };
   let salesTimeProgress = null;
+  let forceRefreshInFlight = false;
 
   function asArray(value, fallback = []) {
     return Array.isArray(value) ? value : fallback;
@@ -530,7 +533,61 @@ export function createSalesDashboardFeature({
     }
   }
 
+  function refreshPayloadFromCurrentFilters() {
+    const params = new URLSearchParams(buildDashboardQuery());
+    const rawSids = params.get("sids") || "";
+    const sids = rawSids
+      ? [...new Set(rawSids.split(",").map((value) => Number(value.trim())).filter((value) => Number.isSafeInteger(value) && value > 0))]
+      : [...new Set((getSelectedFrontSids() || []).map(Number).filter((value) => Number.isSafeInteger(value) && value > 0))];
+    if (!sids.length) throw new Error("当前筛选范围没有可刷新的 SID。");
+    return {
+      startDate: params.get("startDate") || "",
+      endDate: params.get("endDate") || "",
+      sids,
+      currencyMode: (params.get("currencyCode") || "CNY").trim().toUpperCase(),
+      forceRefresh: true,
+    };
+  }
+
+  async function refreshSalesFacts() {
+    const button = root?.querySelector?.("#sales-facts-force-refresh");
+    const status = root?.querySelector?.("#sales-facts-force-refresh-status");
+    if (forceRefreshInFlight) return null;
+    forceRefreshInFlight = true;
+    setButtonBusy(button, true);
+    if (status) status.textContent = "销售事实刷新中…";
+    try {
+      const response = await fetchImpl("/api/sales-facts/order-profit/refresh", {
+        method: "POST",
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(refreshPayloadFromCurrentFilters()),
+      });
+      if (response.status === 401) {
+        redirectToLogin?.();
+        throw new Error("登录状态已失效");
+      }
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || "销售事实刷新失败。");
+      }
+      const dashboard = await loadDashboard({ loadingOverlay: false });
+      renderDashboard(dashboard);
+      if (status) status.textContent = "销售事实已刷新";
+      return dashboard;
+    } catch (error) {
+      if (status) status.textContent = `刷新失败：${error.message || "销售事实刷新失败"}`;
+      console.error("销售事实刷新失败", { errorName: error?.name || "Error" });
+      return null;
+    } finally {
+      forceRefreshInFlight = false;
+      setButtonBusy(button, false);
+    }
+  }
+
   function setupSalesDashboard() {
+    bind(root, "#sales-facts-force-refresh", "click", () => refreshSalesFacts());
     bind(root, "#msku-store-tabs", "click", (event) => {
       const button = closestTarget(event, "[data-msku-store]");
       if (!button) return;
@@ -546,6 +603,7 @@ export function createSalesDashboardFeature({
   return {
     applyMskuDetailSort,
     loadDashboard,
+    refreshSalesFacts,
     makeUnavailableDashboard,
     revealMskuDetailPanel,
     renderDashboard,

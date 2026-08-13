@@ -39,139 +39,21 @@ async function withTempLingxingProvider(run) {
   }
 }
 
-test("sales weekly source cache reuses the same base data across different listing owners", async () => {
+test("sales weekly ignores the legacy source cache and requires the sales facts dependency", async () => {
   await withTempLingxingProvider(async (projectRoot) => {
     const cacheStore = await importFresh(projectRoot, "src/utils/cacheStore.js");
-    const cacheKey = salesWeeklySourceCacheKey();
-    const source = {
-      cacheScope: {
-        version: "sales-weekly-source-v3",
-        startDate: "2026-07-01",
-        endDate: "2026-07-23",
-        currencyCode: "ORIGINAL",
-        sids: [],
-      },
-      sellers: [
-        { sid: 1, name: "探嘉澳洲", country: "AU" },
-        { sid: 2, name: "坦蛋伯澳洲", country: "AU" },
-      ],
-      sellerProfitRecords: [],
-      orderProfitRecords: [
-        {
-          sid: 1,
-          country: "AU",
-          countryCode: "AU",
-          storeName: "探嘉澳洲",
-          msku: "MSKU-1",
-          totalSalesAmount: 100,
-          totalSalesQuantity: 2,
-          grossProfit: 10,
-          totalAdsCost: 5,
-          totalAdsSales: 20,
-          totalSalesRefunds: 2,
-        },
-        {
-          sid: 2,
-          country: "AU",
-          countryCode: "AU",
-          storeName: "坦蛋伯澳洲",
-          msku: "MSKU-2",
-          totalSalesAmount: 200,
-          totalSalesQuantity: 4,
-          grossProfit: 20,
-          totalAdsCost: 10,
-          totalAdsSales: 40,
-          totalSalesRefunds: 4,
-        },
-      ],
-      recent30OrderProfitRecords: [
-        {
-          sid: 1,
-          country: "AU",
-          countryCode: "AU",
-          storeName: "探嘉澳洲",
-          msku: "MSKU-1",
-          totalSalesAmount: 400,
-          totalSalesRefunds: 12,
-        },
-        {
-          sid: 2,
-          country: "AU",
-          countryCode: "AU",
-          storeName: "坦蛋伯澳洲",
-          msku: "MSKU-2",
-          totalSalesAmount: 500,
-          totalSalesRefunds: 25,
-        },
-      ],
-      dailyProfitRecords: [],
-      inventoryRecords: [],
-      listingOwnerRows: [
-        { sid: 1, country: "AU", countryCode: "AU", msku: "MSKU-1", listingOwner: "林芃" },
-        { sid: 2, country: "AU", countryCode: "AU", msku: "MSKU-2", listingOwner: "熊丹轩" },
-      ],
-      budgetTargets: { rows: [], totals: {} },
-      range: { startDate: "2026-07-01", endDate: "2026-07-23" },
-      currencyCode: "ORIGINAL",
-      raw: {
-        recent30: {
-          startDate: "2026-06-24",
-          endDate: "2026-07-23",
-          cacheState: "hit",
-          cacheUpdatedAt: "2026-07-23 10:00:00",
-          recordCount: 2,
-        },
-      },
-      updatedAt: "2026-07-23 10:00:00",
-    };
-
-    await cacheStore.saveSalesWeeklySourceCache(cacheKey, source);
+    await cacheStore.saveSalesWeeklySourceCache(salesWeeklySourceCacheKey(), { orderProfitRecords: [{ totalSalesAmount: 999 }] });
     const { getSalesWeeklyDashboard } = await importFresh(projectRoot, "src/services/dashboardService.js");
-
-    const linPeng = await getSalesWeeklyDashboard({
-      startDate: "2026-07-01",
-      endDate: "2026-07-23",
-      currencyCode: "ORIGINAL",
-      listingOwner: "林芃",
-    });
-    const shadowedLinPeng = await getSalesWeeklyDashboard({
-      startDate: "2026-07-01",
-      endDate: "2026-07-23",
-      currencyCode: "ORIGINAL",
-      listingOwner: "林芃",
-    }, {
-      salesFactsShadow: {
-        enabled: true,
-        readNewFacts: async () => { throw new Error("shadow facts unavailable"); },
-        logger: { info() {}, error() {} },
-      },
-    });
-    const xiong = await getSalesWeeklyDashboard({
-      startDate: "2026-07-01",
-      endDate: "2026-07-23",
-      currencyCode: "ORIGINAL",
-      listingOwner: "熊丹轩",
-    });
-
-    const salesLinPeng = linPeng.summary.find((item) => item[0] === "销售额")?.[1];
-    const salesXiong = xiong.summary.find((item) => item[0] === "销售额")?.[1];
-
-    assert.equal(linPeng.cacheHit, true);
-    assert.equal(xiong.cacheHit, true);
-    assert.equal(salesLinPeng, "100");
-    assert.equal(salesXiong, "200");
-    assert.equal(linPeng.detailRows[0].refundRate30d, 3);
-    assert.deepEqual(shadowedLinPeng, linPeng);
-    assert.equal(xiong.detailRows[0].refundRate30d, 5);
-    assert.deepEqual(linPeng.meta.recent30, {
-      startDate: "2026-06-24",
-      endDate: "2026-07-23",
-      cacheState: "hit",
-      cacheUpdatedAt: "2026-07-23 10:00:00",
-      recordCount: 2,
-    });
-    assert.match(linPeng.meta.syncStatus, /1\s*条/);
-    assert.match(xiong.meta.syncStatus, /1\s*条/);
+    const error = new Error("facts unavailable");
+    await assert.rejects(
+      getSalesWeeklyDashboard({ startDate: "2026-07-01", endDate: "2026-07-23", currencyCode: "CNY", sids: [1] }, {
+        salesFacts: {
+          sellerDirectory: [{ sid: 1, name: "探嘉美国", countryCode: "US", status: 1 }],
+          getSalesFacts: async () => { throw error; },
+        },
+      }),
+      (actual) => actual === error,
+    );
   });
 });
 

@@ -22,8 +22,10 @@ export function createSalesRoutes(deps = {}) {
       method: "GET",
       path: "/api/dashboard/sales-weekly",
       auth: "session",
-      handler: async ({ res, url }) => {
-        sendJson(res, 200, await getSalesWeeklyDashboard(readSalesDashboardFilters(url)));
+      handler: async ({ req, res, url }) => {
+        sendJson(res, 200, await getSalesWeeklyDashboard(readSalesDashboardFilters(url), {
+          requestId: req?.headers?.["x-request-id"] || "sales-weekly",
+        }));
       },
     },
     {

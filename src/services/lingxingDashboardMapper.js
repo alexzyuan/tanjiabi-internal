@@ -2,6 +2,8 @@ import { mockDashboard } from "../data/mockDashboard.js";
 import { lingxingShopMap } from "../data/lingxingShopMap.js";
 import { buildListingOwnerMap, findListingOwner, normalizeInventoryOwnerRows, ownerOptionsFromRows } from "./listingOwnerService.js";
 
+export const SALES_WEEKLY_MAPPER_VERSION = "sales-weekly-facts-v1";
+
 function toNumber(value) {
   if (typeof value === "string") {
     value = value.replace(/,/g, "").replace(/%/g, "");
@@ -735,6 +737,7 @@ function buildActualMskuMap(records = []) {
         countryCode: readFirst(record, ["countryCode", "country_code", "region", "marketplace"]) || "",
         storeName: getStore(record),
         msku: getMsku(record),
+        listingOwner: readFirst(record, ["listingOwner", "listing_owner"]) || "",
         productName: "",
       };
       existing.quantity += getQuantity(record);
@@ -756,6 +759,7 @@ function buildActualMskuMap(records = []) {
       existing.firstLegCostRate ??= getRatePercentMetric(record, fieldMap.firstLegCostRate);
       existing.fbaInventory ??= getFbaInventoryQuantity(record);
       existing.productName ||= getProductName(record);
+      existing.listingOwner ||= readFirst(record, ["listingOwner", "listing_owner"]) || "";
       map.set(key, existing);
     });
   });
@@ -851,7 +855,7 @@ export function buildBudgetMskuDetailRows(records = [], budgetTargets = {}, inve
     const fbaInventory = actual.fbaInventory !== null && actual.fbaInventory !== undefined
       ? toNumber(actual.fbaInventory)
       : findFbaInventory(inventoryMap, row);
-    const listingOwner = findListingOwner(ownerMap, {
+    const listingOwner = actual.listingOwner || findListingOwner(ownerMap, {
       sid: actual.sid || resolveBudgetRowSid(row),
       country: actual.country || resolveBudgetRowCountry(row),
       countryCode: row.countryCode || "",
@@ -1000,12 +1004,12 @@ export function mapLingxingToSalesDashboard({
   const ownerOptions = ownerOptionsFromRows(ownerRows);
   const listingOwnerFilter = String(filters.listingOwner || filters.owner || "").trim();
   const records = listingOwnerFilter
-    ? sourceRecords.filter((record) => findListingOwner(ownerMap, {
+    ? sourceRecords.filter((record) => (String(record.listingOwner || "").trim() || findListingOwner(ownerMap, {
       sid: getRecordSid(record),
       country: getSite(record),
       countryCode: readFirst(record, ["countryCode", "country_code", "region", "marketplace"]) || "",
       msku: getMsku(record),
-    }) === listingOwnerFilter)
+    })) === listingOwnerFilter)
     : sourceRecords;
   const cacheText = raw.cacheState === "hit"
     ? ` · 缓存 ${raw.cacheUpdatedAt || ""}`.trimEnd()

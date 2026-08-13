@@ -24,7 +24,8 @@ export const SALES_DERIVED_PAYLOAD_KEYS = Object.freeze(new Set([
   "amount", "quantity", "salesAmount", "salesQuantity", "totalSalesAmount", "totalSalesQuantity", "profit",
   "grossProfit", "netSalesAmount", "refundAmount", "refundRate30d", "fbaAvailableDays", "inventoryWarning",
   "inventoryRecordCount", "listingOwnerRecordCount", "cacheHit", "currencyMode", "startDate", "endDate",
-  "sourceName", "status", "message", "key", "label", "valueText", "percent", "detail", "date", "day",
+  "sourceName", "status", "message", "key", "label", "valueText", "percent", "detail", "date", "day", "factDate", "reportDate", "currencyCode",
+  "totalSalesQuantity", "multiChannelSalesQuantity", "totalAdsSales", "totalAdsSalesQuantity", "totalSalesAmount", "netSalesAmount", "grossProfit", "salesProfit", "buyerShippingFee", "promotionDiscount", "totalSalesRefunds", "returnQuantity", "refundsQuantity", "fbaInventoryCompensation", "otherIncome", "platformFee", "fbaDeliveryFee", "otherOrderFee", "storageFee", "totalAdsCost", "promotionFee", "fbaInternationalShippingFee", "inboundPlacementFee", "adjustmentFee", "otherPlatformFee", "purchaseCost", "firstLegCost", "otherProductCost", "purchaseUnitCost", "firstLegUnitCost", "storageFeeRate", "platformFeeRate", "fbaDeliveryFeeRate", "purchaseCostRate", "firstLegCostRate",
 ]));
 
 function log(logger, level, event, details) {

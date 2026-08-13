@@ -180,6 +180,7 @@ const {
 const {
   buildDashboardQuery,
   getFrontShopSellers,
+  getSelectedFrontSids,
   populateFrontShopFilters,
   setupFrontShopFilterControls,
 } = createFrontShopFilters({
@@ -390,6 +391,7 @@ let makeUnavailableDashboard = (message) => ({
   fetchImpl: fetch.bind(window),
   formatActualMoney,
   formatNumber,
+  getSelectedFrontSids,
   getCurrentAuthUser: () => getCurrentAuthUser(),
   parseDisplayPercent,
   parseNumber,

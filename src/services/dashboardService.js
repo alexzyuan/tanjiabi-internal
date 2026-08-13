@@ -3,20 +3,12 @@ import { getConfig } from "../config/index.js";
 import { getSyncState } from "./syncService.js";
 import {
   readMskuDetailCache,
-  readSalesDashboardCache,
-  readSalesWeeklySourceCache,
   saveMskuDetailCache,
-  saveSalesDashboardCache,
-  saveSalesWeeklySourceCache,
 } from "../utils/cacheStore.js";
 import { filterCoreSellers, getLingxingAdapter } from "../adapters/lingxingAdapter.js";
-import { buildBudgetMskuDetailRows, mapLingxingToSalesDashboard } from "./lingxingDashboardMapper.js";
+import { buildBudgetMskuDetailRows, mapLingxingToSalesDashboard, SALES_WEEKLY_MAPPER_VERSION } from "./lingxingDashboardMapper.js";
 import { getDefaultWeekRange } from "../utils/dateRange.js";
-import {
-  migrateSalesWeeklySourceCache,
-  SALES_WEEKLY_SOURCE_CACHE_VERSION,
-  validateSalesWeeklySourceCache,
-} from "./salesWeeklySourceCache.js";
+import { validateSalesWeeklySourceCache } from "./salesWeeklySourceCache.js";
 import { getBudgetTargetContext } from "./budgetTargetService.js";
 import {
   fetchListingOwnerRows,
@@ -26,25 +18,11 @@ import {
 } from "./listingOwnerService.js";
 import { getSharedSellers } from "./sharedDataService.js";
 import { getSalesForecastAvailableDaysBySellerMsku } from "./salesForecastService.js";
-import { runSalesFactsShadowRead } from "./salesFactsShadowService.js";
+import { normalizeSalesFactsScope, addSalesFactsDateDays, SalesFactsInputError } from "./salesFactsIdentity.js";
+import { getSalesFacts } from "./salesFactsQueryService.js";
+import { getOrBuildSalesDerived } from "./salesDerivedCacheService.js";
 
-function hasLiveFilters(filters) {
-  return Boolean(filters.startDate || filters.endDate || filters.sids?.length);
-}
-
-const salesWeeklySourceRefreshes = new Map();
-
-function nowMs() {
-  return Date.now();
-}
-
-function logSalesWeeklyTiming(stage, startedAt, extra = {}) {
-  console.info("[sales-weekly]", {
-    stage,
-    durationMs: nowMs() - startedAt,
-    ...extra,
-  });
-}
+function nowMs() { return Date.now(); }
 
 function normalizedCurrencyCode(filters = {}) {
   return String(filters.currencyCode || "CNY").trim().toUpperCase() || "CNY";
@@ -52,20 +30,6 @@ function normalizedCurrencyCode(filters = {}) {
 
 function uniqueNumbers(values = []) {
   return [...new Set(values.map(Number).filter(Boolean))];
-}
-
-function salesWeeklySourceScope(filters = {}) {
-  const defaultRange = getDefaultWeekRange(getConfig().dashboard);
-  const startDate = filters.startDate || defaultRange.startDate;
-  const endDate = filters.endDate || defaultRange.endDate;
-  const sids = Array.isArray(filters.sids) ? uniqueNumbers(filters.sids).sort((a, b) => a - b) : [];
-  return {
-    version: SALES_WEEKLY_SOURCE_CACHE_VERSION,
-    startDate,
-    endDate,
-    currencyCode: normalizedCurrencyCode(filters),
-    sids,
-  };
 }
 
 export { validateSalesWeeklySourceCache };
@@ -86,87 +50,6 @@ export function validateSalesWeeklyDashboardCache(dashboard) {
     return { ok: false, reasons: [`${missingFbaAvailableDays} detail rows are missing fbaAvailableDays`] };
   }
   return { ok: true, reasons: [] };
-}
-
-function salesWeeklySourceCacheKey(filters = {}) {
-  return JSON.stringify(salesWeeklySourceScope(filters));
-}
-
-function salesWeeklySourceCacheKeyForVersion(filters = {}, version) {
-  return JSON.stringify({ ...salesWeeklySourceScope(filters), version });
-}
-
-function sourceFiltersFromCacheScope(scope = {}) {
-  return {
-    startDate: scope.startDate || "",
-    endDate: scope.endDate || "",
-    currencyCode: scope.currencyCode || "CNY",
-    sids: Array.isArray(scope.sids) ? scope.sids : [],
-  };
-}
-
-function matchesDefaultSalesWeeklyRange(filters = {}) {
-  const defaultRange = getDefaultWeekRange(getConfig().dashboard);
-  const startDate = filters.startDate || defaultRange.startDate;
-  const endDate = filters.endDate || defaultRange.endDate;
-  return startDate === defaultRange.startDate && endDate === defaultRange.endDate;
-}
-
-function canUseDefaultSalesDashboardCache(filters = {}) {
-  const listingOwner = String(filters.listingOwner || filters.owner || "").trim();
-  const hasSelectedSids = Array.isArray(filters.sids) && filters.sids.length > 0;
-  return matchesDefaultSalesWeeklyRange(filters)
-    && !listingOwner
-    && !hasSelectedSids
-    && normalizedCurrencyCode(filters) === "CNY";
-}
-
-function dashboardFiltersFromSource(source = {}, filters = {}) {
-  return {
-    ...sourceFiltersFromCacheScope(source.cacheScope || salesWeeklySourceScope(filters)),
-    listingOwner: String(filters.listingOwner || filters.owner || "").trim(),
-    owner: String(filters.owner || filters.listingOwner || "").trim(),
-  };
-}
-
-function mapSalesWeeklySourceToDashboard(source = {}, filters = {}) {
-  const nextFilters = dashboardFiltersFromSource(source, filters);
-  return mapLingxingToSalesDashboard({
-    sellers: source.sellers || [],
-    sellerProfitRecords: source.sellerProfitRecords || [],
-    orderProfitRecords: source.orderProfitRecords || [],
-    recent30OrderProfitRecords: source.recent30OrderProfitRecords || [],
-    dailyProfitRecords: source.dailyProfitRecords || [],
-    inventoryRecords: source.inventoryRecords || [],
-    listingOwnerRows: source.listingOwnerRows || [],
-    filters: nextFilters,
-    range: source.range || {
-      startDate: nextFilters.startDate,
-      endDate: nextFilters.endDate,
-    },
-    currencyCode: source.currencyCode || nextFilters.currencyCode || "CNY",
-    raw: {
-      ...(source.raw || {}),
-      cacheState: source.raw?.cacheState || "hit",
-      cacheUpdatedAt: source.cacheUpdatedAt || source.updatedAt || "",
-      recent30: source.raw?.recent30 || null,
-    },
-    budgetTargets: source.budgetTargets || {},
-  });
-}
-
-function shadowSalesWeeklyDashboard(dashboard, source, shadow = {}) {
-  return runSalesFactsShadowRead({
-    enabled: shadow.enabled,
-    legacyResult: dashboard,
-    legacyRecords: source?.orderProfitRecords || [],
-    readNewFacts: shadow.readNewFacts,
-    compare: shadow.compare,
-    requestId: shadow.requestId,
-    logger: shadow.logger || console,
-    scope: shadow.scope,
-    now: shadow.now,
-  });
 }
 
 function salesReviewAvailableDaysKey(sid, msku) {
@@ -243,301 +126,195 @@ async function fetchSalesListingOwnerRows(adapter, records = [], budgetTargets =
   }
 }
 
-async function fetchSalesWeeklySource(filters = {}) {
-  const adapter = getLingxingAdapter();
-  const data = await adapter.fetchSalesWeeklyData(filters);
-  const budgetTargets = await getBudgetTargetContext(data.range);
-  const listingOwnerRows = await fetchSalesListingOwnerRows(
-    adapter,
-    data.orderProfitRecords || data.sellerProfitRecords || [],
-    budgetTargets,
-    data.sellers || [],
-  );
+function activeSeller(seller = {}) {
+  if (seller.status === undefined || seller.status === null || seller.status === "") return true;
+  if (Number(seller.status) === 1) return true;
+  return ["active", "enabled", "正常", "启用"].includes(String(seller.status).trim().toLocaleLowerCase("en-US"));
+}
+
+function salesFactsSellerId(seller = {}) {
+  return Number(seller.sid || seller.seller_id || seller.sellerId || seller.id);
+}
+
+async function resolveWeeklySellerDirectory(salesFacts = {}) {
+  if (Array.isArray(salesFacts.sellerDirectory)) return salesFacts.sellerDirectory;
+  if (typeof salesFacts.getSellerDirectory === "function") {
+    const value = await salesFacts.getSellerDirectory();
+    if (Array.isArray(value)) return value;
+    if (Array.isArray(value?.sellers)) return value.sellers;
+  }
+  const result = await getSharedSellers({ adapter: getLingxingAdapter() });
+  if (Array.isArray(result?.sellers)) return result.sellers;
+  throw new SalesFactsInputError("销售周报缺少可信 seller directory。", { code: "SALES_FACTS_WEEKLY_SELLER_DIRECTORY_INVALID" });
+}
+
+function subtractSalesFactsDays(value, days) {
+  return addSalesFactsDateDays(value, -days);
+}
+
+function weeklyScopes(filters, sellers, now) {
+  const defaultRange = getDefaultWeekRange(getConfig().dashboard);
+  const startDate = filters.startDate || defaultRange.startDate;
+  const endDate = filters.endDate || defaultRange.endDate;
+  const sids = Array.isArray(filters.sids) && filters.sids.length
+    ? uniqueNumbers(filters.sids)
+    : sellers.filter(activeSeller).map(salesFactsSellerId).filter((sid) => Number.isInteger(sid) && sid > 0);
+  const currencyMode = normalizedCurrencyCode(filters);
+  const requested = normalizeSalesFactsScope({ startDate, endDate, sids, currencyMode, sellerDirectory: sellers, now: new Date(now()) });
+  const recentStartDate = subtractSalesFactsDays(requested.endDate, 29);
+  const factsStartDate = recentStartDate < requested.startDate ? recentStartDate : requested.startDate;
+  const facts = normalizeSalesFactsScope({ startDate: factsStartDate, endDate: requested.endDate, sids: requested.sids, currencyMode, sellerDirectory: sellers, now: new Date(now()) });
+  return { requested, facts, recentStartDate };
+}
+
+function mapSalesFactToDashboardRecord(fact, sellerBySid) {
+  const sid = Number(fact.sid);
+  const seller = sellerBySid.get(sid) || {};
+  const storeName = seller.displayName || seller.name || seller.storeName || String(sid);
+  const country = seller.country || seller.countryCode || "";
+  const countryCode = seller.countryCode || seller.country || "";
   return {
-    cacheScope: salesWeeklySourceScope(filters),
-    sellers: data.sellers || [],
-    sellerProfitRecords: data.sellerProfitRecords || [],
-    orderProfitRecords: data.orderProfitRecords || [],
-    recent30OrderProfitRecords: data.recent30OrderProfitRecords || [],
-    dailyProfitRecords: data.dailyProfitRecords || [],
-    inventoryRecords: data.inventoryRecords || [],
+    ...(fact.metrics || {}),
+    factDate: fact.factDate,
+    reportDate: fact.factDate,
+    date: fact.factDate,
+    sid,
+    msku: fact.msku,
+    mskuKey: fact.mskuKey,
+    storeName,
+    country,
+    countryCode,
+    currencyCode: fact.actualCurrencyCode || fact.currencyMode,
+    listingOwner: fact.listingOwner || "",
+    listingOwnerStatus: fact.listingOwnerStatus || "historical-unknown",
+  };
+}
+
+function ownerRowsFromFactRecords(records = []) {
+  const seen = new Set();
+  return records.map((record) => ({
+    sid: Number(record.sid),
+    msku: record.msku,
+    country: record.country,
+    countryCode: record.countryCode,
+    storeName: record.storeName,
+    listingOwner: record.listingOwner || "-",
+  })).filter((row) => {
+    const key = `${row.sid}|${String(row.msku).toLowerCase()}|${row.listingOwner}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function isDateWithin(value, startDate, endDate) {
+  return String(value) >= startDate && String(value) <= endDate;
+}
+
+export { SALES_WEEKLY_MAPPER_VERSION };
+
+export async function getSalesWeeklyDashboard(filters = {}, options = {}) {
+  const salesFacts = options.salesFacts || {};
+  const now = typeof salesFacts.now === "function" ? salesFacts.now : Date.now;
+  const sellers = await resolveWeeklySellerDirectory(salesFacts);
+  const { requested, facts: factsScope, recentStartDate } = weeklyScopes(filters, sellers, now);
+  const requestId = salesFacts.requestId || options.requestId || "sales-weekly";
+  const getFacts = salesFacts.getSalesFacts || getSalesFacts;
+  const getDerived = salesFacts.getOrBuildSalesDerived || getOrBuildSalesDerived;
+  const factsResult = await getFacts(factsScope, {
+    repository: salesFacts.repository,
+    sellerDirectory: sellers,
+    getSellerDirectory: salesFacts.getSellerDirectory,
+    refreshOrderProfitScope: salesFacts.refreshOrderProfitScope,
+    forceRefresh: salesFacts.forceRefresh === true,
+    requestId,
+    now,
+    logger: salesFacts.logger || console,
+  });
+  const sellerBySid = new Map(sellers.map((seller) => [salesFactsSellerId(seller), seller]));
+  const derivedResult = await getDerived({
+    scope: factsScope,
+    mapperVersion: salesFacts.mapperVersion || SALES_WEEKLY_MAPPER_VERSION,
+    repository: salesFacts.repository,
+    requestId,
+    now,
+    logger: salesFacts.logger || console,
+    build: async () => {
+      const rows = (factsResult.records || []).map((fact) => mapSalesFactToDashboardRecord(fact, sellerBySid));
+      return {
+        rows,
+        recent30: rows.filter((row) => isDateWithin(row.factDate, recentStartDate, requested.endDate)),
+        startDate: requested.startDate,
+        endDate: requested.endDate,
+        currencyMode: requested.currencyMode,
+      };
+    },
+  });
+  const payload = derivedResult?.payload;
+  if (!payload || !Array.isArray(payload.rows) || !Array.isArray(payload.recent30)) {
+    throw new SalesFactsInputError("销售周报派生缓存 payload 无效。", { code: "SALES_FACTS_WEEKLY_DERIVED_PAYLOAD_INVALID" });
+  }
+  const budgetTargetReader = options.getBudgetTargetContext || getBudgetTargetContext;
+  const budgetTargets = await budgetTargetReader({ startDate: requested.startDate, endDate: requested.endDate });
+  const selectedRows = payload.rows.filter((row) => isDateWithin(row.factDate, requested.startDate, requested.endDate));
+  const listingOwnerRows = ownerRowsFromFactRecords(selectedRows);
+  const dashboard = mapLingxingToSalesDashboard({
+    sellers,
+    orderProfitRecords: selectedRows,
+    recent30OrderProfitRecords: payload.recent30,
+    dailyProfitRecords: selectedRows,
+    inventoryRecords: [],
     listingOwnerRows,
-    budgetTargets,
-    range: data.range,
-    currencyCode: data.currencyCode || normalizedCurrencyCode(filters),
-    raw: data.raw || {},
-    updatedAt: new Date().toLocaleString("zh-CN", { hour12: false }),
-  };
-}
-
-function refreshSalesWeeklySourceCacheInBackground(filters = {}) {
-  const cacheKey = salesWeeklySourceCacheKey(filters);
-  if (salesWeeklySourceRefreshes.has(cacheKey)) return;
-  const startedAt = nowMs();
-  const promise = fetchSalesWeeklySource(filters)
-    .then(async (source) => {
-      await saveSalesWeeklySourceCache(cacheKey, source);
-      logSalesWeeklyTiming("background-refresh-success", startedAt, {
-        cacheKey,
-        sourceUpdatedAt: source.updatedAt || "",
-      });
-    })
-    .catch((error) => {
-      console.error("[sales-weekly] background refresh failed", {
-        durationMs: nowMs() - startedAt,
-        filters: {
-          startDate: filters.startDate || "",
-          endDate: filters.endDate || "",
-          currencyCode: filters.currencyCode || "CNY",
-          sids: Array.isArray(filters.sids) ? filters.sids : [],
-        },
-        error: error.message,
-      });
-    })
-    .finally(() => {
-      salesWeeklySourceRefreshes.delete(cacheKey);
-    });
-  salesWeeklySourceRefreshes.set(cacheKey, promise);
-}
-
-function emptyLingxingDashboard(syncState, syncStatus = "领星数据尚未成功返回，请先检查同步中心错误信息。") {
-  return {
-    ...mockDashboard,
-    meta: {
-      ...mockDashboard.meta,
-      source: "领星 ERP",
-      syncStatus,
-      updatedAt: syncState.lastSuccessAt || "-",
+    filters: {
+      ...filters,
+      startDate: requested.startDate,
+      endDate: requested.endDate,
+      currencyCode: requested.currencyMode,
     },
-    insights: [
-      ["数据未就绪", "未显示模拟经营数据", "请先确认同步中心显示为 lingxing，并查看最近错误信息。"],
-      ["需要处理", "检查服务器配置", "确认 /opt/tanjia-bi/.env 中 DATA_PROVIDER=lingxing，且 PM2 从项目目录启动。"],
-      ["下一步", "手动同步一次", "同步成功后看板会恢复真实领星订单利润口径。"],
-    ],
-    kpis: [
-      { title: "时间进度", value: "未连接", left: "等待真实数据", right: "请检查同步中心", progress: 0, tone: "orange" },
-      { title: "总销售收入达成率", value: "-", left: "目标：-", right: "实际：-", progress: 0, tone: "orange" },
-      { title: "广告销售占比", value: "-", left: "广告销售：-", right: "销售额：-", progress: 0, tone: "orange" },
-      { title: "店铺利润达成率", value: "-", left: "目标：-", right: "实际：-", progress: 0, tone: "orange" },
-      { title: "广告费率达成率", value: "-", left: "目标费率：-", right: "实际费率：-", progress: 0, tone: "orange" },
-    ],
-    siteRows: [["暂无真实数据", "-", 0, 0, "0.0%", 0, 0, "0.0%", 0, 0, "0.00%", "0.00%"]],
-    miniMetrics: [
-      ["销售额", "-", "等待领星返回", ""],
-      ["订单退款", "-", "等待领星返回", ""],
-      ["广告花费", "-", "等待领星返回", ""],
-      ["退货率", "-", "等待领星返回", ""],
-      ["ACOS", "-", "等待领星返回", ""],
-      ["销售毛利", "-", "等待领星返回", ""],
-    ],
-    summary: [
-      ["销售毛利", "-"],
-      ["销售毛利率", "-"],
-      ["公司净利", "-"],
-      ["公司净利率", "-"],
-      ["销售额", "-"],
-      ["广告花费", "-"],
-      ["广告销售额", "-"],
-      ["ACOS", "-"],
-      ["退款率", "-"],
-    ],
-    trend: [],
-    adTrend: [],
-    acosTrend: [],
-    returnTrend: [],
-    trendLabels: [],
-    dailyRows: [],
-    storeData: [],
-    profitData: [],
-    detailRows: [],
-  };
-}
-
-function normalizeCachedDashboard(cachedDashboard, syncState, syncStatus) {
-  const empty = emptyLingxingDashboard(syncState, syncStatus);
-  const cachedMeta = cachedDashboard?.meta || {};
-
-  return {
-    ...empty,
-    ...cachedDashboard,
-    meta: {
-      ...empty.meta,
-      ...cachedMeta,
-      source: "领星 ERP",
-      syncStatus,
-      updatedAt: syncState.lastSuccessAt || cachedMeta.updatedAt || empty.meta.updatedAt,
-    },
-    insights: Array.isArray(cachedDashboard?.insights) ? cachedDashboard.insights : empty.insights,
-    kpis: Array.isArray(cachedDashboard?.kpis) ? cachedDashboard.kpis : empty.kpis,
-    siteRows: Array.isArray(cachedDashboard?.siteRows) ? cachedDashboard.siteRows : empty.siteRows,
-    miniMetrics: Array.isArray(cachedDashboard?.miniMetrics) ? cachedDashboard.miniMetrics : empty.miniMetrics,
-    summary: Array.isArray(cachedDashboard?.summary) ? cachedDashboard.summary : empty.summary,
-    trend: Array.isArray(cachedDashboard?.trend) ? cachedDashboard.trend : empty.trend,
-    adTrend: Array.isArray(cachedDashboard?.adTrend) ? cachedDashboard.adTrend : empty.adTrend,
-    acosTrend: Array.isArray(cachedDashboard?.acosTrend) ? cachedDashboard.acosTrend : empty.acosTrend,
-    returnTrend: Array.isArray(cachedDashboard?.returnTrend) ? cachedDashboard.returnTrend : empty.returnTrend,
-    trendLabels: Array.isArray(cachedDashboard?.trendLabels) ? cachedDashboard.trendLabels : empty.trendLabels,
-    dailyRows: Array.isArray(cachedDashboard?.dailyRows) ? cachedDashboard.dailyRows : empty.dailyRows,
-    storeData: Array.isArray(cachedDashboard?.storeData) ? cachedDashboard.storeData : empty.storeData,
-    profitData: Array.isArray(cachedDashboard?.profitData) ? cachedDashboard.profitData : empty.profitData,
-    detailRows: Array.isArray(cachedDashboard?.detailRows) ? cachedDashboard.detailRows : empty.detailRows,
-  };
-}
-
-export async function getSalesWeeklyDashboard(filters = {}, { salesFactsShadow = {} } = {}) {
-  const startedAt = nowMs();
-  const syncState = getSyncState();
-  const sourceCacheKey = salesWeeklySourceCacheKey(filters);
-  const defaultCacheEligible = canUseDefaultSalesDashboardCache(filters);
-  let cachedSource = null;
-  let cachedDashboard = null;
-
-  try {
-    cachedSource = await readSalesWeeklySourceCache(sourceCacheKey);
-  } catch (error) {
-    console.error("[sales-weekly] source cache read failed", {
-      cacheKey: sourceCacheKey,
-      error: error.message,
-    });
-  }
-
-  if (!cachedSource?.data) {
-    const legacyCacheKey = salesWeeklySourceCacheKeyForVersion(filters, "sales-weekly-source-v2");
-    try {
-      const legacySource = await readSalesWeeklySourceCache(legacyCacheKey);
-      const migration = migrateSalesWeeklySourceCache(legacySource?.data, salesWeeklySourceScope(filters));
-      if (migration) {
-        await saveSalesWeeklySourceCache(sourceCacheKey, migration.data);
-        cachedSource = {
-          ...legacySource,
-          data: migration.data,
-        };
-        console.warn("[sales-weekly] migrated validated legacy source cache", {
-          cacheKey: sourceCacheKey,
-          migratedFrom: migration.migratedFrom,
-        });
-      }
-    } catch (error) {
-      console.error("[sales-weekly] legacy source cache migration failed", {
-        cacheKey: legacyCacheKey,
-        error: error.message,
-      });
-    }
-  }
-
-  if (cachedSource?.data) {
-    const validation = validateSalesWeeklySourceCache(cachedSource.data, salesWeeklySourceScope(filters));
-    if (!validation.ok) {
-      console.error("[sales-weekly] source cache contract rejected", {
-        cacheKey: sourceCacheKey,
-        reasons: validation.reasons,
-      });
-      cachedSource = null;
-    }
-  }
-
-  if (syncState.provider === "lingxing" && cachedSource?.data) {
-    const dashboard = await enrichSalesReviewAvailableDays(mapSalesWeeklySourceToDashboard(cachedSource.data, filters));
-    if (defaultCacheEligible) refreshSalesWeeklySourceCacheInBackground(filters);
-    logSalesWeeklyTiming("cache-hit-source", startedAt, {
-      cacheKey: sourceCacheKey,
-      updatedAt: cachedSource.updatedAt || cachedSource.data.updatedAt || "",
-    });
-    return shadowSalesWeeklyDashboard({
-      ...dashboard,
-      cacheHit: true,
-    }, cachedSource.data, salesFactsShadow);
-  }
-
-  try {
-    cachedDashboard = await readSalesDashboardCache();
-  } catch (error) {
-    console.error("[sales-weekly] legacy cache read failed", {
-      error: error.message,
-    });
-  }
-
-  if (cachedDashboard) {
-    const validation = validateSalesWeeklyDashboardCache(cachedDashboard);
-    if (!validation.ok) {
-      console.error("[sales-weekly] legacy dashboard cache contract rejected", {
-        reasons: validation.reasons,
-      });
-      cachedDashboard = null;
-    }
-  }
-
-  if (syncState.provider === "lingxing" && cachedDashboard && defaultCacheEligible) {
-    refreshSalesWeeklySourceCacheInBackground(filters);
-    logSalesWeeklyTiming("cache-hit-default", startedAt, {
-      updatedAt: cachedDashboard.meta?.updatedAt || "",
-      requestedRange: {
-        startDate: filters.startDate || "",
-        endDate: filters.endDate || "",
+    range: { startDate: requested.startDate, endDate: requested.endDate },
+    currencyCode: requested.currencyMode,
+    raw: {
+      cacheState: factsResult.meta?.cacheState || "hit",
+      cacheUpdatedAt: factsResult.meta?.updatedAt || "",
+      recent30: {
+        startDate: recentStartDate,
+        endDate: requested.endDate,
+        cacheState: factsResult.meta?.cacheState || "hit",
+        cacheUpdatedAt: factsResult.meta?.updatedAt || "",
+        recordCount: payload.recent30.length,
       },
-    });
-    return enrichSalesReviewAvailableDays(normalizeCachedDashboard(
-      cachedDashboard,
-      syncState,
-      cachedDashboard.meta?.syncStatus || syncState.lastStatus || "已显示最近同步缓存，后台刷新实时数据",
-    ));
-  }
-
-  if (syncState.provider === "lingxing" && hasLiveFilters(filters)) {
-    try {
-      const source = await fetchSalesWeeklySource(filters);
-      await saveSalesWeeklySourceCache(sourceCacheKey, source);
-      if (defaultCacheEligible) {
-        await saveSalesDashboardCache(await enrichSalesReviewAvailableDays(mapSalesWeeklySourceToDashboard(source, {})));
-      }
-      const dashboard = await enrichSalesReviewAvailableDays(mapSalesWeeklySourceToDashboard(source, filters));
-      logSalesWeeklyTiming("live-success", startedAt, {
-        defaultCacheEligible,
-        cacheKey: sourceCacheKey,
-        recordStatus: dashboard?.meta?.syncStatus || "",
-      });
-      return shadowSalesWeeklyDashboard({
-        ...dashboard,
-        cacheHit: false,
-      }, source, salesFactsShadow);
-    } catch (error) {
-      logSalesWeeklyTiming("live-failed", startedAt, {
-        defaultCacheEligible,
-        cacheKey: sourceCacheKey,
-        error: error.message,
-      });
-      throw error;
-    }
-  }
-
-  if (syncState.provider === "lingxing" && cachedDashboard) {
-    logSalesWeeklyTiming("cache-hit", startedAt, {
-      updatedAt: cachedDashboard.meta?.updatedAt || "",
-    });
-    return enrichSalesReviewAvailableDays(normalizeCachedDashboard(
-      cachedDashboard,
-      syncState,
-      cachedDashboard.meta?.syncStatus || syncState.lastStatus || "已显示最近同步缓存",
-    ));
-  }
-
-  const fallback = {
-    ...mockDashboard,
+    },
+    budgetTargets,
+  });
+  const enriched = await enrichSalesReviewAvailableDays(dashboard, {
+    getAvailableDays: salesFacts.getAvailableDays || options.getAvailableDays || getSalesForecastAvailableDaysBySellerMsku,
+  });
+  const factsMeta = factsResult.meta || {};
+  const derivedMeta = derivedResult.meta || {};
+  return {
+    ...enriched,
+    cacheHit: factsMeta.cacheState === "hit" && derivedMeta.cacheState === "hit",
     meta: {
-      ...mockDashboard.meta,
-      source: syncState.provider === "lingxing" ? "领星 ERP" : "模拟数据",
-      syncStatus: syncState.lastStatus,
-      updatedAt: syncState.lastSuccessAt || mockDashboard.meta.updatedAt,
+      ...(enriched.meta || {}),
+      source: "sales-facts-sqlite",
+      cacheState: factsMeta.cacheState || "hit",
+      derivedCacheState: derivedMeta.cacheState || "hit",
+      updatedAt: factsMeta.updatedAt || derivedMeta.updatedAt || null,
+      ageSeconds: Number.isFinite(Number(factsMeta.ageSeconds)) ? Number(factsMeta.ageSeconds) : null,
+      revision: factsMeta.revision ?? derivedMeta.revision ?? null,
+      ownerRevision: factsMeta.ownerRevision ?? derivedMeta.ownerRevision ?? null,
+      mapperVersion: derivedMeta.mapperVersion || salesFacts.mapperVersion || SALES_WEEKLY_MAPPER_VERSION,
+      requestId: factsMeta.requestId || derivedMeta.requestId || requestId,
+      rangeKey: factsScope.rangeKey,
+      startDate: requested.startDate,
+      endDate: requested.endDate,
+      currencyMode: requested.currencyMode,
+      scopeCount: { dates: requested.dates.length, sids: requested.sids.length },
+      factsScopeCount: { dates: factsScope.dates.length, sids: factsScope.sids.length },
+      recordCount: selectedRows.length,
+      syncStatus: `销售事实 ${selectedRows.length} 条，负责人已按销售日期关联`,
     },
   };
-
-  if (syncState.provider === "lingxing") {
-    logSalesWeeklyTiming("empty-lingxing", startedAt);
-    return emptyLingxingDashboard(syncState);
-  }
-
-  logSalesWeeklyTiming("mock-fallback", startedAt);
-  return fallback;
 }
 
 function stableMskuDetailCacheKey(filters) {
