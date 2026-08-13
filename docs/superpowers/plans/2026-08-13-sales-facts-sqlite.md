@@ -482,7 +482,7 @@ SALES_FACTS_PREFLIGHT_CURRENCY_MODE=CNY|ORIGINAL
 
 It fetches one complete month and each day serially, compares quantity exactly and fixed-point money within one metric-specific storage unit (`0.000001` for `otherIncome`, `0.0001` for other money fields by default), records page/row/mismatch counts, and recommends `monthly` only on complete equality. Inputs are never silently rounded and the fetch mode never silently changes.
 
-Gate A residual: the current OrderProfit adapter merges all pages before the preflight receives rows, so the report can include only pagination evidence that the adapter explicitly exposes. Persisting actual per-request page counts/declared totals in the preflight report remains a P2 adapter-instrumentation task; do not synthesize those values from row counts.
+`fetchMskuOrderProfit(params, { onPagination })` keeps observer configuration outside signed request params and reports only safe pagination metadata. The preflight requires one internally consistent final `complete` event for every monthly/daily request and rejects missing evidence, safety-limit evidence, multiple/early final events, changing totals, contradictory `hasNext`, and row counts inconsistent with totals. `actualPagination` aggregates only `requestCount`, `pageCount`, requests with declared total/hasNext, terminal-reason counts, incomplete requests, and safety-limit hits; it never includes records or request identities.
 
 - [ ] **Step 5: Run GREEN and commit**
 

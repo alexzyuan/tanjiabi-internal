@@ -6,6 +6,21 @@ import { runSalesFactsOrderProfitPreflightCli } from "../scripts/audit-sales-fac
 
 const FEBRUARY_DATES = Array.from({ length: 28 }, (_, index) => `2026-02-${String(index + 1).padStart(2, "0")}`);
 
+function emitCompletePagination(onPagination, overrides = {}) {
+  onPagination?.({
+    pageIndex: 1,
+    offset: 0,
+    pageRowCount: 1,
+    cumulativeRowCount: 1,
+    declaredTotal: 1,
+    hasNext: false,
+    terminalReason: "has-next-false",
+    complete: true,
+    safetyLimitHit: false,
+    ...overrides,
+  });
+}
+
 test("owner audit CLI force-loads runtime sellers without writing seller cache", async () => {
   const directoryCalls = [];
   const outputs = [];
@@ -190,6 +205,78 @@ test("OrderProfit preflight uses canonical scope validation for unknown SIDs", a
   assert.equal(loadCalled, false);
 });
 
+test("OrderProfit preflight fails closed when pagination evidence is missing", async () => {
+  const report = await runSalesFactsOrderProfitPreflightCli({
+    env: {
+      SALES_FACTS_PREFLIGHT_START_DATE: "2026-02-01",
+      SALES_FACTS_PREFLIGHT_END_DATE: "2026-02-28",
+      SALES_FACTS_PREFLIGHT_SIDS: "8708",
+      SALES_FACTS_PREFLIGHT_CURRENCY_MODE: "CNY",
+    },
+    getDirectory: async () => ({ sellers: [{ sid: 8708, countryCode: "US", status: 1 }] }),
+    adapter: {},
+    loadRange: async () => [],
+    writeOutput() {},
+  });
+
+  assert.equal(report.ok, false);
+  assert.equal(report.error.code, "SALES_FACTS_PAGINATION_EVIDENCE_MISSING");
+  assert.equal(report.error.operation, "order-profit-pagination-validation");
+});
+
+test("OrderProfit preflight rejects contradictory complete pagination evidence", async () => {
+  const report = await runSalesFactsOrderProfitPreflightCli({
+    env: {
+      SALES_FACTS_PREFLIGHT_START_DATE: "2026-02-01",
+      SALES_FACTS_PREFLIGHT_END_DATE: "2026-02-28",
+      SALES_FACTS_PREFLIGHT_SIDS: "8708",
+      SALES_FACTS_PREFLIGHT_CURRENCY_MODE: "CNY",
+    },
+    getDirectory: async () => ({ sellers: [{ sid: 8708, countryCode: "US", status: 1 }] }),
+    adapter: {},
+    loadRange: async ({ onPagination }) => {
+      emitCompletePagination(onPagination, {
+        cumulativeRowCount: 1,
+        declaredTotal: 2,
+        hasNext: false,
+      });
+      return [];
+    },
+    writeOutput() {},
+  });
+
+  assert.equal(report.ok, false);
+  assert.equal(report.error.code, "SALES_FACTS_PAGINATION_EVIDENCE_INVALID");
+  assert.equal(report.error.operation, "order-profit-pagination-validation");
+});
+
+for (const evidence of [
+  { complete: false, terminalReason: "empty-before-more" },
+  { complete: false, terminalReason: "safety-limit", safetyLimitHit: true },
+]) {
+  test(`OrderProfit preflight rejects incomplete pagination evidence: ${evidence.terminalReason}`, async () => {
+    const report = await runSalesFactsOrderProfitPreflightCli({
+      env: {
+        SALES_FACTS_PREFLIGHT_START_DATE: "2026-02-01",
+        SALES_FACTS_PREFLIGHT_END_DATE: "2026-02-28",
+        SALES_FACTS_PREFLIGHT_SIDS: "8708",
+        SALES_FACTS_PREFLIGHT_CURRENCY_MODE: "CNY",
+      },
+      getDirectory: async () => ({ sellers: [{ sid: 8708, countryCode: "US", status: 1 }] }),
+      adapter: {},
+      loadRange: async ({ onPagination }) => {
+        emitCompletePagination(onPagination, evidence);
+        throw new Error("upstream detail must not win");
+      },
+      writeOutput() {},
+    });
+
+    assert.equal(report.ok, false);
+    assert.equal(report.error.code, "SALES_FACTS_PAGINATION_EVIDENCE_INCOMPLETE");
+    assert.equal(report.error.operation, "order-profit-pagination-validation");
+  });
+}
+
 test("OrderProfit preflight compares one monthly request with serial daily requests without writes", async () => {
   const calls = [];
   const outputs = [];
@@ -202,9 +289,14 @@ test("OrderProfit preflight compares one monthly request with serial daily reque
     },
     getDirectory: async () => ({ sellers: [{ sid: 8708, countryCode: "US", status: 1 }] }),
     adapter: {},
-    loadRange: async ({ startDate, endDate }) => {
+    loadRange: async ({ startDate, endDate, onPagination }) => {
       calls.push([startDate, endDate]);
       const dates = startDate === endDate ? [startDate] : FEBRUARY_DATES;
+      emitCompletePagination(onPagination, {
+        pageRowCount: dates.length,
+        cumulativeRowCount: dates.length,
+        declaredTotal: dates.length,
+      });
       return dates.map((factDate) => ({ sid: 8708, seller_sku: "A", report_date: factDate, currency_code: "CNY", amount: 10, volume: 1 }));
     },
     writeOutput: (text) => outputs.push(text),
@@ -216,6 +308,15 @@ test("OrderProfit preflight compares one monthly request with serial daily reque
   assert.equal(report.ok, true);
   assert.equal(report.exitCode, 0);
   assert.equal(report.approvedFetchMode, "monthly");
+  assert.deepEqual(report.actualPagination, {
+    requestCount: 29,
+    pageCount: 29,
+    requestsWithDeclaredTotal: 29,
+    requestsWithHasNext: 29,
+    terminalReasonCounts: { "has-next-false": 29 },
+    incompleteRequestCount: 0,
+    safetyLimitHitCount: 0,
+  });
   assert.equal(outputs.length, 1);
 });
 
@@ -230,10 +331,13 @@ test("OrderProfit preflight approves daily for a complete mismatch and emits no 
     },
     getDirectory: async () => ({ sellers: [{ sid: 8708, countryCode: "US", status: 1 }] }),
     adapter: {},
-    loadRange: async ({ requestKind, startDate }) => [{
-      sid: 8708, seller_sku: "SECRET-MSKU", report_date: startDate, currency_code: "CNY",
-      amount: requestKind === "monthly" ? 10 : 9,
-    }],
+    loadRange: async ({ requestKind, startDate, onPagination }) => {
+      emitCompletePagination(onPagination);
+      return [{
+        sid: 8708, seller_sku: "SECRET-MSKU", report_date: startDate, currency_code: "CNY",
+        amount: requestKind === "monthly" ? 10 : 9,
+      }];
+    },
     writeOutput: (text) => outputs.push(text),
   });
   assert.equal(report.ok, true);
@@ -284,8 +388,9 @@ test("OrderProfit preflight approves daily when monthly rows lack dates but ever
     },
     getDirectory: async () => ({ sellers: [{ sid: 8708, countryCode: "US", status: 1 }] }),
     adapter: {},
-    loadRange: async ({ startDate, endDate, requestKind }) => {
+    loadRange: async ({ startDate, endDate, requestKind, onPagination }) => {
       calls.push([requestKind, startDate, endDate]);
+      emitCompletePagination(onPagination);
       if (requestKind === "monthly") {
         return [{ sid: 8708, seller_sku: "A", currency_code: "CNY", amount: 20, volume: 2 }];
       }
@@ -318,8 +423,18 @@ test("OrderProfit preflight rejects daily approval when any requested day is inv
     },
     getDirectory: async () => ({ sellers: [{ sid: 8708, countryCode: "US", status: 1 }] }),
     adapter: {},
-    loadRange: async ({ startDate, requestKind }) => {
-      if (requestKind === "monthly") return [];
+    loadRange: async ({ startDate, requestKind, onPagination }) => {
+      if (requestKind === "monthly") {
+        emitCompletePagination(onPagination, {
+          pageRowCount: 0,
+          cumulativeRowCount: 0,
+          declaredTotal: 0,
+          hasNext: null,
+          terminalReason: "total-exhausted",
+        });
+        return [];
+      }
+      emitCompletePagination(onPagination);
       if (startDate === "2026-02-02") return [{ sid: 9999, seller_sku: "A", amount: 1 }];
       return [{ sid: 8708, seller_sku: "A", amount: 1 }];
     },

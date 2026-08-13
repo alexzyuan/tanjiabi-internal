@@ -350,6 +350,7 @@ test("LingxingAdapter keeps OrderProfit end date unchanged without mutating UI f
 test("LingxingAdapter paginates order profit until the upstream total is exhausted", async () => {
   const adapter = new LingxingAdapter(lingxingTestConfig);
   const calls = [];
+  const pagination = [];
   adapter.performSignedRequest = async (_endpoint, options) => {
     calls.push(options.params);
     const offset = options.params.offset;
@@ -362,29 +363,124 @@ test("LingxingAdapter paginates order profit until the upstream total is exhaust
     };
   };
 
-  const payload = await adapter.fetchMskuOrderProfit({ startDate: "2026-07-01", endDate: "2026-07-31" });
+  const payload = await adapter.fetchMskuOrderProfit(
+    { startDate: "2026-07-01", endDate: "2026-07-31" },
+    { onPagination: (evidence) => pagination.push(evidence) },
+  );
 
   assert.deepEqual(calls.map(({ offset, length }) => ({ offset, length })), [
     { offset: 0, length: 5000 },
     { offset: 5000, length: 5000 },
   ]);
   assert.equal(adapter.normalizeRecordList(payload).length, 5002);
+  assert.deepEqual(pagination, [
+    {
+      pageIndex: 1, offset: 0, pageRowCount: 5000, cumulativeRowCount: 5000,
+      declaredTotal: 5002, hasNext: null, terminalReason: null, complete: false, safetyLimitHit: false,
+    },
+    {
+      pageIndex: 2, offset: 5000, pageRowCount: 2, cumulativeRowCount: 5002,
+      declaredTotal: 5002, hasNext: null, terminalReason: "total-exhausted", complete: true, safetyLimitHit: false,
+    },
+  ]);
+  assert.doesNotMatch(JSON.stringify(pagination), /records|seller_sku|amount|token|raw/i);
 });
 
 test("LingxingAdapter fails observably instead of truncating order profit at its safety cap", async () => {
   const adapter = new LingxingAdapter({ ...lingxingTestConfig, orderProfitMaxRows: 5000 });
+  const pagination = [];
   adapter.performSignedRequest = async () => ({
     code: 0,
     data: { records: Array.from({ length: 5000 }, (_, id) => ({ id })), total: 5001 },
   });
 
   await assert.rejects(
-    () => adapter.fetchMskuOrderProfit({ startDate: "2026-07-01", endDate: "2026-07-31" }),
+    () => adapter.fetchMskuOrderProfit(
+      { startDate: "2026-07-01", endDate: "2026-07-31" },
+      { onPagination: (evidence) => pagination.push(evidence) },
+    ),
     (error) => error.endpoint === "/basicOpen/finance/mreport/OrderProfit"
       && error.details?.fetchedRows === 5000
       && /安全上限/.test(error.message),
   );
+  assert.equal(pagination.at(-1)?.terminalReason, "safety-limit");
+  assert.equal(pagination.at(-1)?.complete, false);
+  assert.equal(pagination.at(-1)?.safetyLimitHit, true);
 });
+
+test("LingxingAdapter reports incomplete pagination before rejecting an empty page", async () => {
+  const adapter = new LingxingAdapter(lingxingTestConfig);
+  const pagination = [];
+  adapter.performSignedRequest = async (_endpoint, options) => ({
+    code: 0,
+    data: {
+      records: options.params.offset === 0 ? [{ id: 1 }] : [],
+      total: 2,
+      hasNext: true,
+    },
+  });
+
+  await assert.rejects(
+    () => adapter.fetchMskuOrderProfit(
+      { startDate: "2026-07-01", endDate: "2026-07-31" },
+      { onPagination: (evidence) => pagination.push(evidence) },
+    ),
+    /空页/,
+  );
+  assert.equal(pagination.at(-1)?.terminalReason, "empty-before-more");
+  assert.equal(pagination.at(-1)?.complete, false);
+  assert.equal(pagination.at(-1)?.safetyLimitHit, false);
+});
+
+test("LingxingAdapter propagates pagination observer failures", async () => {
+  const adapter = new LingxingAdapter(lingxingTestConfig);
+  adapter.performSignedRequest = async () => ({ code: 0, data: { records: [], total: 0 } });
+
+  await assert.rejects(
+    () => adapter.fetchMskuOrderProfit({}, { onPagination: () => { throw new Error("observer failed"); } }),
+    /observer failed/,
+  );
+});
+
+for (const scenario of [
+  {
+    name: "declared total changes across pages",
+    responses: [
+      { records: [{ id: 1 }], total: 3, hasNext: true },
+      { records: [{ id: 2 }], total: 2, hasNext: false },
+    ],
+  },
+  {
+    name: "hasNext false before declared total",
+    responses: [{ records: [{ id: 1 }], total: 2, hasNext: false }],
+  },
+  {
+    name: "hasNext true after declared total",
+    responses: [{ records: [{ id: 1 }], total: 1, hasNext: true }],
+  },
+  {
+    name: "rows exceed declared total",
+    responses: [{ records: [{ id: 1 }, { id: 2 }], total: 1 }],
+  },
+]) {
+  test(`LingxingAdapter rejects contradictory OrderProfit pagination: ${scenario.name}`, async () => {
+    const adapter = new LingxingAdapter(lingxingTestConfig);
+    const pagination = [];
+    let callIndex = 0;
+    adapter.performSignedRequest = async () => ({
+      code: 0,
+      data: scenario.responses[callIndex++],
+    });
+
+    await assert.rejects(
+      () => adapter.fetchMskuOrderProfit({}, { onPagination: (evidence) => pagination.push(evidence) }),
+      (error) => error.code === "ORDER_PROFIT_PAGINATION_CONTRACT_INVALID",
+    );
+    assert.equal(pagination.at(-1)?.terminalReason, "pagination-contract-conflict");
+    assert.equal(pagination.at(-1)?.complete, false);
+    assert.equal(pagination.at(-1)?.safetyLimitHit, false);
+  });
+}
 
 test("LingxingAdapter continues after a short page when upstream pagination metadata says more rows exist", async () => {
   const adapter = new LingxingAdapter(lingxingTestConfig);

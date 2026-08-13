@@ -472,7 +472,7 @@ export class LingxingAdapter {
     });
   }
 
-  async fetchMskuOrderProfit(params) {
+  async fetchMskuOrderProfit(params, { onPagination = null } = {}) {
     const { currencyCode, ...restParams } = params || {};
     const pageSize = 5000;
     const maxRows = Number(this.config.orderProfitMaxRows || 100000);
@@ -486,8 +486,43 @@ export class LingxingAdapter {
     const records = [];
     let firstPayload;
     let pageCount = 0;
+    let lastTotal = null;
+    let lastHasNext = null;
+    const observePagination = (evidence) => {
+      if (typeof onPagination === "function") onPagination(evidence);
+    };
+    const rejectPaginationContract = ({ offset, pageRecords, total, hasNext }) => {
+      observePagination({
+        pageIndex: pageCount,
+        offset,
+        pageRowCount: pageRecords.length,
+        cumulativeRowCount: records.length,
+        declaredTotal: total,
+        hasNext,
+        terminalReason: "pagination-contract-conflict",
+        complete: false,
+        safetyLimitHit: false,
+      });
+      const error = new Error("订单利润分页元数据冲突，拒绝返回结果");
+      error.name = "LingxingOrderProfitPaginationError";
+      error.code = "ORDER_PROFIT_PAGINATION_CONTRACT_INVALID";
+      error.endpoint = "/basicOpen/finance/mreport/OrderProfit";
+      error.details = { pageCount, offset, total, hasNext, fetchedRows: records.length };
+      throw error;
+    };
     for (let offset = 0; ; ) {
       if (offset >= maxRows) {
+        observePagination({
+          pageIndex: pageCount,
+          offset,
+          pageRowCount: 0,
+          cumulativeRowCount: records.length,
+          declaredTotal: lastTotal,
+          hasNext: lastHasNext,
+          terminalReason: "safety-limit",
+          complete: false,
+          safetyLimitHit: true,
+        });
         const error = new Error(`订单利润分页达到安全上限 ${maxRows} 条，拒绝返回截断结果`);
         error.endpoint = "/basicOpen/finance/mreport/OrderProfit";
         error.details = { maxRows, pageSize, fetchedRows: records.length };
@@ -502,16 +537,54 @@ export class LingxingAdapter {
       records.push(...pageRecords);
       pageCount += 1;
       const total = orderProfitTotal(payload);
-      const hasNext = payload?.data?.hasNext ?? payload?.hasNext;
+      const rawHasNext = payload?.data?.hasNext ?? payload?.hasNext;
+      const hasNext = rawHasNext === true ? true : rawHasNext === false ? false : null;
+      if ((lastTotal !== null && total !== null && total !== lastTotal)
+        || (total !== null && records.length > total)
+        || (hasNext === false && total !== null && records.length < total)
+        || (hasNext === true && total !== null && records.length >= total)) {
+        rejectPaginationContract({ offset, pageRecords, total, hasNext });
+      }
+      lastTotal = total;
+      lastHasNext = hasNext;
       const totalExhausted = total !== null && records.length >= total;
       const upstreamHasMore = hasNext === true || (total !== null && records.length < total);
       if (!pageRecords.length && upstreamHasMore) {
+        observePagination({
+          pageIndex: pageCount,
+          offset,
+          pageRowCount: 0,
+          cumulativeRowCount: records.length,
+          declaredTotal: total,
+          hasNext,
+          terminalReason: "empty-before-more",
+          complete: false,
+          safetyLimitHit: false,
+        });
         const error = new Error("订单利润分页返回空页但上游仍声明存在后续数据，拒绝返回不完整结果");
         error.endpoint = "/basicOpen/finance/mreport/OrderProfit";
         error.details = { offset, total, hasNext, fetchedRows: records.length };
         throw error;
       }
-      if (!upstreamHasMore && (totalExhausted || hasNext === false || pageRecords.length < pageSize || !pageRecords.length)) break;
+      let terminalReason = null;
+      if (!upstreamHasMore) {
+        if (totalExhausted) terminalReason = "total-exhausted";
+        else if (hasNext === false) terminalReason = "has-next-false";
+        else if (!pageRecords.length) terminalReason = "empty-page";
+        else if (pageRecords.length < pageSize) terminalReason = "short-page";
+      }
+      observePagination({
+        pageIndex: pageCount,
+        offset,
+        pageRowCount: pageRecords.length,
+        cumulativeRowCount: records.length,
+        declaredTotal: total,
+        hasNext,
+        terminalReason,
+        complete: terminalReason !== null,
+        safetyLimitHit: false,
+      });
+      if (terminalReason) break;
       offset += pageRecords.length;
     }
     if (pageCount > 1) {

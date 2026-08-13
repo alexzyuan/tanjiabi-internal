@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import { getLingxingAdapter } from "../src/adapters/lingxingAdapter.js";
 import { auditAllListingOwners } from "../src/services/listingOwnerHistoryService.js";
-import { normalizeSalesFactsScope } from "../src/services/salesFactsIdentity.js";
+import { SalesFactsContractError, normalizeSalesFactsScope } from "../src/services/salesFactsIdentity.js";
 import {
   compareMonthlyAndDailyFacts,
   normalizeOrderProfitRows,
@@ -123,14 +123,143 @@ function preflightInputs(env) {
   return { startDate, endDate, dates, sids: [...new Set(sids)].sort((a, b) => a - b), currencyMode };
 }
 
-async function defaultLoadOrderProfitRange({ adapter, startDate, endDate, sids, currencyMode }) {
-  const payload = await adapter.fetchMskuOrderProfit({
-    startDate,
-    endDate,
-    sids,
-    currencyCode: currencyMode,
-  });
+async function defaultLoadOrderProfitRange({ adapter, startDate, endDate, sids, currencyMode, onPagination }) {
+  const payload = await adapter.fetchMskuOrderProfit(
+    { startDate, endDate, sids, currencyCode: currencyMode },
+    { onPagination },
+  );
   return normalizeRecordList(payload);
+}
+
+const COMPLETE_PAGINATION_REASONS = new Set([
+  "total-exhausted",
+  "has-next-false",
+  "empty-page",
+  "short-page",
+]);
+
+function paginationEvidenceError(code) {
+  const error = new SalesFactsContractError("OrderProfit 分页证据不完整。", { code });
+  error.operation = "order-profit-pagination-validation";
+  return error;
+}
+
+function safePaginationEvent(event) {
+  if (!event || typeof event !== "object" || Array.isArray(event)) {
+    throw paginationEvidenceError("SALES_FACTS_PAGINATION_EVIDENCE_INVALID");
+  }
+  const pageIndex = Number(event.pageIndex);
+  const offset = Number(event.offset);
+  const pageRowCount = Number(event.pageRowCount);
+  const cumulativeRowCount = Number(event.cumulativeRowCount);
+  const declaredTotal = event.declaredTotal === null ? null : Number(event.declaredTotal);
+  const hasNext = event.hasNext === null ? null : event.hasNext;
+  const terminalReason = event.terminalReason === null ? null : String(event.terminalReason || "");
+  if (!Number.isInteger(pageIndex) || pageIndex < 1
+    || !Number.isInteger(offset) || offset < 0
+    || !Number.isInteger(pageRowCount) || pageRowCount < 0
+    || !Number.isInteger(cumulativeRowCount) || cumulativeRowCount < 0
+    || (declaredTotal !== null && (!Number.isInteger(declaredTotal) || declaredTotal < 0))
+    || (hasNext !== null && typeof hasNext !== "boolean")
+    || typeof event.complete !== "boolean"
+    || typeof event.safetyLimitHit !== "boolean") {
+    throw paginationEvidenceError("SALES_FACTS_PAGINATION_EVIDENCE_INVALID");
+  }
+  return {
+    pageIndex,
+    offset,
+    pageRowCount,
+    cumulativeRowCount,
+    declaredTotal,
+    hasNext,
+    terminalReason,
+    complete: event.complete,
+    safetyLimitHit: event.safetyLimitHit,
+  };
+}
+
+function validatePaginationEvidence(events) {
+  if (!events.length) throw paginationEvidenceError("SALES_FACTS_PAGINATION_EVIDENCE_MISSING");
+  const final = events.at(-1);
+  if (!final.complete || final.safetyLimitHit) {
+    throw paginationEvidenceError("SALES_FACTS_PAGINATION_EVIDENCE_INCOMPLETE");
+  }
+  if (!COMPLETE_PAGINATION_REASONS.has(final.terminalReason)
+    || events.slice(0, -1).some((event) => event.complete || event.terminalReason !== null || event.safetyLimitHit)) {
+    throw paginationEvidenceError("SALES_FACTS_PAGINATION_EVIDENCE_INVALID");
+  }
+  let cumulative = 0;
+  let declaredTotal = null;
+  for (const [index, event] of events.entries()) {
+    if (event.pageIndex !== index + 1 || event.offset !== cumulative) {
+      throw paginationEvidenceError("SALES_FACTS_PAGINATION_EVIDENCE_INVALID");
+    }
+    cumulative += event.pageRowCount;
+    if (event.cumulativeRowCount !== cumulative) {
+      throw paginationEvidenceError("SALES_FACTS_PAGINATION_EVIDENCE_INVALID");
+    }
+    if (event.declaredTotal !== null) {
+      if (declaredTotal !== null && event.declaredTotal !== declaredTotal) {
+        throw paginationEvidenceError("SALES_FACTS_PAGINATION_EVIDENCE_INVALID");
+      }
+      declaredTotal = event.declaredTotal;
+      if (cumulative > declaredTotal
+        || (event.hasNext === false && cumulative < declaredTotal)
+        || (event.hasNext === true && cumulative >= declaredTotal)) {
+        throw paginationEvidenceError("SALES_FACTS_PAGINATION_EVIDENCE_INVALID");
+      }
+    }
+  }
+  if ((final.terminalReason === "total-exhausted"
+      && (final.declaredTotal === null || final.cumulativeRowCount !== final.declaredTotal || final.hasNext === true))
+    || (final.terminalReason === "has-next-false" && final.hasNext !== false)
+    || (final.terminalReason === "empty-page" && final.pageRowCount !== 0)) {
+    throw paginationEvidenceError("SALES_FACTS_PAGINATION_EVIDENCE_INVALID");
+  }
+  return {
+    pageCount: events.length,
+    hasDeclaredTotal: events.some((event) => event.declaredTotal !== null),
+    hasHasNext: events.some((event) => event.hasNext !== null),
+    terminalReason: final.terminalReason,
+    complete: final.complete,
+    safetyLimitHit: final.safetyLimitHit,
+  };
+}
+
+async function loadRangeWithPaginationEvidence(loadRange, params) {
+  const events = [];
+  let rows;
+  let loadError = null;
+  try {
+    rows = await loadRange({
+      ...params,
+      onPagination: (event) => events.push(safePaginationEvent(event)),
+    });
+  } catch (error) {
+    loadError = error;
+  }
+  if (events.length || !loadError) {
+    const evidence = validatePaginationEvidence(events);
+    if (loadError) throw loadError;
+    return { rows, evidence };
+  }
+  throw loadError;
+}
+
+function aggregatePaginationEvidence(requests) {
+  const terminalReasonCounts = {};
+  for (const request of requests) {
+    terminalReasonCounts[request.terminalReason] = (terminalReasonCounts[request.terminalReason] || 0) + 1;
+  }
+  return {
+    requestCount: requests.length,
+    pageCount: requests.reduce((total, request) => total + request.pageCount, 0),
+    requestsWithDeclaredTotal: requests.filter((request) => request.hasDeclaredTotal).length,
+    requestsWithHasNext: requests.filter((request) => request.hasHasNext).length,
+    terminalReasonCounts,
+    incompleteRequestCount: requests.filter((request) => !request.complete).length,
+    safetyLimitHitCount: requests.filter((request) => request.safetyLimitHit).length,
+  };
 }
 
 function safePreflightFailure(requestId, code) {
@@ -201,7 +330,8 @@ export async function runSalesFactsOrderProfitPreflightCli({
   }
 
   try {
-    const monthlyRaw = await loadRange({
+    const paginationEvidence = [];
+    const monthlyResult = await loadRangeWithPaginationEvidence(loadRange, {
       adapter,
       startDate: scope.startDate,
       endDate: scope.endDate,
@@ -210,10 +340,12 @@ export async function runSalesFactsOrderProfitPreflightCli({
       requestId,
       requestKind: "monthly",
     });
+    const monthlyRaw = monthlyResult.rows;
+    paginationEvidence.push(monthlyResult.evidence);
     const dailyRaw = [];
     const dailyRows = [];
     for (const factDate of scope.dates) {
-      const dayRaw = await loadRange({
+      const dayResult = await loadRangeWithPaginationEvidence(loadRange, {
         adapter,
         startDate: factDate,
         endDate: factDate,
@@ -222,6 +354,8 @@ export async function runSalesFactsOrderProfitPreflightCli({
         requestId,
         requestKind: "daily",
       });
+      const dayRaw = dayResult.rows;
+      paginationEvidence.push(dayResult.evidence);
       dailyRaw.push(...dayRaw);
       try {
         dailyRows.push(...normalizeOrderProfitRows(dayRaw, {
@@ -272,13 +406,14 @@ export async function runSalesFactsOrderProfitPreflightCli({
       monthlyRowCount: monthlyRaw.length,
       dailyRowCount: dailyRaw.length,
       dailyValidationComplete: true,
+      actualPagination: aggregatePaginationEvidence(paginationEvidence),
       ...(monthlyValidationCode ? { monthlyValidationCode } : {}),
       ...comparison,
     };
     writeOutput(JSON.stringify(report));
     return report;
   } catch (error) {
-    const failure = safeValidationFailure(requestId, error, "order-profit-fetch");
+    const failure = safeValidationFailure(requestId, error, error?.operation || "order-profit-fetch");
     writeOutput(JSON.stringify(failure));
     return failure;
   }

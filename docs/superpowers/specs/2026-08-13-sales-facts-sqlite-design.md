@@ -243,7 +243,7 @@ metadata 仅保存受控键，包括两个 revision、最近成功同步、owner
 2. 以 `date + SID + MSKU + currencyMode` 聚合后无身份冲突或多实际币种。
 3. 数量类指标逐日合计与整月请求完全一致。
 4. 金额类指标按各自 registry 尺度比较，每个事实身份最多允许一个存储单位差异：`otherIncome` 为 `0.000001`，其他金额默认为 `0.0001`；不先舍入到统一小数位，所有超限差异必须在报告中列出。
-5. 分页 total/hasNext/空页契约全部完整，整月和逐日均未触及安全上限。
+5. 分页 total/hasNext/空页契约全部完整，整月和逐日均未触及安全上限。OrderProfit adapter 通过独立的 `onPagination` observer 只发送 `pageIndex`、`offset`、页/累计行数、声明 total、hasNext、终止原因、complete 和 safety-limit 状态；不得发送 records、raw payload、金额、MSKU 或凭据。每个整月/逐日请求必须恰有一个最终 complete evidence；证据缺失、不完整、安全上限或 total/hasNext/行数互相矛盾时预检失败。
 
 全部通过时采用“整月请求后按真实日期拆分”；任一条件失败则正式同步采用逐日请求。逐日模式默认串行，只有压测和限流日志证明安全后才允许配置为最大并发 2，不得一次并发整月。仅对网络超时、HTTP 429 或领星明确的临时限流错误重试，每页最多 3 次总尝试；优先遵守上游 `Retry-After`，否则使用有抖动的指数退避。数据契约、身份、日期或分页完整性错误不重试。每次重试记录 requestId、endpoint、attempt、delay 和安全错误码。模式与并发选择写入 metadata 和部署审计，不能运行时静默切换。
 
@@ -337,7 +337,7 @@ metadata 仅保存受控键，包括两个 revision、最近成功同步、owner
 
 - requestId、operation、feature；
 - start/end、SID count、currency mode；
-- fetch mode（monthly/daily）、day/month count、page count、row count；
+- fetch mode（monthly/daily）、day/month count、page count、row count；Gate A `actualPagination` 只聚合 request/page count、具备 total/hasNext 的请求数、终止原因计数、incomplete 与 safety-limit 请求数，不输出逐请求业务数据；
 - cache state、coverage state、single-flight owner/joiner；
 - network、normalization、validation、transaction、query、owner join 和 derived map 耗时；
 - facts revision、owner revision、mapper version；
