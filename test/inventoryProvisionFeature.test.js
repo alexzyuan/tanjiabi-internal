@@ -87,6 +87,31 @@ test("inventory provision cost refresh confirms a historical month, posts it, an
   ]]);
   assert.equal(dashboardLoads, 1);
   assert.match(statuses.at(-1)[1], /2026-05.*2026-04.*3/);
+  assert.match(statuses.at(-1)[1], /成本缓存刷新时间：2026\/8\/11 16:03:44/);
+});
+
+test("inventory provision cost refresh omits a comparison month when the API refreshed only one month", async () => {
+  const elements = new Map([
+    ["#inventory-provision-date", { value: "2026-01" }],
+    ["#inventory-provision-refresh-costs", { disabled: false }],
+  ]);
+  const statuses = [];
+  const { feature } = createFeature({
+    root: { querySelector: (selector) => elements.get(selector) || null },
+    fieldValue: (selector) => elements.get(selector)?.value || "",
+    confirmImpl: () => true,
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({ ok: true, refresh: { date: "2026-01", comparisonMonth: "", refreshedAt: "2026/8/13 10:00:00", months: [{ updatedRows: 1 }] } }),
+    }),
+    setText: (selector, value) => statuses.push([selector, value]),
+  });
+
+  await feature.refreshInventoryProvisionCosts();
+
+  assert.match(statuses.at(-1)[1], /成本已刷新：2026-01/);
+  assert.doesNotMatch(statuses.at(-1)[1], /与 上月/);
+  assert.match(statuses.at(-1)[1], /成本缓存刷新时间：2026\/8\/13 10:00:00/);
 });
 
 test("inventory provision cost refresh blocks the current month without a request", async () => {
@@ -109,6 +134,42 @@ test("inventory provision cost refresh blocks the current month without a reques
   assert.equal(requestCount, 0);
   assert.equal(elements.get("#inventory-provision-refresh-costs").disabled, true);
   assert.match(statuses.at(-1)[1], /当前月/);
+});
+
+test("inventory provision historical note labels the cost cache refresh time", () => {
+  const elements = new Map([
+    ["#inventory-provision-date", { value: "2026-01" }],
+    ["#inventory-provision-refresh-costs", { disabled: false }],
+    ["#inventory-detail-table", { innerHTML: "" }],
+    ["#inventory-bucket-table", { innerHTML: "" }],
+    ["#inventory-age-trend-chart", { innerHTML: "" }],
+    ["#inventory-age-donut-chart", { innerHTML: "" }],
+    ["#inventory-store-chart", { innerHTML: "" }],
+  ]);
+  const texts = new Map();
+  const { feature } = createFeature({
+    root: { querySelector: (selector) => elements.get(selector) || null },
+    setText: (selector, value) => texts.set(selector, value),
+  });
+
+  feature.renderInventoryProvision({
+    meta: {
+      source: "测试",
+      date: "2026-01",
+      historicalMode: true,
+      snapshotAvailable: true,
+      costRefreshedAt: "2026/8/13 10:00:00",
+    },
+    filters: { countryOptions: [], storeOptions: [], ownerOptions: [] },
+    buckets: [],
+    bucketSummary: [],
+    storeDistribution: [],
+    monthTrend: [],
+    kpis: {},
+    detailRows: [],
+  });
+
+  assert.match(texts.get("#inventory-provision-date-note"), /成本缓存刷新时间：2026\/8\/13 10:00:00/);
 });
 
 test("inventory provision renders MSKU summary rows and expands batch details from the MSKU button", () => {

@@ -95,6 +95,18 @@ test("cost refresh rebuilds the selected and comparison months with current Germ
   assert.equal(result.months.find((item) => item.month === "2026-05").updatedRows, 1);
 });
 
+test("cost refresh rebuilds only the selected month before provision movement starts", async () => {
+  const fixture = createServiceDependencies();
+  const { createInventoryProvisionCostRefreshService } = await import("../src/services/inventoryProvisionCostRefreshService.js");
+  const service = createInventoryProvisionCostRefreshService(fixture.dependencies);
+
+  const result = await service.refresh({ date: "2026-01" });
+
+  assert.deepEqual(fixture.calls.history.map((call) => call.month), ["2026-01"]);
+  assert.deepEqual(fixture.saved.map(({ month }) => month), ["2026-01"]);
+  assert.equal(result.comparisonMonth, "");
+});
+
 test("cost refresh rejects a missing product-management cost without overwriting either month", async () => {
   const { createInventoryProvisionCostRefreshService } = await import("../src/services/inventoryProvisionCostRefreshService.js");
   const fixture = createServiceDependencies({

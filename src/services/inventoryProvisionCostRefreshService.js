@@ -7,6 +7,7 @@ import { getSharedSellers } from "./sharedDataService.js";
 
 const REQUIRED_GERMAN_SID = 17307;
 const REQUIRED_GERMAN_STORE = "tanjia-eu-DE";
+const PROVISION_MOVEMENT_START_MONTH = "2026-04";
 const FIRST_LEG_COST_KEYS = [
   "unit_first_leg_fee",
   "first_leg_cost",
@@ -96,7 +97,6 @@ function verifyRefreshMonth(date, todayText) {
   const currentMonth = String(todayText() || "").slice(0, 7);
   monthText(currentMonth);
   if (month >= currentMonth) throw new Error("刷新成本仅支持历史月份；当前月使用实时 FBA 成本。");
-  if (month < "2026-04") throw new Error("库存计提成本刷新仅支持 2026-04 及之后的月份。");
   return month;
 }
 
@@ -113,14 +113,14 @@ export function createInventoryProvisionCostRefreshService({
 } = {}) {
   async function refresh({ date } = {}) {
     const targetMonth = verifyRefreshMonth(date, todayText);
-    const comparisonMonth = shiftMonth(targetMonth, -1);
+    const comparisonMonth = targetMonth >= PROVISION_MOVEMENT_START_MONTH ? shiftMonth(targetMonth, -1) : "";
     const directory = await getSellers({ forceRefresh: true });
     const sellers = filterCoreSellers(directory?.sellers || []);
     if (!sellers.some((seller) => Number(seller.sid) === REQUIRED_GERMAN_SID)) {
       throw new Error(`运行时店铺目录缺少德国店铺 ${REQUIRED_GERMAN_STORE}（SID ${REQUIRED_GERMAN_SID}）。`);
     }
 
-    const months = [comparisonMonth, targetMonth];
+    const months = comparisonMonth ? [comparisonMonth, targetMonth] : [targetMonth];
     const historicalData = await Promise.all(months.map((month) => loadHistoricalRows(month, {
       adapter,
       sellers,

@@ -232,7 +232,7 @@ export function createInventoryProvisionFeature({
       "#inventory-provision-date-note",
       snapshotAvailable
         ? data.meta?.historicalMode
-          ? `历史月末库存 · 库龄按库存分类账 FIFO 重建${data.meta?.snapshotUpdatedAt ? ` · 缓存 ${data.meta.snapshotUpdatedAt}` : ""}${data.meta?.costRefreshedAt ? ` · 成本刷新 ${data.meta.costRefreshedAt}` : ""}`
+          ? `历史月末库存 · 库龄按库存分类账 FIFO 重建${data.meta?.snapshotUpdatedAt ? ` · 缓存 ${data.meta.snapshotUpdatedAt}` : ""}${data.meta?.costRefreshedAt ? ` · 成本缓存刷新时间：${data.meta.costRefreshedAt}` : ""}`
           : "当前月份为实时库存"
         : availableDates.length
           ? `历史月报读取失败；本地快照：${availableDates.slice(-5).join("、")}`
@@ -387,7 +387,10 @@ export function createInventoryProvisionFeature({
       await loadInventoryProvision();
       const refresh = data.refresh || {};
       const updatedRows = (refresh.months || []).reduce((total, month) => total + Number(month.updatedRows || 0), 0);
-      setText("#inventory-provision-status", `成本已刷新：${refresh.date || date} 与 ${refresh.comparisonMonth || "上月"} · 更新 ${updatedRows} 条 · ${refresh.refreshedAt || ""}`, root);
+      const refreshedMonths = refresh.comparisonMonth
+        ? `${refresh.date || date} 与 ${refresh.comparisonMonth}`
+        : refresh.date || date;
+      setText("#inventory-provision-status", `成本已刷新：${refreshedMonths} · 更新 ${updatedRows} 条${refresh.refreshedAt ? ` · 成本缓存刷新时间：${refresh.refreshedAt}` : ""}`, root);
     } catch (error) {
       setText("#inventory-provision-status", `成本刷新失败：${error.message}`, root);
     } finally {
