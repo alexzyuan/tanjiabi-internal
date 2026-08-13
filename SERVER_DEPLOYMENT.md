@@ -187,7 +187,7 @@ export SALES_FACTS_PREFLIGHT_START_DATE=2026-07-01
 export SALES_FACTS_PREFLIGHT_END_DATE=2026-07-31
 export SALES_FACTS_PREFLIGHT_SIDS=8708,8709
 export SALES_FACTS_PREFLIGHT_CURRENCY_MODE=CNY
-npm run sales-facts:preflight > /opt/tanjia-bi-approvals/sales-facts-preflight.json
+node scripts/audit-sales-facts-preflight.js > /opt/tanjia-bi-approvals/sales-facts-preflight.json
 sha256sum /opt/tanjia-bi-approvals/sales-facts-preflight.json
 ```
 

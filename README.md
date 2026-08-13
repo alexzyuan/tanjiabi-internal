@@ -119,7 +119,7 @@ bash deploy.sh
 DEPLOY_CONFIRM_BRANCH=main npm run package:deploy
 ```
 
-部署脚本在服务器上的固定顺序是：`npm ci` → 商品目录 SQLite smoke → 销售事实 SQLite smoke → `node scripts/validate-sales-facts-schema.js` → 校验 `SALES_FACTS_PREFLIGHT_ARTIFACT` 与 `SALES_FACTS_PREFLIGHT_ARTIFACT_SHA256` → `node scripts/migrate-product-catalog.js` → PM2 重启 → `/api/health` 与部署完整性检查。部署不会自动调用领星预检；artifact 必须由运维先用 `npm run sales-facts:preflight` 生成并人工批准，且报告要求 `ok=true`、`exitCode=0`、daily 模式、分页完整和差异计数为零。迁移或任一 SQLite/预检门禁失败时不会重启应用；`/api/health` 会保留根级 `ok`，并在 `productCatalog`、`salesFacts` 字段报告受控的 schema、quick-check、revision、coverage/事实/费用/负责人/派生缓存行数和 SQLite/WAL 大小诊断。
+部署脚本在服务器上的固定顺序是：`npm ci` → 商品目录 SQLite smoke → 销售事实 SQLite smoke → `node scripts/validate-sales-facts-schema.js` → 校验 `SALES_FACTS_PREFLIGHT_ARTIFACT` 与 `SALES_FACTS_PREFLIGHT_ARTIFACT_SHA256` → `node scripts/migrate-product-catalog.js` → PM2 重启 → `/api/health` 与部署完整性检查。部署不会自动调用领星预检；artifact 必须由运维直接运行 `node scripts/audit-sales-facts-preflight.js` 生成并人工批准（避免 `npm run` 的标题混入 JSON），且报告要求 `ok=true`、`exitCode=0`、daily 模式、分页完整和差异计数为零。迁移或任一 SQLite/预检门禁失败时不会重启应用；`/api/health` 会保留根级 `ok`，并在 `productCatalog`、`salesFacts` 字段报告受控的 schema、quick-check、revision、coverage/事实/费用/负责人/派生缓存行数和 SQLite/WAL 大小诊断。
 
 打包前必须保证工作树 clean。非生产分支的临时验证需要同时设置 `ALLOW_NON_PRODUCTION_DEPLOY=1` 和 `DEPLOY_CONFIRM_BRANCH=<当前分支>`；这不会改变服务器正式分支规则。
 
