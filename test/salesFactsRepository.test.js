@@ -200,6 +200,15 @@ test("monthly replacement commits OrderProfit and custom fees in one revision", 
     refreshedAtMs: 1000,
     refreshBatchId: "monthly-1",
   }]);
+  assert.deepEqual(repository.readCustomFeeCoverage(scopeFor()), [{
+    naturalMonth: "2026-08",
+    sid: 8708,
+    currencyMode: "CNY",
+    refreshedAtMs: 1000,
+    rowCount: 1,
+    refreshBatchId: "monthly-1",
+    revision: 1,
+  }]);
 });
 
 test("owner periods reject overlap and increment owner revision only on change", async (t) => {

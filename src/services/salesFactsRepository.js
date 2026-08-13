@@ -141,8 +141,8 @@ function normalizeFact(input, scope, refreshedAtMs, refreshBatchId) {
     actualCurrencyCode: text(input?.actualCurrencyCode, "销售事实实际币种缺失。").toUpperCase(),
     metrics: normalizeMetrics(input?.metrics),
     sourceUpdatedAtMs: integer(input?.sourceUpdatedAtMs, "销售事实来源时间无效。"),
-    refreshedAtMs,
-    refreshBatchId,
+    refreshedAtMs: input?.refreshedAtMs === undefined ? refreshedAtMs : integer(input.refreshedAtMs, "销售事实刷新时间无效。"),
+    refreshBatchId: input?.refreshBatchId === undefined ? refreshBatchId : text(input.refreshBatchId, "销售事实批次 ID 缺失。"),
   };
   assertInScope(fact, scope, fact.factDate);
   if (fact.currencyMode === "CNY" && fact.actualCurrencyCode !== "CNY") {
@@ -155,8 +155,11 @@ function normalizeCoverage(input, scope, refreshedAtMs, refreshBatchId, revision
   const row = {
     factDate: date(input?.factDate), sid: positiveSid(input?.sid), currencyMode: mode(input?.currencyMode),
     sourceUpdatedAtMs: integer(input?.sourceUpdatedAtMs, "coverage 来源时间无效。"),
-    refreshedAtMs, rowCount: integer(input?.rowCount, "coverage 行数无效。"),
-    pageCount: integer(input?.pageCount, "coverage 页数无效。"), refreshBatchId, revision,
+    refreshedAtMs: input?.refreshedAtMs === undefined ? refreshedAtMs : integer(input.refreshedAtMs, "coverage 刷新时间无效。"),
+    rowCount: integer(input?.rowCount, "coverage 行数无效。"),
+    pageCount: integer(input?.pageCount, "coverage 页数无效。"),
+    refreshBatchId: input?.refreshBatchId === undefined ? refreshBatchId : text(input.refreshBatchId, "coverage 批次 ID 缺失。"),
+    revision,
   };
   assertInScope(row, scope, row.factDate);
   return row;
@@ -185,7 +188,8 @@ function normalizeFee(input, scope, refreshedAtMs, refreshBatchId) {
     currencyMode: mode(input?.currencyMode), feeName: text(input?.feeName, "费用名称缺失。"),
     feeAmount: input?.feeAmount, actualCurrencyCode: text(input?.actualCurrencyCode, "费用实际币种缺失。").toUpperCase(),
     recognized: input?.recognized === true, sourceUpdatedAtMs: integer(input?.sourceUpdatedAtMs, "费用来源时间无效。"),
-    refreshedAtMs, refreshBatchId,
+    refreshedAtMs: input?.refreshedAtMs === undefined ? refreshedAtMs : integer(input.refreshedAtMs, "费用刷新时间无效。"),
+    refreshBatchId: input?.refreshBatchId === undefined ? refreshBatchId : text(input.refreshBatchId, "费用批次 ID 缺失。"),
   };
   if (typeof row.feeAmount !== "bigint") throw new SalesFactsInputError("费用金额必须是定点整数。");
   if (!scope.sids.includes(row.sid) || row.currencyMode !== scope.currencyMode || !scope.dates.some((value) => value.startsWith(row.naturalMonth))) {
@@ -195,7 +199,15 @@ function normalizeFee(input, scope, refreshedAtMs, refreshBatchId) {
 }
 
 function normalizeFeeCoverage(input, scope, refreshedAtMs, refreshBatchId, revision) {
-  const row = { naturalMonth: month(input?.naturalMonth), sid: positiveSid(input?.sid), currencyMode: mode(input?.currencyMode), refreshedAtMs, rowCount: integer(input?.rowCount, "费用 coverage 行数无效。"), refreshBatchId, revision };
+  const row = {
+    naturalMonth: month(input?.naturalMonth),
+    sid: positiveSid(input?.sid),
+    currencyMode: mode(input?.currencyMode),
+    refreshedAtMs: input?.refreshedAtMs === undefined ? refreshedAtMs : integer(input.refreshedAtMs, "费用 coverage 刷新时间无效。"),
+    rowCount: integer(input?.rowCount, "费用 coverage 行数无效。"),
+    refreshBatchId: input?.refreshBatchId === undefined ? refreshBatchId : text(input.refreshBatchId, "费用 coverage 批次 ID 缺失。"),
+    revision,
+  };
   if (!scope.sids.includes(row.sid) || row.currencyMode !== scope.currencyMode || !scope.dates.some((value) => value.startsWith(row.naturalMonth))) throw new SalesFactsInputError("费用 coverage 超出明确范围。");
   return row;
 }
@@ -346,6 +358,22 @@ export function createSalesFactsRepository({
     });
   }
 
+  function readCustomFeeCoverage(scopeInput, options = {}) {
+    return operate(logger, "read-custom-fee-coverage", options.requestId, () => {
+      const scope = normalizeScope(scopeInput);
+      const months = [...new Set(scope.dates.map((value) => value.slice(0, 7)))];
+      return db.prepare(`SELECT * FROM custom_fee_coverage_monthly WHERE natural_month IN (${months.map(() => "?").join(",")}) AND currency_mode=? AND sid IN (${scope.sids.map(() => "?").join(",")}) ORDER BY natural_month,sid`).all(...months, scope.currencyMode, ...scope.sids).map((row) => ({
+        naturalMonth: row.natural_month,
+        sid: Number(row.sid),
+        currencyMode: row.currency_mode,
+        refreshedAtMs: Number(row.refreshed_at_ms),
+        rowCount: Number(row.row_count),
+        refreshBatchId: row.refresh_batch_id,
+        revision: Number(row.revision),
+      }));
+    });
+  }
+
   const ownerInsert = db.prepare("INSERT INTO listing_owner_period(sid,msku_key,msku,effective_from,effective_to,owner_identity,owner_person_id,owner_name_snapshot,identity_source,status,updated_at_ms) VALUES(@sid,@mskuKey,@msku,@effectiveFrom,@effectiveTo,@ownerIdentity,@ownerPersonId,@ownerNameSnapshot,@identitySource,@status,@updatedAtMs)");
   const mapOwnerPeriod = (row) => ({ sid: Number(row.sid), mskuKey: row.msku_key, msku: row.msku, effectiveFrom: row.effective_from, effectiveTo: row.effective_to, ownerIdentity: row.owner_identity, ownerPersonId: row.owner_person_id, ownerNameSnapshot: row.owner_name_snapshot, identitySource: row.identity_source, status: row.status, updatedAtMs: Number(row.updated_at_ms) });
   const selectAllOwnerPeriods = () => db.prepare("SELECT * FROM listing_owner_period ORDER BY sid,msku_key,effective_from").all().map(mapOwnerPeriod);
@@ -430,7 +458,17 @@ export function createSalesFactsRepository({
   }
 
   function debugSnapshotForTest() {
-    return { facts: readFacts({ dates: db.prepare("SELECT DISTINCT fact_date FROM order_profit_daily ORDER BY fact_date").all().map((row) => row.fact_date), sids: db.prepare("SELECT DISTINCT sid FROM order_profit_daily ORDER BY sid").all().map((row) => Number(row.sid)), currencyMode: "CNY" }), coverage: db.prepare("SELECT * FROM fact_coverage_daily ORDER BY fact_date,sid,currency_mode").all(), revisions: getRevisions() };
+    const factDates = db.prepare("SELECT DISTINCT fact_date FROM order_profit_daily ORDER BY fact_date").all().map((row) => row.fact_date);
+    const factSids = db.prepare("SELECT DISTINCT sid FROM order_profit_daily ORDER BY sid").all().map((row) => Number(row.sid));
+    const feeMonths = db.prepare("SELECT DISTINCT natural_month FROM custom_fee_monthly ORDER BY natural_month").all().map((row) => row.natural_month);
+    const feeSids = db.prepare("SELECT DISTINCT sid FROM custom_fee_monthly ORDER BY sid").all().map((row) => Number(row.sid));
+    return {
+      facts: factDates.length && factSids.length ? readFacts({ dates: factDates, sids: factSids, currencyMode: "CNY" }) : [],
+      coverage: db.prepare("SELECT * FROM fact_coverage_daily ORDER BY fact_date,sid,currency_mode").all(),
+      customFees: feeMonths.length && feeSids.length ? readCustomFees({ dates: factDates, sids: feeSids, currencyMode: "CNY" }) : [],
+      customFeeCoverage: db.prepare("SELECT * FROM custom_fee_coverage_monthly ORDER BY natural_month,sid,currency_mode").all(),
+      revisions: getRevisions(),
+    };
   }
 
   return {
@@ -443,6 +481,7 @@ export function createSalesFactsRepository({
     replaceOrderProfitScope,
     replaceMonthlyReportScope,
     readCustomFees,
+    readCustomFeeCoverage,
     readOwnerPeriods,
     readOwnerState,
     applyOwnerSnapshot,
