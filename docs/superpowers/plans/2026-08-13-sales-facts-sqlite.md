@@ -1038,20 +1038,26 @@ Task 15 changes only operational documentation and deployment gates; no frontend
 
 At a desktop viewport, verify sales weekly and monthly report render without console errors; query and explicit force requests contain exact date/SID/currency fields; busy state prevents duplicate submit; controlled 502/503 does not expose secrets; successful response shows source/cacheState/updatedAt. Do not execute narrow-screen checks or responsive assertions.
 
-- [ ] **Step 5: Run package dry guard without production deploy**
+- [x] **Step 5: Run package dry guard without production deploy**
 
 From a clean committed feature branch use only non-production packaging with explicit branch confirmation, inspect the manifest/archive for the sales smoke/capability, then delete the temporary archive. Do not SSH, PM2 restart, or call production during implementation review.
 
-- [ ] **Step 6: Request two-axis code review**
+`ALLOW_NON_PRODUCTION_DEPLOY=1 DEPLOY_CONFIRM_BRANCH=codex/sales-facts-sqlite npm run package:deploy` passed on clean commit `ed42edb`; the CSS-free archive contained the manifest, both sales-facts smoke/schema scripts, and the strict preflight-artifact validator, then the temporary archive was removed. No SSH, PM2, or production request was made.
+
+- [x] **Step 6: Request two-axis code review**
 
 Review since the design commit `1e88b3a` along Standards and Spec axes. Resolve every Critical/Important finding with new RED tests and separate fix commits. Re-run affected focused suites and the complete pure Node suite.
 
-- [ ] **Step 7: Commit documentation**
+The review found and the follow-up commit `8536b2e` fixed a fail-open preflight artifact validator: all approval, daily-mode, pagination, request-count, identity, metric, and safety fields are now required and validated strictly. Follow-up focused deploy tests passed 22/22; complete Node verification passed 1117/1117.
+
+- [x] **Step 7: Commit documentation**
 
 ```bash
 git add AGENTS.md README.md SERVER_DEPLOYMENT.md
 git commit -m "docs: document sales facts sqlite operations"
 ```
+
+Documentation and the completed verification record were committed in `ed42edb`; this checklist was updated afterward only to record the final review and package evidence.
 
 ## Final Merge and Production Gate
 
