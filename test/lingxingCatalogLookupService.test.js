@@ -198,6 +198,32 @@ test("fetchLingxingListingsBySidMskus can restrict a lookup to exact MSKUs", asy
   assert.deepEqual(calls.map((call) => call.exact_search), [1]);
 });
 
+test("fetchLingxingListingsBySidMskus respects Lingxing search_value batch limit", async () => {
+  const calls = [];
+  const mskus = Array.from({ length: 11 }, (_, index) => `MSKU-${index + 1}`);
+  const adapter = {
+    async fetchListings(params) {
+      calls.push(params);
+      return {
+        data: {
+          total: params.search_value.length,
+          list: params.search_value.map((seller_sku) => ({ seller_sku, local_sku: `SKU-${seller_sku}` })),
+        },
+      };
+    },
+  };
+
+  const records = await fetchLingxingListingsBySidMskus(adapter, 8708, mskus, {
+    exactOnly: true,
+    includeDeletedListings: true,
+    includeUnpairedListings: true,
+    sidVariants: [{ sid: 8708 }],
+  });
+
+  assert.deepEqual(calls.map((call) => call.search_value), [mskus.slice(0, 10), mskus.slice(10)]);
+  assert.equal(records.length, 11);
+});
+
 test("fetchLingxingProductRecords uses local product fallback and strict errors", async () => {
   const calls = [];
   const adapter = {

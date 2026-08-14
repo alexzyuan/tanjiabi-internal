@@ -376,8 +376,8 @@ test("normal lookup exposes true listing/product batch metadata", async (t) => {
 
   const result = await getProductCatalogForRows(fixture.scope, fixture.options);
   assert.equal(result.meta.listingFetchedCount, 81);
-  assert.equal(result.meta.listingBatchCount, 2);
-  assert.equal(result.meta.listingRequestCount, 2);
+  assert.equal(result.meta.listingBatchCount, 9);
+  assert.equal(result.meta.listingRequestCount, 9);
   assert.equal(result.meta.productFetchedCount, 81);
   assert.equal(result.meta.productLookupBatchCount, 2);
   assert.equal(result.meta.productInfoRequestCount, 2);

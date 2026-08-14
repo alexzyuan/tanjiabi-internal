@@ -1,5 +1,7 @@
 import { normalizeRecordList } from "../utils/recordAccess.js";
 
+export const LINGXING_LISTING_SEARCH_MAX_VALUES = 10;
+
 function totalCountOf(payload) {
   const data = payload?.data || payload || {};
   const value = data.total ?? data.count ?? data.totalCount ?? payload?.total;
@@ -89,7 +91,7 @@ export function lingxingSidVariants(sid) {
 }
 
 export async function fetchLingxingListingsBySidMskus(adapter, sid, mskus = [], {
-  batchSize = 50,
+  batchSize = LINGXING_LISTING_SEARCH_MAX_VALUES,
   sidVariants = lingxingSidVariants(sid),
   normalize = normalizeRecordList,
   strict = false,

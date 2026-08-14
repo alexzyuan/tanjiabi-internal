@@ -1,6 +1,7 @@
 import {
   fetchLingxingListingsBySidMskus,
   fetchLingxingProductRecords,
+  LINGXING_LISTING_SEARCH_MAX_VALUES,
 } from "./lingxingCatalogLookupService.js";
 import {
   findListingSharedCatalogMatches,
@@ -17,7 +18,7 @@ import {
   normalizeCatalogKey,
 } from "./productCatalogIdentity.js";
 
-export const LISTING_BATCH_SIZE = 50;
+export const LISTING_BATCH_SIZE = LINGXING_LISTING_SEARCH_MAX_VALUES;
 export const PRODUCT_BATCH_SIZE = 80;
 export const LIVE_LISTING_SOURCE = "lingxing-listing";
 export const SHARED_LISTING_XLSX_SOURCE = "listing-shared-xlsx";
