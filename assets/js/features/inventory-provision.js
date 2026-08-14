@@ -34,7 +34,7 @@ export function createInventoryProvisionFeature({
   function syncInventoryProvisionCostRefreshState() {
     const button = root?.querySelector?.("#inventory-provision-refresh-costs");
     if (!button) return;
-    button.disabled = selectedInventoryProvisionMonth() === getDefaultMonth();
+    button.disabled = false;
   }
 
   function shortMoney(value) {
@@ -366,30 +366,25 @@ export function createInventoryProvisionFeature({
 
   async function refreshInventoryProvisionCosts() {
     setDefaultInventoryProvisionDate();
-    const date = selectedInventoryProvisionMonth();
     const button = root?.querySelector?.("#inventory-provision-refresh-costs");
-    if (date === getDefaultMonth()) {
-      if (button) button.disabled = true;
-      setText("#inventory-provision-status", "当前月为实时 FBA 成本，不能回算产品管理成本。", root);
-      return;
-    }
     const confirmRefresh = typeof confirmImpl === "function" ? confirmImpl : () => true;
-    if (!confirmRefresh(`将用产品管理当前成本回算 ${date} 及上月，并覆盖历史成本缓存。是否继续？`)) return;
+    if (!confirmRefresh("将使用领星产品管理当前采购成本和单位头程成本，刷新本年度所有已结束月份。是否继续？")) return;
     const restoreButton = setButtonBusy(button, "刷新成本中...", button?.textContent || "刷新成本");
     try {
       const response = await fetchImpl("/api/dashboard/inventory-provision/refresh-costs", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ date }),
+        body: JSON.stringify({}),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || `API ${response.status}`);
       await loadInventoryProvision();
       const refresh = data.refresh || {};
       const updatedRows = (refresh.months || []).reduce((total, month) => total + Number(month.updatedRows || 0), 0);
-      const refreshedMonths = refresh.comparisonMonth
-        ? `${refresh.date || date} 与 ${refresh.comparisonMonth}`
-        : refresh.date || date;
+      const refreshedMonthValues = (refresh.months || []).map((month) => month.month).filter(Boolean);
+      const refreshedMonths = refreshedMonthValues.length
+        ? `${refreshedMonthValues[0]} 至 ${refreshedMonthValues.at(-1)}`
+        : `${refresh.year || "本年度"}已结束月份`;
       setText("#inventory-provision-status", `成本已刷新：${refreshedMonths} · 更新 ${updatedRows} 条${refresh.refreshedAt ? ` · 成本缓存刷新时间：${refresh.refreshedAt}` : ""}`, root);
     } catch (error) {
       setText("#inventory-provision-status", `成本刷新失败：${error.message}`, root);

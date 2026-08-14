@@ -62,7 +62,8 @@ export function createInventoryRoutes(deps = {}) {
       auth: "finance",
       errorStatusCode: 400,
       handler: async ({ req, res }) => {
-        const refresh = await refreshInventoryProvisionCosts(await readJsonBody(req));
+        await readJsonBody(req);
+        const refresh = await refreshInventoryProvisionCosts({});
         sendJson(res, 200, { ok: true, refresh });
       },
     },

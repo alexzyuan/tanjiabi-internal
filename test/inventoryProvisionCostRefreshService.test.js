@@ -38,21 +38,25 @@ function historicalMonth(month) {
 
 function createServiceDependencies(overrides = {}) {
   const saved = [];
-  const calls = { sellers: [], history: [], listings: [], products: [] };
+  const calls = { sellers: [], history: [], loader: [], listings: [], products: [] };
   return {
     saved,
     calls,
     dependencies: {
       adapter: {},
-      todayText: () => "2026-08-11",
-      nowText: () => "2026/8/11 16:03:44",
+      todayText: () => "2026-08-14",
+      nowText: () => "2026/8/14 10:00:00",
       getSellers: async (options) => {
         calls.sellers.push(options);
         return { sellers: [germanSeller()] };
       },
+      readHistoryCache: async (month) => {
+        calls.history.push({ month });
+        return { updatedAt: `2026/8/13 18:00:00`, data: historicalMonth(month) };
+      },
       loadHistoricalRows: async (month, options) => {
-        calls.history.push({ month, options });
-        return historicalMonth(month);
+        calls.loader.push({ month, options });
+        throw new Error("历史库存重建加载器不得被成本刷新调用。");
       },
       fetchListingsBySidMskus: async (_adapter, sid, mskus) => {
         calls.listings.push({ sid, mskus });
@@ -68,46 +72,55 @@ function createServiceDependencies(overrides = {}) {
   };
 }
 
-test("cost refresh rebuilds the selected and comparison months with current German product costs", async () => {
+test("cost refresh updates every completed month from existing caches and reuses product lookups", async () => {
   const { createInventoryProvisionCostRefreshService } = await import("../src/services/inventoryProvisionCostRefreshService.js");
   assert.equal(typeof createInventoryProvisionCostRefreshService, "function");
   const fixture = createServiceDependencies();
   const service = createInventoryProvisionCostRefreshService(fixture.dependencies);
 
-  const result = await service.refresh({ date: "2026-05" });
+  const result = await service.refresh({});
 
   assert.deepEqual(fixture.calls.sellers, [{ forceRefresh: true }]);
-  assert.deepEqual(fixture.calls.history.map((call) => call.month), ["2026-04", "2026-05"]);
-  fixture.calls.history.forEach(({ options }) => {
-    assert.equal(options.forceRefresh, true);
-    assert.equal(options.persist, false);
-    assert.equal(options.sellers[0].sid, 17307);
-  });
-  assert.deepEqual(fixture.saved.map(({ month }) => month), ["2026-04", "2026-05"]);
+  assert.deepEqual(fixture.calls.history.map((call) => call.month), [
+    "2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07",
+  ]);
+  assert.equal(fixture.calls.loader.length, 0);
+  assert.equal(fixture.calls.listings.length, 1);
+  assert.equal(fixture.calls.products.length, 1);
+  assert.deepEqual(fixture.saved.map(({ month }) => month), [
+    "2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07",
+  ]);
   fixture.saved.forEach(({ data }) => {
     assert.equal(data.rows[0].purchaseCost, 12.5);
     assert.equal(data.rows[0].firstLegCost, 3.2);
     assert.equal(data.costSource, "lingxing-product-management");
-    assert.equal(data.costRefreshedAt, "2026/8/11 16:03:44");
+    assert.equal(data.costRefreshedAt, "2026/8/14 10:00:00");
+    assert.equal(data.costRefreshYear, "2026");
   });
-  assert.equal(result.date, "2026-05");
-  assert.equal(result.comparisonMonth, "2026-04");
-  assert.equal(result.months.find((item) => item.month === "2026-05").updatedRows, 1);
+  assert.equal(result.year, "2026");
+  assert.deepEqual(result.months.map((item) => item.month), [
+    "2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07",
+  ]);
+  assert.equal(result.totalRows, 7);
+  assert.equal(result.updatedRows, 7);
+  assert.equal(result.refreshedAt, "2026/8/14 10:00:00");
 });
 
-test("cost refresh rebuilds only the selected month before provision movement starts", async () => {
+test("cost refresh fails before writing when a completed-month cache is missing", async () => {
   const fixture = createServiceDependencies();
   const { createInventoryProvisionCostRefreshService } = await import("../src/services/inventoryProvisionCostRefreshService.js");
+  fixture.dependencies.readHistoryCache = async (month) => {
+    fixture.calls.history.push({ month });
+    return month === "2026-04" ? null : { updatedAt: "2026/8/13 18:00:00", data: historicalMonth(month) };
+  };
   const service = createInventoryProvisionCostRefreshService(fixture.dependencies);
 
-  const result = await service.refresh({ date: "2026-01" });
-
-  assert.deepEqual(fixture.calls.history.map((call) => call.month), ["2026-01"]);
-  assert.deepEqual(fixture.saved.map(({ month }) => month), ["2026-01"]);
-  assert.equal(result.comparisonMonth, "");
+  await assert.rejects(() => service.refresh({}), /库存计提历史缓存缺失：2026-04/);
+  assert.equal(fixture.saved.length, 0);
+  assert.equal(fixture.calls.listings.length, 0);
 });
 
-test("cost refresh rejects a missing product-management cost without overwriting either month", async () => {
+test("cost refresh rejects a missing product-management cost without overwriting any month", async () => {
   const { createInventoryProvisionCostRefreshService } = await import("../src/services/inventoryProvisionCostRefreshService.js");
   const fixture = createServiceDependencies({
     fetchProductRecords: async () => [{ sku: "TJ-DE-001", purchase_price: "12.5" }],
@@ -115,10 +128,49 @@ test("cost refresh rejects a missing product-management cost without overwriting
   const service = createInventoryProvisionCostRefreshService(fixture.dependencies);
 
   await assert.rejects(
-    () => service.refresh({ date: "2026-05" }),
+    () => service.refresh({}),
     /产品管理.*单位头程成本.*tanjia-eu-DE.*JMDE-HJ825A/,
   );
   assert.equal(fixture.saved.length, 0);
+});
+
+test("cost refresh failure exposes its stage and logs annual lookup counts", async () => {
+  const { createInventoryProvisionCostRefreshService } = await import("../src/services/inventoryProvisionCostRefreshService.js");
+  const failures = [];
+  const fixture = createServiceDependencies({
+    fetchListingsBySidMskus: async (_adapter, sid, _mskus, options) => {
+      options.metrics.increment("lingxingListingRequests");
+      options.metrics.increment("lingxingListingRequests");
+      return [{ sid, seller_sku: "JMDE-HJ825A", local_sku: "TJ-DE-001" }];
+    },
+    fetchProductRecords: async (_adapter, _params, _fallbackParams, options) => {
+      options.metrics.increment("lingxingProductInfoRequests");
+      options.metrics.increment("lingxingProductFallbackRequests");
+      return [{ sku: "TJ-DE-001", purchase_price: "12.5" }];
+    },
+    logger: { error: (...args) => failures.push(args) },
+  });
+  const service = createInventoryProvisionCostRefreshService(fixture.dependencies);
+
+  await assert.rejects(
+    () => service.refresh({}),
+    (error) => error.details?.stage === "cost-validation",
+  );
+
+  assert.equal(failures.length, 1);
+  assert.equal(failures[0][0], "[inventory-provision-cost-refresh] failed");
+  assert.deepEqual(failures[0][1], {
+    operationId: failures[0][1].operationId,
+    year: "2026",
+    months: ["2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07"],
+    monthCount: 7,
+    rowCount: 7,
+    listingRequestCount: 2,
+    productRequestCount: 2,
+    stage: "cost-validation",
+    stageDurations: failures[0][1].stageDurations,
+    error: "产品管理缺少单位头程成本：店铺 tanjia-eu-DE（SID 17307）MSKU JMDE-HJ825A，内部 SKU TJ-DE-001。",
+  });
 });
 
 test("cost refresh rejects a fresh seller directory that omits the required German shop", async () => {
@@ -128,7 +180,7 @@ test("cost refresh rejects a fresh seller directory that omits the required Germ
   });
   const service = createInventoryProvisionCostRefreshService(fixture.dependencies);
 
-  await assert.rejects(() => service.refresh({ date: "2026-05" }), /tanjia-eu-DE.*17307/);
+  await assert.rejects(() => service.refresh({}), /tanjia-eu-DE.*17307/);
   assert.equal(fixture.calls.history.length, 0);
   assert.equal(fixture.saved.length, 0);
 });

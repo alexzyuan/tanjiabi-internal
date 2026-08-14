@@ -56,7 +56,7 @@ test("inventory provision feature owns its DOM event bindings", () => {
   );
 });
 
-test("inventory provision cost refresh confirms a historical month, posts it, and reloads the dashboard", async () => {
+test("inventory provision cost refresh confirms the annual scope, posts no month, and reloads the dashboard", async () => {
   const elements = new Map([
     ["#inventory-provision-date", { value: "2026-05" }],
     ["#inventory-provision-refresh-costs", { disabled: false }],
@@ -72,7 +72,14 @@ test("inventory provision cost refresh confirms a historical month, posts it, an
       fetchCalls.push(args);
       return {
         ok: true,
-        json: async () => ({ ok: true, refresh: { date: "2026-05", comparisonMonth: "2026-04", refreshedAt: "2026/8/11 16:03:44", months: [{ updatedRows: 1 }, { updatedRows: 2 }] } }),
+        json: async () => ({ ok: true, refresh: {
+          year: "2026",
+          refreshedAt: "2026/8/14 10:00:00",
+          months: [
+            { month: "2026-01", updatedRows: 1 },
+            { month: "2026-07", updatedRows: 2 },
+          ],
+        } }),
       };
     },
     loadDashboardSection: async () => { dashboardLoads += 1; },
@@ -83,57 +90,33 @@ test("inventory provision cost refresh confirms a historical month, posts it, an
 
   assert.deepEqual(fetchCalls, [[
     "/api/dashboard/inventory-provision/refresh-costs",
-    { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ date: "2026-05" }) },
+    { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({}) },
   ]]);
   assert.equal(dashboardLoads, 1);
-  assert.match(statuses.at(-1)[1], /2026-05.*2026-04.*3/);
-  assert.match(statuses.at(-1)[1], /成本缓存刷新时间：2026\/8\/11 16:03:44/);
+  assert.match(statuses.at(-1)[1], /2026-01.*2026-07.*3/);
+  assert.match(statuses.at(-1)[1], /成本缓存刷新时间：2026\/8\/14 10:00:00/);
 });
 
-test("inventory provision cost refresh omits a comparison month when the API refreshed only one month", async () => {
-  const elements = new Map([
-    ["#inventory-provision-date", { value: "2026-01" }],
-    ["#inventory-provision-refresh-costs", { disabled: false }],
-  ]);
-  const statuses = [];
-  const { feature } = createFeature({
-    root: { querySelector: (selector) => elements.get(selector) || null },
-    fieldValue: (selector) => elements.get(selector)?.value || "",
-    confirmImpl: () => true,
-    fetchImpl: async () => ({
-      ok: true,
-      json: async () => ({ ok: true, refresh: { date: "2026-01", comparisonMonth: "", refreshedAt: "2026/8/13 10:00:00", months: [{ updatedRows: 1 }] } }),
-    }),
-    setText: (selector, value) => statuses.push([selector, value]),
-  });
-
-  await feature.refreshInventoryProvisionCosts();
-
-  assert.match(statuses.at(-1)[1], /成本已刷新：2026-01/);
-  assert.doesNotMatch(statuses.at(-1)[1], /与 上月/);
-  assert.match(statuses.at(-1)[1], /成本缓存刷新时间：2026\/8\/13 10:00:00/);
-});
-
-test("inventory provision cost refresh blocks the current month without a request", async () => {
+test("inventory provision cost refresh remains available when the dashboard selects the current month", async () => {
   const elements = new Map([
     ["#inventory-provision-date", { value: "2026-08" }],
     ["#inventory-provision-refresh-costs", { disabled: false }],
   ]);
   let requestCount = 0;
-  const statuses = [];
   const { feature } = createFeature({
     root: { querySelector: (selector) => elements.get(selector) || null },
     fieldValue: (selector) => elements.get(selector)?.value || "",
-    fetchImpl: async () => { requestCount += 1; },
-    setText: (selector, value) => statuses.push([selector, value]),
+    confirmImpl: () => true,
+    fetchImpl: async () => {
+      requestCount += 1;
+      return { ok: true, json: async () => ({ ok: true, refresh: { year: "2026", months: [], refreshedAt: "2026/8/14 10:00:00" } }) };
+    },
     getDefaultMonth: () => "2026-08",
   });
 
   await feature.refreshInventoryProvisionCosts();
 
-  assert.equal(requestCount, 0);
-  assert.equal(elements.get("#inventory-provision-refresh-costs").disabled, true);
-  assert.match(statuses.at(-1)[1], /当前月/);
+  assert.equal(requestCount, 1);
 });
 
 test("inventory provision historical note labels the cost cache refresh time", () => {

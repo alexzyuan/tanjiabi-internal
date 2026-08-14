@@ -117,14 +117,14 @@ test("slow-moving-risk live route forwards the confirmed filter fields", async (
   assert.deepEqual(payload, { rows: [] });
 });
 
-test("inventory provision cost refresh route is finance-protected and forwards its selected month", async () => {
+test("inventory provision cost refresh route is finance-protected and invokes annual refresh without a selected month", async () => {
   let received = null;
   let payload = null;
   const route = createInventoryRoutes({
     readJsonBody: async () => ({ date: "2026-05" }),
     refreshInventoryProvisionCosts: async (value) => {
       received = value;
-      return { date: value.date, comparisonMonth: "2026-04", months: [] };
+      return { year: "2026", months: [{ month: "2026-01", updatedRows: 1 }], refreshedAt: "2026/8/14 10:00:00" };
     },
     sendJson: (_res, _status, value) => { payload = value; },
   }).find((item) => item.path === "/api/dashboard/inventory-provision/refresh-costs");
@@ -132,6 +132,6 @@ test("inventory provision cost refresh route is finance-protected and forwards i
   assert.equal(route?.method, "POST");
   assert.equal(route?.auth, "finance");
   await route.handler({ req: {}, res: {} });
-  assert.deepEqual(received, { date: "2026-05" });
-  assert.deepEqual(payload, { ok: true, refresh: { date: "2026-05", comparisonMonth: "2026-04", months: [] } });
+  assert.deepEqual(received, {});
+  assert.deepEqual(payload, { ok: true, refresh: { year: "2026", months: [{ month: "2026-01", updatedRows: 1 }], refreshedAt: "2026/8/14 10:00:00" } });
 });
