@@ -130,6 +130,28 @@ test("fetchLingxingListingsBySidMskus falls back to single MSKU queries for mixe
   assert.deepEqual(searchedValues, [["A", "B"], ["A", "B"], ["A"], ["B"]]);
 });
 
+test("fetchLingxingListingsBySidMskus can include deleted listings for historical inventory", async () => {
+  const calls = [];
+  const adapter = {
+    async fetchListings(params) {
+      calls.push(params);
+      if (!Object.hasOwn(params, "is_delete")) {
+        return { data: { total: 1, list: [{ seller_sku: "JM-XSL-SP", local_sku: "TJ018", is_delete: 1 }] } };
+      }
+      return { data: { total: 0, list: [] } };
+    },
+  };
+
+  const records = await fetchLingxingListingsBySidMskus(adapter, 8708, ["JM-XSL-SP"], {
+    includeDeletedListings: true,
+    sidVariants: [{ sid: 8708 }],
+  });
+
+  assert.deepEqual(records, [{ seller_sku: "JM-XSL-SP", local_sku: "TJ018", is_delete: 1 }]);
+  assert.equal(calls[0].is_delete, undefined);
+  assert.equal(Object.hasOwn(calls[0], "is_delete"), false);
+});
+
 test("fetchLingxingProductRecords uses local product fallback and strict errors", async () => {
   const calls = [];
   const adapter = {

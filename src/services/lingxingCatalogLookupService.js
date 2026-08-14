@@ -94,12 +94,13 @@ export async function fetchLingxingListingsBySidMskus(adapter, sid, mskus = [], 
   normalize = normalizeRecordList,
   strict = false,
   metrics = null,
+  includeDeletedListings = false,
 } = {}) {
   const records = [];
   for (const batch of chunkArray(uniqueText(mskus), batchSize)) {
     const baseParams = {
       is_pair: 1,
-      is_delete: 0,
+      ...(includeDeletedListings ? {} : { is_delete: 0 }),
       search_field: "seller_sku",
       search_value: batch,
       exact_search: 1,

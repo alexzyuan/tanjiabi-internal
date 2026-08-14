@@ -61,14 +61,33 @@ function readableValue(value) {
   return value !== undefined && value !== null && String(value).trim() !== "";
 }
 
+function parseCostValue(value, field) {
+  const parsed = Number(String(value).replace(/,/g, "").replace(/[¥￥]/g, ""));
+  if (!Number.isFinite(parsed)) throw new Error(`产品管理字段 ${field} 不是有效数字。`);
+  return parsed;
+}
+
 function readCost(record, keys) {
   for (const key of keys) {
     if (!readableValue(record?.[key])) continue;
-    const value = Number(String(record[key]).replace(/,/g, "").replace(/[¥￥]/g, ""));
-    if (!Number.isFinite(value)) throw new Error(`产品管理字段 ${key} 不是有效数字。`);
-    return { value, field: key };
+    return { value: parseCostValue(record[key], key), field: key };
   }
   return null;
+}
+
+function readFirstLegCost(record, countryCode) {
+  const country = String(countryCode || "").trim().toUpperCase();
+  const relationKey = country ? `${country}_cg_transport_costs` : "";
+  if (relationKey && Array.isArray(record?.product_logistics_relation)) {
+    for (const relation of record.product_logistics_relation) {
+      if (!readableValue(relation?.[relationKey])) continue;
+      return {
+        value: parseCostValue(relation[relationKey], `product_logistics_relation.${relationKey}`),
+        field: `product_logistics_relation.${relationKey}`,
+      };
+    }
+  }
+  return readCost(record, FIRST_LEG_COST_KEYS);
 }
 
 function listingMsku(record) {
@@ -199,6 +218,7 @@ export function createInventoryProvisionCostRefreshService({
         const listingRecords = await fetchListingsBySidMskus(adapter, sid, uniqueText(mskus), {
           strict: true,
           metrics: lookupMetrics,
+          includeDeletedListings: true,
         });
         listingRecords.forEach((record) => {
           const msku = listingMsku(record);
@@ -243,12 +263,13 @@ export function createInventoryProvisionCostRefreshService({
         if (!product) throw refreshError(`产品管理未返回产品：${diagnosticRow(row, internalSku)}。`, 422);
         const purchase = readCost(product, PURCHASE_COST_KEYS);
         if (!purchase) throw refreshError(`产品管理缺少采购成本：${diagnosticRow(row, internalSku)}。`, 422);
-        const firstLeg = readCost(product, FIRST_LEG_COST_KEYS);
+        const firstLeg = readFirstLegCost(product, row.countryCode);
         if (!firstLeg) throw refreshError(`产品管理缺少单位头程成本：${diagnosticRow(row, internalSku)}。`, 422);
         refreshedCostsByIdentity.set(identity, {
           purchaseCost: purchase.value,
           firstLegCost: firstLeg.value,
           costSource: "lingxing-product-management",
+          costInternalSku: internalSku,
           costPurchaseField: purchase.field,
           costFirstLegField: firstLeg.field,
         });

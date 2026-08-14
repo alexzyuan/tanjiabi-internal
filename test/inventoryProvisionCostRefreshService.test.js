@@ -113,6 +113,57 @@ test("cost refresh updates every completed month from existing caches and reuses
   assert.equal(result.refreshedAt, "2026/8/14 10:00:00");
 });
 
+test("cost refresh reads deleted Listing mappings and country logistics costs for historical inventory", async () => {
+  const { createInventoryProvisionCostRefreshService } = await import("../src/services/inventoryProvisionCostRefreshService.js");
+  const fixture = createServiceDependencies({
+    readHistoryCache: async (month) => {
+      fixture.calls.history.push({ month });
+      return {
+        updatedAt: "2026/8/13 18:00:00",
+        data: {
+          ...historicalMonth(month),
+          rows: [{
+            sid: 8708,
+            sellerId: "A-US",
+            storeName: "xiamentanjia-US",
+            country: "美国",
+            countryCode: "US",
+            msku: "JM-XSL-SP",
+            skuName: "TJ018水陆遥控车",
+            quantity: Number(month.slice(5)),
+            purchaseCost: 0,
+            firstLegCost: 0,
+          }],
+        },
+      };
+    },
+    fetchListingsBySidMskus: async (_adapter, sid, mskus, options) => {
+      fixture.calls.listings.push({ sid, mskus, options });
+      assert.equal(options.includeDeletedListings, true);
+      return [{ sid, seller_sku: "JM-XSL-SP", local_sku: "TJ018", is_delete: 1 }];
+    },
+    fetchProductRecords: async (_adapter, params) => {
+      fixture.calls.products.push(params);
+      return [{
+        sku: "TJ018",
+        cg_price: "48.0000",
+        product_logistics_relation: [{ US_cg_transport_costs: "6.8900", US_currency: "CNY" }],
+      }];
+    },
+  });
+  const service = createInventoryProvisionCostRefreshService(fixture.dependencies);
+
+  await service.refresh({});
+
+  assert.equal(fixture.calls.listings.length, 1);
+  assert.deepEqual(fixture.calls.products, [{ skus: ["TJ018"] }]);
+  fixture.saved.forEach(({ data }) => {
+    assert.equal(data.rows[0].purchaseCost, 48);
+    assert.equal(data.rows[0].firstLegCost, 6.89);
+    assert.equal(data.rows[0].costInternalSku, "TJ018");
+  });
+});
+
 test("cost refresh fails before writing when a completed-month cache is missing", async () => {
   const fixture = createServiceDependencies();
   const { createInventoryProvisionCostRefreshService } = await import("../src/services/inventoryProvisionCostRefreshService.js");
