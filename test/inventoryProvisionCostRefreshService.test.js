@@ -11,6 +11,26 @@ function germanSeller() {
   };
 }
 
+function usSeller() {
+  return {
+    sid: 8708,
+    seller_id: "A-US",
+    name: "xiamentanjia-US",
+    country: "美国",
+    countryCode: "US",
+  };
+}
+
+function caSeller() {
+  return {
+    sid: 8709,
+    seller_id: "A-CA",
+    name: "xiamentanjia-CA",
+    country: "加拿大",
+    countryCode: "CA",
+  };
+}
+
 function historicalMonth(month) {
   const monthNumber = Number(month.slice(5));
   return {
@@ -140,6 +160,7 @@ test("cost refresh reads deleted Listing mappings and country logistics costs fo
     fetchListingsBySidMskus: async (_adapter, sid, mskus, options) => {
       fixture.calls.listings.push({ sid, mskus, options });
       assert.equal(options.includeDeletedListings, true);
+      assert.equal(options.includeUnpairedListings, true);
       return [{ sid, seller_sku: "JM-XSL-SP", local_sku: "TJ018", is_delete: 1 }];
     },
     fetchProductRecords: async (_adapter, params) => {
@@ -161,6 +182,68 @@ test("cost refresh reads deleted Listing mappings and country logistics costs fo
     assert.equal(data.rows[0].purchaseCost, 48);
     assert.equal(data.rows[0].firstLegCost, 6.89);
     assert.equal(data.rows[0].costInternalSku, "TJ018");
+  });
+});
+
+test("cost refresh resolves an unpaired deleted Listing through a unique same-family mapped Listing", async () => {
+  const { createInventoryProvisionCostRefreshService } = await import("../src/services/inventoryProvisionCostRefreshService.js");
+  const fixture = createServiceDependencies({
+    getSellers: async (options) => {
+      fixture.calls.sellers.push(options);
+      return { sellers: [germanSeller(), usSeller(), caSeller()] };
+    },
+    readHistoryCache: async (month) => {
+      fixture.calls.history.push({ month });
+      return {
+        updatedAt: "2026/8/13 18:00:00",
+        data: {
+          ...historicalMonth(month),
+          rows: [{
+            sid: 8708,
+            sellerId: "A-US",
+            storeName: "xiamentanjia-US",
+            country: "美国",
+            countryCode: "US",
+            msku: "JM-FJPPJ",
+            skuName: "",
+            quantity: Number(month.slice(5)),
+            purchaseCost: 0,
+            firstLegCost: 0,
+          }],
+        },
+      };
+    },
+    fetchListingsBySidMskus: async (_adapter, sid, mskus, options) => {
+      fixture.calls.listings.push({ sid, mskus, options });
+      assert.equal(options.includeDeletedListings, true);
+      assert.equal(options.includeUnpairedListings, true);
+      if (sid === 8708 && mskus.includes("JM-FJPPJ")) {
+        return [{ sid, seller_sku: "JM-FJPPJ", local_sku: "", is_delete: 1, status: 0 }];
+      }
+      if (sid === 8709 && mskus.includes("FJPPJ")) {
+        return [{ sid, seller_sku: "CAJM-FJPPJ", local_sku: "TJ015", is_delete: 0, status: 0 }];
+      }
+      return [];
+    },
+    fetchProductRecords: async (_adapter, params) => {
+      fixture.calls.products.push(params);
+      return [{
+        sku: "TJ015",
+        cg_price: "29.5000",
+        product_logistics_relation: [{ US_cg_transport_costs: "6.9600", US_currency: "CNY" }],
+      }];
+    },
+  });
+  const service = createInventoryProvisionCostRefreshService(fixture.dependencies);
+
+  await service.refresh({});
+
+  assert.equal(fixture.calls.listings.some((call) => call.sid === 8709 && call.mskus.includes("FJPPJ")), true);
+  assert.deepEqual(fixture.calls.products, [{ skus: ["TJ015"] }]);
+  fixture.saved.forEach(({ data }) => {
+    assert.equal(data.rows[0].purchaseCost, 29.5);
+    assert.equal(data.rows[0].firstLegCost, 6.96);
+    assert.equal(data.rows[0].costInternalSku, "TJ015");
   });
 });
 

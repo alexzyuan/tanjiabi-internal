@@ -152,6 +152,29 @@ test("fetchLingxingListingsBySidMskus can include deleted listings for historica
   assert.equal(Object.hasOwn(calls[0], "is_delete"), false);
 });
 
+test("fetchLingxingListingsBySidMskus can include unpaired deleted listings", async () => {
+  const calls = [];
+  const adapter = {
+    async fetchListings(params) {
+      calls.push(params);
+      if (!Object.hasOwn(params, "is_pair") && !Object.hasOwn(params, "is_delete")) {
+        return { data: { total: 1, list: [{ seller_sku: "JM-FJPPJ", local_sku: "", is_delete: 1, is_pair: 0 }] } };
+      }
+      return { data: { total: 0, list: [] } };
+    },
+  };
+
+  const records = await fetchLingxingListingsBySidMskus(adapter, 8708, ["JM-FJPPJ"], {
+    includeDeletedListings: true,
+    includeUnpairedListings: true,
+    sidVariants: [{ sid: 8708 }],
+  });
+
+  assert.deepEqual(records, [{ seller_sku: "JM-FJPPJ", local_sku: "", is_delete: 1, is_pair: 0 }]);
+  assert.equal(Object.hasOwn(calls[0], "is_pair"), false);
+  assert.equal(Object.hasOwn(calls[0], "is_delete"), false);
+});
+
 test("fetchLingxingProductRecords uses local product fallback and strict errors", async () => {
   const calls = [];
   const adapter = {
