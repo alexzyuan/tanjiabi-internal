@@ -96,6 +96,7 @@ export async function fetchLingxingListingsBySidMskus(adapter, sid, mskus = [], 
   metrics = null,
   includeDeletedListings = false,
   includeUnpairedListings = false,
+  exactOnly = false,
 } = {}) {
   const records = [];
   for (const batch of chunkArray(uniqueText(mskus), batchSize)) {
@@ -111,7 +112,7 @@ export async function fetchLingxingListingsBySidMskus(adapter, sid, mskus = [], 
     for (const variant of sidVariants) {
       try {
         batchRecords = await fetchLingxingListingRecords(adapter, { ...baseParams, ...variant }, { normalize, metrics });
-        if (!batchRecords.length) {
+        if (!batchRecords.length && !exactOnly) {
           batchRecords = await fetchLingxingListingRecords(adapter, { ...baseParams, exact_search: 0, ...variant }, { normalize, metrics });
         }
         if (batchRecords.length) break;
@@ -120,7 +121,7 @@ export async function fetchLingxingListingsBySidMskus(adapter, sid, mskus = [], 
         batchRecords = [];
       }
     }
-    if (!batchRecords.length && batch.length > 1) {
+    if (!batchRecords.length && !exactOnly && batch.length > 1) {
       for (const msku of batch) {
         const singleParams = { ...baseParams, search_value: [msku], exact_search: 1 };
         for (const variant of sidVariants) {

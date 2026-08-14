@@ -185,7 +185,7 @@ test("cost refresh reads deleted Listing mappings and country logistics costs fo
   });
 });
 
-test("cost refresh resolves an unpaired deleted Listing through a unique same-family mapped Listing", async () => {
+test("cost refresh only matches exact MSKUs present in inventory history", async () => {
   const { createInventoryProvisionCostRefreshService } = await import("../src/services/inventoryProvisionCostRefreshService.js");
   const fixture = createServiceDependencies({
     getSellers: async (options) => {
@@ -217,11 +217,10 @@ test("cost refresh resolves an unpaired deleted Listing through a unique same-fa
       fixture.calls.listings.push({ sid, mskus, options });
       assert.equal(options.includeDeletedListings, true);
       assert.equal(options.includeUnpairedListings, true);
+      assert.equal(options.exactOnly, true);
+      assert.deepEqual(options.sidVariants, [{ sid }]);
       if (sid === 8708 && mskus.includes("JM-FJPPJ")) {
-        return [{ sid, seller_sku: "JM-FJPPJ", local_sku: "", is_delete: 1, status: 0 }];
-      }
-      if (sid === 8709 && mskus.includes("FJPPJ")) {
-        return [{ sid, seller_sku: "CAJM-FJPPJ", local_sku: "TJ015", is_delete: 0, status: 0 }];
+        return [{ sid, seller_sku: "JM-FJPPJ", local_sku: "TJ015", is_delete: 1, status: 0 }];
       }
       return [];
     },
@@ -238,13 +237,38 @@ test("cost refresh resolves an unpaired deleted Listing through a unique same-fa
 
   await service.refresh({});
 
-  assert.equal(fixture.calls.listings.some((call) => call.sid === 8709 && call.mskus.includes("FJPPJ")), true);
+  assert.deepEqual(fixture.calls.listings.map((call) => ({ sid: call.sid, mskus: call.mskus })), [
+    { sid: 8708, mskus: ["JM-FJPPJ"] },
+  ]);
   assert.deepEqual(fixture.calls.products, [{ skus: ["TJ015"] }]);
   fixture.saved.forEach(({ data }) => {
     assert.equal(data.rows[0].purchaseCost, 29.5);
     assert.equal(data.rows[0].firstLegCost, 6.96);
     assert.equal(data.rows[0].costInternalSku, "TJ015");
   });
+});
+
+test("cost refresh joins an in-flight annual refresh instead of issuing duplicate Listing requests", async () => {
+  const { createInventoryProvisionCostRefreshService } = await import("../src/services/inventoryProvisionCostRefreshService.js");
+  let releaseHistory;
+  const historyGate = new Promise((resolve) => {
+    releaseHistory = resolve;
+  });
+  const fixture = createServiceDependencies({
+    readHistoryCache: async (month) => {
+      await historyGate;
+      fixture.calls.history.push({ month });
+      return { updatedAt: "2026/8/13 18:00:00", data: historicalMonth(month) };
+    },
+  });
+  const service = createInventoryProvisionCostRefreshService(fixture.dependencies);
+
+  const first = service.refresh({});
+  const second = service.refresh({});
+  assert.strictEqual(first, second);
+  releaseHistory();
+  await Promise.all([first, second]);
+  assert.equal(fixture.calls.listings.length, 1);
 });
 
 test("cost refresh fails before writing when a completed-month cache is missing", async () => {

@@ -98,19 +98,6 @@ function listingInternalSku(record) {
   return String(record?.local_sku || record?.localSku || record?.sku || record?.product_sku || "").trim();
 }
 
-function mskuFamilyTerm(value) {
-  const text = String(value || "").trim().toUpperCase();
-  const hyphenIndex = text.indexOf("-");
-  if (hyphenIndex < 0 || hyphenIndex >= text.length - 1) return "";
-  return text.slice(hyphenIndex + 1);
-}
-
-function isSameMskuFamily(value, familyTerm) {
-  const term = String(familyTerm || "").trim().toUpperCase();
-  if (!term) return false;
-  return mskuFamilyTerm(value) === term;
-}
-
 function productSku(record) {
   return String(record?.sku || record?.local_sku || record?.localSku || record?.product_sku || "").trim();
 }
@@ -121,10 +108,6 @@ function inventoryIdentity(row) {
 
 function diagnosticRow(row, internalSku = "") {
   return `店铺 ${row.storeName || "-"}（SID ${row.sid || "-"}）MSKU ${row.msku || "-"}${internalSku ? `，内部 SKU ${internalSku}` : ""}`;
-}
-
-function diagnosticListing(record, internalSku = "") {
-  return `SID ${record?.sid || "-"} MSKU ${listingMsku(record) || "-"}${internalSku ? ` 内部 SKU ${internalSku}` : ""}`;
 }
 
 function refreshError(message, statusCode) {
@@ -164,7 +147,7 @@ export function createInventoryProvisionCostRefreshService({
   saveHistoryCache = saveInventoryProvisionHistoryCache,
   logger = console,
 } = {}) {
-  async function refresh() {
+  async function executeRefresh() {
     const operationId = `inventory-provision-cost-refresh-${randomUUID()}`;
     let year = "";
     let months = [];
@@ -237,6 +220,8 @@ export function createInventoryProvisionCostRefreshService({
           metrics: lookupMetrics,
           includeDeletedListings: true,
           includeUnpairedListings: true,
+          exactOnly: true,
+          sidVariants: [{ sid }],
         });
         listingRecords.forEach((record) => {
           const msku = listingMsku(record);
@@ -247,56 +232,13 @@ export function createInventoryProvisionCostRefreshService({
 
       const internalSkuByIdentity = new Map();
       const internalSkuSourceByIdentity = new Map();
-      const missingInternalSkuRows = [];
       rowsByIdentity.forEach((row, identity) => {
         const listing = listingByIdentity.get(identity);
         const internalSku = listingInternalSku(listing);
-        if (internalSku) {
-          internalSkuByIdentity.set(identity, internalSku);
-          internalSkuSourceByIdentity.set(identity, "lingxing-listing");
-        } else {
-          missingInternalSkuRows.push({ identity, row });
-        }
+        if (!internalSku) throw refreshError(`Listing 未返回内部 SKU：${diagnosticRow(row)}。`, 422);
+        internalSkuByIdentity.set(identity, internalSku);
+        internalSkuSourceByIdentity.set(identity, "lingxing-listing");
       });
-      if (missingInternalSkuRows.length) {
-        const families = uniqueText(missingInternalSkuRows.map(({ row }) => mskuFamilyTerm(row.msku)));
-        const candidatesByFamily = new Map(families.map((family) => [family, new Map()]));
-        for (const seller of sellers) {
-          const sellerSid = Number(seller.sid || 0);
-          if (!sellerSid) continue;
-          for (const familyBatch of chunk(families, 50)) {
-            const candidateRecords = await fetchListingsBySidMskus(adapter, sellerSid, familyBatch, {
-              strict: false,
-              metrics: lookupMetrics,
-              includeDeletedListings: true,
-              includeUnpairedListings: true,
-            });
-            candidateRecords.forEach((record) => {
-              const msku = listingMsku(record);
-              const internalSku = listingInternalSku(record);
-              const family = mskuFamilyTerm(msku);
-              if (!internalSku || !candidatesByFamily.has(family) || !isSameMskuFamily(msku, family)) return;
-              candidatesByFamily.get(family).set(normalizeKey(internalSku), { ...record, sid: sellerSid, internalSku });
-            });
-          }
-        }
-        missingInternalSkuRows.forEach(({ identity, row }) => {
-          const family = mskuFamilyTerm(row.msku);
-          const candidates = family ? [...(candidatesByFamily.get(family)?.values() || [])] : [];
-          if (candidates.length === 1) {
-            internalSkuByIdentity.set(identity, candidates[0].internalSku);
-            internalSkuSourceByIdentity.set(identity, `lingxing-listing-same-family:${listingMsku(candidates[0])}`);
-            return;
-          }
-          if (candidates.length > 1) {
-            throw refreshError(
-              `Listing 未返回内部 SKU，且同基础 MSKU 有多个内部 SKU 候选：${diagnosticRow(row)}；候选 ${candidates.map((candidate) => diagnosticListing(candidate, candidate.internalSku)).join("，")}。`,
-              422,
-            );
-          }
-          throw refreshError(`Listing 未返回内部 SKU：${diagnosticRow(row)}。`, 422);
-        });
-      }
 
       stage = "product-lookup";
       const productStartedAt = Date.now();
@@ -435,6 +377,19 @@ export function createInventoryProvisionCostRefreshService({
       });
       throw error;
     }
+  }
+
+  let refreshInFlight = null;
+  function refresh() {
+    if (refreshInFlight) {
+      logger.info?.("[inventory-provision-cost-refresh] join in-flight refresh");
+      return refreshInFlight;
+    }
+    const operation = executeRefresh();
+    refreshInFlight = operation.finally(() => {
+      refreshInFlight = null;
+    });
+    return refreshInFlight;
   }
 
   return { refresh };

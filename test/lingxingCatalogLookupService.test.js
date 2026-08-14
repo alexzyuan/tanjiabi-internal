@@ -175,6 +175,29 @@ test("fetchLingxingListingsBySidMskus can include unpaired deleted listings", as
   assert.equal(Object.hasOwn(calls[0], "is_delete"), false);
 });
 
+test("fetchLingxingListingsBySidMskus can restrict a lookup to exact MSKUs", async () => {
+  const calls = [];
+  const adapter = {
+    async fetchListings(params) {
+      calls.push(params);
+      if (params.exact_search === 0) {
+        return { data: { total: 1, list: [{ seller_sku: "FJPPJ-RELATED", local_sku: "TJ999" }] } };
+      }
+      return { data: { total: 0, list: [] } };
+    },
+  };
+
+  const records = await fetchLingxingListingsBySidMskus(adapter, 8708, ["JM-FJPPJ"], {
+    exactOnly: true,
+    includeDeletedListings: true,
+    includeUnpairedListings: true,
+    sidVariants: [{ sid: 8708 }],
+  });
+
+  assert.deepEqual(records, []);
+  assert.deepEqual(calls.map((call) => call.exact_search), [1]);
+});
+
 test("fetchLingxingProductRecords uses local product fallback and strict errors", async () => {
   const calls = [];
   const adapter = {
