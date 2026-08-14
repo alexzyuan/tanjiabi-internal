@@ -248,6 +248,130 @@ test("cost refresh only matches exact MSKUs present in inventory history", async
   });
 });
 
+test("cost refresh skips deleted listings without local SKU and reports pairing warnings", async () => {
+  const { createInventoryProvisionCostRefreshService } = await import("../src/services/inventoryProvisionCostRefreshService.js");
+  const fixture = createServiceDependencies({
+    getSellers: async (options) => {
+      fixture.calls.sellers.push(options);
+      return { sellers: [germanSeller(), usSeller()] };
+    },
+    readHistoryCache: async (month) => {
+      fixture.calls.history.push({ month });
+      return {
+        updatedAt: "2026/8/13 18:00:00",
+        data: {
+          ...historicalMonth(month),
+          rows: [
+            ...historicalMonth(month).rows,
+            {
+              sid: 8708,
+              sellerId: "A-US",
+              storeName: "xiamentanjia-US",
+              country: "美国",
+              countryCode: "US",
+              msku: "JM-FJPPJ",
+              quantity: 2,
+              purchaseCost: 7,
+              firstLegCost: 3,
+            },
+          ],
+        },
+      };
+    },
+    fetchListingsBySidMskus: async (_adapter, sid, mskus, options) => {
+      fixture.calls.listings.push({ sid, mskus, options });
+      if (sid === 8708) return [{ sid, seller_sku: "JM-FJPPJ", local_sku: "", is_delete: 1 }];
+      return [{ sid, seller_sku: "JMDE-HJ825A", local_sku: "TJ-DE-001", is_delete: 0 }];
+    },
+  });
+  const service = createInventoryProvisionCostRefreshService(fixture.dependencies);
+
+  const result = await service.refresh({});
+
+  assert.deepEqual(result.skippedRows, [{
+    sid: 8708,
+    storeName: "xiamentanjia-US",
+    msku: "JM-FJPPJ",
+    reason: "deleted-listing-needs-pairing",
+    months: ["2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07"],
+    rowCount: 7,
+  }]);
+  assert.equal(result.updatedRows, 7);
+  assert.equal(result.totalRows, 14);
+  fixture.saved.forEach(({ data }) => {
+    const skipped = data.rows.find((row) => row.msku === "JM-FJPPJ");
+    assert.equal(skipped.purchaseCost, 7);
+    assert.equal(skipped.firstLegCost, 3);
+    assert.equal(skipped.costRefreshStatus, "skipped-needs-listing-pair");
+    assert.match(skipped.costRefreshWarning, /xiamentanjia-US.*JM-FJPPJ.*需要配对/);
+  });
+});
+
+test("cost refresh falls back to the MSKU's country shop and country logistics cost", async () => {
+  const { createInventoryProvisionCostRefreshService } = await import("../src/services/inventoryProvisionCostRefreshService.js");
+  const fixture = createServiceDependencies({
+    getSellers: async (options) => {
+      fixture.calls.sellers.push(options);
+      return { sellers: [germanSeller(), usSeller(), caSeller()] };
+    },
+    readHistoryCache: async (month) => {
+      fixture.calls.history.push({ month });
+      return {
+        updatedAt: "2026/8/13 18:00:00",
+        data: {
+          ...historicalMonth(month),
+          rows: [{
+            sid: 8708,
+            sellerId: "A-US",
+            storeName: "xiamentanjia-US",
+            country: "美国",
+            countryCode: "US",
+            msku: "CAJM-HDPPJ",
+            quantity: 2,
+            purchaseCost: 0,
+            firstLegCost: 0,
+          }],
+        },
+      };
+    },
+    fetchListingsBySidMskus: async (_adapter, sid, mskus, options) => {
+      fixture.calls.listings.push({ sid, mskus, options });
+      if (sid === 8708) return [];
+      return [{ sid, seller_sku: "CAJM-HDPPJ", local_sku: "TJ009", is_delete: 0 }];
+    },
+    fetchProductRecords: async (_adapter, params) => {
+      fixture.calls.products.push(params);
+      return [{
+        sku: "TJ009",
+        cg_price: "36.0000",
+        product_logistics_relation: [{
+          US_cg_transport_costs: "9.9100",
+          CA_cg_transport_costs: "8.6700",
+        }],
+      }];
+    },
+  });
+  const service = createInventoryProvisionCostRefreshService(fixture.dependencies);
+
+  const result = await service.refresh({});
+
+  assert.deepEqual(fixture.calls.listings.map(({ sid, mskus }) => ({ sid, mskus })), [
+    { sid: 8708, mskus: ["CAJM-HDPPJ"] },
+    { sid: 8709, mskus: ["CAJM-HDPPJ"] },
+  ]);
+  assert.deepEqual(fixture.calls.products, [{ skus: ["TJ009"] }]);
+  assert.equal(result.countryFallbackMatches, 1);
+  fixture.saved.forEach(({ data }) => {
+    const row = data.rows[0];
+    assert.equal(row.purchaseCost, 36);
+    assert.equal(row.firstLegCost, 8.67);
+    assert.equal(row.costInternalSku, "TJ009");
+    assert.equal(row.costInternalSkuSource, "lingxing-listing-country-fallback");
+    assert.equal(row.costCountryCode, "CA");
+    assert.equal(row.costFirstLegField, "product_logistics_relation.CA_cg_transport_costs");
+  });
+});
+
 test("cost refresh joins an in-flight annual refresh instead of issuing duplicate Listing requests", async () => {
   const { createInventoryProvisionCostRefreshService } = await import("../src/services/inventoryProvisionCostRefreshService.js");
   let releaseHistory;

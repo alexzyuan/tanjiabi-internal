@@ -102,6 +102,37 @@ test("inventory provision cost refresh confirms the annual scope, posts no month
   assert.match(statuses.at(-1)[1], /成本缓存刷新时间：2026\/8\/14 10:00:00/);
 });
 
+test("inventory provision cost refresh reports skipped deleted Listing pairings", async () => {
+  const elements = new Map([
+    ["#inventory-provision-date", { value: "2026-05" }],
+    ["#inventory-provision-refresh-costs", { disabled: false }],
+  ]);
+  const statuses = [];
+  const { feature } = createFeature({
+    root: { querySelector: (selector) => elements.get(selector) || null },
+    fieldValue: (selector) => elements.get(selector)?.value || "",
+    confirmImpl: () => true,
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        refresh: {
+          year: "2026",
+          refreshedAt: "2026/8/14 10:00:00",
+          months: [{ month: "2026-01", updatedRows: 3 }],
+          skippedRows: [{ storeName: "xiamentanjia-US", msku: "JM-FJPPJ" }],
+        },
+      }),
+    }),
+    loadDashboardSection: async () => {},
+    setText: (selector, value) => statuses.push([selector, value]),
+  });
+
+  await feature.refreshInventoryProvisionCosts();
+
+  assert.match(statuses.at(-1)[1], /xiamentanjia-US.*JM-FJPPJ.*需要配对/);
+});
+
 test("inventory provision cost refresh preserves the rendered table when the API fails", async () => {
   const table = { innerHTML: "existing rows" };
   const elements = new Map([
@@ -175,6 +206,9 @@ test("inventory provision historical note labels the cost cache refresh time", (
       historicalMode: true,
       snapshotAvailable: true,
       costRefreshedAt: "2026/8/13 10:00:00",
+      costRefreshSummary: {
+        warnings: ["店铺 xiamentanjia-US（SID 8708）MSKU JM-FJPPJ 需要配对"],
+      },
     },
     filters: { countryOptions: [], storeOptions: [], ownerOptions: [] },
     buckets: [],
@@ -186,6 +220,7 @@ test("inventory provision historical note labels the cost cache refresh time", (
   });
 
   assert.match(texts.get("#inventory-provision-date-note"), /成本缓存刷新时间：2026\/8\/13 10:00:00/);
+  assert.match(texts.get("#inventory-provision-status"), /xiamentanjia-US.*JM-FJPPJ.*需要配对/);
 });
 
 test("inventory provision renders MSKU summary rows and expands batch details from the MSKU button", () => {

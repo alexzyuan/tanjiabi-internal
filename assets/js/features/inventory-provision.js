@@ -226,7 +226,14 @@ export function createInventoryProvisionFeature({
     setText("#inventory-age-271-plus-amount", `¥${formatActualMoney(bucketSummaryByKey["271_plus"]?.amount || 0)}`, root);
     setText("#inventory-cost-mode-note", costModeLabel, root);
     setText("#inventory-unit-cost-head", costModeLabel, root);
-    setText("#inventory-provision-status", `${data.meta?.source || "数据源"} · ${data.meta?.date || ""} · ${data.meta?.syncStatus || ""}${data.meta?.reversalStatus ? ` · ${data.meta.reversalStatus}` : ""}`, root);
+    const cachedPairingWarnings = Array.isArray(data.meta?.costRefreshSummary?.warnings)
+      ? data.meta.costRefreshSummary.warnings.filter(Boolean).join("；")
+      : "";
+    setText(
+      "#inventory-provision-status",
+      `${data.meta?.source || "数据源"} · ${data.meta?.date || ""} · ${data.meta?.syncStatus || ""}${data.meta?.reversalStatus ? ` · ${data.meta.reversalStatus}` : ""}${cachedPairingWarnings ? ` · ${cachedPairingWarnings}` : ""}`,
+      root,
+    );
     const availableDates = data.meta?.availableDates || [];
     setText(
       "#inventory-provision-date-note",
@@ -385,7 +392,15 @@ export function createInventoryProvisionFeature({
       const refreshedMonths = refreshedMonthValues.length
         ? `${refreshedMonthValues[0]} 至 ${refreshedMonthValues.at(-1)}`
         : `${refresh.year || "本年度"}已结束月份`;
-      setText("#inventory-provision-status", `成本已刷新：${refreshedMonths} · 更新 ${updatedRows} 条${refresh.refreshedAt ? ` · 成本缓存刷新时间：${refresh.refreshedAt}` : ""}`, root);
+      const pairingWarnings = (refresh.skippedRows || [])
+        .map((row) => `店铺 ${row.storeName || "-"}（SID ${row.sid || "-"}）MSKU ${row.msku || "-"} 需要配对`)
+        .join("；");
+      const pairingWarningText = pairingWarnings ? ` · ${pairingWarnings}` : "";
+      setText(
+        "#inventory-provision-status",
+        `成本已刷新：${refreshedMonths} · 更新 ${updatedRows} 条${refresh.refreshedAt ? ` · 成本缓存刷新时间：${refresh.refreshedAt}` : ""}${pairingWarningText}`,
+        root,
+      );
     } catch (error) {
       setText("#inventory-provision-status", `成本刷新失败：${error.message}`, root);
     } finally {
