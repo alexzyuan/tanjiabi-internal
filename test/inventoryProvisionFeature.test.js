@@ -63,11 +63,15 @@ test("inventory provision cost refresh confirms the annual scope, posts no month
   ]);
   const fetchCalls = [];
   const statuses = [];
+  let confirmation = "";
   let dashboardLoads = 0;
   const { feature } = createFeature({
     root: { querySelector: (selector) => elements.get(selector) || null },
     fieldValue: (selector) => elements.get(selector)?.value || "",
-    confirmImpl: () => true,
+    confirmImpl: (message) => {
+      confirmation = message;
+      return true;
+    },
     fetchImpl: async (...args) => {
       fetchCalls.push(args);
       return {
@@ -88,6 +92,7 @@ test("inventory provision cost refresh confirms the annual scope, posts no month
 
   await feature.refreshInventoryProvisionCosts();
 
+  assert.equal(confirmation, "将使用领星产品管理当前采购成本和单位头程成本，刷新本年度所有已结束月份。是否继续？");
   assert.deepEqual(fetchCalls, [[
     "/api/dashboard/inventory-provision/refresh-costs",
     { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({}) },
@@ -95,6 +100,34 @@ test("inventory provision cost refresh confirms the annual scope, posts no month
   assert.equal(dashboardLoads, 1);
   assert.match(statuses.at(-1)[1], /2026-01.*2026-07.*3/);
   assert.match(statuses.at(-1)[1], /成本缓存刷新时间：2026\/8\/14 10:00:00/);
+});
+
+test("inventory provision cost refresh preserves the rendered table when the API fails", async () => {
+  const table = { innerHTML: "existing rows" };
+  const elements = new Map([
+    ["#inventory-provision-date", { value: "2026-08" }],
+    ["#inventory-provision-refresh-costs", { disabled: false }],
+    ["#inventory-detail-table", table],
+  ]);
+  const statuses = [];
+  let dashboardLoads = 0;
+  const { feature } = createFeature({
+    root: { querySelector: (selector) => elements.get(selector) || null },
+    confirmImpl: () => true,
+    fetchImpl: async () => ({
+      ok: false,
+      status: 502,
+      json: async () => ({ error: "ERP Listing 查询失败" }),
+    }),
+    loadDashboardSection: async () => { dashboardLoads += 1; },
+    setText: (selector, value) => statuses.push([selector, value]),
+  });
+
+  await feature.refreshInventoryProvisionCosts();
+
+  assert.equal(dashboardLoads, 0);
+  assert.equal(table.innerHTML, "existing rows");
+  assert.equal(statuses.at(-1)[1], "成本刷新失败：ERP Listing 查询失败");
 });
 
 test("inventory provision cost refresh remains available when the dashboard selects the current month", async () => {

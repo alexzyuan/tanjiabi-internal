@@ -12,6 +12,7 @@ function germanSeller() {
 }
 
 function historicalMonth(month) {
+  const monthNumber = Number(month.slice(5));
   return {
     rows: [{
       sid: 17307,
@@ -20,9 +21,10 @@ function historicalMonth(month) {
       country: "德国",
       countryCode: "DE",
       msku: "JMDE-HJ825A",
-      quantity: 3,
-      cohortMonth: "2026-02",
-      ageDays: 120,
+      quantity: monthNumber,
+      cohortMonth: `2025-${String(monthNumber).padStart(2, "0")}`,
+      ageDays: monthNumber * 10,
+      listingOwner: `owner-${month}`,
       purchaseCost: 0,
       firstLegCost: 0,
     }],
@@ -90,9 +92,14 @@ test("cost refresh updates every completed month from existing caches and reuses
   assert.deepEqual(fixture.saved.map(({ month }) => month), [
     "2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07",
   ]);
-  fixture.saved.forEach(({ data }) => {
+  fixture.saved.forEach(({ month, data }) => {
+    const monthNumber = Number(month.slice(5));
     assert.equal(data.rows[0].purchaseCost, 12.5);
     assert.equal(data.rows[0].firstLegCost, 3.2);
+    assert.equal(data.rows[0].quantity, monthNumber);
+    assert.equal(data.rows[0].cohortMonth, `2025-${String(monthNumber).padStart(2, "0")}`);
+    assert.equal(data.rows[0].ageDays, monthNumber * 10);
+    assert.equal(data.rows[0].listingOwner, `owner-${month}`);
     assert.equal(data.costSource, "lingxing-product-management");
     assert.equal(data.costRefreshedAt, "2026/8/14 10:00:00");
     assert.equal(data.costRefreshYear, "2026");
@@ -115,7 +122,10 @@ test("cost refresh fails before writing when a completed-month cache is missing"
   };
   const service = createInventoryProvisionCostRefreshService(fixture.dependencies);
 
-  await assert.rejects(() => service.refresh({}), /库存计提历史缓存缺失：2026-04/);
+  await assert.rejects(
+    () => service.refresh({}),
+    (error) => error.statusCode === 409 && /库存计提历史缓存缺失：2026-04/.test(error.message),
+  );
   assert.equal(fixture.saved.length, 0);
   assert.equal(fixture.calls.listings.length, 0);
 });
@@ -171,6 +181,39 @@ test("cost refresh failure exposes its stage and logs annual lookup counts", asy
     stageDurations: failures[0][1].stageDurations,
     error: "产品管理缺少单位头程成本：店铺 tanjia-eu-DE（SID 17307）MSKU JMDE-HJ825A，内部 SKU TJ-DE-001。",
   });
+  assert.equal(typeof failures[0][1].stageDurations.costValidationMs, "number");
+});
+
+test("cost refresh classifies Listing dependency failures as upstream errors", async () => {
+  const { createInventoryProvisionCostRefreshService } = await import("../src/services/inventoryProvisionCostRefreshService.js");
+  const fixture = createServiceDependencies({
+    fetchListingsBySidMskus: async () => { throw new Error("listing unavailable"); },
+  });
+  const service = createInventoryProvisionCostRefreshService(fixture.dependencies);
+
+  await assert.rejects(
+    () => service.refresh({}),
+    (error) => error.statusCode === 502 && error.details?.stage === "listing-lookup",
+  );
+  assert.equal(fixture.saved.length, 0);
+});
+
+test("cost refresh reports partial atomic cache writes as server failures", async () => {
+  const { createInventoryProvisionCostRefreshService } = await import("../src/services/inventoryProvisionCostRefreshService.js");
+  const fixture = createServiceDependencies();
+  fixture.dependencies.saveHistoryCache = async (month, data) => {
+    if (month === "2026-03") throw new Error("disk unavailable");
+    fixture.saved.push({ month, data });
+  };
+  const service = createInventoryProvisionCostRefreshService(fixture.dependencies);
+
+  await assert.rejects(
+    () => service.refresh({}),
+    (error) => error.statusCode === 500
+      && error.details?.stage === "cache-write"
+      && JSON.stringify(error.details.writtenMonths) === JSON.stringify(["2026-01", "2026-02"])
+      && JSON.stringify(error.details.pendingMonths) === JSON.stringify(["2026-03", "2026-04", "2026-05", "2026-06", "2026-07"]),
+  );
 });
 
 test("cost refresh rejects a fresh seller directory that omits the required German shop", async () => {

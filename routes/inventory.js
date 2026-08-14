@@ -60,7 +60,7 @@ export function createInventoryRoutes(deps = {}) {
       method: "POST",
       path: "/api/dashboard/inventory-provision/refresh-costs",
       auth: "finance",
-      errorStatusCode: 400,
+      errorStatusCode: 500,
       handler: async ({ req, res }) => {
         await readJsonBody(req);
         const refresh = await refreshInventoryProvisionCosts({});

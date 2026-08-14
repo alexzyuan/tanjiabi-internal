@@ -131,6 +131,7 @@ test("inventory provision cost refresh route is finance-protected and invokes an
 
   assert.equal(route?.method, "POST");
   assert.equal(route?.auth, "finance");
+  assert.equal(route?.errorStatusCode, 500);
   await route.handler({ req: {}, res: {} });
   assert.deepEqual(received, {});
   assert.deepEqual(payload, { ok: true, refresh: { year: "2026", months: [{ month: "2026-01", updatedRows: 1 }], refreshedAt: "2026/8/14 10:00:00" } });

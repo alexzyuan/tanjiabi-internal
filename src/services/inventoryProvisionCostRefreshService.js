@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { filterCoreSellers, getLingxingAdapter } from "../adapters/lingxingAdapter.js";
 import {
   readInventoryProvisionHistoryCache,
@@ -9,6 +10,15 @@ import { getSharedSellers } from "./sharedDataService.js";
 
 const REQUIRED_GERMAN_SID = 17307;
 const REQUIRED_GERMAN_STORE = "tanjia-eu-DE";
+const STAGE_DURATION_KEYS = {
+  initialize: "initializeMs",
+  "seller-directory": "sellerDirectoryMs",
+  "history-cache-read": "historyCacheReadMs",
+  "listing-lookup": "listingLookupMs",
+  "product-lookup": "productLookupMs",
+  "cost-validation": "costValidationMs",
+  "cache-write": "cacheWriteMs",
+};
 const FIRST_LEG_COST_KEYS = [
   "unit_first_leg_fee",
   "first_leg_cost",
@@ -81,12 +91,25 @@ function diagnosticRow(row, internalSku = "") {
   return `店铺 ${row.storeName || "-"}（SID ${row.sid || "-"}）MSKU ${row.msku || "-"}${internalSku ? `，内部 SKU ${internalSku}` : ""}`;
 }
 
+function refreshError(message, statusCode) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
+
+function defaultStatusCodeForStage(stage) {
+  if (["seller-directory", "listing-lookup", "product-lookup"].includes(stage)) return 502;
+  if (["history-cache-read", "cache-write"].includes(stage)) return 500;
+  if (stage === "cost-validation") return 422;
+  return 400;
+}
+
 function currentYearCompletedMonths(todayText) {
   const today = String(todayText() || "");
   const match = today.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   const monthNumber = Number(match?.[2]);
-  if (!match || monthNumber < 1 || monthNumber > 12) throw new Error("成本刷新日期必须是 YYYY-MM-DD 格式。");
-  if (monthNumber === 1) throw new Error("本年度暂无已结束月份可刷新。");
+  if (!match || monthNumber < 1 || monthNumber > 12) throw refreshError("成本刷新日期必须是 YYYY-MM-DD 格式。", 400);
+  if (monthNumber === 1) throw refreshError("本年度暂无已结束月份可刷新。", 400);
   const year = match[1];
   return {
     year,
@@ -106,7 +129,7 @@ export function createInventoryProvisionCostRefreshService({
   logger = console,
 } = {}) {
   async function refresh() {
-    const operationId = `inventory-provision-cost-refresh-${Date.now()}`;
+    const operationId = `inventory-provision-cost-refresh-${randomUUID()}`;
     let year = "";
     let months = [];
     let stage = "initialize";
@@ -114,6 +137,8 @@ export function createInventoryProvisionCostRefreshService({
     let listingRequestCount = 0;
     let productRequestCount = 0;
     const stageDurations = {};
+    const operationStartedAt = Date.now();
+    let stageStartedAt = operationStartedAt;
     const lookupMetrics = {
       increment(name) {
         if (name === "lingxingListingRequests") listingRequestCount += 1;
@@ -122,7 +147,6 @@ export function createInventoryProvisionCostRefreshService({
         }
       },
     };
-    const operationStartedAt = Date.now();
     const markStage = (name, startedAt) => {
       stageDurations[name] = Date.now() - startedAt;
     };
@@ -132,19 +156,21 @@ export function createInventoryProvisionCostRefreshService({
 
       stage = "seller-directory";
       const sellerStartedAt = Date.now();
+      stageStartedAt = sellerStartedAt;
       const directory = await getSellers({ forceRefresh: true });
       const sellers = filterCoreSellers(directory?.sellers || []);
       markStage("sellerDirectoryMs", sellerStartedAt);
       if (!sellers.some((seller) => Number(seller.sid) === REQUIRED_GERMAN_SID)) {
-        throw new Error(`运行时店铺目录缺少德国店铺 ${REQUIRED_GERMAN_STORE}（SID ${REQUIRED_GERMAN_SID}）。`);
+        throw refreshError(`运行时店铺目录缺少德国店铺 ${REQUIRED_GERMAN_STORE}（SID ${REQUIRED_GERMAN_SID}）。`, 422);
       }
 
       stage = "history-cache-read";
       const cacheStartedAt = Date.now();
+      stageStartedAt = cacheStartedAt;
       const historicalData = await Promise.all(months.map(async (month) => {
         const cached = await readHistoryCache(month);
         if (!cached?.data || !Array.isArray(cached.data.rows) || !cached.data.rows.length) {
-          throw new Error(`库存计提历史缓存缺失：${month}`);
+          throw refreshError(`库存计提历史缓存缺失：${month}`, 409);
         }
         return { month, data: cached.data, cacheUpdatedAt: cached.updatedAt || "" };
       }));
@@ -155,12 +181,13 @@ export function createInventoryProvisionCostRefreshService({
       const rowsByIdentity = new Map();
       rows.forEach((row) => {
         const sid = Number(row.sid || 0);
-        if (!sid || !row.msku) throw new Error(`历史库存缺少成本匹配标识：${diagnosticRow(row)}。`);
+        if (!sid || !row.msku) throw refreshError(`历史库存缺少成本匹配标识：${diagnosticRow(row)}。`, 422);
         rowsByIdentity.set(inventoryIdentity(row), row);
       });
 
       stage = "listing-lookup";
       const listingStartedAt = Date.now();
+      stageStartedAt = listingStartedAt;
       const listingByIdentity = new Map();
       const mskusBySid = new Map();
       rowsByIdentity.forEach((row) => {
@@ -184,12 +211,13 @@ export function createInventoryProvisionCostRefreshService({
       rowsByIdentity.forEach((row, identity) => {
         const listing = listingByIdentity.get(identity);
         const internalSku = listingInternalSku(listing);
-        if (!internalSku) throw new Error(`Listing 未返回内部 SKU：${diagnosticRow(row)}。`);
+        if (!internalSku) throw refreshError(`Listing 未返回内部 SKU：${diagnosticRow(row)}。`, 422);
         internalSkuByIdentity.set(identity, internalSku);
       });
 
       stage = "product-lookup";
       const productStartedAt = Date.now();
+      stageStartedAt = productStartedAt;
       const productBySku = new Map();
       const productSkus = uniqueText([...internalSkuByIdentity.values()]);
       for (const skus of chunk(productSkus, 80)) {
@@ -206,18 +234,18 @@ export function createInventoryProvisionCostRefreshService({
 
       stage = "cost-validation";
       const validationStartedAt = Date.now();
+      stageStartedAt = validationStartedAt;
       const refreshedAt = nowText();
-      const refreshedByIdentity = new Map();
+      const refreshedCostsByIdentity = new Map();
       rowsByIdentity.forEach((row, identity) => {
         const internalSku = internalSkuByIdentity.get(identity);
         const product = productBySku.get(normalizeKey(internalSku));
-        if (!product) throw new Error(`产品管理未返回产品：${diagnosticRow(row, internalSku)}。`);
+        if (!product) throw refreshError(`产品管理未返回产品：${diagnosticRow(row, internalSku)}。`, 422);
         const purchase = readCost(product, PURCHASE_COST_KEYS);
-        if (!purchase) throw new Error(`产品管理缺少采购成本：${diagnosticRow(row, internalSku)}。`);
+        if (!purchase) throw refreshError(`产品管理缺少采购成本：${diagnosticRow(row, internalSku)}。`, 422);
         const firstLeg = readCost(product, FIRST_LEG_COST_KEYS);
-        if (!firstLeg) throw new Error(`产品管理缺少单位头程成本：${diagnosticRow(row, internalSku)}。`);
-        refreshedByIdentity.set(identity, {
-          ...row,
+        if (!firstLeg) throw refreshError(`产品管理缺少单位头程成本：${diagnosticRow(row, internalSku)}。`, 422);
+        refreshedCostsByIdentity.set(identity, {
           purchaseCost: purchase.value,
           firstLegCost: firstLeg.value,
           costSource: "lingxing-product-management",
@@ -228,7 +256,10 @@ export function createInventoryProvisionCostRefreshService({
       markStage("costValidationMs", validationStartedAt);
 
       const prepared = historicalData.map(({ month, data }) => {
-        const nextRows = data.rows.map((row) => refreshedByIdentity.get(inventoryIdentity(row)) || row);
+        const nextRows = data.rows.map((row) => ({
+          ...row,
+          ...refreshedCostsByIdentity.get(inventoryIdentity(row)),
+        }));
         return {
           month,
           data: {
@@ -249,6 +280,7 @@ export function createInventoryProvisionCostRefreshService({
 
       stage = "cache-write";
       const writeStartedAt = Date.now();
+      stageStartedAt = writeStartedAt;
       const writtenMonths = [];
       try {
         for (const entry of prepared) {
@@ -294,9 +326,14 @@ export function createInventoryProvisionCostRefreshService({
       });
       return result;
     } catch (error) {
+      const stageDurationKey = STAGE_DURATION_KEYS[stage];
+      if (stageDurationKey && !Object.hasOwn(stageDurations, stageDurationKey)) {
+        stageDurations[stageDurationKey] = Date.now() - stageStartedAt;
+      }
       stageDurations.totalMs = Date.now() - operationStartedAt;
+      if (!Number.isInteger(error.statusCode)) error.statusCode = defaultStatusCodeForStage(stage);
       error.details = {
-        ...(error.details || {}),
+        ...(error.details && typeof error.details === "object" && !Array.isArray(error.details) ? error.details : {}),
         stage,
       };
       logger.error?.("[inventory-provision-cost-refresh] failed", {
