@@ -35,7 +35,7 @@
 | `/bd/productPerformance/openApi/asinList` | `fetchProductPerformance` | `start_date` / `end_date` | [产品表现](https://apidoc.lingxing.com/docs/Statistics/AsinListNew) |
 | `/erp/sc/routing/data/local_inventory/purchaseOrderList` | `fetchPurchaseOrders` | `start_date` / `end_date` | [查询采购单列表](https://apidoc.lingxing.com/docs/Purchase/PurchaseOrderList) |
 | `/cost/center/ods/summary/query` | `fetchInventoryLedgerSummary` | 日度 `startDate` / `endDate`；月度同样原样传递 | [库存分类账 summary](https://apidoc.lingxing.com/docs/Finance/summaryQuery) |
-| `/cost/center/ods/detail/query` | `fetchInventoryLedgerDetailPage` | `startDate` / `endDate` 为闭区间，库存分类账重建按自然月请求 | [库存分类账 detail](https://apidoc.lingxing.com/docs/Finance/centerOdsDetailQuery) |
+| `/cost/center/ods/detail/query` | `fetchInventoryLedgerDetailPage` | `startDate` / `endDate` 为闭区间；仅用于库存分类账的诊断或核对，不是正式历史重建输入 | [库存分类账 detail](https://apidoc.lingxing.com/docs/Finance/centerOdsDetailQuery) |
 | `/basicOpen/finance/requestFundsPool/purchase/list` | `fetchPayablePurchasePool` | `start_time` / `end_time` / `time_field` | [请款池-货款现结](https://apidoc.lingxing.com/docs/Finance/requestFundsPoolPurchaseList) |
 | `/basicOpen/finance/requestFundsPool/logistics/list` | `fetchPayableFreightPool` | `start_time` / `end_time` / `search_field_time` | [请款池-物流请款](https://apidoc.lingxing.com/docs/Finance/requestFundsPoolLogisticsList) |
 | `/basicOpen/finance/requestFundsPool/customFee/list` | `fetchPayableOtherPool` | `start_time` / `end_time` / `search_field_time` | [请款池-其他应付款](https://apidoc.lingxing.com/docs/Finance/requestFundsPoolCustomFeeList) |
@@ -55,6 +55,7 @@
 | `/basicOpen/salesAnalysis/returnOrder/analysisLists` | `fetchReturnAnalysis` | [退货分析](https://apidoc.lingxing.com/docs/Statistics/ReturnOrderAnalysisLists)；只说明格式和范围 |
 | `/basicOpen/openapi/service/v3/data/mws/reviews` | `fetchReviewV2` | [Review 新接口](https://apidoc.lingxing.com/docs/Service/reviewV2)；只说明格式 |
 | `/bd/sp/api/open/settlement/summary/list` | `fetchSettlementSummary` | [结算汇总](https://apidoc.lingxing.com/docs/Finance/settlementSummaryList)；只说明字段和最长范围 |
+| `/basicOpen/report/create/reportExportTask` | `createReportExportTask` | 库存分类账原始报告导出任务；正式重建使用 `GET_LEDGER_DETAIL_VIEW_DATA` 导出的报告文件，日期按任务协议传递，不以本表的日粒度端点规则推断 |
 
 ## 代码约束
 
