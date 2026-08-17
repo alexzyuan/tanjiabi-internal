@@ -52,7 +52,7 @@
 
 每个成功 manifest 至少包含：`source=lingxing-exported-inventory-ledger-report`、`reportType`、`sellerId`、`marketplaceId`、`region`、时间范围、`taskId`、`reportDocumentId`、`compressionAlgorithm`、`rawFile`、`sha256`、`byteCount`、`fetchedAt`、`parsedRowCount`、`runId`。不得写入 URL 查询参数、令牌或完整外部响应。
 
-`force` 会重新导出并重新归档；非 force 只复用符合上述 source、文件存在且 SHA-256 仍一致的成功 manifest。旧 JSON-API manifest 不能作为可复用输入，且必须明确提示需要导出文件后才能全量重建。
+`force` 会重新导出并重新归档；非 force 只复用符合上述 source、任务范围、文件 SHA-256 的成功 manifest。旧 JSON-API manifest 不能作为可复用输入，且必须明确提示需要导出文件后才能全量重建。完整 FIFO 的开账也只能来自导出报告中的分类账事件；不调用 FBA 月末库存 JSON API 补数。
 
 ## 验证与启用顺序
 
@@ -60,4 +60,3 @@
 2. 以 `dryRun` 实际请求一个小范围的领星导出任务，确认得到真实可解析文件；dry-run 不归档、不更新历史缓存。
 3. 验证文件 manifest 和解析元数据后，打包部署。
 4. 部署后运行一次受控全量重建；这一步会写历史计提缓存，须在当次获得明确授权，且不触发成本刷新。
-

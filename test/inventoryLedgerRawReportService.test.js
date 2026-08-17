@@ -82,13 +82,7 @@ function createExportReportAdapter({ statuses = ["DONE"], omitDoneUrl = false } 
     },
     async fetchAllFbaInventoryHistory(params) {
       calls.snapshots.push(params);
-      return [{
-        msku: "MSKU-1",
-        seller_id: "A-SELLER",
-        sid: 8708,
-        country_code: "US",
-        child_data: [{ disposition: "sellable", end_count: 5 }],
-      }];
+      throw new Error("formal raw rebuild must not call the FBA inventory JSON API");
     },
   };
 }
@@ -119,14 +113,13 @@ test("raw rebuild exports, downloads, archives, parses original reports, and ato
   assert.equal(adapter.calls.query.length, 39);
   assert.equal(adapter.calls.download.length, 13);
   assert.equal(adapter.calls.detailApi.length, 0);
-  assert.deepEqual(adapter.calls.snapshots, [{ start_date: "2024-09", end_date: "2024-09", seller_id: ["A-SELLER"] }]);
-  assert.equal(result.reportCount, 14);
-  assert.equal(result.parsedRowCount, 14);
+  assert.deepEqual(adapter.calls.snapshots, []);
+  assert.equal(result.reportCount, 13);
+  assert.equal(result.parsedRowCount, 13);
   assert.equal(store.commits.length, 1);
   assert.deepEqual(result.committedMonths, ["2025-10"]);
   assert.equal(store.manifests.get("2024-10|A-SELLER|na|ATVPD").source, "lingxing-exported-inventory-ledger-report");
   assert.equal(store.manifests.get("2024-10|A-SELLER|na|ATVPD").extension, "tsv");
-  assert.equal(store.manifests.get("2024-09|A-SELLER|na|ATVPD|opening-snapshot").source, "lingxing-fba-monthly-inventory-snapshot");
 });
 
 test("raw rebuild reuses only exported-report manifests and refreshes old JSON API manifests", async () => {
@@ -135,14 +128,28 @@ test("raw rebuild reuses only exported-report manifests and refreshes old JSON A
   await runInventoryLedgerRawRebuild(serviceOptions({ adapter, store }));
   const reused = await runInventoryLedgerRawRebuild(serviceOptions({ adapter, store }));
   assert.equal(adapter.calls.create.length, 13);
-  assert.equal(reused.reusedReportCount, 14);
+  assert.equal(reused.reusedReportCount, 13);
   assert.equal(store.verifyCalls.length, 13);
   store.manifests.get("2024-10|A-SELLER|na|ATVPD").source = "lingxing-inventory-ledger-detail-api";
   await runInventoryLedgerRawRebuild(serviceOptions({ adapter, store }));
   assert.equal(adapter.calls.create.length, 14);
   assert.equal(store.manifests.get("2024-10|A-SELLER|na|ATVPD").source, "lingxing-exported-inventory-ledger-report");
+  assert.match(store.manifests.get("2024-10|A-SELLER|na|ATVPD").runId, /^inventory-ledger-raw-rebuild-/u);
   await runInventoryLedgerRawRebuild(serviceOptions({ adapter, store, force: true }));
   assert.equal(adapter.calls.create.length, 27);
+});
+
+test("raw rebuild rejects an exported report manifest whose scope metadata was altered", async () => {
+  const adapter = createExportReportAdapter();
+  const store = makeStore();
+  await runInventoryLedgerRawRebuild(serviceOptions({ adapter, store }));
+  store.manifests.get("2024-10|A-SELLER|na|ATVPD").marketplaceId = "wrong-marketplace";
+  await assert.rejects(
+    () => runInventoryLedgerRawRebuild(serviceOptions({ adapter, store })),
+    /manifest 与重建范围不一致.*阶段 reuse/u,
+  );
+  assert.equal(adapter.calls.create.length, 13);
+  assert.equal(store.commits.length, 1);
 });
 
 test("raw rebuild renews a completed report URL by report document ID", async () => {
@@ -169,6 +176,15 @@ test("raw rebuild rejects UNKNOWN report task with safe stage, month, seller, an
     return true;
   });
   assert.equal(store.commits.length, 0);
+});
+
+test("raw rebuild records all known report scope in a download failure", async () => {
+  const adapter = createExportReportAdapter();
+  adapter.downloadReportDocument = async () => { throw new Error("库存分类账下载失败：HTTP 504"); };
+  await assert.rejects(
+    () => runInventoryLedgerRawRebuild(serviceOptions({ adapter })),
+    /阶段 download.*月份 2024-10.*店铺 A-SELLER.*任务 task-1/u,
+  );
 });
 
 test("raw rebuild dry run validates exported reports without archiving or replacing history", async () => {

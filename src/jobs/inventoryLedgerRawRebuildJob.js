@@ -38,6 +38,7 @@ export function shouldRunInventoryLedgerRawRebuild({ now = new Date(), state = {
   const clock = shanghaiClock(now);
   if (Number(clock.date.slice(-2)) < 10) return false;
   if (clock.time < validRunAt(runAt)) return false;
+  if (state?.lastAttemptPeriod === priorMonth(now) && state?.lastAttemptDate === clock.date) return false;
   return state?.lastSuccessfulPeriod !== priorMonth(now);
 }
 
@@ -87,8 +88,16 @@ export async function runInventoryLedgerRawRebuildIfNeeded({
           ...latestState,
           lastAttemptPeriod: period,
           lastAttemptAt: new Date().toISOString(),
+          lastAttemptDate: shanghaiClock(now).date,
           lastStatus: "failed",
           lastError: error.message || String(error),
+          lastFailure: {
+            stage: error.stage || "unknown",
+            month: error.month || "",
+            sellerId: error.sellerId || "",
+            taskId: error.taskId || "",
+            taskStatus: error.taskStatus || "",
+          },
           lastResult: { durationMs: Date.now() - startedAt, stage: error.stage || "unknown" },
         });
         logger.error?.("[inventory-ledger-raw-rebuild-job] failed", { period, error: error.message || String(error) });

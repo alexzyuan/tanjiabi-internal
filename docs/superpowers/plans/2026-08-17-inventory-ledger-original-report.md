@@ -49,5 +49,4 @@ Do not modify `inventoryProvisionCostRefreshService`, Listing lookup code, front
 - [ ] Run `node --test test/lingxingAdapter.test.js test/inventoryLedgerRawReportService.test.js test/inventoryLedgerReportParser.test.js test/inventoryLedgerRawReportStore.test.js` and `npm run check`.
 - [ ] Run `git diff --check` and `npm test`.
 - [ ] Commit only the implementation, tests and matching documentation.
-- [ ] After deploy approval, execute one real `dryRun` export range. Do not run the cache-writing full rebuild until the dry-run has returned a parseable original report file and the user separately authorizes writing the history cache.
-
+- [ ] After deploy approval, execute one real `dryRun` export range. Do not call a JSON inventory endpoint for opening inventory and do not run the cache-writing full rebuild until the dry-run has returned a parseable original report file and the user separately authorizes writing the history cache.

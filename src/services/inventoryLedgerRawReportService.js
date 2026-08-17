@@ -32,14 +32,6 @@ function lastDay(month) {
   return String(new Date(year, value, 0).getDate()).padStart(2, "0");
 }
 
-function snapshotScopeKey(scope) {
-  return `${scope.scopeKey}|opening-snapshot`;
-}
-
-function nowText() {
-  return new Date().toLocaleString("zh-CN", { hour12: false });
-}
-
 function regionForSeller(seller) {
   const country = String(seller.countryCode || seller.country || "").trim().toUpperCase();
   if (["US", "CA", "MX", "BR"].includes(country) || /美国|加拿大/u.test(String(seller.country || ""))) return "na";
@@ -75,11 +67,25 @@ function countryCodeForSeller(seller) {
 }
 
 function safeError(error, details = {}) {
-  const result = new Error(error?.message || String(error));
-  result.stage = details.stage || error?.stage || "unknown";
-  result.month = details.month || error?.month || "";
-  result.sellerId = details.sellerId || error?.sellerId || "";
-  result.taskId = details.taskId || error?.taskId || "";
+  const stage = details.stage || error?.stage || "unknown";
+  const month = details.month || error?.month || "";
+  const sellerId = details.sellerId || error?.sellerId || "";
+  const taskId = details.taskId || error?.taskId || "";
+  const taskStatus = details.taskStatus || error?.taskStatus || "";
+  const context = [
+    `阶段 ${stage}`,
+    month ? `月份 ${month}` : "",
+    sellerId ? `店铺 ${sellerId}` : "",
+    taskId ? `任务 ${taskId}` : "",
+    taskStatus ? `状态 ${taskStatus}` : "",
+  ].filter(Boolean).join(" / ");
+  const message = String(error?.message || error || "");
+  const result = new Error(message.includes(`阶段 ${stage}`) ? message : `${message}（${context}）。`);
+  result.stage = stage;
+  result.month = month;
+  result.sellerId = sellerId;
+  result.taskId = taskId;
+  result.taskStatus = taskStatus;
   result.runId = details.runId || error?.runId || "";
   return result;
 }
@@ -95,6 +101,25 @@ function requireTaskId(payload, { month, sellerId }) {
   const taskId = String(payload?.data?.task_id || "").trim();
   if (!taskId) throw new Error(`库存分类账创建导出任务未返回 task_id：${month} / ${sellerId}`);
   return taskId;
+}
+
+function validateReusableReportManifest(manifest, { scope, month }) {
+  const expectedStartDate = `${month}-01`;
+  const expectedEndDate = `${month}-${lastDay(month)}`;
+  const compressionAlgorithm = String(manifest?.compressionAlgorithm || "").trim().toUpperCase();
+  if (manifest?.status !== "success" || manifest?.source !== REPORT_SOURCE
+    || manifest?.reportType !== REPORT_TYPE
+    || manifest?.sellerId !== scope.sellerId
+    || manifest?.marketplaceId !== scope.marketplaceId
+    || manifest?.region !== scope.region
+    || manifest?.startDate !== expectedStartDate
+    || manifest?.endDate !== expectedEndDate
+    || !String(manifest?.taskId || "").trim()
+    || !String(manifest?.reportDocumentId || "").trim()
+    || !["NONE", "GZIP"].includes(compressionAlgorithm)
+    || manifest?.extension !== extensionForCompression(compressionAlgorithm)) {
+    throw new Error(`库存分类账原始报告 manifest 与重建范围不一致：${month} / ${scope.sellerId}。`);
+  }
 }
 
 function baseRowsFromCaches(caches, sellers) {
@@ -159,17 +184,20 @@ async function pollReportTask({ adapter, taskId, scope, month, sleep, pollInterv
     if (["FATAL", "CANCELLED", "UNKNOWN"].includes(status)) {
       const error = new Error(`库存分类账导出失败：${status}（阶段 poll / 月份 ${month} / 店铺 ${scope.sellerId} / 任务 ${taskId}）。`);
       error.taskId = taskId;
+      error.taskStatus = status;
       throw error;
     }
     if (!['IN_QUEUE', 'IN_PROGRESS'].includes(status)) {
       const error = new Error(`库存分类账导出状态无效：${status || "空"}（阶段 poll / 月份 ${month} / 店铺 ${scope.sellerId} / 任务 ${taskId}）。`);
       error.taskId = taskId;
+      error.taskStatus = status || "EMPTY";
       throw error;
     }
     if (attempt < maxPollAttempts) await sleep(pollIntervalMs);
   }
   const error = new Error(`库存分类账导出超时（阶段 poll / 月份 ${month} / 店铺 ${scope.sellerId} / 任务 ${taskId}）。`);
   error.taskId = taskId;
+  error.taskStatus = "TIMEOUT";
   throw error;
 }
 
@@ -178,8 +206,13 @@ async function fetchOrReuseReport({
 }) {
   let manifest = !force && !dryRun ? await store.readManifest(month, scope.scopeKey) : null;
   if (manifest?.status === "success" && manifest.source === REPORT_SOURCE) {
-    const parsed = await parseSavedReport({ store, manifest, scope, month, parser });
-    return { manifest, parsed, reused: true };
+    try {
+      validateReusableReportManifest(manifest, { scope, month });
+      const parsed = await parseSavedReport({ store, manifest, scope, month, parser });
+      return { manifest, parsed, reused: true };
+    } catch (error) {
+      throw safeError(error, { stage: "reuse", month, sellerId: scope.sellerId, taskId: manifest.taskId, runId });
+    }
   }
 
   let stage = "create";
@@ -237,6 +270,7 @@ async function fetchOrReuseReport({
         reportType: REPORT_TYPE,
         taskId,
         reportDocumentId,
+        runId,
         compressionAlgorithm,
         startDate: `${month}-01`,
         endDate: `${month}-${lastDay(month)}`,
@@ -247,107 +281,6 @@ async function fetchOrReuseReport({
     return { manifest, parsed, reused: false };
   } catch (error) {
     throw safeError(error, { stage, month, sellerId: scope.sellerId, taskId, runId });
-  }
-}
-
-function parseSnapshotQuantity(value, sourceRow, scope) {
-  const quantity = Number(value);
-  if (!Number.isFinite(quantity) || quantity < 0) {
-    throw new Error(`库存分类账期初快照数量无效：${scope.seller.name || scope.sellerId} 第 ${sourceRow} 行。`);
-  }
-  return quantity;
-}
-
-function normalizeOpeningSnapshotRecords(sourceRows, { scope, openingMonth }) {
-  if (!Array.isArray(sourceRows)) throw new Error(`库存分类账期初快照 records 必须是数组：${scope.seller.name || scope.sellerId}。`);
-  const rowsByMsku = new Map();
-  sourceRows.forEach((parent, parentIndex) => {
-    const children = Array.isArray(parent?.child_data) && parent.child_data.length ? parent.child_data : [parent];
-    children.forEach((child, childIndex) => {
-      const row = { ...parent, ...child };
-      if (Number(row.sid) !== Number(scope.seller.sid)
-        || String(row.seller_id || "").trim() !== scope.sellerId
-        || String(row.country_code || "").trim().toUpperCase() !== scope.location
-        || String(row.disposition || "").trim().toLowerCase() !== "sellable") return;
-      const sourceRow = parentIndex + 1 + childIndex / 1000;
-      const msku = String(row.msku || "").trim();
-      if (!msku) throw new Error(`库存分类账期初快照 MSKU 为空：${scope.seller.name || scope.sellerId} 第 ${sourceRow} 行。`);
-      const quantity = parseSnapshotQuantity(row.end_count, sourceRow, scope);
-      if (!quantity) return;
-      const current = rowsByMsku.get(msku) || { quantity: 0, title: String(row.local_name || "").trim(), sourceRow };
-      current.quantity += quantity;
-      rowsByMsku.set(msku, current);
-    });
-  });
-  return [...rowsByMsku.entries()].map(([msku, row]) => ({
-    date: `${shiftMonth(openingMonth, 1)}-01`,
-    openingCohortMonth: openingMonth,
-    msku,
-    eventType: "OpeningSnapshot",
-    eventTypeDescription: "FBA monthly ending sellable inventory snapshot",
-    quantity: row.quantity,
-    fulfillmentCenter: "",
-    disposition: "01",
-    referenceId: "",
-    reason: "",
-    title: row.title,
-    sellerId: scope.sellerId,
-    marketplaceId: scope.marketplaceId,
-    scopeKey: snapshotScopeKey(scope),
-    sourceRow: row.sourceRow,
-  }));
-}
-
-async function parseSavedOpeningSnapshot({ store, manifest, scope, openingMonth }) {
-  const bytes = await store.readReport({ month: openingMonth, scopeKey: snapshotScopeKey(scope), extension: manifest.extension });
-  if (!bytes?.length) throw new Error(`库存分类账期初快照原始文件缺失或为空：${openingMonth} / ${scope.sellerId}`);
-  let sourceRows;
-  try {
-    sourceRows = JSON.parse(bytes.toString("utf8"));
-  } catch (error) {
-    throw new Error(`库存分类账期初快照 JSON 无法解析：${openingMonth} / ${scope.sellerId}。${error.message}`);
-  }
-  return normalizeOpeningSnapshotRecords(sourceRows, { scope, openingMonth });
-}
-
-async function fetchOrReuseOpeningSnapshot({ adapter, store, scope, openingMonth, force, dryRun, runId }) {
-  const scopeKey = snapshotScopeKey(scope);
-  let manifest = !force && !dryRun ? await store.readManifest(openingMonth, scopeKey) : null;
-  if (manifest?.status === "success" && manifest.source === "lingxing-fba-monthly-inventory-snapshot") {
-    return { records: await parseSavedOpeningSnapshot({ store, manifest, scope, openingMonth }), reused: true };
-  }
-  let stage = "opening-snapshot-fetch";
-  try {
-    const sourceRows = await adapter.fetchAllFbaInventoryHistory({
-      start_date: openingMonth,
-      end_date: openingMonth,
-      seller_id: [scope.sellerId],
-    }, { length: 1000, maxRows: 100_000 });
-    stage = "opening-snapshot-parse";
-    const records = normalizeOpeningSnapshotRecords(sourceRows, { scope, openingMonth });
-    if (dryRun) return { records, reused: false };
-    stage = "opening-snapshot-archive";
-    const bytes = Buffer.from(JSON.stringify(sourceRows));
-    await store.saveReport({
-      month: openingMonth,
-      scopeKey,
-      extension: "json",
-      bytes,
-      manifest: {
-        status: "success",
-        source: "lingxing-fba-monthly-inventory-snapshot",
-        sellerId: scope.sellerId,
-        marketplaceId: scope.marketplaceId,
-        sid: Number(scope.seller.sid),
-        countryCode: scope.location,
-        snapshotMonth: openingMonth,
-        fetchedAt: new Date().toISOString(),
-        parsedRowCount: records.length,
-      },
-    });
-    return { records, reused: false };
-  } catch (error) {
-    throw safeError(error, { stage, month: openingMonth, sellerId: scope.sellerId, runId });
   }
 }
 
@@ -394,7 +327,6 @@ export async function runInventoryLedgerRawRebuild({
   const startedAt = Date.now();
   const targetMonths = buildInventoryLedgerTargetMonths({ now, startMonth });
   const sourceMonths = buildInventoryLedgerSourceMonths({ targetMonths, ledgerSeedMonth });
-  const openingSnapshotMonth = shiftMonth(sourceMonths[0], -1);
   lastStatus = { status: "running", runId, targetMonths, sourceMonths, startedAt: new Date().toISOString() };
   try {
     const directory = await getSellers({ adapter, forceRefresh: true });
@@ -404,11 +336,6 @@ export async function runInventoryLedgerRawRebuild({
     const parsedReports = [];
     let reusedReportCount = 0;
     logger.info?.("[inventory-ledger-raw-rebuild] started", { runId, targetMonths, sellerCount: sellers.length, force });
-    for (const scope of scopes) {
-      const result = await fetchOrReuseOpeningSnapshot({ adapter, store, scope, openingMonth: openingSnapshotMonth, force, dryRun, runId });
-      parsedReports.push({ records: result.records });
-      if (result.reused) reusedReportCount += 1;
-    }
     for (const month of sourceMonths) {
       for (const scope of scopes) {
         const result = await fetchOrReuseReport({
@@ -453,6 +380,8 @@ export async function runInventoryLedgerRawRebuild({
       stage: failed.stage,
       month: failed.month,
       sellerId: failed.sellerId,
+      taskId: failed.taskId,
+      taskStatus: failed.taskStatus,
       error: failed.message,
       failedAt: new Date().toISOString(),
       durationMs: Date.now() - startedAt,
