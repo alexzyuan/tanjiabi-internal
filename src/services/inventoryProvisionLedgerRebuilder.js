@@ -33,6 +33,11 @@ function eventKey(record) {
   return `${record.sellerId}|${record.marketplaceId}|${record.msku}`;
 }
 
+function isSellableDisposition(value) {
+  const normalized = String(value || "").trim().toUpperCase();
+  return !normalized || ["SELLABLE", "SELLABLEINVENTORY", "01"].includes(normalized);
+}
+
 function normalizedEventType(value) {
   return String(value || "").replace(/[\s_-]+/gu, "").toLowerCase();
 }
@@ -147,6 +152,7 @@ export function rebuildInventoryProvisionHistory({
   const recordsByKey = new Map();
   records.forEach((record) => {
     if (!targetSet.has(monthText(record.date))) throw new Error(`库存分类账事件 ${record.date} 不在重建范围内。`);
+    if (!isSellableDisposition(record.disposition)) return;
     const key = eventKey(record);
     if (!recordsByKey.has(key)) recordsByKey.set(key, []);
     recordsByKey.get(key).push(record);

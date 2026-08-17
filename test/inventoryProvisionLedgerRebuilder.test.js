@@ -76,3 +76,15 @@ test("inventory ledger rebuilder preserves fractional quantities and omits empty
   assert.equal(result.entries[1].data.rows.length, 0);
   assert.equal(result.summary.metadataFallbackRows, 1);
 });
+
+test("inventory ledger rebuilder excludes non-sellable ledger rows from provision history", () => {
+  const result = rebuildInventoryProvisionHistory({
+    records: [
+      event("2025-10-01", "BeginningBalance", 2, 2),
+      { ...event("2025-10-02", "Receipts", 9, 3), disposition: "UNSELLABLE" },
+    ],
+    targetMonths: ["2025-10"], sellers, baseRowsByKey: new Map(),
+  });
+  assert.equal(result.entries[0].data.rows.length, 1);
+  assert.equal(result.entries[0].data.rows[0].quantity, 2);
+});
