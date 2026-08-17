@@ -348,6 +348,29 @@ export function createInventoryProvisionFeature({
     });
   }
 
+  async function exportInventoryProvisionDetail() {
+    const button = root?.querySelector?.("#inventory-provision-export");
+    const restoreButton = setButtonBusy(button, "导出中...", button?.textContent || "导出文件");
+    try {
+      const response = await fetchImpl(`/api/dashboard/inventory-provision/export?${buildInventoryProvisionQuery()}`);
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || `导出失败：${response.status}`);
+      }
+      const blob = await response.blob();
+      const disposition = response.headers.get("content-disposition") || "";
+      const match = disposition.match(/filename\*=UTF-8''([^;]+)/);
+      const exportMonth = fieldValue("#inventory-provision-date", "", root) || "未选择月份";
+      const filename = match ? decodeURIComponent(match[1]) : `库存减值明细-${exportMonth}.xlsx`;
+      downloadBlob(blob, filename);
+      setText("#inventory-provision-status", `库存减值明细已导出：${filename}`, root);
+    } catch (error) {
+      setText("#inventory-provision-status", `库存减值明细导出失败：${error.message}`, root);
+    } finally {
+      restoreButton();
+    }
+  }
+
   async function refreshInventoryProvision() {
     setDefaultInventoryProvisionDate();
     const month = selectedInventoryProvisionMonth();
@@ -376,29 +399,6 @@ export function createInventoryProvisionFeature({
       );
     } catch (error) {
       setText("#inventory-provision-status", `库存计提刷新失败：${error.message}`, root);
-    } finally {
-      restoreButton();
-    }
-  }
-
-  async function exportInventoryProvisionDetail() {
-    const button = root?.querySelector?.("#inventory-provision-export");
-    const restoreButton = setButtonBusy(button, "导出中...", button?.textContent || "导出文件");
-    try {
-      const response = await fetchImpl(`/api/dashboard/inventory-provision/export?${buildInventoryProvisionQuery()}`);
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error.error || `导出失败：${response.status}`);
-      }
-      const blob = await response.blob();
-      const disposition = response.headers.get("content-disposition") || "";
-      const match = disposition.match(/filename\*=UTF-8''([^;]+)/);
-      const exportMonth = fieldValue("#inventory-provision-date", "", root) || "未选择月份";
-      const filename = match ? decodeURIComponent(match[1]) : `库存减值明细-${exportMonth}.xlsx`;
-      downloadBlob(blob, filename);
-      setText("#inventory-provision-status", `库存减值明细已导出：${filename}`, root);
-    } catch (error) {
-      setText("#inventory-provision-status", `库存减值明细导出失败：${error.message}`, root);
     } finally {
       restoreButton();
     }
