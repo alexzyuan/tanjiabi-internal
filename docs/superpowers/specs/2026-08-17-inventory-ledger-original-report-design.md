@@ -43,7 +43,7 @@
 
 报表范围固定为自然月 `00:00:00Z` 到该月末 `23:59:59Z`，报告类型为 `GET_LEDGER_DETAIL_VIEW_DATA`；店铺、区域和 marketplace 均使用店铺目录中的真实值。
 
-- `IN_QUEUE`、`IN_PROGRESS`：按受限次数和间隔轮询；每一次记录 `runId`、月份、卖家及状态。
+- `IN_QUEUE`、`IN_PROGRESS`：按受限次数和间隔轮询；每一次以结构化日志记录 `runId`、月份、卖家、任务号、轮询次数及状态。
 - `DONE`：读取任务返回的 URL；若无 URL，以 `report_document_id` 请求续期 URL；下载非空文件，解析并归档。
 - `FATAL`、`CANCELLED`、`UNKNOWN`、空状态、轮询超时、无文件 URL、下载非 2xx、空文件、压缩方式/字段/日期不正确：立即失败。
 - 报表失败时不调用 detail API，不写成功 manifest，不覆盖任何月份缓存；失败状态可在运维状态中追溯。
@@ -52,11 +52,11 @@
 
 每个成功 manifest 至少包含：`source=lingxing-exported-inventory-ledger-report`、`reportType`、`sellerId`、`marketplaceId`、`region`、时间范围、`taskId`、`reportDocumentId`、`compressionAlgorithm`、`rawFile`、`sha256`、`byteCount`、`fetchedAt`、`parsedRowCount`、`runId`。不得写入 URL 查询参数、令牌或完整外部响应。
 
-`force` 会重新导出并重新归档；非 force 只复用符合上述 source、任务范围、文件 SHA-256 的成功 manifest。旧 JSON-API manifest 不能作为可复用输入，且必须明确提示需要导出文件后才能全量重建。完整 FIFO 的开账也只能来自导出报告中的分类账事件；不调用 FBA 月末库存 JSON API 补数。
+`force` 会重新导出并重新归档；非 force 只复用符合上述 source、`scopeKey`、任务范围、文件 SHA-256 的成功 manifest。旧 JSON-API manifest 不能作为可复用输入，且必须明确提示需要导出文件后才能全量重建。完整 FIFO 的开账也只能来自导出报告中的分类账事件；不调用 FBA 月末库存 JSON API 补数。
 
 ## 验证与启用顺序
 
 1. 使用 fixture 覆盖任务创建、轮询、URL 续期、下载、文件解析、归档和“API 不得回退”。
-2. 以 `dryRun` 实际请求一个小范围的领星导出任务，确认得到真实可解析文件；dry-run 不归档、不更新历史缓存。
+2. 以 `dryRun` 实际请求一个小范围的领星导出任务，例如 `node scripts/rebuild-inventory-ledger.js --dry-run --start-month 2026-07 --ledger-seed-month 2026-07 --seller-id <seller_id>`，确认得到真实可解析文件；`--seller-id` 只能用于 dry-run，dry-run 不归档、不更新历史缓存。
 3. 验证文件 manifest 和解析元数据后，打包部署。
 4. 部署后运行一次受控全量重建；这一步会写历史计提缓存，须在当次获得明确授权，且不触发成本刷新。

@@ -97,6 +97,7 @@ function validateReusableReportManifest(manifest, { scope, month }) {
   const compressionAlgorithm = String(manifest?.compressionAlgorithm || "").trim().toUpperCase();
   if (manifest?.status !== "success" || manifest?.source !== REPORT_SOURCE
     || manifest?.reportType !== REPORT_TYPE
+    || manifest?.scopeKey !== scope.scopeKey
     || manifest?.sellerId !== scope.sellerId
     || manifest?.marketplaceId !== scope.marketplaceId
     || manifest?.region !== scope.region
@@ -159,7 +160,7 @@ async function parseSavedReport({ store, manifest, scope, month, parser }) {
   });
 }
 
-async function pollReportTask({ adapter, taskId, scope, month, sleep, pollIntervalMs, maxPollAttempts }) {
+async function pollReportTask({ adapter, taskId, scope, month, runId, logger, sleep, pollIntervalMs, maxPollAttempts }) {
   for (let attempt = 1; attempt <= maxPollAttempts; attempt += 1) {
     const payload = await adapter.queryReportExportTask({
       seller_id: scope.sellerId,
@@ -168,7 +169,10 @@ async function pollReportTask({ adapter, taskId, scope, month, sleep, pollInterv
     });
     const task = payload?.data || {};
     const status = String(task.progress_status || "").trim().toUpperCase();
-    if (status === "DONE") return task;
+    logger.info?.("[inventory-ledger-raw-rebuild] export task status", {
+      runId, month, sellerId: scope.sellerId, taskId, status: status || "EMPTY", attempt,
+    });
+    if (status === "DONE") return { ...task, progress_status: "DONE" };
     if (["FATAL", "CANCELLED", "UNKNOWN"].includes(status)) {
       const error = new Error(`库存分类账导出失败：${status}（阶段 poll / 月份 ${month} / 店铺 ${scope.sellerId} / 任务 ${taskId}）。`);
       error.taskId = taskId;
@@ -190,7 +194,7 @@ async function pollReportTask({ adapter, taskId, scope, month, sleep, pollInterv
 }
 
 async function fetchOrReuseReport({
-  adapter, store, parser, scope, month, force, dryRun, runId, sleep, pollIntervalMs, maxPollAttempts,
+  adapter, store, parser, scope, month, force, dryRun, runId, logger, sleep, pollIntervalMs, maxPollAttempts,
 }) {
   let manifest = !force && !dryRun ? await store.readManifest(month, scope.scopeKey) : null;
   if (manifest?.status === "success" && manifest.source === REPORT_SOURCE) {
@@ -205,6 +209,7 @@ async function fetchOrReuseReport({
 
   let stage = "create";
   let taskId = "";
+  let taskStatus = "";
   try {
     const created = await adapter.createReportExportTask({
       seller_id: scope.sellerId,
@@ -216,7 +221,10 @@ async function fetchOrReuseReport({
     });
     taskId = requireTaskId(created, { month, sellerId: scope.sellerId });
     stage = "poll";
-    const task = await pollReportTask({ adapter, taskId, scope, month, sleep, pollIntervalMs, maxPollAttempts });
+    const task = await pollReportTask({
+      adapter, taskId, scope, month, runId, logger, sleep, pollIntervalMs, maxPollAttempts,
+    });
+    taskStatus = String(task.progress_status || "DONE").trim().toUpperCase();
     const reportDocumentId = String(task.report_document_id || "").trim();
     let url = String(task.url || "").trim();
     if (!url) {
@@ -268,7 +276,7 @@ async function fetchOrReuseReport({
     });
     return { manifest, parsed, reused: false };
   } catch (error) {
-    throw safeError(error, { stage, month, sellerId: scope.sellerId, taskId, runId });
+    throw safeError(error, { stage, month, sellerId: scope.sellerId, taskId, taskStatus, runId });
   }
 }
 
@@ -318,10 +326,15 @@ export async function runInventoryLedgerRawRebuild({
   const sourceMonths = buildInventoryLedgerSourceMonths({ targetMonths, ledgerSeedMonth });
   lastStatus = { status: "running", runId, targetMonths, sourceMonths, startedAt: new Date().toISOString() };
   try {
+    const requestedSellerIds = [...new Set((Array.isArray(sellerIds) ? sellerIds : [sellerIds]).map((value) => String(value || "").trim()).filter(Boolean))];
+    if (requestedSellerIds.length && !dryRun) {
+      const error = new Error("库存分类账指定 seller_id 仅允许用于 dry-run 验证，正式重建必须覆盖全部店铺。");
+      error.stage = "validate";
+      throw error;
+    }
     const directory = await getSellers({ adapter, forceRefresh: true });
     const sellers = filterCoreSellers(directory?.sellers || directory || []);
     if (!sellers.length) throw new Error("库存分类账重建店铺目录为空。");
-    const requestedSellerIds = [...new Set((Array.isArray(sellerIds) ? sellerIds : [sellerIds]).map((value) => String(value || "").trim()).filter(Boolean))];
     const availableSellerIds = new Set(sellers.map((seller) => String(seller.seller_id || seller.sellerId || "").trim()));
     const missingSellerIds = requestedSellerIds.filter((sellerId) => !availableSellerIds.has(sellerId));
     if (missingSellerIds.length) throw new Error(`库存分类账指定 seller_id 未出现在当前店铺目录：${missingSellerIds.join(", ")}`);
@@ -335,7 +348,7 @@ export async function runInventoryLedgerRawRebuild({
     for (const month of sourceMonths) {
       for (const scope of scopes) {
         const result = await fetchOrReuseReport({
-          adapter, store, parser, scope, month, force, dryRun, runId, sleep, pollIntervalMs, maxPollAttempts,
+          adapter, store, parser, scope, month, force, dryRun, runId, logger, sleep, pollIntervalMs, maxPollAttempts,
         });
         parsedReports.push(result.parsed);
         if (result.reused) reusedReportCount += 1;

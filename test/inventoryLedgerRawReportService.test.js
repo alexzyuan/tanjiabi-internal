@@ -152,6 +152,19 @@ test("raw rebuild rejects an exported report manifest whose scope metadata was a
   assert.equal(store.commits.length, 1);
 });
 
+test("raw rebuild rejects an exported report manifest whose scope key was altered", async () => {
+  const adapter = createExportReportAdapter();
+  const store = makeStore();
+  await runInventoryLedgerRawRebuild(serviceOptions({ adapter, store }));
+  store.manifests.get("2024-10|A-SELLER|na|ATVPD").scopeKey = "altered-scope";
+  await assert.rejects(
+    () => runInventoryLedgerRawRebuild(serviceOptions({ adapter, store })),
+    /manifest 与重建范围不一致.*阶段 reuse/u,
+  );
+  assert.equal(adapter.calls.create.length, 13);
+  assert.equal(store.commits.length, 1);
+});
+
 test("raw rebuild renews a completed report URL by report document ID", async () => {
   const adapter = createExportReportAdapter({ omitDoneUrl: true });
   await runInventoryLedgerRawRebuild(serviceOptions({ adapter }));
@@ -214,9 +227,20 @@ test("raw rebuild dry run can limit an export validation to an explicit seller a
   assert.equal(adapter.calls.create.length, 1);
 });
 
+test("raw rebuild rejects seller-scoped runs unless they are dry runs", async () => {
+  const adapter = createExportReportAdapter();
+  const store = makeStore();
+  await assert.rejects(
+    () => runInventoryLedgerRawRebuild({ ...serviceOptions({ adapter, store }), sellerIds: ["A-SELLER"] }),
+    /仅允许用于 dry-run/u,
+  );
+  assert.equal(adapter.calls.create.length, 0);
+  assert.equal(store.commits.length, 0);
+});
+
 test("raw rebuild rejects an explicit seller that is absent from the current directory", async () => {
   await assert.rejects(
-    () => runInventoryLedgerRawRebuild({ ...serviceOptions(), sellerIds: ["MISSING"] }),
+    () => runInventoryLedgerRawRebuild({ ...serviceOptions(), dryRun: true, sellerIds: ["MISSING"] }),
     /未出现在当前店铺目录/u,
   );
 });

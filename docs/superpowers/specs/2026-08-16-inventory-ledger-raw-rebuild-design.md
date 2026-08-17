@@ -58,7 +58,7 @@
 
 ### `src/jobs/inventoryLedgerRawRebuildJob.js`（新增）
 
-使用 `Asia/Shanghai` 日历和现有 `withJobLock`：每 5 分钟检查一次，10 日 `02:00` 以后若上个月尚未成功则执行；成功状态持久化到 `data-cache/inventory-ledger-raw/job-state.json`，失败记录阶段和可重试信息。应用启动时只做一次“是否到时间”的检查，不在非计划日期拉取。
+使用 `Asia/Shanghai` 日历和现有 `withJobLock`：每 5 分钟检查一次，10 日 `02:00` 以后若上个月尚未成功则执行；同一上海自然日只自动尝试一次，失败留待次日重试，避免持续重复提交同一批任务。成功和失败状态均持久化到 `data-cache/inventory-ledger-raw/job-state.json`；失败记录阶段、月份、卖家、任务号、上游状态和可重试信息。应用启动时只做一次“是否到时间”的检查，不在非计划日期拉取。
 
 ### `src/services/inventoryLedgerRawReportStore.js`
 
@@ -93,7 +93,7 @@ flowchart LR
 - 原始文件、manifest、job state 和历史缓存均使用临时文件 + rename；不能留下“成功”状态但文件不完整的记录。
 - 每次运行生成 `runId`，日志包含阶段、目标月份、seller/region 数、任务数、下载字节数、解析行数、重建行数、耗时和 commit 结果；认证信息和完整原始响应禁止写入日志。
 - 成功状态必须包含实际原始报表获取时间与重建时间，页面已有的“成本缓存刷新时间”不冒充库存源更新时间。
-- 失败重试不删除旧成功 manifest；新失败 manifest 作为最近尝试记录，下一次调度可继续。
+- 失败重试不删除旧成功 manifest；失败尝试只写入 job state，不伪造失败 manifest，下一次调度可继续。
 
 ## 测试与验收
 
