@@ -1,0 +1,3 @@
+event-date	msku	event-type	quantity	fulfillment-center	disposition	reference-id	reason	title
+2025-11-05	MSKU-1	CustomerReturns	2	ONT8	SELLABLE	return-1	customer return	Toy truck
+2025-11-10	MSKU-1	WarehouseTransferOut	-1	ONT8	SELLABLE	transfer-1	transfer	Toy truck

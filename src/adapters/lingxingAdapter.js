@@ -1,4 +1,5 @@
 import { getConfig } from "../config/index.js";
+import { Buffer } from "node:buffer";
 import { listDateRange } from "../utils/dateRange.js";
 import { withLingxingDateContract } from "../utils/lingxingDateRange.js";
 import { createLingxingAuth, createLingxingClient, createTokenState, tokenConfigKey } from "./lingxing/index.js";
@@ -41,6 +42,16 @@ function sleep(ms) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+async function fetchBinaryWithTimeout(fetchImpl, url, options = {}, timeoutMs = 60_000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetchImpl(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function lingxingDateRangeParams(endpoint, params = {}) {
@@ -1021,6 +1032,31 @@ export class LingxingAdapter {
       method: "POST",
       params,
     });
+  }
+
+  renewReportExportTask(params = {}) {
+    return this.signedRequest("/basicOpen/report/amazonReportExportTask", {
+      method: "POST",
+      params,
+    });
+  }
+
+  async downloadReportDocument(url, {
+    fetchImpl = (...args) => globalThis.fetch(...args),
+    timeoutMs = 60_000,
+  } = {}) {
+    if (!String(url || "").trim()) throw new Error("库存分类账下载失败：下载地址为空。");
+    let response;
+    try {
+      response = await fetchBinaryWithTimeout(fetchImpl, url, { method: "GET" }, timeoutMs);
+    } catch (error) {
+      if (error?.name === "AbortError") throw new Error("库存分类账下载失败：下载超时。");
+      throw new Error(`库存分类账下载失败：${error.message || String(error)}`);
+    }
+    if (!response.ok) throw new Error(`库存分类账下载失败：HTTP ${response.status}`);
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (!bytes.length) throw new Error("库存分类账下载失败：报表文件为空。");
+    return bytes;
   }
 
   async fetchOrderProfitReportByOrderDate(params) {

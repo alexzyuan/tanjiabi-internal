@@ -793,3 +793,74 @@ test("LingxingAdapter sends daily inventory ledger summary with camel inclusive 
   assert.equal(calls[0].params.start_date, undefined);
   assert.equal(calls[0].params.end_date, undefined);
 });
+
+test("LingxingAdapter supports inventory ledger report task renewal", async () => {
+  const adapter = new LingxingAdapter(lingxingTestConfig);
+  const calls = [];
+  adapter.performSignedRequest = async (endpoint, options) => {
+    calls.push({ endpoint, params: options.params });
+    return { code: 0, data: { task_id: "task-1", url: "https://download.test/report" } };
+  };
+
+  await adapter.createReportExportTask({
+    seller_id: "A-SELLER",
+    report_type: "GET_LEDGER_DETAIL_VIEW_DATA",
+    data_start_time: "2025-10-01T00:00:00Z",
+    data_end_time: "2025-10-31T23:59:59Z",
+    marketplace_ids: ["ATVPD"],
+    region: "na",
+  });
+  await adapter.queryReportExportTask({ seller_id: "A-SELLER", task_id: "task-1", region: "na" });
+  await adapter.renewReportExportTask({ seller_id: "A-SELLER", report_document_id: "doc-1", region: "na" });
+
+  assert.deepEqual(calls.map(({ endpoint }) => endpoint), [
+    "/basicOpen/report/create/reportExportTask",
+    "/basicOpen/report/query/reportExportTask",
+    "/basicOpen/report/amazonReportExportTask",
+  ]);
+  assert.deepEqual(calls[2].params, {
+    seller_id: "A-SELLER",
+    report_document_id: "doc-1",
+    region: "na",
+  });
+});
+
+test("LingxingAdapter downloads a non-empty binary inventory ledger report", async () => {
+  const adapter = new LingxingAdapter(lingxingTestConfig);
+  const calls = [];
+  const bytes = Buffer.from("event-date\tmsku\n2025-10-01\tMSKU-1\n", "utf8");
+  const result = await adapter.downloadReportDocument("https://download.test/report", {
+    fetchImpl: async (url, options) => {
+      calls.push({ url, options });
+      return {
+        ok: true,
+        status: 200,
+        async arrayBuffer() {
+          return bytes;
+        },
+      };
+    },
+  });
+
+  assert.deepEqual(result, bytes);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "https://download.test/report");
+  assert.equal(calls[0].options.method, "GET");
+  assert.ok(calls[0].options.signal instanceof AbortSignal);
+});
+
+test("LingxingAdapter rejects failed or empty inventory ledger downloads", async () => {
+  const adapter = new LingxingAdapter(lingxingTestConfig);
+  await assert.rejects(
+    () => adapter.downloadReportDocument("https://download.test/failed", {
+      fetchImpl: async () => ({ ok: false, status: 504, async arrayBuffer() { return new ArrayBuffer(0); } }),
+    }),
+    /库存分类账下载失败：HTTP 504/u,
+  );
+  await assert.rejects(
+    () => adapter.downloadReportDocument("https://download.test/empty", {
+      fetchImpl: async () => ({ ok: true, status: 200, async arrayBuffer() { return new ArrayBuffer(0); } }),
+    }),
+    /库存分类账下载失败：报表文件为空/u,
+  );
+});

@@ -54,6 +54,9 @@
 | `/basicOpen/salesAnalysis/returnOrder/analysisLists` | `fetchReturnAnalysis` | [退货分析](https://apidoc.lingxing.com/docs/Statistics/ReturnOrderAnalysisLists)；只说明格式和范围 |
 | `/basicOpen/openapi/service/v3/data/mws/reviews` | `fetchReviewV2` | [Review 新接口](https://apidoc.lingxing.com/docs/Service/reviewV2)；只说明格式 |
 | `/bd/sp/api/open/settlement/summary/list` | `fetchSettlementSummary` | [结算汇总](https://apidoc.lingxing.com/docs/Finance/settlementSummaryList)；只说明字段和最长范围 |
+| `/basicOpen/report/create/reportExportTask` | `createReportExportTask` | 库存分类账导出任务以 `data_start_time` / `data_end_time` 的显式 UTC 月份边界请求；不是用户日期控件接口 |
+| `/basicOpen/report/query/reportExportTask` | `queryReportExportTask` | 报告任务状态查询，无日期范围 |
+| `/basicOpen/report/amazonReportExportTask` | `renewReportExportTask` | 下载 URL 续期，无日期范围 |
 
 ## 代码约束
 

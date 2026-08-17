@@ -53,6 +53,8 @@ import { refreshInventoryProvisionCosts } from "./src/services/inventoryProvisio
 import { getSlowMovingRiskDashboard } from "./src/services/slowMovingRiskService.js";
 import { createSlowMovingRiskSnapshotStore } from "./src/services/slowMovingRiskSnapshotStore.js";
 import { startSlowMovingRiskWeeklyScheduler } from "./src/jobs/slowMovingRiskWeeklyJob.js";
+import { startInventoryLedgerRawRebuildScheduler } from "./src/jobs/inventoryLedgerRawRebuildJob.js";
+import { getInventoryLedgerRawRebuildStatus } from "./src/services/inventoryLedgerRawReportService.js";
 import { debugLowInventoryLedgerSource, getLowInventoryFeeDashboard } from "./src/services/lowInventoryFeeService.js";
 import {
   getPlatformCashflowDashboard,
@@ -1102,6 +1104,7 @@ startFactoryInventoryWarmupScheduler();
 startFbaShipmentWarmupScheduler();
 startDefaultDashboardWarmupScheduler();
 startSlowMovingRiskWeeklyScheduler();
+startInventoryLedgerRawRebuildScheduler();
 
 const server = http.createServer((req, res) => {
   router(req, res).catch((error) => {
