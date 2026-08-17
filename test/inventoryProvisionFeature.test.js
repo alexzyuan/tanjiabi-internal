@@ -41,8 +41,8 @@ test("inventory provision feature owns its DOM event bindings", () => {
 
   assert.deepEqual(
     bindCalls.map(([, selector, eventName, handler]) => [selector, eventName, handler]),
-    [
-      ["#inventory-provision-refresh", "click", feature.loadInventoryProvision],
+      [
+      ["#inventory-provision-refresh", "click", feature.refreshInventoryProvision],
       ["#inventory-provision-export", "click", bindCalls[1][3]],
       ["#inventory-provision-refresh-costs", "click", feature.refreshInventoryProvisionCosts],
       ["#inventory-provision-date", "change", bindCalls[3][3]],
@@ -54,6 +54,67 @@ test("inventory provision feature owns its DOM event bindings", () => {
       ["#inventory-detail-table", "click", bindCalls[9][3]],
     ],
   );
+});
+
+test("inventory provision refresh posts selected month then reloads dashboard", async () => {
+  const elements = new Map([
+    ["#inventory-provision-date", { value: "2026-07" }],
+    ["#inventory-provision-refresh", { textContent: "刷新计提" }],
+  ]);
+  const calls = [];
+  const statuses = [];
+  let reloads = 0;
+  const { feature } = createFeature({
+    root: { querySelector: (key) => elements.get(key) || null },
+    fieldValue: (key) => elements.get(key)?.value || "",
+    confirmImpl: () => true,
+    fetchImpl: async (...args) => {
+      calls.push(args);
+      return {
+        ok: true,
+        json: async () => ({ refresh: { month: "2026-07", backupCreated: true, rawCount: 77, ledgerCount: 817, rows: [{ quantity: 27 }] } }),
+      };
+    },
+    loadDashboardSection: async () => { reloads += 1; },
+    setText: (selector, value) => statuses.push([selector, value]),
+  });
+
+  await feature.refreshInventoryProvision();
+
+  assert.deepEqual(calls, [[
+    "/api/dashboard/inventory-provision/refresh",
+    { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ date: "2026-07" }) },
+  ]]);
+  assert.equal(reloads, 1);
+  assert.match(statuses.at(-1)[1], /2026-07.*FIFO 批次 1 条.*缓存备份 已创建/u);
+});
+
+test("inventory provision refresh preserves the rendered table when the API fails", async () => {
+  const elements = new Map([
+    ["#inventory-provision-date", { value: "2026-08" }],
+    ["#inventory-provision-refresh", { textContent: "刷新计提" }],
+    ["#inventory-detail-table", { innerHTML: "existing rows" }],
+  ]);
+  const statuses = [];
+  let reloads = 0;
+  const { feature } = createFeature({
+    root: { querySelector: (key) => elements.get(key) || null },
+    fieldValue: (key) => elements.get(key)?.value || "",
+    confirmImpl: () => true,
+    fetchImpl: async () => ({
+      ok: false,
+      status: 422,
+      json: async () => ({ error: "当前月仅支持实时库存读取" }),
+    }),
+    loadDashboardSection: async () => { reloads += 1; },
+    setText: (selector, value) => statuses.push([selector, value]),
+  });
+
+  await feature.refreshInventoryProvision();
+
+  assert.equal(reloads, 0);
+  assert.equal(elements.get("#inventory-detail-table").innerHTML, "existing rows");
+  assert.equal(statuses.at(-1)[1], "库存计提刷新失败：当前月仅支持实时库存读取");
 });
 
 test("inventory provision cost refresh confirms the annual scope, posts no month, and reloads the dashboard", async () => {

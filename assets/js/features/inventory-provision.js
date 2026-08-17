@@ -348,6 +348,39 @@ export function createInventoryProvisionFeature({
     });
   }
 
+  async function refreshInventoryProvision() {
+    setDefaultInventoryProvisionDate();
+    const month = selectedInventoryProvisionMonth();
+    const button = root?.querySelector?.("#inventory-provision-refresh");
+    const confirmRefresh = typeof confirmImpl === "function" ? confirmImpl : () => true;
+    if (!confirmRefresh(`将从领星重新构建 ${month} 月末库存、库龄和 FIFO 批次，并在写入前备份当前缓存。是否继续？`)) return;
+    const restoreButton = setButtonBusy(button, "刷新中...", button?.textContent || "刷新计提");
+    try {
+      const response = await fetchImpl("/api/dashboard/inventory-provision/refresh", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ date: month }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(data?.error || (data ? `API ${response.status}` : `API ${response.status}（服务端返回非 JSON）`));
+      }
+      const refresh = data?.refresh;
+      if (!refresh?.month) throw new Error("刷新接口未返回有效月份。");
+      await loadInventoryProvision();
+      const batchCount = Array.isArray(refresh.rows) ? refresh.rows.length : Number(refresh.batchCount || 0);
+      setText(
+        "#inventory-provision-status",
+        `库存计提已刷新：${refresh.month} · FBA库存 ${Number(refresh.rawCount || 0)} 条 · 分类账 ${Number(refresh.ledgerCount || 0)} 条 · FIFO 批次 ${batchCount} 条 · 缓存备份 ${refresh.backupCreated ? "已创建" : "无旧缓存可备份"}${refresh.refreshedAt ? ` · 刷新时间：${refresh.refreshedAt}` : ""}`,
+        root,
+      );
+    } catch (error) {
+      setText("#inventory-provision-status", `库存计提刷新失败：${error.message}`, root);
+    } finally {
+      restoreButton();
+    }
+  }
+
   async function exportInventoryProvisionDetail() {
     const button = root?.querySelector?.("#inventory-provision-export");
     const restoreButton = setButtonBusy(button, "导出中...", button?.textContent || "导出文件");
@@ -432,7 +465,7 @@ export function createInventoryProvisionFeature({
   function setupInventoryProvision() {
     setDefaultInventoryProvisionDate();
     syncInventoryProvisionCostRefreshState();
-    bind(root, "#inventory-provision-refresh", "click", loadInventoryProvision);
+    bind(root, "#inventory-provision-refresh", "click", refreshInventoryProvision);
     bind(root, "#inventory-provision-export", "click", exportInventoryProvisionDetail);
     bind(root, "#inventory-provision-refresh-costs", "click", refreshInventoryProvisionCosts);
     bind(root, "#inventory-provision-date", "change", handleInventoryProvisionDateChange);
@@ -447,6 +480,7 @@ export function createInventoryProvisionFeature({
   return {
     buildInventoryProvisionQuery,
     loadInventoryProvision,
+    refreshInventoryProvision,
     renderInventoryProvision,
     refreshInventoryProvisionCosts,
     setDefaultInventoryProvisionDate,
