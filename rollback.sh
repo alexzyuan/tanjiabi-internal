@@ -4,7 +4,8 @@ set -euo pipefail
 APP_DIR="${APP_DIR:-/opt/tanjia-bi}"
 APP_NAME="${PM2_APP_NAME:-tanjia-bi}"
 RELEASES_DIR="$APP_DIR/releases"
-TARGET="${1:-}"
+TARGET=""
+RESTORE_INVENTORY_PROVISION_CACHE=0
 STAMP="$(date +%Y%m%d-%H%M%S)"
 CURRENT_BACKUP="$RELEASES_DIR/before-rollback-$STAMP"
 
@@ -57,7 +58,23 @@ list_releases() {
 
 [ -d "$APP_DIR" ] || fail "目录不存在：$APP_DIR"
 
-if [ "${TARGET:-}" = "list" ]; then
+for argument in "$@"; do
+  case "$argument" in
+    list)
+      [ -z "$TARGET" ] || fail "list 不能和回退目标同时使用。"
+      TARGET="list"
+      ;;
+    --restore-inventory-provision-cache)
+      RESTORE_INVENTORY_PROVISION_CACHE=1
+      ;;
+    *)
+      [ -z "$TARGET" ] || fail "只能指定一个回退目标。"
+      TARGET="$argument"
+      ;;
+  esac
+done
+
+if [ "$TARGET" = "list" ]; then
   list_releases
   exit 0
 fi
@@ -94,6 +111,15 @@ tar \
 
 log "恢复备份文件"
 tar -cf - -C "$TARGET" . | tar -xf - -C "$APP_DIR"
+
+if [ "$RESTORE_INVENTORY_PROVISION_CACHE" = "1" ]; then
+  snapshot_tool="$CURRENT_BACKUP/scripts/inventory-provision-deploy-snapshot.js"
+  [ -f "$snapshot_tool" ] || fail "当前版本缺少库存计提保护快照工具，无法恢复库存缓存。"
+  log "按显式参数恢复库存计提历史缓存和分类账原文件"
+  node "$snapshot_tool" restore \
+    --source-data-dir "$APP_DIR/data-cache" \
+    --snapshot-data-dir "$TARGET/data-cache"
+fi
 
 cd "$APP_DIR"
 

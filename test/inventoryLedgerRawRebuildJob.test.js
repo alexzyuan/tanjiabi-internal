@@ -20,11 +20,23 @@ test("inventory ledger job waits until Shanghai 10th at configured time and runs
   }), true);
 });
 
+test("inventory ledger automatic rebuild is disabled until explicitly enabled", async () => {
+  let rebuildCalls = 0;
+  const result = await runInventoryLedgerRawRebuildIfNeeded({
+    enabled: false,
+    now: new Date("2026-08-10T02:00:00.000Z"),
+    rebuild: async () => { rebuildCalls += 1; return {}; },
+  });
+  assert.deepEqual(result, { ok: true, skipped: true, reason: "disabled", period: "2026-07" });
+  assert.equal(rebuildCalls, 0);
+});
+
 test("inventory ledger job persists success and uses a lock", async () => {
   const writes = [];
   let rebuildCalls = 0;
   const result = await runInventoryLedgerRawRebuildIfNeeded({
     now: new Date("2026-08-10T02:00:00.000Z"),
+    enabled: true,
     readState: async () => ({}),
     writeState: async (value) => { writes.push(value); },
     rebuild: async () => { rebuildCalls += 1; return { committedMonths: ["2025-10", "2026-07"], rebuiltRowCount: 9 }; },
@@ -41,6 +53,7 @@ test("inventory ledger job persists failure context and defers automatic retry t
   await assert.rejects(
     () => runInventoryLedgerRawRebuildIfNeeded({
       now: new Date("2026-08-10T02:00:00.000Z"),
+      enabled: true,
       readState: async () => ({}),
       writeState: async (value) => { writes.push(value); },
       rebuild: async () => {

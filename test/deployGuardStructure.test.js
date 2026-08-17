@@ -42,6 +42,20 @@ test("deployment package includes the controlled inventory-ledger rebuild comman
   assert.match(source, /scripts\/rebuild-inventory-ledger\.js/);
 });
 
+test("deployment protects inventory provision caches and rollback restores them only when explicitly requested", async () => {
+  const [deploySource, rollbackSource, packageSource] = await Promise.all([
+    readFile(new URL("../deploy.sh", import.meta.url), "utf8"),
+    readFile(new URL("../rollback.sh", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/package-deploy.js", import.meta.url), "utf8"),
+  ]);
+  assert.match(packageSource, /scripts\/inventory-provision-deploy-snapshot\.js/);
+  assert.match(deploySource, /backup_inventory_provision_runtime_data\(\)/);
+  assert.match(deploySource, /node "\$snapshot_tool" snapshot/);
+  assert.match(deploySource, /backup_inventory_provision_runtime_data\nbackup_sales_forecast_runtime_data/);
+  assert.match(rollbackSource, /--restore-inventory-provision-cache/);
+  assert.match(rollbackSource, /node "\$snapshot_tool" restore/);
+});
+
 test("deployment package advertises and includes the sales facts SQLite capability", async () => {
   const source = await readFile(new URL("../scripts/package-deploy.js", import.meta.url), "utf8");
   assert.match(source, /capabilities:\s*\[[\s\S]*product-catalog-sqlite-v1[\s\S]*sales-facts-sqlite-v1/);

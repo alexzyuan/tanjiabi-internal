@@ -45,6 +45,7 @@ export function shouldRunInventoryLedgerRawRebuild({ now = new Date(), state = {
 export async function runInventoryLedgerRawRebuildIfNeeded({
   force = false,
   now = new Date(),
+  enabled = getConfig().inventoryLedgerRebuildEnabled,
   runAt = getConfig().inventoryLedgerRebuildAt,
   rebuild = runInventoryLedgerRawRebuild,
   store = createInventoryLedgerRawReportStore(),
@@ -54,6 +55,7 @@ export async function runInventoryLedgerRawRebuildIfNeeded({
   logger = console,
 } = {}) {
   const period = priorMonth(now);
+  if (!force && !enabled) return { ok: true, skipped: true, reason: "disabled", period };
   if (running) return { ok: true, skipped: true, reason: "already running", period };
   const state = await readState();
   if (!force && !shouldRunInventoryLedgerRawRebuild({ now, state, runAt })) {
@@ -112,13 +114,18 @@ export async function runInventoryLedgerRawRebuildIfNeeded({
 export function startInventoryLedgerRawRebuildScheduler({
   intervalMs = DEFAULT_POLL_MS,
   runAt = getConfig().inventoryLedgerRebuildAt,
+  enabled = getConfig().inventoryLedgerRebuildEnabled,
 } = {}) {
   if (timer) clearInterval(timer);
-  runInventoryLedgerRawRebuildIfNeeded({ runAt }).catch((error) => {
+  if (!enabled) {
+    console.info("[inventory-ledger-raw-rebuild-job] scheduler disabled");
+    return;
+  }
+  runInventoryLedgerRawRebuildIfNeeded({ runAt, enabled }).catch((error) => {
     console.error("[inventory-ledger-raw-rebuild-job] startup check failed", { error: error.message });
   });
   timer = setInterval(() => {
-    runInventoryLedgerRawRebuildIfNeeded({ runAt }).catch((error) => {
+    runInventoryLedgerRawRebuildIfNeeded({ runAt, enabled }).catch((error) => {
       console.error("[inventory-ledger-raw-rebuild-job] scheduled run failed", { error: error.message });
     });
   }, intervalMs);

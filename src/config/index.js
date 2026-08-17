@@ -133,6 +133,7 @@ export function getConfig() {
     port: Number(readEnv("PORT", DEFAULT_PORT)),
     syncIntervalHours: Number(readEnv("SYNC_INTERVAL_HOURS", DEFAULT_SYNC_INTERVAL_HOURS)),
     inventoryLedgerRebuildAt: readEnv("INVENTORY_LEDGER_REBUILD_AT", "02:00"),
+    inventoryLedgerRebuildEnabled: readBool("INVENTORY_LEDGER_REBUILD_ENABLED", false),
     dataProvider,
     runtime: {
       cwd: process.cwd(),

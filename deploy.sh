@@ -61,6 +61,15 @@ backup_sales_forecast_runtime_data() {
   done
 }
 
+backup_inventory_provision_runtime_data() {
+  local snapshot_tool="$TMP_DIR/scripts/inventory-provision-deploy-snapshot.js"
+  [ -f "$snapshot_tool" ] || fail "部署包缺少库存计提保护快照工具。"
+  log "备份库存计提历史缓存和分类账原文件"
+  node "$snapshot_tool" snapshot \
+    --source-data-dir "$APP_DIR/data-cache" \
+    --snapshot-data-dir "$BACKUP_DIR/data-cache"
+}
+
 health_check() {
   local port_value
   port_value="$(read_port)"
@@ -171,6 +180,17 @@ fi
 
 mkdir -p "$RELEASES_DIR"
 
+log "预检查部署包"
+mkdir -p "$TMP_DIR"
+tar -xzf "$ARCHIVE" -C "$TMP_DIR"
+[ -f "$TMP_DIR/server.js" ] || fail "部署包缺少 server.js"
+[ -f "$TMP_DIR/app.js" ] || fail "部署包缺少 app.js"
+[ -f "$TMP_DIR/package.json" ] || fail "部署包缺少 package.json"
+[ -f "$TMP_DIR/scripts/sales-facts-sqlite-smoke.js" ] || fail "部署包缺少销售事实 SQLite smoke"
+[ -f "$TMP_DIR/scripts/validate-sales-facts-schema.js" ] || fail "部署包缺少销售事实 schema 校验脚本"
+[ -f "$TMP_DIR/scripts/validate-sales-facts-preflight-artifact.js" ] || fail "部署包缺少销售事实 preflight artifact 校验脚本"
+[ -f "$TMP_DIR/scripts/inventory-provision-deploy-snapshot.js" ] || fail "部署包缺少库存计提保护快照工具"
+
 log "备份当前版本到：$BACKUP_DIR"
 mkdir -p "$BACKUP_DIR"
 tar \
@@ -182,17 +202,8 @@ tar \
   --exclude='./tanjia-bi-deploy.tar.gz' \
   --exclude='./.deploy-tmp-*' \
   -cf - -C "$APP_DIR" . | tar -xf - -C "$BACKUP_DIR"
+backup_inventory_provision_runtime_data
 backup_sales_forecast_runtime_data
-
-log "预检查部署包"
-mkdir -p "$TMP_DIR"
-tar -xzf "$ARCHIVE" -C "$TMP_DIR"
-[ -f "$TMP_DIR/server.js" ] || fail "部署包缺少 server.js"
-[ -f "$TMP_DIR/app.js" ] || fail "部署包缺少 app.js"
-[ -f "$TMP_DIR/package.json" ] || fail "部署包缺少 package.json"
-[ -f "$TMP_DIR/scripts/sales-facts-sqlite-smoke.js" ] || fail "部署包缺少销售事实 SQLite smoke"
-[ -f "$TMP_DIR/scripts/validate-sales-facts-schema.js" ] || fail "部署包缺少销售事实 schema 校验脚本"
-[ -f "$TMP_DIR/scripts/validate-sales-facts-preflight-artifact.js" ] || fail "部署包缺少销售事实 preflight artifact 校验脚本"
 
 log "在隔离目录安装依赖"
 npm ci --prefix "$TMP_DIR"

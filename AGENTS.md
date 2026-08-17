@@ -55,6 +55,7 @@ Production deploys are package-based, so the deployment source branch must be gu
 3. `scripts/package-deploy.js` must require `DEPLOY_CONFIRM_BRANCH=<current branch>` and write `.deploy-manifest.json` with branch, commit, clean state, CSS mode, and confirmed branch.
 4. `deploy.sh` must reject archives without `.deploy-manifest.json`, archives from an unconfirmed branch, or archives whose branch differs from `PRODUCTION_DEPLOY_BRANCH` unless `ALLOW_NON_PRODUCTION_DEPLOY=1` is explicitly set.
 5. Do not bypass these guards by hand-copying runtime files into `/opt/tanjia-bi`.
+6. Every deployment must SHA-256 snapshot `data-cache/inventory-provision-history` and `data-cache/inventory-ledger-raw` into its release backup before extracting application files. Normal rollback preserves these runtime directories; restoring them requires the explicit `--restore-inventory-provision-cache` rollback flag and a verified snapshot manifest. `INVENTORY_LEDGER_REBUILD_ENABLED` defaults to `false`; do not enable automatic cache-writing rebuilds until a real exported-file dry-run is reviewed.
 
 ## BI SQLite Cache Architecture
 

@@ -106,11 +106,11 @@ npm run catalog:legacy:archive
 
 ## 安全部署与回退
 
-每次上传新版 `tanjia-bi-deploy.tar.gz` 后，在服务器执行：
+每次上传新版 `tanjia-bi-deploy.tar.gz` 后，在服务器执行（首次启用库存分类账原报表保护时，使用部署包中的脚本启动，确保快照先于代码切换）：
 
 ```bash
 cd /opt/tanjia-bi
-bash deploy.sh
+tar -xOzf tanjia-bi-deploy.tar.gz deploy.sh | bash -s -- /opt/tanjia-bi/tanjia-bi-deploy.tar.gz
 ```
 
 正式部署包必须从当前生产分支打包，并显式确认分支：
@@ -125,11 +125,17 @@ DEPLOY_CONFIRM_BRANCH=main npm run package:deploy
 
 服务器会校验部署包内的 `.deploy-manifest.json`，确认分支、提交、干净工作区状态、部署文件哈希，并逐项核对首页侧边栏全部板块和对应页面容器，避免从错误分支或不完整部署包覆盖线上版本。
 
-如果新版异常，执行：
+如果新版异常，仅回退代码：
 
 ```bash
 cd /opt/tanjia-bi
 bash rollback.sh
+```
+
+若要同时恢复某次部署前的库存计提历史缓存和分类账原文件，必须显式指定：
+
+```bash
+bash rollback.sh <release-name> --restore-inventory-provision-cache
 ```
 
 查看可回退版本：
@@ -138,4 +144,4 @@ bash rollback.sh
 bash rollback.sh list
 ```
 
-部署包和部署/回退脚本都不会携带或覆盖 `.env`、`data-cache/`（包括 SQLite、WAL、SHM）、`uploads/`、`node_modules/`，所以密钥、账号、预算记录和缓存数据会保留。SQLite 迁移写入失败时部署会在 PM2 重启前停止；回退旧代码时旧 JSON 与 SQLite 数据仍保留，旧版本会忽略新数据库文件。
+部署包和部署/回退脚本都不会携带或覆盖 `.env`、`data-cache/`（包括 SQLite、WAL、SHM）、`uploads/`、`node_modules/`，所以密钥、账号、预算记录和缓存数据会保留。每次部署还会在对应 release 下单独备份并 SHA-256 校验 `inventory-provision-history` 与 `inventory-ledger-raw`；普通回退不会覆盖它们，只有上述显式参数才会恢复该备份。库存分类账自动全量重建默认关闭（`INVENTORY_LEDGER_REBUILD_ENABLED=false`）；真实原文件 dry-run 审核后才可手工启用。SQLite 迁移写入失败时部署会在 PM2 重启前停止；回退旧代码时旧 JSON 与 SQLite 数据仍保留，旧版本会忽略新数据库文件。
