@@ -217,7 +217,7 @@ test("historical inventory rejects a missing target-month ledger instead of prop
   assert.equal(saved, false);
 });
 
-test("historical inventory ignores caches without the current FIFO rebuild version", async () => {
+test("historical inventory rebuilds versionless caches with fractional batches", async () => {
   const { loadHistoricalInventoryRows } = await import("../src/services/inventoryProvisionService.js");
   let ledgerCalls = 0;
 
@@ -257,7 +257,7 @@ test("historical inventory ignores caches without the current FIFO rebuild versi
     readHistoryCache: async () => ({
       updatedAt: "2026/8/14 16:52:04",
       data: {
-        rows: [{ msku: "STALE" }],
+        rows: [{ msku: "STALE", quantity: 1.5 }],
         ownerSyncVersion: 4,
       },
     }),
@@ -266,6 +266,28 @@ test("historical inventory ignores caches without the current FIFO rebuild versi
 
   assert.equal(ledgerCalls, 10);
   assert.equal(result.rows[0].msku, "JMDE-HJ825A");
+});
+
+test("historical inventory reuses a versionless cache when every batch quantity is an integer", async () => {
+  const { loadHistoricalInventoryRows } = await import("../src/services/inventoryProvisionService.js");
+  let upstreamCalls = 0;
+
+  const result = await loadHistoricalInventoryRows("2026-06", {
+    adapter: {
+      fetchAllFbaInventoryDetails: async () => { upstreamCalls += 1; throw new Error("legacy integer cache must be reused"); },
+    },
+    readHistoryCache: async () => ({
+      updatedAt: "2026/8/14 16:52:04",
+      data: {
+        rows: [{ msku: "JM-9006Truck", quantity: 27 }],
+        ownerSyncVersion: 4,
+      },
+    }),
+  });
+
+  assert.equal(upstreamCalls, 0);
+  assert.equal(result.rows[0].quantity, 27);
+  assert.equal(result.cacheUpdatedAt, "2026/8/14 16:52:04");
 });
 
 test("inventory provision landed cost rows calculate provision amount by aging bucket", async () => {

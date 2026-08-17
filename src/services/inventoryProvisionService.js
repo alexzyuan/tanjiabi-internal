@@ -1470,6 +1470,10 @@ function sellableHistoryRow(row) {
   return sellable ? { ...row, ...sellable, parent_node: true } : row;
 }
 
+function hasOnlyIntegerBatchQuantities(rows) {
+  return Array.isArray(rows) && rows.every((row) => Number.isInteger(row?.quantity));
+}
+
 export async function loadHistoricalInventoryRows(selectedMonth, {
   adapter = getLingxingAdapter(),
   sellers = null,
@@ -1481,9 +1485,12 @@ export async function loadHistoricalInventoryRows(selectedMonth, {
 } = {}) {
   if (!forceRefresh) {
     const cached = await readHistoryCache(selectedMonth);
+    const isCurrentFifoCache = cached?.data?.historicalFifoRebuildVersion === historicalFifoRebuildVersion;
+    const isSafeLegacyFifoCache = cached?.data?.historicalFifoRebuildVersion == null
+      && hasOnlyIntegerBatchQuantities(cached?.data?.rows);
     if (cached?.data?.rows?.length
       && cached.data.ownerSyncVersion === historicalOwnerSyncVersion
-      && cached.data.historicalFifoRebuildVersion === historicalFifoRebuildVersion) {
+      && (isCurrentFifoCache || isSafeLegacyFifoCache)) {
       return { ...cached.data, cacheUpdatedAt: cached.updatedAt || "" };
     }
   }
