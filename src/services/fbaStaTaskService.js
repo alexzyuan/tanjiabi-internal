@@ -280,6 +280,16 @@ function isWithinTaskWindow(task, date = new Date()) {
     && parts.hour < Number(task.endHour ?? 19);
 }
 
+function validateTaskScheduleDates(payload = {}, date = new Date()) {
+  if (payload.scheduleEnabled !== true) return;
+  const activeEndDate = normalizeDateText(payload.activeEndDate);
+  if (!activeEndDate) return;
+  const today = scheduleDateText(date);
+  if (activeEndDate < today) {
+    throw new Error(`结束日期不能早于当前日期 ${today}，请修改结束日期。`);
+  }
+}
+
 export async function normalizeFbaStaTaskShop(input, options = {}) {
   const seller = await resolveCanonicalStaSeller(input, options);
   return {
@@ -292,6 +302,7 @@ export async function normalizeFbaStaTaskShop(input, options = {}) {
 }
 
 async function normalizeTaskInput(payload, shopInput, automation) {
+  validateTaskScheduleDates(payload);
   const shop = await normalizeFbaStaTaskShop(shopInput);
   const targetWarehouseCode = String(payload.targetWarehouseCode || "").trim().toUpperCase();
   const msku = String(payload.msku || payload.inboundPlanItems?.[0]?.msku || "").trim();
@@ -600,6 +611,7 @@ export async function updateFbaStaTask(id, payload = {}) {
     if (payload.startHour !== undefined) task.startHour = clampNumber(payload.startHour, task.startHour ?? 8, 0, 23);
     if (payload.endHour !== undefined) task.endHour = clampNumber(payload.endHour, task.endHour ?? 19, 1, 24);
     if (payload.nextRunAt !== undefined) task.nextRunAt = payload.nextRunAt || toIso();
+    validateTaskScheduleDates(task);
     task.status = task.enabled ? "pending" : "paused";
     task.updatedAt = toIso();
     return { ok: true, task, state: publicSchedulerState(state) };
@@ -717,3 +729,7 @@ export function startFbaStaScheduler() {
     });
   }, schedulerPollMs);
 }
+
+export const fbaStaTaskTestUtils = {
+  validateTaskScheduleDates,
+};
