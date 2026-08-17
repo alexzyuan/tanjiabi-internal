@@ -28,6 +28,10 @@ function lastDay(month) {
   return String(new Date(year, value, 0).getDate()).padStart(2, "0");
 }
 
+function snapshotScopeKey(scope) {
+  return `${scope.scopeKey}|opening-snapshot`;
+}
+
 function nowText() {
   return new Date().toLocaleString("zh-CN", { hour12: false });
 }
@@ -173,6 +177,107 @@ async function fetchOrReuseReport({ adapter, store, parser, scope, month, force,
   }
 }
 
+function parseSnapshotQuantity(value, sourceRow, scope) {
+  const quantity = Number(value);
+  if (!Number.isFinite(quantity) || quantity < 0) {
+    throw new Error(`库存分类账期初快照数量无效：${scope.seller.name || scope.sellerId} 第 ${sourceRow} 行。`);
+  }
+  return quantity;
+}
+
+function normalizeOpeningSnapshotRecords(sourceRows, { scope, openingMonth }) {
+  if (!Array.isArray(sourceRows)) throw new Error(`库存分类账期初快照 records 必须是数组：${scope.seller.name || scope.sellerId}。`);
+  const rowsByMsku = new Map();
+  sourceRows.forEach((parent, parentIndex) => {
+    const children = Array.isArray(parent?.child_data) && parent.child_data.length ? parent.child_data : [parent];
+    children.forEach((child, childIndex) => {
+      const row = { ...parent, ...child };
+      if (Number(row.sid) !== Number(scope.seller.sid)
+        || String(row.seller_id || "").trim() !== scope.sellerId
+        || String(row.country_code || "").trim().toUpperCase() !== scope.location
+        || String(row.disposition || "").trim().toLowerCase() !== "sellable") return;
+      const sourceRow = parentIndex + 1 + childIndex / 1000;
+      const msku = String(row.msku || "").trim();
+      if (!msku) throw new Error(`库存分类账期初快照 MSKU 为空：${scope.seller.name || scope.sellerId} 第 ${sourceRow} 行。`);
+      const quantity = parseSnapshotQuantity(row.end_count, sourceRow, scope);
+      if (!quantity) return;
+      const current = rowsByMsku.get(msku) || { quantity: 0, title: String(row.local_name || "").trim(), sourceRow };
+      current.quantity += quantity;
+      rowsByMsku.set(msku, current);
+    });
+  });
+  return [...rowsByMsku.entries()].map(([msku, row]) => ({
+    date: `${shiftMonth(openingMonth, 1)}-01`,
+    openingCohortMonth: openingMonth,
+    msku,
+    eventType: "OpeningSnapshot",
+    eventTypeDescription: "FBA monthly ending sellable inventory snapshot",
+    quantity: row.quantity,
+    fulfillmentCenter: "",
+    disposition: "01",
+    referenceId: "",
+    reason: "",
+    title: row.title,
+    sellerId: scope.sellerId,
+    marketplaceId: scope.marketplaceId,
+    scopeKey: snapshotScopeKey(scope),
+    sourceRow: row.sourceRow,
+  }));
+}
+
+async function parseSavedOpeningSnapshot({ store, manifest, scope, openingMonth }) {
+  const bytes = await store.readReport({ month: openingMonth, scopeKey: snapshotScopeKey(scope), extension: manifest.extension });
+  if (!bytes?.length) throw new Error(`库存分类账期初快照原始文件缺失或为空：${openingMonth} / ${scope.sellerId}`);
+  let sourceRows;
+  try {
+    sourceRows = JSON.parse(bytes.toString("utf8"));
+  } catch (error) {
+    throw new Error(`库存分类账期初快照 JSON 无法解析：${openingMonth} / ${scope.sellerId}。${error.message}`);
+  }
+  return normalizeOpeningSnapshotRecords(sourceRows, { scope, openingMonth });
+}
+
+async function fetchOrReuseOpeningSnapshot({ adapter, store, scope, openingMonth, force, dryRun, runId }) {
+  const scopeKey = snapshotScopeKey(scope);
+  let manifest = !force && !dryRun ? await store.readManifest(openingMonth, scopeKey) : null;
+  if (manifest?.status === "success" && manifest.source === "lingxing-fba-monthly-inventory-snapshot") {
+    return { records: await parseSavedOpeningSnapshot({ store, manifest, scope, openingMonth }), reused: true };
+  }
+  let stage = "opening-snapshot-fetch";
+  try {
+    const sourceRows = await adapter.fetchAllFbaInventoryHistory({
+      start_date: openingMonth,
+      end_date: openingMonth,
+      seller_id: [scope.sellerId],
+    }, { length: 1000, maxRows: 100_000 });
+    stage = "opening-snapshot-parse";
+    const records = normalizeOpeningSnapshotRecords(sourceRows, { scope, openingMonth });
+    if (dryRun) return { records, reused: false };
+    stage = "opening-snapshot-archive";
+    const bytes = Buffer.from(JSON.stringify(sourceRows));
+    await store.saveReport({
+      month: openingMonth,
+      scopeKey,
+      extension: "json",
+      bytes,
+      manifest: {
+        status: "success",
+        source: "lingxing-fba-monthly-inventory-snapshot",
+        sellerId: scope.sellerId,
+        marketplaceId: scope.marketplaceId,
+        sid: Number(scope.seller.sid),
+        countryCode: scope.location,
+        snapshotMonth: openingMonth,
+        fetchedAt: new Date().toISOString(),
+        parsedRowCount: records.length,
+      },
+    });
+    return { records, reused: false };
+  } catch (error) {
+    throw safeError(error, { stage, month: openingMonth, sellerId: scope.sellerId, runId });
+  }
+}
+
 export function buildInventoryLedgerTargetMonths({ now = new Date(), startMonth = DEFAULT_START_MONTH } = {}) {
   if (!/^\d{4}-\d{2}$/u.test(String(startMonth || ""))) throw new Error("库存分类账重建起始月份无效。");
   const endMonth = shiftMonth(shanghaiMonth(now), -1);
@@ -213,6 +318,7 @@ export async function runInventoryLedgerRawRebuild({
   const startedAt = Date.now();
   const targetMonths = buildInventoryLedgerTargetMonths({ now, startMonth });
   const sourceMonths = buildInventoryLedgerSourceMonths({ targetMonths, ledgerSeedMonth });
+  const openingSnapshotMonth = shiftMonth(sourceMonths[0], -1);
   lastStatus = { status: "running", runId, targetMonths, sourceMonths, startedAt: new Date().toISOString() };
   try {
     const directory = await getSellers({ adapter, forceRefresh: true });
@@ -222,6 +328,11 @@ export async function runInventoryLedgerRawRebuild({
     const parsedReports = [];
     let reusedReportCount = 0;
     logger.info?.("[inventory-ledger-raw-rebuild] started", { runId, targetMonths, sellerCount: sellers.length, force });
+    for (const scope of scopes) {
+      const result = await fetchOrReuseOpeningSnapshot({ adapter, store, scope, openingMonth: openingSnapshotMonth, force, dryRun, runId });
+      parsedReports.push({ records: result.records });
+      if (result.reused) reusedReportCount += 1;
+    }
     for (const month of sourceMonths) {
       for (const scope of scopes) {
         const result = await fetchOrReuseReport({ adapter, store, parser, scope, month, force, dryRun, runId });

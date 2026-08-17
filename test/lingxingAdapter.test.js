@@ -730,6 +730,21 @@ test("LingxingAdapter sends FBA inventory history with month-form snake date fie
   assert.equal(calls[0].params.end_date, "2026-05");
 });
 
+test("LingxingAdapter fully paginates historical FBA inventory snapshots and rejects incomplete pages", async () => {
+  const adapter = new LingxingAdapter(lingxingTestConfig);
+  const calls = [];
+  adapter.performSignedRequest = async (endpoint, options) => {
+    calls.push({ endpoint, params: options.params });
+    if (options.params.offset === 0) return { code: 0, data: { total: 3, row_data: [{ msku: "A" }, { msku: "B" }] } };
+    return { code: 0, data: { total: 3, row_data: [{ msku: "C" }] } };
+  };
+
+  const rows = await adapter.fetchAllFbaInventoryHistory({ start_date: "2024-09", end_date: "2024-09" }, { length: 2 });
+
+  assert.deepEqual(rows.map((row) => row.msku), ["A", "B", "C"]);
+  assert.deepEqual(calls.map(({ params }) => params.offset), [0, 2]);
+});
+
 test("LingxingAdapter keeps payable pool closed end dates and uses documented field names", async () => {
   const adapter = new LingxingAdapter(lingxingTestConfig);
   const calls = [];
