@@ -35,6 +35,7 @@ const explicitFiles = [
   "scripts/audit-sales-facts-preflight.js",
   "scripts/migrate-product-catalog.js",
   "scripts/retire-product-catalog-legacy-cache.js",
+  "scripts/rebuild-inventory-ledger.js",
   "assets/favicon.svg",
   "assets/jm-logo.jpg",
   "assets/jm-favicon.png",

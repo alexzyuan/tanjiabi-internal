@@ -37,6 +37,11 @@ test("deployment package source lists catalog smoke and migration scripts explic
   assert.match(source, /scripts\/migrate-product-catalog\.js/);
 });
 
+test("deployment package includes the controlled inventory-ledger rebuild command", async () => {
+  const source = await readFile(new URL("../scripts/package-deploy.js", import.meta.url), "utf8");
+  assert.match(source, /scripts\/rebuild-inventory-ledger\.js/);
+});
+
 test("deployment package advertises and includes the sales facts SQLite capability", async () => {
   const source = await readFile(new URL("../scripts/package-deploy.js", import.meta.url), "utf8");
   assert.match(source, /capabilities:\s*\[[\s\S]*product-catalog-sqlite-v1[\s\S]*sales-facts-sqlite-v1/);
