@@ -47,23 +47,11 @@ function scopeForSeller(seller) {
   if (!marketplaceId) throw new Error(`库存分类账店铺缺少 marketplaceId：${seller.name || sellerId}`);
   const region = regionForSeller(seller);
   return {
-    seller,
     sellerId,
     marketplaceId,
     region,
-    location: countryCodeForSeller(seller),
     scopeKey: `${sellerId}|${region}|${marketplaceId}`,
   };
-}
-
-function countryCodeForSeller(seller) {
-  const explicit = String(seller.countryCode || "").trim().toUpperCase();
-  if (explicit) return explicit;
-  const country = String(seller.country || "").trim();
-  const known = new Map([["美国", "US"], ["加拿大", "CA"], ["德国", "DE"], ["澳洲", "AU"], ["澳大利亚", "AU"]]);
-  const code = known.get(country);
-  if (!code) throw new Error(`库存分类账无法识别店铺国家编码：${seller.name || seller.seller_id || "-"}`);
-  return code;
 }
 
 function safeError(error, details = {}) {
