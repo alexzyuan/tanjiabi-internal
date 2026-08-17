@@ -1,0 +1,4 @@
+event-date	msku	event-type	quantity	fulfillment-center	disposition	reference-id	reason	title
+2025-10-01	MSKU-1	BeginningBalance	10	ONT8	SELLABLE	opening	opening balance	Toy truck
+2025-10-03	MSKU-1	Receipts	5	ONT8	SELLABLE	receipt-1	inbound	Toy truck
+2025-10-10	MSKU-1	CustomerShipments	-7	ONT8	SELLABLE	order-1	customer shipment	Toy truck
