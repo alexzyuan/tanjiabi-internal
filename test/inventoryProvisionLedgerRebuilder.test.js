@@ -88,3 +88,21 @@ test("inventory ledger rebuilder excludes non-sellable ledger rows from provisio
   assert.equal(result.entries[0].data.rows.length, 1);
   assert.equal(result.entries[0].data.rows[0].quantity, 2);
 });
+
+test("inventory ledger rebuilder maps official numeric event types and preserves historical seed events", () => {
+  const result = rebuildInventoryProvisionHistory({
+    records: [
+      event("2024-10-01", "04", 10, 1),
+      event("2025-10-02", "01", -4, 2),
+      event("2025-10-04", "02", 1, 3),
+      event("2025-10-05", "03", -1, 4),
+      event("2025-10-06", "06", 2, 5),
+    ],
+    targetMonths: ["2025-10"], sellers, baseRowsByKey: new Map(),
+  });
+  assert.deepEqual(result.entries[0].data.rows.map(({ cohortMonth, quantity }) => ({ cohortMonth, quantity })), [
+    { cohortMonth: "2024-10", quantity: 5 },
+    { cohortMonth: "2025-10", quantity: 1 },
+    { cohortMonth: "2025-10", quantity: 2 },
+  ]);
+});

@@ -59,6 +59,34 @@ function parseQuantity(value, sourceRow) {
   return quantity;
 }
 
+function normalizeApiRecord(record, index, { expectedMonth, sellerId, marketplaceId, scopeKey }) {
+  const sourceRow = index + 1;
+  const date = parseDate(record?.date, sourceRow);
+  if (!date.startsWith(`${expectedMonth}-`)) {
+    throw new Error(`库存分类账 API 第 ${sourceRow} 行日期 ${date} 不属于目标月份 ${expectedMonth}。`);
+  }
+  const msku = normalizeText(record?.msku);
+  const eventType = normalizeText(record?.eventType);
+  if (!msku) throw new Error(`库存分类账 API 第 ${sourceRow} 行 MSKU 为空。`);
+  if (!eventType) throw new Error(`库存分类账 API 第 ${sourceRow} 行事件类型为空。`);
+  return {
+    date,
+    msku,
+    eventType,
+    eventTypeDescription: normalizeText(record?.eventTypeDesc),
+    quantity: parseQuantity(record?.quantity, sourceRow),
+    fulfillmentCenter: normalizeText(record?.fulfillmentCenter),
+    disposition: normalizeText(record?.disposition),
+    referenceId: normalizeText(record?.referenceId),
+    reason: normalizeText(record?.reason),
+    title: normalizeText(record?.title),
+    sellerId: normalizeText(sellerId),
+    marketplaceId: normalizeText(marketplaceId),
+    scopeKey: normalizeText(scopeKey),
+    sourceRow,
+  };
+}
+
 function decodeReport(bytes, compressionAlgorithm) {
   const compression = String(compressionAlgorithm || "NONE").trim().toUpperCase();
   if (compression === "GZIP") return gunzipSync(bytes).toString("utf8");
@@ -114,6 +142,32 @@ export function parseInventoryLedgerReport(bytes, {
     records,
     meta: {
       rowCount: records.length,
+      expectedMonth,
+      sellerId: normalizeText(sellerId),
+      marketplaceId: normalizeText(marketplaceId),
+      scopeKey: normalizeText(scopeKey),
+    },
+  };
+}
+
+export function parseInventoryLedgerApiRecords(records, {
+  expectedMonth,
+  sellerId,
+  marketplaceId,
+  scopeKey,
+} = {}) {
+  if (!/^[0-9]{4}-[0-9]{2}$/u.test(String(expectedMonth || ""))) throw new Error("库存分类账 expectedMonth 无效。");
+  if (!normalizeText(sellerId) || !normalizeText(marketplaceId) || !normalizeText(scopeKey)) {
+    throw new Error("库存分类账解析缺少 sellerId、marketplaceId 或 scopeKey。 ");
+  }
+  if (!Array.isArray(records)) throw new Error("库存分类账 API records 必须是数组。 ");
+  const normalized = records.map((record, index) => normalizeApiRecord(record, index, {
+    expectedMonth, sellerId, marketplaceId, scopeKey,
+  }));
+  return {
+    records: normalized,
+    meta: {
+      rowCount: normalized.length,
       expectedMonth,
       sellerId: normalizeText(sellerId),
       marketplaceId: normalizeText(marketplaceId),

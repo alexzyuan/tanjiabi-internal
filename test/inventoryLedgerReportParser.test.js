@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { gzipSync } from "node:zlib";
 import test from "node:test";
-import { parseInventoryLedgerReport } from "../src/services/inventoryLedgerReportParser.js";
+import { parseInventoryLedgerApiRecords, parseInventoryLedgerReport } from "../src/services/inventoryLedgerReportParser.js";
 
 async function fixture(name) {
   return readFile(new URL(`./fixtures/inventory-ledger/${name}`, import.meta.url));
@@ -64,4 +64,16 @@ test("inventory ledger parser rejects missing required headers, invalid quantiti
 test("inventory ledger parser retains unknown event types for the FIFO validator", () => {
   const parsed = parseInventoryLedgerReport(Buffer.from("event-date\tmsku\tevent-type\tquantity\tfulfillment-center\tdisposition\treference-id\treason\n2025-10-01\tMSKU-1\tMysteryEvent\t1\tONT8\tSELLABLE\tid\treason\n"), context);
   assert.equal(parsed.records[0].eventType, "MysteryEvent");
+});
+
+test("inventory ledger parser normalizes the official detail API records", () => {
+  const parsed = parseInventoryLedgerApiRecords([{
+    date: "2025-10-31", msku: "MSKU-1", eventType: "04", eventTypeDesc: "Receipts", quantity: 3,
+    fulfillmentCenter: "ONT8", disposition: "01", referenceId: "ref-1", reason: "", title: "Toy truck",
+  }], context);
+  assert.deepEqual(parsed.records[0], {
+    date: "2025-10-31", msku: "MSKU-1", eventType: "04", eventTypeDescription: "Receipts", quantity: 3,
+    fulfillmentCenter: "ONT8", disposition: "01", referenceId: "ref-1", reason: "", title: "Toy truck",
+    sellerId: "A-SELLER", marketplaceId: "ATVPD", scopeKey: "A-SELLER|na|ATVPD", sourceRow: 1,
+  });
 });
