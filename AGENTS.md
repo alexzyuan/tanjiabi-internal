@@ -71,11 +71,11 @@ Legacy product-catalog retirement is a manual two-phase operation. Phase 1 only 
 
 ## Inventory Ledger Raw Rebuild
 
-- Historical inventory-provision quantities and FIFO ages are rebuilt only from Lingxing's Amazon inventory-ledger detail export `GET_LEDGER_DETAIL_VIEW_DATA`, starting at `2025-10`; costs remain owned by the separate product-management cost-refresh workflow.
-- `src/services/inventoryLedgerRawReportService.js` orchestrates export, strict parsing, FIFO reconstruction, and all-or-nothing historical-cache replacement. `src/services/inventoryLedgerRawReportStore.js` owns raw binary files, manifests, job state, and atomic history-directory commits. Do not add binary I/O to `src/utils/cacheStore.js`.
+- Historical inventory-provision quantities and FIFO ages are rebuilt only from Lingxing `/cost/center/ods/detail/query`, whose events are sourced from Amazon `GET_LEDGER_DETAIL_VIEW_DATA`. Read the FIFO seed from `2024-10`, write target history from `2025-10`, and keep costs in the separate product-management cost-refresh workflow.
+- `src/services/inventoryLedgerRawReportService.js` orchestrates official-detail pagination, strict parsing, FIFO reconstruction, and all-or-nothing historical-cache replacement. `src/services/inventoryLedgerRawReportStore.js` owns archived normalized API JSON, manifests, job state, and atomic history-directory commits. Do not add binary I/O to `src/utils/cacheStore.js`.
 - The scheduler runs after the 10th at `INVENTORY_LEDGER_REBUILD_AT` (default `02:00`, `Asia/Shanghai`) and uses `withJobLock`. Its admin status endpoint is read-only; raw report files must never be exposed as a browser download route.
-- Every seller scope must contain the Lingxing `seller_id` and `marketplaceId`; do not infer either from SID, name, or country. A missing scope, export failure, unknown required report field/event, malformed date, or incomplete month coverage must fail the run and leave the prior `inventory-provision-history` directory unchanged.
-- Original reports and redacted manifests remain in `data-cache/inventory-ledger-raw/<YYYY-MM>/`. Manifests may record IDs, region, date range, hash and parsing counts, but never access tokens or complete third-party responses.
+- Every seller scope must contain the Lingxing `seller_id` and `marketplaceId`; do not infer either from SID, name, or country. A missing scope, API/page failure, unknown required event, malformed date, FIFO overdraw, or incomplete month coverage must fail the run and leave the prior `inventory-provision-history` directory unchanged. `--dry-run` must perform the same retrieval and FIFO validation without archiving or committing.
+- Normalized original API event JSON and redacted manifests remain in `data-cache/inventory-ledger-raw/<YYYY-MM>/`. Manifests may record store IDs, region, date range, hash and parsing counts, but never access tokens or complete third-party responses.
 
 ## FBA Logistics API Ordering
 

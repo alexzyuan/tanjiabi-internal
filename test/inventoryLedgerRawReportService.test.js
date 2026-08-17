@@ -2,18 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { buildInventoryLedgerTargetMonths, runInventoryLedgerRawRebuild } from "../src/services/inventoryLedgerRawReportService.js";
 
-const seller = {
-  sid: 8708,
-  seller_id: "A-SELLER",
-  name: "xiamentanjia-US",
-  country: "美国",
-  countryCode: "US",
-  marketplaceId: "ATVPD",
-};
-
-function reportBytes(month) {
-  return Buffer.from(`event-date\tmsku\tevent-type\tquantity\tfulfillment-center\tdisposition\treference-id\treason\n${month}-01\tMSKU-1\tBeginningBalance\t2\tONT8\tSELLABLE\topening\topening\n`);
-}
+const seller = { sid: 8708, seller_id: "A-SELLER", name: "xiamentanjia-US", country: "美国", countryCode: "US", marketplaceId: "ATVPD" };
 
 function makeStore() {
   const manifests = new Map();
@@ -21,9 +10,7 @@ function makeStore() {
   const commits = [];
   const key = (month, scopeKey) => `${month}|${scopeKey}`;
   return {
-    manifests,
-    reports,
-    commits,
+    manifests, reports, commits,
     async readManifest(month, scopeKey) { return manifests.get(key(month, scopeKey)) || null; },
     async saveReport({ month, scopeKey, extension, bytes, manifest }) {
       reports.set(key(month, scopeKey), bytes);
@@ -36,40 +23,32 @@ function makeStore() {
   };
 }
 
-function createAdapter({ statuses = ["IN_QUEUE", "IN_PROGRESS", "DONE"], omitDoneUrl = false } = {}) {
-  const calls = { create: [], query: [], renew: [], download: [] };
-  let statusIndex = 0;
+function officialRecord({ date, eventType, quantity }) {
   return {
-    calls,
-    async createReportExportTask(params) { calls.create.push(params); return { data: { task_id: `task-${calls.create.length}` } }; },
-    async queryReportExportTask(params) {
-      calls.query.push(params);
-      const progress_status = statuses[Math.min(statusIndex++, statuses.length - 1)];
-      return { data: {
-        progress_status,
-        report_document_id: "doc-1",
-        compression_algorithm: "NONE",
-        url: progress_status === "DONE" && !omitDoneUrl ? "https://download.test/report" : "",
-      } };
-    },
-    async renewReportExportTask(params) { calls.renew.push(params); return { data: { url: "https://download.test/renewed" } }; },
-    async downloadReportDocument(url) { calls.download.push(url); return reportBytes("2025-10"); },
+    date, msku: "MSKU-1", eventType, eventTypeDesc: eventType === "04" ? "Receipts" : "Shipments", quantity,
+    fulfillmentCenter: "ONT8", disposition: "01", referenceId: "ref-1", reason: "", title: "Toy truck",
   };
 }
 
-function serviceOptions({ adapter = createAdapter(), store = makeStore(), force = false } = {}) {
+function createOfficialLedgerAdapter({ fail = false } = {}) {
+  const calls = [];
   return {
-    adapter,
-    store,
-    force,
-    now: new Date("2025-11-10T02:00:00+08:00"),
-    startMonth: "2025-10",
-    getSellers: async () => ({ sellers: [seller] }),
-    sleep: async () => {},
-    pollIntervalMs: 0,
-    maxPollAttempts: 4,
-    readHistoryCache: async () => null,
-    logger: { info() {}, error() {} },
+    calls,
+    async fetchAllInventoryLedgerDetails(params) {
+      calls.push(params);
+      if (fail) throw new Error("official ledger unavailable");
+      if (params.startDate === "2024-10-01") return [officialRecord({ date: "2024-10-01", eventType: "04", quantity: 5 })];
+      if (params.startDate === "2025-10-01") return [officialRecord({ date: "2025-10-02", eventType: "01", quantity: -1 })];
+      return [];
+    },
+  };
+}
+
+function serviceOptions({ adapter = createOfficialLedgerAdapter(), store = makeStore(), force = false } = {}) {
+  return {
+    adapter, store, force,
+    now: new Date("2025-11-10T02:00:00+08:00"), startMonth: "2025-10", ledgerSeedMonth: "2024-10",
+    getSellers: async () => ({ sellers: [seller] }), readHistoryCache: async () => null, logger: { info() {}, error() {} },
   };
 }
 
@@ -79,50 +58,45 @@ test("target months start at 2025-10 and stop at the previous Shanghai month", (
   ]);
 });
 
-test("raw rebuild polls, archives, parses, and atomically commits complete scope", async () => {
-  const adapter = createAdapter();
+test("raw rebuild fetches official detail API seed and target months, archives JSON, and atomically commits", async () => {
+  const adapter = createOfficialLedgerAdapter();
   const store = makeStore();
   const result = await runInventoryLedgerRawRebuild(serviceOptions({ adapter, store }));
-
-  assert.equal(adapter.calls.create.length, 1);
-  assert.equal(adapter.calls.create[0].report_type, "GET_LEDGER_DETAIL_VIEW_DATA");
-  assert.equal(adapter.calls.create[0].data_start_time, "2025-10-01T00:00:00Z");
-  assert.equal(adapter.calls.create[0].data_end_time, "2025-10-31T23:59:59Z");
-  assert.deepEqual(adapter.calls.create[0].marketplace_ids, ["ATVPD"]);
-  assert.equal(adapter.calls.create[0].region, "na");
-  assert.equal(adapter.calls.query.length, 3);
-  assert.equal(adapter.calls.download.length, 1);
+  assert.equal(adapter.calls.length, 13);
+  assert.deepEqual(adapter.calls.map(({ startDate, endDate, sellerIds, disposition }) => ({ startDate, endDate, sellerIds, disposition })), [
+    ["2024-10", "31"], ["2024-11", "30"], ["2024-12", "31"], ["2025-01", "31"], ["2025-02", "28"], ["2025-03", "31"], ["2025-04", "30"], ["2025-05", "31"], ["2025-06", "30"], ["2025-07", "31"], ["2025-08", "31"], ["2025-09", "30"], ["2025-10", "31"],
+  ].map(([month, day]) => ({ startDate: `${month}-01`, endDate: `${month}-${day}`, sellerIds: ["A-SELLER"], disposition: "01" })));
+  assert.deepEqual(adapter.calls.map(({ locations }) => locations), Array(13).fill(["US"]));
+  assert.equal(result.reportCount, 13);
+  assert.equal(result.parsedRowCount, 2);
   assert.equal(store.commits.length, 1);
   assert.deepEqual(result.committedMonths, ["2025-10"]);
-  assert.equal(result.parsedRowCount, 1);
+  assert.equal(store.manifests.get("2024-10|A-SELLER|na|ATVPD").source, "lingxing-inventory-ledger-detail-api");
 });
 
-test("raw rebuild renews a finished report URL once when task query omits it", async () => {
-  const adapter = createAdapter({ statuses: ["DONE"], omitDoneUrl: true });
-  const store = makeStore();
-  await runInventoryLedgerRawRebuild(serviceOptions({ adapter, store }));
-  assert.equal(adapter.calls.renew.length, 1);
-  assert.deepEqual(adapter.calls.download, ["https://download.test/renewed"]);
-});
-
-test("raw rebuild reuses successful manifests and only force requests reports again", async () => {
-  const adapter = createAdapter({ statuses: ["DONE"] });
+test("raw rebuild reuses validated official-detail manifests unless force is requested", async () => {
+  const adapter = createOfficialLedgerAdapter();
   const store = makeStore();
   await runInventoryLedgerRawRebuild(serviceOptions({ adapter, store }));
   const reused = await runInventoryLedgerRawRebuild(serviceOptions({ adapter, store }));
-  assert.equal(adapter.calls.create.length, 1);
-  assert.equal(reused.reportCount, 1);
-
+  assert.equal(adapter.calls.length, 13);
+  assert.equal(reused.reusedReportCount, 13);
   await runInventoryLedgerRawRebuild(serviceOptions({ adapter, store, force: true }));
-  assert.equal(adapter.calls.create.length, 2);
+  assert.equal(adapter.calls.length, 26);
 });
 
-test("raw rebuild does not commit when report task fails or parser input is invalid", async () => {
-  const adapter = createAdapter({ statuses: ["FATAL"] });
+test("raw rebuild does not commit when official detail API retrieval fails", async () => {
+  const adapter = createOfficialLedgerAdapter({ fail: true });
   const store = makeStore();
-  await assert.rejects(
-    () => runInventoryLedgerRawRebuild(serviceOptions({ adapter, store })),
-    /导出失败/u,
-  );
+  await assert.rejects(() => runInventoryLedgerRawRebuild(serviceOptions({ adapter, store })), /official ledger unavailable/u);
+  assert.equal(store.commits.length, 0);
+});
+
+test("raw rebuild dry run validates official records without archiving or replacing history", async () => {
+  const adapter = createOfficialLedgerAdapter();
+  const store = makeStore();
+  const result = await runInventoryLedgerRawRebuild({ ...serviceOptions({ adapter, store }), dryRun: true });
+  assert.equal(result.dryRun, true);
+  assert.equal(store.manifests.size, 0);
   assert.equal(store.commits.length, 0);
 });

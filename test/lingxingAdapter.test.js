@@ -794,6 +794,35 @@ test("LingxingAdapter sends daily inventory ledger summary with camel inclusive 
   assert.equal(calls[0].params.end_date, undefined);
 });
 
+test("LingxingAdapter pages the official inventory ledger detail API without truncating records", async () => {
+  const adapter = new LingxingAdapter(lingxingTestConfig);
+  const calls = [];
+  adapter.performSignedRequest = async (endpoint, options) => {
+    calls.push({ endpoint, params: options.params });
+    const offset = options.params.offset;
+    return {
+      code: 1,
+      success: true,
+      data: {
+        total: 3,
+        records: offset === 0 ? [{ msku: "A" }, { msku: "B" }] : [{ msku: "C" }],
+      },
+    };
+  };
+
+  const records = await adapter.fetchAllInventoryLedgerDetails({
+    sellerIds: ["A-SELLER"], startDate: "2025-10-01", endDate: "2025-10-31", disposition: "01",
+  }, { length: 2, maxRows: 10 });
+
+  assert.deepEqual(records, [{ msku: "A" }, { msku: "B" }, { msku: "C" }]);
+  assert.deepEqual(calls.map(({ endpoint, params }) => ({ endpoint, offset: params.offset, length: params.length })), [
+    { endpoint: "/cost/center/ods/detail/query", offset: 0, length: 2 },
+    { endpoint: "/cost/center/ods/detail/query", offset: 2, length: 2 },
+  ]);
+  assert.equal(calls[0].params.startDate, "2025-10-01");
+  assert.equal(calls[0].params.endDate, "2025-10-31");
+});
+
 test("LingxingAdapter supports inventory ledger report task renewal", async () => {
   const adapter = new LingxingAdapter(lingxingTestConfig);
   const calls = [];

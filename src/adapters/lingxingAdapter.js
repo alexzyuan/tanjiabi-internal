@@ -1020,6 +1020,59 @@ export class LingxingAdapter {
     });
   }
 
+  fetchInventoryLedgerDetailPage(params = {}) {
+    return this.signedRequest("/cost/center/ods/detail/query", {
+      method: "POST",
+      successCodes: [1, "1"],
+      acceptSuccessBoolean: true,
+      params: {
+        offset: 0,
+        length: 1000,
+        ...lingxingDateRangeParams("/cost/center/ods/detail/query", params),
+      },
+    });
+  }
+
+  async fetchAllInventoryLedgerDetails(params = {}, { length = 1000, maxRows = 100_000 } = {}) {
+    if (!Number.isInteger(length) || length <= 0 || length > 1000) {
+      throw new Error("库存分类账分页长度必须是 1-1000 的整数。 ");
+    }
+    if (!Number.isInteger(maxRows) || maxRows < length) {
+      throw new Error("库存分类账分页安全上限必须不小于单页长度。 ");
+    }
+    const endpoint = "/cost/center/ods/detail/query";
+    const records = [];
+    let declaredTotal = null;
+    for (let offset = 0; offset < maxRows; offset += length) {
+      const payload = await this.fetchInventoryLedgerDetailPage({ ...params, offset, length });
+      const pageRecords = this.normalizeRecordList(payload);
+      const rawTotal = payload?.data?.total;
+      const total = rawTotal === undefined || rawTotal === null ? null : Number(rawTotal);
+      if (total !== null && (!Number.isInteger(total) || total < 0)) {
+        throw new Error("库存分类账分页 total 无效，拒绝使用可能截断的数据。 ");
+      }
+      if (declaredTotal !== null && total !== null && declaredTotal !== total) {
+        throw new Error("库存分类账分页 total 前后不一致，拒绝使用可能变动的数据。 ");
+      }
+      if (total !== null) declaredTotal = total;
+      if (records.length + pageRecords.length > maxRows) {
+        throw new Error(`库存分类账分页超过安全上限 ${maxRows}，拒绝截断。`);
+      }
+      records.push(...pageRecords);
+      if (declaredTotal !== null && records.length > declaredTotal) {
+        throw new Error("库存分类账分页记录数超过 total，拒绝使用不一致的数据。 ");
+      }
+      if (declaredTotal !== null && records.length === declaredTotal) return records;
+      if (!pageRecords.length || pageRecords.length < length) {
+        if (declaredTotal !== null && records.length < declaredTotal) {
+          throw new Error("库存分类账分页提前结束，拒绝使用不完整的数据。 ");
+        }
+        return records;
+      }
+    }
+    throw new Error(`库存分类账分页达到安全上限 ${maxRows}，拒绝截断。`);
+  }
+
   createReportExportTask(params = {}) {
     return this.signedRequest("/basicOpen/report/create/reportExportTask", {
       method: "POST",

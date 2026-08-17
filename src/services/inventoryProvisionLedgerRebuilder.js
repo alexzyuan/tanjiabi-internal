@@ -43,6 +43,12 @@ function normalizedEventType(value) {
 }
 
 const eventActions = new Map([
+  ["01", "out"],
+  ["02", "in"],
+  ["03", "signed"],
+  ["04", "in"],
+  ["05", "out"],
+  ["06", "signed"],
   ["beginningbalance", "opening"],
   ["receipts", "in"],
   ["receipt", "in"],
@@ -147,11 +153,11 @@ export function rebuildInventoryProvisionHistory({
   nowText = () => new Date().toLocaleString("zh-CN", { hour12: false }),
 } = {}) {
   const months = uniqueMonths(targetMonths);
-  const targetSet = new Set(months);
+  const lastTargetMonth = months.at(-1);
   const sellersById = new Map(sellers.map((seller) => [String(seller.seller_id || seller.sellerId || ""), seller]));
   const recordsByKey = new Map();
   records.forEach((record) => {
-    if (!targetSet.has(monthText(record.date))) throw new Error(`库存分类账事件 ${record.date} 不在重建范围内。`);
+    if (monthText(record.date) > lastTargetMonth) throw new Error(`库存分类账事件 ${record.date} 晚于重建范围。`);
     if (!isSellableDisposition(record.disposition)) return;
     const key = eventKey(record);
     if (!recordsByKey.has(key)) recordsByKey.set(key, []);
@@ -166,7 +172,8 @@ export function rebuildInventoryProvisionHistory({
     let cohorts = [];
     let offset = 0;
     for (const month of months) {
-      while (offset < group.length && monthText(group[offset].date) === month) {
+      const monthEnd = lastDayOfMonth(month);
+      while (offset < group.length && group[offset].date <= monthEnd) {
         cohorts = applyRecord(cohorts, group[offset]);
         offset += 1;
       }
