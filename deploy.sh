@@ -193,7 +193,13 @@ tar -xzf "$ARCHIVE" -C "$TMP_DIR"
 [ -f "$TMP_DIR/scripts/sales-facts-sqlite-smoke.js" ] || fail "部署包缺少销售事实 SQLite smoke"
 [ -f "$TMP_DIR/scripts/validate-sales-facts-schema.js" ] || fail "部署包缺少销售事实 schema 校验脚本"
 [ -f "$TMP_DIR/scripts/validate-sales-facts-preflight-artifact.js" ] || fail "部署包缺少销售事实 preflight artifact 校验脚本"
-rm -rf "$TMP_DIR"
+
+log "在隔离目录安装依赖"
+npm ci --prefix "$TMP_DIR"
+
+log "检查新版 Node 语法"
+node --check "$TMP_DIR/server.js"
+node --check "$TMP_DIR/app.js"
 
 log "解压新版到线上目录"
 tar -xzf "$ARCHIVE" -C "$APP_DIR"
@@ -203,12 +209,13 @@ cd "$APP_DIR"
 log "检查 Node 版本"
 node -e 'const version = process.versions.node.split(".").map(Number); const ok = (version[0] === 22 && version[1] >= 19) || (version[0] > 22 && version[0] < 25); if (!ok) { console.error(`Node ${process.versions.node} 不满足 package.json engines: >=22.19.0 <25`); process.exit(1); }'
 
-log "检查 Node 语法"
-node --check server.js
-node --check app.js
-
-log "安装依赖"
-npm ci
+log "切换已验证的原生依赖"
+PREVIOUS_NODE_MODULES="$TMP_DIR/previous-node_modules"
+if [ -d "$APP_DIR/node_modules" ]; then
+  mv "$APP_DIR/node_modules" "$PREVIOUS_NODE_MODULES"
+fi
+mv "$TMP_DIR/node_modules" "$APP_DIR/node_modules"
+rm -rf "$PREVIOUS_NODE_MODULES"
 
 log "检查 SQLite 原生模块和事务"
 node scripts/product-catalog-sqlite-smoke.js

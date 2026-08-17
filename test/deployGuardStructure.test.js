@@ -73,6 +73,20 @@ test("deployment source installs, smokes, validates, checks approved preflight, 
   assert.match(source, /SALES_FACTS_PREFLIGHT_ARTIFACT_SHA256/);
 });
 
+test("deployment builds native dependencies in the isolated release directory before replacing live node_modules", async () => {
+  const source = await readFile(new URL("../deploy.sh", import.meta.url), "utf8");
+  const stagedInstallIndex = source.indexOf('npm ci --prefix "$TMP_DIR"');
+  const extractLiveIndex = source.indexOf('tar -xzf "$ARCHIVE" -C "$APP_DIR"');
+  const swapIndex = source.indexOf('mv "$TMP_DIR/node_modules" "$APP_DIR/node_modules"');
+  const restartIndex = source.indexOf("pm2 start");
+
+  assert.ok(stagedInstallIndex >= 0, "native dependencies must be installed in the isolated release directory");
+  assert.ok(extractLiveIndex >= 0 && stagedInstallIndex < extractLiveIndex);
+  assert.ok(swapIndex >= 0 && extractLiveIndex < swapIndex);
+  assert.ok(swapIndex < restartIndex);
+  assert.doesNotMatch(source, /\ncd "\$APP_DIR"\n[\s\S]*?\nnpm ci\n/);
+});
+
 test("deployment can explicitly skip only the sales facts business preflight", async () => {
   const source = await readFile(new URL("../deploy.sh", import.meta.url), "utf8");
   const skipIndex = source.indexOf("SKIP_SALES_FACTS_PREFLIGHT");
