@@ -138,6 +138,25 @@ test("inventory provision cost refresh route is finance-protected and invokes an
   assert.deepEqual(payload, { ok: true, refresh: { year: "2026", months: [{ month: "2026-01", updatedRows: 1 }], refreshedAt: "2026/8/14 10:00:00" } });
 });
 
+test("inventory provision refresh route is finance-protected and forwards selected month", async () => {
+  let received = null;
+  let payload = null;
+  const route = createInventoryRoutes({
+    readJsonBody: async () => ({ date: "2026-07" }),
+    refreshInventoryProvisionMonth: async (value) => {
+      received = value;
+      return { month: "2026-07", backupCreated: true };
+    },
+    sendJson: (_res, _status, value) => { payload = value; },
+  }).find((item) => item.path === "/api/dashboard/inventory-provision/refresh");
+
+  assert.equal(route?.method, "POST");
+  assert.equal(route?.auth, "finance");
+  await route.handler({ req: {}, res: {} });
+  assert.deepEqual(received, { date: "2026-07" });
+  assert.deepEqual(payload, { ok: true, refresh: { month: "2026-07", backupCreated: true } });
+});
+
 test("inventory ledger rebuild status route is admin-protected and read-only", async () => {
   let payload = null;
   const status = { status: "success", committedMonths: ["2025-10", "2026-07"] };

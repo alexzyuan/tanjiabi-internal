@@ -50,6 +50,7 @@ import {
   getInventoryProvisionDashboard,
 } from "./src/services/inventoryProvisionService.js";
 import { refreshInventoryProvisionCosts } from "./src/services/inventoryProvisionCostRefreshService.js";
+import { refreshInventoryProvisionMonth } from "./src/services/inventoryProvisionRefreshService.js";
 import { getSlowMovingRiskDashboard } from "./src/services/slowMovingRiskService.js";
 import { createSlowMovingRiskSnapshotStore } from "./src/services/slowMovingRiskSnapshotStore.js";
 import { startSlowMovingRiskWeeklyScheduler } from "./src/jobs/slowMovingRiskWeeklyJob.js";
@@ -968,6 +969,7 @@ const apiRoutes = createApiRoutes(buildApiRoutes({
   saveAftersalesMailSettings: aftersalesMailSettingsService.saveSettings,
   getInventoryProvisionDashboard,
   exportInventoryProvisionDetailXlsx,
+  refreshInventoryProvisionMonth,
   refreshInventoryProvisionCosts,
   getSlowMovingRiskDashboard,
   listSlowMovingRiskReports: () => slowMovingRiskSnapshotStore.list(),

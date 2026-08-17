@@ -6,6 +6,7 @@ export function createInventoryRoutes(deps = {}) {
     isFinanceUser,
     getInventoryProvisionDashboard,
     exportInventoryProvisionDetailXlsx,
+    refreshInventoryProvisionMonth,
     refreshInventoryProvisionCosts,
     getSlowMovingRiskDashboard,
     listSlowMovingRiskReports,
@@ -54,6 +55,17 @@ export function createInventoryRoutes(deps = {}) {
         } catch (error) {
           sendJson(res, 502, error.payload || error.details || { error: error.message || "库存减值明细导出失败" });
         }
+      },
+    },
+    {
+      method: "POST",
+      path: "/api/dashboard/inventory-provision/refresh",
+      auth: "finance",
+      errorStatusCode: 502,
+      handler: async ({ req, res }) => {
+        const payload = await readJsonBody(req);
+        const refresh = await refreshInventoryProvisionMonth({ date: payload?.date });
+        sendJson(res, 200, { ok: true, refresh });
       },
     },
     {
