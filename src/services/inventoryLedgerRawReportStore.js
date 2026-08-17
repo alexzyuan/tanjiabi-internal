@@ -28,6 +28,14 @@ function manifestFile(rawDir, month, scopeKey) {
   return path.join(rawDir, safeMonth(month), `${hashKey(safeScopeKey(scopeKey))}.manifest.json`);
 }
 
+function requiredSha256(value) {
+  const sha256 = String(value || "").trim().toLowerCase();
+  if (!/^[a-f0-9]{64}$/u.test(sha256)) {
+    throw new Error("库存分类账原始文件完整性校验缺少有效的 manifest SHA-256。");
+  }
+  return sha256;
+}
+
 async function writeBufferAtomic(filePath, bytes) {
   const dir = path.dirname(filePath);
   await mkdir(dir, { recursive: true });
@@ -72,6 +80,25 @@ export function createInventoryLedgerRawReportStore({ dataDir = path.join(proces
       if (error.code === "ENOENT") return null;
       throw error;
     }
+  }
+
+  async function verifyReport({ month, scopeKey, extension = "bin", expectedSha256 } = {}) {
+    const expected = requiredSha256(expectedSha256);
+    const filePath = reportFile(rawDir, month, scopeKey, extension);
+    let bytes;
+    try {
+      bytes = await readFile(filePath);
+    } catch (error) {
+      if (error.code === "ENOENT") {
+        throw new Error(`库存分类账原始文件缺失，无法通过 manifest 完整性校验：${safeMonth(month)} / ${safeScopeKey(scopeKey)}。`);
+      }
+      throw error;
+    }
+    const sha256 = crypto.createHash("sha256").update(bytes).digest("hex");
+    if (sha256 !== expected) {
+      throw new Error(`库存分类账原始文件 SHA-256 不匹配：${safeMonth(month)} / ${safeScopeKey(scopeKey)}（manifest ${expected}，实际 ${sha256}）。`);
+    }
+    return { bytes, byteCount: bytes.length, sha256 };
   }
 
   async function listManifests(months = []) {
@@ -153,6 +180,7 @@ export function createInventoryLedgerRawReportStore({ dataDir = path.join(proces
     readManifest,
     saveReport,
     readReport,
+    verifyReport,
     listManifests,
     readJobState: () => readJsonWithRecovery(jobStateFile, {}),
     writeJobState: (state = {}) => writeJsonAtomic(jobStateFile, state),
