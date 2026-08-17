@@ -79,7 +79,18 @@ test("historical inventory force refresh bypasses cache and preserves the German
     sellers: [{ sid: 17307, seller_id: "A-DE", name: "tanjia-eu-DE", country: "德国", countryCode: "DE" }],
     adapter: {
       fetchAllFbaInventoryDetails: async () => [],
-      fetchMonthlyInventoryLedgerSummary: async () => ({ data: { records: [] } }),
+      fetchMonthlyInventoryLedgerSummary: async ({ startDate }) => ({
+        data: {
+          records: startDate === "2026-05" ? [{
+            sellerId: "A-DE",
+            location: "DE",
+            msku: "JMDE-HJ825A",
+            date: "2026-05",
+            receipts: 3,
+            endingWareHouseBalance: 3,
+          }] : [],
+        },
+      }),
       fetchFbaInventoryHistory: async () => ({
         data: {
           row_data: [{
@@ -104,6 +115,102 @@ test("historical inventory force refresh bypasses cache and preserves the German
   assert.equal(result.rows[0].country, "德国");
   assert.equal(result.rows[0].purchaseCost, 10);
   assert.equal(result.rows[0].firstLegCost, 2);
+});
+
+test("historical inventory rejects a missing target-month ledger instead of proportionally scaling batches", async () => {
+  const { loadHistoricalInventoryRows } = await import("../src/services/inventoryProvisionService.js");
+  let saved = false;
+
+  await assert.rejects(
+    () => loadHistoricalInventoryRows("2026-04", {
+      sellers: [{ sid: 17307, seller_id: "A-DE", name: "tanjia-eu-DE", country: "德国", countryCode: "DE" }],
+      adapter: {
+        fetchAllFbaInventoryDetails: async () => [],
+        fetchMonthlyInventoryLedgerSummary: async ({ startDate }) => ({
+          data: {
+            records: startDate === "2026-03" ? [{
+              sellerId: "A-DE",
+              location: "DE",
+              msku: "JMDE-HJ825A",
+              date: "2026-03",
+              startingWarehouseBalance: 2,
+              receipts: 2,
+              endingWareHouseBalance: 4,
+            }] : [],
+          },
+        }),
+        fetchFbaInventoryHistory: async () => ({
+          data: {
+            row_data: [{
+              sid: 17307,
+              country_code: "DE",
+              msku: "JMDE-HJ825A",
+              end_count: 3,
+              end_other_amount: 30,
+              end_logistic_amount: 6,
+            }],
+          },
+        }),
+        fetchListings: async () => ({ data: { list: [] } }),
+      },
+      readHistoryCache: async () => null,
+      saveHistoryCache: async () => { saved = true; },
+    }),
+    /库存分类账缺少目标月份记录：2026-04/u,
+  );
+
+  assert.equal(saved, false);
+});
+
+test("historical inventory ignores caches without the current FIFO rebuild version", async () => {
+  const { loadHistoricalInventoryRows } = await import("../src/services/inventoryProvisionService.js");
+  let ledgerCalls = 0;
+
+  const result = await loadHistoricalInventoryRows("2026-05", {
+    sellers: [{ sid: 17307, seller_id: "A-DE", name: "tanjia-eu-DE", country: "德国", countryCode: "DE" }],
+    adapter: {
+      fetchAllFbaInventoryDetails: async () => [],
+      fetchMonthlyInventoryLedgerSummary: async ({ startDate }) => {
+        ledgerCalls += 1;
+        return {
+          data: {
+            records: startDate === "2026-05" ? [{
+              sellerId: "A-DE",
+              location: "DE",
+              msku: "JMDE-HJ825A",
+              date: "2026-05",
+              receipts: 3,
+              endingWareHouseBalance: 3,
+            }] : [],
+          },
+        };
+      },
+      fetchFbaInventoryHistory: async () => ({
+        data: {
+          row_data: [{
+            sid: 17307,
+            country_code: "DE",
+            msku: "JMDE-HJ825A",
+            end_count: 3,
+            end_other_amount: 30,
+            end_logistic_amount: 6,
+          }],
+        },
+      }),
+      fetchListings: async () => ({ data: { list: [] } }),
+    },
+    readHistoryCache: async () => ({
+      updatedAt: "2026/8/14 16:52:04",
+      data: {
+        rows: [{ msku: "STALE" }],
+        ownerSyncVersion: 4,
+      },
+    }),
+    saveHistoryCache: async () => {},
+  });
+
+  assert.equal(ledgerCalls, 10);
+  assert.equal(result.rows[0].msku, "JMDE-HJ825A");
 });
 
 test("inventory provision landed cost rows calculate provision amount by aging bucket", async () => {

@@ -25,6 +25,7 @@ const ageBuckets = [
 ];
 
 const historicalOwnerSyncVersion = 4;
+const historicalFifoRebuildVersion = 1;
 const provisionMovementBaselineMonth = "2026-03";
 const provisionMovementStartMonth = "2026-04";
 const emptyListingOwnerFilterValue = "__EMPTY_LISTING_OWNER__";
@@ -1480,7 +1481,9 @@ export async function loadHistoricalInventoryRows(selectedMonth, {
 } = {}) {
   if (!forceRefresh) {
     const cached = await readHistoryCache(selectedMonth);
-    if (cached?.data?.rows?.length && cached.data.ownerSyncVersion === historicalOwnerSyncVersion) {
+    if (cached?.data?.rows?.length
+      && cached.data.ownerSyncVersion === historicalOwnerSyncVersion
+      && cached.data.historicalFifoRebuildVersion === historicalFifoRebuildVersion) {
       return { ...cached.data, cacheUpdatedAt: cached.updatedAt || "" };
     }
   }
@@ -1559,16 +1562,19 @@ export async function loadHistoricalInventoryRows(selectedMonth, {
     const purchaseAmount = toNumber(row.end_other_amount);
     const firstLegAmount = toNumber(row.end_logistic_amount);
     const records = ledgerByKey.get(historyRowKey(seller.seller_id, row.country_code, row.msku)) || [];
+    if (!records.some((record) => record.date === selectedMonth)) {
+      throw new Error(`库存分类账缺少目标月份记录：${selectedMonth} / ${seller.seller_id || row.seller_id || "-"} / ${row.country_code || "-"} / ${row.msku || "-"}。`);
+    }
     let cohorts = rebuildMonthlyCohorts(records, months);
     if (records.length) matchedRows += 1;
     if (!cohorts.length) cohorts = [{ month: months[0], quantity }];
 
     const cohortQuantity = cohorts.reduce((total, cohort) => total + cohort.quantity, 0);
     if (cohortQuantity && Math.abs(cohortQuantity - quantity) > 0.01) {
-      cohorts = cohorts.map((cohort) => ({
-        ...cohort,
-        quantity: cohort.quantity * quantity / cohortQuantity,
-      }));
+      throw new Error(`库存分类账与月末库存数量不一致：${selectedMonth} / ${seller.seller_id || row.seller_id || "-"} / ${row.country_code || "-"} / ${row.msku || "-"}（分类账 ${cohortQuantity}，月末库存 ${quantity}）。`);
+    }
+    if (cohorts.some((cohort) => !Number.isInteger(cohort.quantity))) {
+      throw new Error(`库存分类账 FIFO 生成了非整数批次数量：${selectedMonth} / ${seller.seller_id || row.seller_id || "-"} / ${row.country_code || "-"} / ${row.msku || "-"}。`);
     }
 
     const purchaseCost = quantity ? purchaseAmount / quantity : 0;
@@ -1602,6 +1608,7 @@ export async function loadHistoricalInventoryRows(selectedMonth, {
     ledgerCount: ledgerRecords.length,
     matchedRows,
     ownerSyncVersion: historicalOwnerSyncVersion,
+    historicalFifoRebuildVersion,
     ownerRecordCount: ownerRecords.length,
     listingOwnerRecordCount: listingOwnerRows.length,
     globalListingOwnerRecordCount: globalListingOwnerRows.length,
