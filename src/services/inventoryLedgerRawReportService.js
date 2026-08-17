@@ -3,11 +3,15 @@ import { filterCoreSellers, getLingxingAdapter } from "../adapters/lingxingAdapt
 import { readInventoryProvisionHistoryCache } from "../utils/cacheStore.js";
 import { createInventoryLedgerRawReportStore } from "./inventoryLedgerRawReportStore.js";
 import { getSellerDirectory } from "./sellerDirectoryService.js";
-import { parseInventoryLedgerApiRecords } from "./inventoryLedgerReportParser.js";
+import { parseInventoryLedgerReport } from "./inventoryLedgerReportParser.js";
 import { rebuildInventoryProvisionHistory } from "./inventoryProvisionLedgerRebuilder.js";
 
 const DEFAULT_START_MONTH = "2025-10";
 const DEFAULT_LEDGER_SEED_MONTH = "2024-10";
+const REPORT_TYPE = "GET_LEDGER_DETAIL_VIEW_DATA";
+const REPORT_SOURCE = "lingxing-exported-inventory-ledger-report";
+const POLL_INTERVAL_MS = 5_000;
+const MAX_POLL_ATTEMPTS = 180;
 let lastStatus = { status: "idle", updatedAt: "" };
 
 function shanghaiMonth(now = new Date()) {
@@ -75,8 +79,22 @@ function safeError(error, details = {}) {
   result.stage = details.stage || error?.stage || "unknown";
   result.month = details.month || error?.month || "";
   result.sellerId = details.sellerId || error?.sellerId || "";
+  result.taskId = details.taskId || error?.taskId || "";
   result.runId = details.runId || error?.runId || "";
   return result;
+}
+
+function extensionForCompression(compressionAlgorithm) {
+  const compression = String(compressionAlgorithm || "NONE").trim().toUpperCase();
+  if (compression === "NONE") return "tsv";
+  if (compression === "GZIP") return "tsv.gz";
+  throw new Error(`库存分类账不支持的压缩方式：${compression}`);
+}
+
+function requireTaskId(payload, { month, sellerId }) {
+  const taskId = String(payload?.data?.task_id || "").trim();
+  if (!taskId) throw new Error(`库存分类账创建导出任务未返回 task_id：${month} / ${sellerId}`);
+  return taskId;
 }
 
 function baseRowsFromCaches(caches, sellers) {
@@ -111,15 +129,16 @@ function baseRowsFromCaches(caches, sellers) {
 }
 
 async function parseSavedReport({ store, manifest, scope, month, parser }) {
-  const bytes = await store.readReport({ month, scopeKey: scope.scopeKey, extension: manifest.extension });
+  const verified = await store.verifyReport({
+    month,
+    scopeKey: scope.scopeKey,
+    extension: manifest.extension,
+    expectedSha256: manifest.sha256,
+  });
+  const bytes = verified?.bytes;
   if (!bytes?.length) throw new Error(`库存分类账原始文件缺失或为空：${month} / ${scope.sellerId}`);
-  let sourceRecords;
-  try {
-    sourceRecords = JSON.parse(bytes.toString("utf8"));
-  } catch (error) {
-    throw new Error(`库存分类账归档 JSON 无法解析：${month} / ${scope.sellerId}。${error.message}`);
-  }
-  return parser(sourceRecords, {
+  return parser(bytes, {
+    compressionAlgorithm: manifest.compressionAlgorithm,
     expectedMonth: month,
     sellerId: scope.sellerId,
     marketplaceId: scope.marketplaceId,
@@ -127,24 +146,76 @@ async function parseSavedReport({ store, manifest, scope, month, parser }) {
   });
 }
 
-async function fetchOrReuseReport({ adapter, store, parser, scope, month, force, dryRun, runId }) {
+async function pollReportTask({ adapter, taskId, scope, month, sleep, pollIntervalMs, maxPollAttempts }) {
+  for (let attempt = 1; attempt <= maxPollAttempts; attempt += 1) {
+    const payload = await adapter.queryReportExportTask({
+      seller_id: scope.sellerId,
+      task_id: taskId,
+      region: scope.region,
+    });
+    const task = payload?.data || {};
+    const status = String(task.progress_status || "").trim().toUpperCase();
+    if (status === "DONE") return task;
+    if (["FATAL", "CANCELLED", "UNKNOWN"].includes(status)) {
+      const error = new Error(`库存分类账导出失败：${status}（阶段 poll / 月份 ${month} / 店铺 ${scope.sellerId} / 任务 ${taskId}）。`);
+      error.taskId = taskId;
+      throw error;
+    }
+    if (!['IN_QUEUE', 'IN_PROGRESS'].includes(status)) {
+      const error = new Error(`库存分类账导出状态无效：${status || "空"}（阶段 poll / 月份 ${month} / 店铺 ${scope.sellerId} / 任务 ${taskId}）。`);
+      error.taskId = taskId;
+      throw error;
+    }
+    if (attempt < maxPollAttempts) await sleep(pollIntervalMs);
+  }
+  const error = new Error(`库存分类账导出超时（阶段 poll / 月份 ${month} / 店铺 ${scope.sellerId} / 任务 ${taskId}）。`);
+  error.taskId = taskId;
+  throw error;
+}
+
+async function fetchOrReuseReport({
+  adapter, store, parser, scope, month, force, dryRun, runId, sleep, pollIntervalMs, maxPollAttempts,
+}) {
   let manifest = !force && !dryRun ? await store.readManifest(month, scope.scopeKey) : null;
-  if (manifest?.status === "success" && manifest.source === "lingxing-inventory-ledger-detail-api") {
+  if (manifest?.status === "success" && manifest.source === REPORT_SOURCE) {
     const parsed = await parseSavedReport({ store, manifest, scope, month, parser });
     return { manifest, parsed, reused: true };
   }
 
-  let stage = "fetch";
+  let stage = "create";
+  let taskId = "";
   try {
-    const sourceRecords = await adapter.fetchAllInventoryLedgerDetails({
-      sellerIds: [scope.sellerId],
-      startDate: `${month}-01`,
-      endDate: `${month}-${lastDay(month)}`,
-      disposition: "01",
-      locations: [scope.location],
+    const created = await adapter.createReportExportTask({
+      seller_id: scope.sellerId,
+      report_type: REPORT_TYPE,
+      data_start_time: `${month}-01T00:00:00Z`,
+      data_end_time: `${month}-${lastDay(month)}T23:59:59Z`,
+      marketplace_ids: [scope.marketplaceId],
+      region: scope.region,
     });
+    taskId = requireTaskId(created, { month, sellerId: scope.sellerId });
+    stage = "poll";
+    const task = await pollReportTask({ adapter, taskId, scope, month, sleep, pollIntervalMs, maxPollAttempts });
+    const reportDocumentId = String(task.report_document_id || "").trim();
+    let url = String(task.url || "").trim();
+    if (!url) {
+      if (!reportDocumentId) throw new Error(`库存分类账完成任务缺少 report_document_id（月份 ${month} / 店铺 ${scope.sellerId} / 任务 ${taskId}）。`);
+      stage = "renew";
+      const renewed = await adapter.renewReportExportTask({
+        seller_id: scope.sellerId,
+        report_document_id: reportDocumentId,
+        region: scope.region,
+      });
+      url = String(renewed?.data?.url || "").trim();
+      if (!url) throw new Error(`库存分类账下载链接续期未返回 URL（月份 ${month} / 店铺 ${scope.sellerId} / 任务 ${taskId}）。`);
+    }
+    stage = "download";
+    const bytes = await adapter.downloadReportDocument(url);
+    const compressionAlgorithm = String(task.compression_algorithm || "NONE").trim().toUpperCase();
+    const extension = extensionForCompression(compressionAlgorithm);
     stage = "parse";
-    const parsed = parser(sourceRecords, {
+    const parsed = parser(bytes, {
+      compressionAlgorithm,
       expectedMonth: month,
       sellerId: scope.sellerId,
       marketplaceId: scope.marketplaceId,
@@ -152,28 +223,30 @@ async function fetchOrReuseReport({ adapter, store, parser, scope, month, force,
     });
     if (dryRun) return { manifest: null, parsed, reused: false };
     stage = "archive";
-    const bytes = Buffer.from(JSON.stringify(sourceRecords));
     manifest = await store.saveReport({
       month,
       scopeKey: scope.scopeKey,
-      extension: "json",
+      extension,
       bytes,
       manifest: {
         status: "success",
-        source: "lingxing-inventory-ledger-detail-api",
+        source: REPORT_SOURCE,
         sellerId: scope.sellerId,
         marketplaceId: scope.marketplaceId,
         region: scope.region,
+        reportType: REPORT_TYPE,
+        taskId,
+        reportDocumentId,
+        compressionAlgorithm,
         startDate: `${month}-01`,
         endDate: `${month}-${lastDay(month)}`,
-        disposition: "01",
         fetchedAt: new Date().toISOString(),
         parsedRowCount: parsed.meta.rowCount,
       },
     });
     return { manifest, parsed, reused: false };
   } catch (error) {
-    throw safeError(error, { stage, month, sellerId: scope.sellerId, runId });
+    throw safeError(error, { stage, month, sellerId: scope.sellerId, taskId, runId });
   }
 }
 
@@ -309,9 +382,12 @@ export async function runInventoryLedgerRawRebuild({
   adapter = getLingxingAdapter(),
   store = createInventoryLedgerRawReportStore(),
   getSellers = getSellerDirectory,
-  parser = parseInventoryLedgerApiRecords,
+  parser = parseInventoryLedgerReport,
   rebuilder = rebuildInventoryProvisionHistory,
   readHistoryCache = readInventoryProvisionHistoryCache,
+  sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  pollIntervalMs = POLL_INTERVAL_MS,
+  maxPollAttempts = MAX_POLL_ATTEMPTS,
   logger = console,
 } = {}) {
   const runId = `inventory-ledger-raw-rebuild-${randomUUID()}`;
@@ -335,7 +411,9 @@ export async function runInventoryLedgerRawRebuild({
     }
     for (const month of sourceMonths) {
       for (const scope of scopes) {
-        const result = await fetchOrReuseReport({ adapter, store, parser, scope, month, force, dryRun, runId });
+        const result = await fetchOrReuseReport({
+          adapter, store, parser, scope, month, force, dryRun, runId, sleep, pollIntervalMs, maxPollAttempts,
+        });
         parsedReports.push(result.parsed);
         if (result.reused) reusedReportCount += 1;
       }
