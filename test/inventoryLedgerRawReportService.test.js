@@ -195,3 +195,28 @@ test("raw rebuild dry run validates exported reports without archiving or replac
   assert.equal(store.manifests.size, 0);
   assert.equal(store.commits.length, 0);
 });
+
+test("raw rebuild dry run can limit an export validation to an explicit seller and one ledger month", async () => {
+  const adapter = createExportReportAdapter();
+  adapter.downloadReportDocument = async () => Buffer.from(
+    "event-date\tmsku\tevent-type\tquantity\tfulfillment-center\tdisposition\treference-id\treason\n2025-10-01\tMSKU-1\tBeginningBalance\t5\tONT8\tSELLABLE\topening\t\n2025-10-02\tMSKU-1\tCustomerShipments\t-1\tONT8\tSELLABLE\tshipment\t\n",
+  );
+  const result = await runInventoryLedgerRawRebuild({
+    ...serviceOptions({ adapter }),
+    dryRun: true,
+    startMonth: "2025-10",
+    ledgerSeedMonth: "2025-10",
+    sellerIds: ["A-SELLER"],
+  });
+  assert.deepEqual(result.targetMonths, ["2025-10"]);
+  assert.deepEqual(result.sourceMonths, ["2025-10"]);
+  assert.equal(result.sellerCount, 1);
+  assert.equal(adapter.calls.create.length, 1);
+});
+
+test("raw rebuild rejects an explicit seller that is absent from the current directory", async () => {
+  await assert.rejects(
+    () => runInventoryLedgerRawRebuild({ ...serviceOptions(), sellerIds: ["MISSING"] }),
+    /未出现在当前店铺目录/u,
+  );
+});

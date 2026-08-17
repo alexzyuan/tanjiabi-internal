@@ -312,6 +312,7 @@ export async function runInventoryLedgerRawRebuild({
   now = new Date(),
   startMonth = DEFAULT_START_MONTH,
   ledgerSeedMonth = DEFAULT_LEDGER_SEED_MONTH,
+  sellerIds = [],
   adapter = getLingxingAdapter(),
   store = createInventoryLedgerRawReportStore(),
   getSellers = getSellerDirectory,
@@ -332,7 +333,14 @@ export async function runInventoryLedgerRawRebuild({
     const directory = await getSellers({ adapter, forceRefresh: true });
     const sellers = filterCoreSellers(directory?.sellers || directory || []);
     if (!sellers.length) throw new Error("库存分类账重建店铺目录为空。");
-    const scopes = sellers.map(scopeForSeller);
+    const requestedSellerIds = [...new Set((Array.isArray(sellerIds) ? sellerIds : [sellerIds]).map((value) => String(value || "").trim()).filter(Boolean))];
+    const availableSellerIds = new Set(sellers.map((seller) => String(seller.seller_id || seller.sellerId || "").trim()));
+    const missingSellerIds = requestedSellerIds.filter((sellerId) => !availableSellerIds.has(sellerId));
+    if (missingSellerIds.length) throw new Error(`库存分类账指定 seller_id 未出现在当前店铺目录：${missingSellerIds.join(", ")}`);
+    const selectedSellers = requestedSellerIds.length
+      ? sellers.filter((seller) => requestedSellerIds.includes(String(seller.seller_id || seller.sellerId || "").trim()))
+      : sellers;
+    const scopes = selectedSellers.map(scopeForSeller);
     const parsedReports = [];
     let reusedReportCount = 0;
     logger.info?.("[inventory-ledger-raw-rebuild] started", { runId, targetMonths, sellerCount: sellers.length, force });
@@ -346,9 +354,9 @@ export async function runInventoryLedgerRawRebuild({
       }
     }
     const caches = await Promise.all(targetMonths.map((month) => readHistoryCache(month)));
-    const baseRowsByKey = baseRowsFromCaches(caches, sellers);
+    const baseRowsByKey = baseRowsFromCaches(caches, selectedSellers);
     const records = parsedReports.flatMap((result) => result.records);
-    const rebuilt = rebuilder({ records, targetMonths, sellers, baseRowsByKey });
+    const rebuilt = rebuilder({ records, targetMonths, sellers: selectedSellers, baseRowsByKey });
     const committed = dryRun
       ? { committedMonths: [] }
       : await store.commitInventoryProvisionHistoryBatch({ entries: rebuilt.entries, targetMonths });
@@ -358,7 +366,7 @@ export async function runInventoryLedgerRawRebuild({
       runId,
       targetMonths,
       sourceMonths,
-      sellerCount: sellers.length,
+      sellerCount: selectedSellers.length,
       reportCount: parsedReports.length,
       reusedReportCount,
       parsedRowCount: records.length,
