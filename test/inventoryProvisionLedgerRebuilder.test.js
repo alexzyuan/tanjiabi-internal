@@ -106,3 +106,17 @@ test("inventory ledger rebuilder maps official numeric event types and preserves
     { cohortMonth: "2025-10", quantity: 2 },
   ]);
 });
+
+test("inventory ledger rebuilder consumes an audited opening snapshot before the first ledger event", () => {
+  const result = rebuildInventoryProvisionHistory({
+    records: [
+      event("2024-10-01", "BeginningBalance", 3, 0),
+      event("2024-10-01", "01", -1, 1),
+      event("2025-10-02", "01", -1, 2),
+    ],
+    targetMonths: ["2025-10"], sellers, baseRowsByKey: new Map(),
+  });
+  assert.deepEqual(result.entries[0].data.rows.map(({ cohortMonth, quantity, ageDays }) => ({ cohortMonth, quantity, ageDays })), [
+    { cohortMonth: "2024-09", quantity: 1, ageDays: 300 },
+  ]);
+});

@@ -41,6 +41,16 @@ function createOfficialLedgerAdapter({ fail = false } = {}) {
       if (params.startDate === "2025-10-01") return [officialRecord({ date: "2025-10-02", eventType: "01", quantity: -1 })];
       return [];
     },
+    async fetchAllFbaInventoryHistory(params) {
+      calls.push(params);
+      return [{
+        msku: "MSKU-1",
+        seller_id: "A-SELLER",
+        sid: 8708,
+        country_code: "US",
+        child_data: [{ disposition: "sellable", end_count: 5 }],
+      }];
+    },
   };
 }
 
@@ -62,16 +72,20 @@ test("raw rebuild fetches official detail API seed and target months, archives J
   const adapter = createOfficialLedgerAdapter();
   const store = makeStore();
   const result = await runInventoryLedgerRawRebuild(serviceOptions({ adapter, store }));
-  assert.equal(adapter.calls.length, 13);
-  assert.deepEqual(adapter.calls.map(({ startDate, endDate, sellerIds, disposition }) => ({ startDate, endDate, sellerIds, disposition })), [
+  const ledgerCalls = adapter.calls.filter(({ startDate }) => startDate);
+  const snapshotCalls = adapter.calls.filter(({ start_date }) => start_date);
+  assert.equal(ledgerCalls.length, 13);
+  assert.deepEqual(ledgerCalls.map(({ startDate, endDate, sellerIds, disposition }) => ({ startDate, endDate, sellerIds, disposition })), [
     ["2024-10", "31"], ["2024-11", "30"], ["2024-12", "31"], ["2025-01", "31"], ["2025-02", "28"], ["2025-03", "31"], ["2025-04", "30"], ["2025-05", "31"], ["2025-06", "30"], ["2025-07", "31"], ["2025-08", "31"], ["2025-09", "30"], ["2025-10", "31"],
   ].map(([month, day]) => ({ startDate: `${month}-01`, endDate: `${month}-${day}`, sellerIds: ["A-SELLER"], disposition: "01" })));
-  assert.deepEqual(adapter.calls.map(({ locations }) => locations), Array(13).fill(["US"]));
-  assert.equal(result.reportCount, 13);
-  assert.equal(result.parsedRowCount, 2);
+  assert.deepEqual(ledgerCalls.map(({ locations }) => locations), Array(13).fill(["US"]));
+  assert.deepEqual(snapshotCalls, [{ start_date: "2024-09", end_date: "2024-09", seller_id: ["A-SELLER"] }]);
+  assert.equal(result.reportCount, 14);
+  assert.equal(result.parsedRowCount, 3);
   assert.equal(store.commits.length, 1);
   assert.deepEqual(result.committedMonths, ["2025-10"]);
   assert.equal(store.manifests.get("2024-10|A-SELLER|na|ATVPD").source, "lingxing-inventory-ledger-detail-api");
+  assert.equal(store.manifests.get("2024-09|A-SELLER|na|ATVPD|opening-snapshot").source, "lingxing-fba-monthly-inventory-snapshot");
 });
 
 test("raw rebuild reuses validated official-detail manifests unless force is requested", async () => {
@@ -79,10 +93,10 @@ test("raw rebuild reuses validated official-detail manifests unless force is req
   const store = makeStore();
   await runInventoryLedgerRawRebuild(serviceOptions({ adapter, store }));
   const reused = await runInventoryLedgerRawRebuild(serviceOptions({ adapter, store }));
-  assert.equal(adapter.calls.length, 13);
-  assert.equal(reused.reusedReportCount, 13);
+  assert.equal(adapter.calls.length, 14);
+  assert.equal(reused.reusedReportCount, 14);
   await runInventoryLedgerRawRebuild(serviceOptions({ adapter, store, force: true }));
-  assert.equal(adapter.calls.length, 26);
+  assert.equal(adapter.calls.length, 28);
 });
 
 test("raw rebuild does not commit when official detail API retrieval fails", async () => {

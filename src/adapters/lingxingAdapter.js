@@ -892,6 +892,41 @@ export class LingxingAdapter {
     });
   }
 
+  async fetchAllFbaInventoryHistory(params = {}, { length = 1000, maxRows = 100_000 } = {}) {
+    if (!Number.isInteger(length) || length <= 0 || length > 2100) {
+      throw new Error("历史 FBA 库存分页长度必须是 1-2100 的整数。 ");
+    }
+    if (!Number.isInteger(maxRows) || maxRows < length) {
+      throw new Error("历史 FBA 库存分页安全上限必须不小于单页长度。 ");
+    }
+    const rows = [];
+    let declaredTotal = null;
+    for (let offset = 0; offset < maxRows; offset += length) {
+      const payload = await this.fetchFbaInventoryHistory({ ...params, offset, length });
+      const pageRows = Array.isArray(payload?.data?.row_data)
+        ? payload.data.row_data
+        : this.normalizeRecordList(payload);
+      const rawTotal = payload?.data?.total ?? payload?.total;
+      const total = Number(rawTotal);
+      if (!Number.isSafeInteger(total) || total < 0) {
+        throw new Error("历史 FBA 库存分页 total 无效，拒绝使用可能截断的数据。 ");
+      }
+      if (declaredTotal !== null && declaredTotal !== total) {
+        throw new Error("历史 FBA 库存分页 total 前后不一致，拒绝使用可能变动的数据。 ");
+      }
+      declaredTotal = total;
+      rows.push(...pageRows);
+      if (rows.length > total || rows.length > maxRows) {
+        throw new Error("历史 FBA 库存分页超过声明总数或安全上限，拒绝截断。 ");
+      }
+      if (rows.length === total) return rows;
+      if (!pageRows.length || pageRows.length < length) {
+        throw new Error("历史 FBA 库存分页提前结束，拒绝使用不完整的数据。 ");
+      }
+    }
+    throw new Error(`历史 FBA 库存分页达到安全上限 ${maxRows}，拒绝截断。`);
+  }
+
   fetchFbaStorageFeeMonth(params = {}) {
     return this.signedRequest("/erp/sc/data/fba_report/storageFeeMonth", {
       method: "POST",

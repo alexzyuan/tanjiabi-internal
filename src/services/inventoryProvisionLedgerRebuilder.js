@@ -49,6 +49,7 @@ const eventActions = new Map([
   ["04", "in"],
   ["05", "out"],
   ["06", "signed"],
+  ["openingsnapshot", "opening"],
   ["beginningbalance", "opening"],
   ["receipts", "in"],
   ["receipt", "in"],
@@ -75,13 +76,15 @@ function createLedgerError(code, message, record) {
     sellerId: record.sellerId,
     marketplaceId: record.marketplaceId,
     msku: record.msku,
+    date: record.date,
     eventType: record.eventType,
+    quantity: record.quantity,
     sourceRow: record.sourceRow,
   };
   return error;
 }
 
-function consumeOldest(cohorts, quantity) {
+function consumeOldest(cohorts, quantity, record) {
   let remaining = quantity;
   for (const cohort of cohorts) {
     if (remaining <= 0) break;
@@ -89,7 +92,13 @@ function consumeOldest(cohorts, quantity) {
     cohort.quantity -= removed;
     remaining -= removed;
   }
-  if (remaining > 0.000001) throw new Error(`库存分类账出库超出可用库存：${remaining}`);
+  if (remaining > 0.000001) {
+    throw createLedgerError(
+      "INVENTORY_LEDGER_FIFO_OVERDRAW",
+      `库存分类账出库超出可用库存：${remaining}（${record.sellerId} / ${record.marketplaceId} / ${record.msku} / ${record.date} / ${record.eventType} / 第 ${record.sourceRow} 行）。`,
+      record,
+    );
+  }
   return cohorts.filter((cohort) => cohort.quantity > 0.000001);
 }
 
@@ -107,17 +116,17 @@ function applyRecord(cohorts, record) {
   if (action === "signed") {
     if (!quantity) throw createLedgerError("INVENTORY_LEDGER_EVENT_TYPE_AMBIGUOUS", `库存分类账 Other 事件数量不能为 0（第 ${record.sourceRow} 行）。`, record);
     if (quantity > 0) return [...cohorts, { month: monthText(record.date), quantity }];
-    return consumeOldest(cohorts, Math.abs(quantity));
+    return consumeOldest(cohorts, Math.abs(quantity), record);
   }
   if (action === "opening") {
     if (quantity < 0) throw createLedgerError("INVENTORY_LEDGER_OPENING_BALANCE_INVALID", `库存分类账期初余额不能为负（第 ${record.sourceRow} 行）。`, record);
     if (!quantity) return cohorts;
     if (cohorts.length) throw createLedgerError("INVENTORY_LEDGER_DUPLICATE_OPENING_BALANCE", `库存分类账重复期初余额（第 ${record.sourceRow} 行）。`, record);
-    return [{ month: shiftMonth(monthText(record.date), -1), quantity: Math.abs(quantity) }];
+    return [{ month: record.openingCohortMonth || shiftMonth(monthText(record.date), -1), quantity: Math.abs(quantity) }];
   }
   if (!quantity) return cohorts;
   if (action === "in") return [...cohorts, { month: monthText(record.date), quantity: Math.abs(quantity) }];
-  return consumeOldest(cohorts, Math.abs(quantity));
+  return consumeOldest(cohorts, Math.abs(quantity), record);
 }
 
 function baseMetadata(baseRowsByKey, key, record, sellersById) {
