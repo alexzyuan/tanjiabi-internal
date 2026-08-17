@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 import { buildApiRoutes } from "../routes/index.js";
+import { createAdminRoutes } from "../routes/admin.js";
 import { createInventoryRoutes } from "../routes/inventory.js";
 
 const routeFiles = [
@@ -135,4 +136,25 @@ test("inventory provision cost refresh route is finance-protected and invokes an
   await route.handler({ req: {}, res: {} });
   assert.deepEqual(received, {});
   assert.deepEqual(payload, { ok: true, refresh: { year: "2026", months: [{ month: "2026-01", updatedRows: 1 }], refreshedAt: "2026/8/14 10:00:00" } });
+});
+
+test("inventory ledger rebuild status route is admin-protected and read-only", async () => {
+  let payload = null;
+  const status = { status: "success", committedMonths: ["2025-10", "2026-07"] };
+  const route = createAdminRoutes({
+    getInventoryLedgerRawRebuildStatus: () => status,
+    sendJson: (_res, _status, value) => { payload = value; },
+  }).find((item) => item.path === "/api/admin/inventory-ledger/rebuild-status");
+
+  assert.equal(route?.method, "GET");
+  assert.equal(route?.auth, "admin");
+  await route.handler({ res: {} });
+  assert.deepEqual(payload, status);
+});
+
+test("server starts the inventory ledger rebuild scheduler without exposing raw report downloads", async () => {
+  const source = await readFile(new URL("../server.js", import.meta.url), "utf8");
+  assert.match(source, /startInventoryLedgerRawRebuildScheduler/);
+  assert.match(source, /getInventoryLedgerRawRebuildStatus/);
+  assert.equal(source.includes("inventory-ledger-raw/"), false);
 });

@@ -17,9 +17,16 @@ export function createAdminRoutes(deps = {}) {
     createBudgetImportTemplate,
     createKnowledgeDocument,
     deleteKnowledgeDocument,
+    getInventoryLedgerRawRebuildStatus,
   } = deps;
 
   return [
+    {
+      method: "GET",
+      path: "/api/admin/inventory-ledger/rebuild-status",
+      auth: "admin",
+      handler: async ({ res }) => sendJson(res, 200, await getInventoryLedgerRawRebuildStatus()),
+    },
     {
       method: "GET",
       path: "/api/admin/budget/template",
