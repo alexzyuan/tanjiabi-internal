@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { gzipSync } from "node:zlib";
 import test from "node:test";
-import { parseInventoryLedgerApiRecords, parseInventoryLedgerReport } from "../src/services/inventoryLedgerReportParser.js";
+import { parseInventoryLedgerReport } from "../src/services/inventoryLedgerReportParser.js";
 
 async function fixture(name) {
   return readFile(new URL(`./fixtures/inventory-ledger/${name}`, import.meta.url));
@@ -23,6 +23,7 @@ test("inventory ledger parser normalizes TSV detail records", async () => {
     date: "2025-10-01",
     msku: "MSKU-1",
     eventType: "BeginningBalance",
+    eventTypeDescription: "",
     quantity: 10,
     fulfillmentCenter: "ONT8",
     disposition: "SELLABLE",
@@ -34,6 +35,7 @@ test("inventory ledger parser normalizes TSV detail records", async () => {
     scopeKey: "A-SELLER|na|ATVPD",
     sourceRow: 2,
   });
+  assert.equal(parsed.records[0].eventTypeDescription, "");
 });
 
 test("inventory ledger parser supports gzip and a UTF-8 BOM", async () => {
@@ -66,14 +68,9 @@ test("inventory ledger parser retains unknown event types for the FIFO validator
   assert.equal(parsed.records[0].eventType, "MysteryEvent");
 });
 
-test("inventory ledger parser normalizes the official detail API records", () => {
-  const parsed = parseInventoryLedgerApiRecords([{
-    date: "2025-10-31", msku: "MSKU-1", eventType: "04", eventTypeDesc: "Receipts", quantity: 3,
-    fulfillmentCenter: "ONT8", disposition: "01", referenceId: "ref-1", reason: "", title: "Toy truck",
-  }], context);
-  assert.deepEqual(parsed.records[0], {
-    date: "2025-10-31", msku: "MSKU-1", eventType: "04", eventTypeDescription: "Receipts", quantity: 3,
-    fulfillmentCenter: "ONT8", disposition: "01", referenceId: "ref-1", reason: "", title: "Toy truck",
-    sellerId: "A-SELLER", marketplaceId: "ATVPD", scopeKey: "A-SELLER|na|ATVPD", sourceRow: 1,
-  });
+test("inventory ledger parser retains an optional event description from the exported report", () => {
+  const parsed = parseInventoryLedgerReport(Buffer.from(
+    "event-date\tmsku\tevent-type\tevent-type-description\tquantity\tfulfillment-center\tdisposition\treference-id\treason\n2025-10-31\tMSKU-1\tReceipts\tAmazon receipt\t3\tONT8\tSELLABLE\tref-1\t\n",
+  ), context);
+  assert.equal(parsed.records[0].eventTypeDescription, "Amazon receipt");
 });
