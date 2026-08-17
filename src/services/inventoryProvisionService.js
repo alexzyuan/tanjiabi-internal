@@ -1558,12 +1558,13 @@ export async function loadHistoricalInventoryRows(selectedMonth, {
   let matchedRows = 0;
   const rows = historyRows.flatMap((row) => {
     const seller = sellerBySid.get(Number(row.sid)) || {};
+    const sellerId = row.seller_id || seller.seller_id || "";
     const quantity = toNumber(row.end_count);
     const purchaseAmount = toNumber(row.end_other_amount);
     const firstLegAmount = toNumber(row.end_logistic_amount);
-    const records = ledgerByKey.get(historyRowKey(seller.seller_id, row.country_code, row.msku)) || [];
+    const records = ledgerByKey.get(historyRowKey(sellerId, row.country_code, row.msku)) || [];
     if (!records.some((record) => record.date === selectedMonth)) {
-      throw new Error(`库存分类账缺少目标月份记录：${selectedMonth} / ${seller.seller_id || row.seller_id || "-"} / ${row.country_code || "-"} / ${row.msku || "-"}。`);
+      throw new Error(`库存分类账缺少目标月份记录：${selectedMonth} / ${sellerId || "-"} / ${row.country_code || "-"} / ${row.msku || "-"}。`);
     }
     let cohorts = rebuildMonthlyCohorts(records, months);
     if (records.length) matchedRows += 1;
@@ -1571,17 +1572,17 @@ export async function loadHistoricalInventoryRows(selectedMonth, {
 
     const cohortQuantity = cohorts.reduce((total, cohort) => total + cohort.quantity, 0);
     if (cohortQuantity && Math.abs(cohortQuantity - quantity) > 0.01) {
-      throw new Error(`库存分类账与月末库存数量不一致：${selectedMonth} / ${seller.seller_id || row.seller_id || "-"} / ${row.country_code || "-"} / ${row.msku || "-"}（分类账 ${cohortQuantity}，月末库存 ${quantity}）。`);
+      throw new Error(`库存分类账与月末库存数量不一致：${selectedMonth} / ${sellerId || "-"} / ${row.country_code || "-"} / ${row.msku || "-"}（分类账 ${cohortQuantity}，月末库存 ${quantity}）。`);
     }
     if (cohorts.some((cohort) => !Number.isInteger(cohort.quantity))) {
-      throw new Error(`库存分类账 FIFO 生成了非整数批次数量：${selectedMonth} / ${seller.seller_id || row.seller_id || "-"} / ${row.country_code || "-"} / ${row.msku || "-"}。`);
+      throw new Error(`库存分类账 FIFO 生成了非整数批次数量：${selectedMonth} / ${sellerId || "-"} / ${row.country_code || "-"} / ${row.msku || "-"}。`);
     }
 
     const purchaseCost = quantity ? purchaseAmount / quantity : 0;
     const firstLegCost = quantity ? firstLegAmount / quantity : 0;
     return cohorts.map((cohort) => ({
       sid: Number(row.sid) || 0,
-      sellerId: seller.seller_id || row.seller_id || "",
+      sellerId,
       countryCode: row.country_code || "",
       storeName: sellerName(seller) || `${row.sid || "-"}`,
       country: sellerCountry(seller) || row.country_code || "",

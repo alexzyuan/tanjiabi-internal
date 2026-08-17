@@ -117,6 +117,61 @@ test("historical inventory force refresh bypasses cache and preserves the German
   assert.equal(result.rows[0].firstLegCost, 2);
 });
 
+test("historical inventory matches a child warehouse row using its upstream seller id", async () => {
+  const { loadHistoricalInventoryRows } = await import("../src/services/inventoryProvisionService.js");
+
+  const result = await loadHistoricalInventoryRows("2026-07", {
+    forceRefresh: true,
+    persist: false,
+    sellers: [{ sid: 8708, seller_id: "A-US", name: "xiamentanjia-US", country: "美国", countryCode: "US" }],
+    adapter: {
+      fetchAllFbaInventoryDetails: async () => [],
+      fetchMonthlyInventoryLedgerSummary: async ({ startDate }) => ({
+        data: {
+          records: startDate === "2026-07" ? [{
+            sellerId: "A-US",
+            location: "CA",
+            msku: "JMCA-cyber8888",
+            date: "2026-07",
+            receipts: 5,
+            endingWareHouseBalance: 5,
+          }] : [],
+        },
+      }),
+      fetchFbaInventoryHistory: async () => ({
+        data: {
+          row_data: [{
+            sid: 8708,
+            seller_id: "A-US",
+            country_code: "CA",
+            msku: "JMCA-cyber8888",
+            end_count: 5,
+            end_other_amount: 170,
+            end_logistic_amount: 20.8,
+            child_data: [{
+              sid: 8709,
+              seller_id: "A-US",
+              country_code: "CA",
+              msku: "JMCA-cyber8888",
+              disposition: "sellable",
+              end_count: 5,
+              end_other_amount: 170,
+              end_logistic_amount: 20.8,
+            }],
+          }],
+        },
+      }),
+      fetchListings: async () => ({ data: { list: [] } }),
+    },
+    readHistoryCache: async () => { throw new Error("history cache must not be read"); },
+    saveHistoryCache: async () => { throw new Error("history cache must not be written"); },
+  });
+
+  assert.equal(result.rows.length, 1);
+  assert.equal(result.rows[0].sellerId, "A-US");
+  assert.equal(result.rows[0].quantity, 5);
+});
+
 test("historical inventory rejects a missing target-month ledger instead of proportionally scaling batches", async () => {
   const { loadHistoricalInventoryRows } = await import("../src/services/inventoryProvisionService.js");
   let saved = false;
