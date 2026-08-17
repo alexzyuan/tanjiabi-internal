@@ -15,6 +15,7 @@ const sharedProductCatalogDir = path.join(cacheDir, "shared-product-catalog");
 const factoryInventoryDir = path.join(cacheDir, "factory-inventory");
 const inventoryProvisionSnapshotDir = path.join(cacheDir, "inventory-provision");
 const inventoryProvisionHistoryDir = path.join(cacheDir, "inventory-provision-history");
+const inventoryProvisionHistoryBackupDir = path.join(cacheDir, "inventory-provision-history-backups");
 const MB = 1024 * 1024;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const supplierBoardCachePolicy = { maxBytes: 300 * MB, maxAgeMs: 180 * DAY_MS };
@@ -153,12 +154,43 @@ async function cacheEntries(dir) {
     }));
 }
 
+async function cleanupInventoryProvisionHistoryBackups(dir, maxEntries) {
+  const entries = await cacheEntries(dir);
+  if (entries.length <= maxEntries) return;
+  entries.sort((left, right) => right.mtimeMs - left.mtimeMs);
+  for (const entry of entries.slice(maxEntries)) await unlinkCacheFile(entry.filePath);
+}
+
 export async function saveInventoryProvisionHistoryCache(month, data) {
   await saveNamedCache(inventoryProvisionHistoryDir, month, data);
 }
 
 export async function readInventoryProvisionHistoryCache(month) {
   return readNamedCache(inventoryProvisionHistoryDir, month, Infinity);
+}
+
+export async function backupInventoryProvisionHistoryCache(month, { operationId = "" } = {}) {
+  const cached = await readInventoryProvisionHistoryCache(month);
+  if (!cached) return { created: false, month, operationId, cached: null };
+
+  const monthBackupDir = path.join(inventoryProvisionHistoryBackupDir, hashKey(month));
+  const backup = {
+    month,
+    operationId,
+    createdAt: new Date().toLocaleString("zh-CN", { hour12: false }),
+    previousCacheUpdatedAt: cached.updatedAt || "",
+    cached,
+  };
+  const backupPath = path.join(monthBackupDir, `${Date.now()}-${hashKey(operationId || "manual")}.json`);
+  await writeJsonAtomic(backupPath, backup);
+  await cleanupInventoryProvisionHistoryBackups(monthBackupDir, 5);
+  return {
+    created: true,
+    month,
+    operationId,
+    previousCacheUpdatedAt: backup.previousCacheUpdatedAt,
+    cached,
+  };
 }
 
 async function saveNamedCache(dir, key, data) {

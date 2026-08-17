@@ -67,6 +67,21 @@ test("cache store writes and reads keyed sales weekly source cache", async () =>
   });
 });
 
+test("inventory provision history backup preserves current monthly cache", async () => {
+  await withTempProject(async (projectRoot) => {
+    const store = await importFresh(projectRoot, "src/utils/cacheStore.js");
+    await store.saveInventoryProvisionHistoryCache("2026-07", { rows: [{ msku: "JM-9006Truck", quantity: 27 }] });
+
+    const backup = await store.backupInventoryProvisionHistoryCache("2026-07", { operationId: "refresh-1" });
+
+    assert.equal(backup.created, true);
+    assert.equal(backup.month, "2026-07");
+    assert.equal(backup.operationId, "refresh-1");
+    assert.deepEqual(backup.cached.data.rows, [{ msku: "JM-9006Truck", quantity: 27 }]);
+    assert.deepEqual((await store.readInventoryProvisionHistoryCache("2026-07")).data.rows, [{ msku: "JM-9006Truck", quantity: 27 }]);
+  });
+});
+
 test("cache store writes through the shared json store boundary", async () => {
   const source = await readFile(new URL("../src/utils/cacheStore.js", import.meta.url), "utf8");
 
