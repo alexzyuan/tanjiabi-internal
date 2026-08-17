@@ -18,7 +18,7 @@
 - Create `src/jobs/inventoryLedgerRawRebuildJob.js`: Asia/Shanghai calendar gate, persisted job state, lock, retry behavior, and scheduler timer.
 - Create `scripts/rebuild-inventory-ledger.js`: explicit server-side maintenance command for the first full rebuild or a reviewed force rebuild; it never exposes a browser download.
 - Modify `src/adapters/lingxingAdapter.js`: add report-document URL renewal and binary download methods beside existing report task methods.
-- Modify `src/utils/cacheStore.js`: add an injectable raw-report store and transactional history-cache commit helper while preserving existing cache APIs.
+- Create `src/services/inventoryLedgerRawReportStore.js`: add an injectable raw-report store and transactional history-cache commit helper; preserve `src/utils/cacheStore.js` as the JSON-cache boundary.
 - Modify `src/services/inventoryProvisionService.js`: expose the existing age-bucket/FIFO primitives through a narrow pure interface or consume the new rebuilder without moving download logic into this service.
 - Modify `src/config/index.js`: expose `INVENTORY_LEDGER_REBUILD_AT` with default `02:00`.
 - Modify `routes/admin.js`, `routes/index.js`, and `server.js`: add a read-only admin status route and start the scheduler; do not add a raw-file route or UI button.
@@ -364,4 +364,3 @@ Expected: the full repository test suite, CSS/browser verification, JavaScript/C
 Run: `git status --short --branch && git log --oneline -8`
 
 Expected: only the intended commits are present, the worktree is clean, and the final handoff can identify the exact commit before any package/deploy action.
-

@@ -56,9 +56,9 @@
 
 使用 `Asia/Shanghai` 日历和现有 `withJobLock`：每 5 分钟检查一次，10 日 `02:00` 以后若上个月尚未成功则执行；成功状态持久化到 `data-cache/inventory-ledger-raw/job-state.json`，失败记录阶段和可重试信息。应用启动时只做一次“是否到时间”的检查，不在非计划日期拉取。
 
-### `src/utils/cacheStore.js`
+### `src/services/inventoryLedgerRawReportStore.js`
 
-增加原始报表目录、manifest、作业状态和 staging/commit 所需的受控读写接口；现有历史缓存读取接口保持兼容。原始文件不参与普通缓存 TTL 清理。
+拥有原始报表目录、manifest、作业状态和 staging/commit 所需的受控读写接口；现有 `src/utils/cacheStore.js` 历史缓存读取接口保持兼容。原始文件不参与普通缓存 TTL 清理，且二进制 I/O 不进入通用 JSON 缓存层。
 
 ### `src/services/inventoryProvisionService.js`
 

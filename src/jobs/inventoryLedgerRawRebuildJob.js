@@ -1,6 +1,6 @@
 import { getConfig } from "../config/index.js";
 import { withJobLock } from "./jobLock.js";
-import { createInventoryLedgerRawReportStore } from "../utils/cacheStore.js";
+import { createInventoryLedgerRawReportStore } from "../services/inventoryLedgerRawReportStore.js";
 import { runInventoryLedgerRawRebuild } from "../services/inventoryLedgerRawReportService.js";
 
 const TIME_ZONE = "Asia/Shanghai";

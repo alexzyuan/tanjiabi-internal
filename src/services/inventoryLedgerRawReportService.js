@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { filterCoreSellers, getLingxingAdapter } from "../adapters/lingxingAdapter.js";
-import { createInventoryLedgerRawReportStore, readInventoryProvisionHistoryCache } from "../utils/cacheStore.js";
+import { readInventoryProvisionHistoryCache } from "../utils/cacheStore.js";
+import { createInventoryLedgerRawReportStore } from "./inventoryLedgerRawReportStore.js";
 import { getSellerDirectory } from "./sellerDirectoryService.js";
 import { parseInventoryLedgerReport } from "./inventoryLedgerReportParser.js";
 import { rebuildInventoryProvisionHistory } from "./inventoryProvisionLedgerRebuilder.js";

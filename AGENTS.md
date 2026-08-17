@@ -69,6 +69,14 @@ Operationally, the native `better-sqlite3` dependency is checked with the dispos
 
 Legacy product-catalog retirement is a manual two-phase operation. Phase 1 only permits `--dry-run` and creation of a verified archive outside the application directory. It requires 30 stable days, three retained release manifests advertising `product-catalog-sqlite-v1`, healthy SQLite, and an exact migrated manifest match. It must never move or delete the source JSON. Quarantine, restore, purge, archive retention and compatibility-code removal require a later reviewed phase. SQLite/WAL/SHM files, Listing shared XLSX files and every other `data-cache` domain are never retirement targets.
 
+## Inventory Ledger Raw Rebuild
+
+- Historical inventory-provision quantities and FIFO ages are rebuilt only from Lingxing's Amazon inventory-ledger detail export `GET_LEDGER_DETAIL_VIEW_DATA`, starting at `2025-10`; costs remain owned by the separate product-management cost-refresh workflow.
+- `src/services/inventoryLedgerRawReportService.js` orchestrates export, strict parsing, FIFO reconstruction, and all-or-nothing historical-cache replacement. `src/services/inventoryLedgerRawReportStore.js` owns raw binary files, manifests, job state, and atomic history-directory commits. Do not add binary I/O to `src/utils/cacheStore.js`.
+- The scheduler runs after the 10th at `INVENTORY_LEDGER_REBUILD_AT` (default `02:00`, `Asia/Shanghai`) and uses `withJobLock`. Its admin status endpoint is read-only; raw report files must never be exposed as a browser download route.
+- Every seller scope must contain the Lingxing `seller_id` and `marketplaceId`; do not infer either from SID, name, or country. A missing scope, export failure, unknown required report field/event, malformed date, or incomplete month coverage must fail the run and leave the prior `inventory-provision-history` directory unchanged.
+- Original reports and redacted manifests remain in `data-cache/inventory-ledger-raw/<YYYY-MM>/`. Manifests may record IDs, region, date range, hash and parsing counts, but never access tokens or complete third-party responses.
+
 ## FBA Logistics API Ordering
 
 The FBA freight workflow now supports direct external logistics API ordering in addition to Excel template export and Lingxing ready-send shipment-order creation.

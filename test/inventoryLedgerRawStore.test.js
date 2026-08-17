@@ -4,9 +4,7 @@ import crypto from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import {
-  createInventoryLedgerRawReportStore,
-} from "../src/utils/cacheStore.js";
+import { createInventoryLedgerRawReportStore } from "../src/services/inventoryLedgerRawReportStore.js";
 import { writeJsonAtomic } from "../src/utils/jsonStore.js";
 
 async function withTempDataDir(run) {
