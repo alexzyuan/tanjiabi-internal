@@ -4,7 +4,6 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { createProductCatalogRepository } from "../src/services/productCatalogRepository.js";
-import { closeProductCatalogRepositoryForTests } from "../src/services/productCatalogService.js";
 import {
   clearFbaShipmentCandidateCache,
   getFbaShipmentCandidates,
@@ -96,6 +95,13 @@ function seedCatalog(repository, {
       refreshedAtMs: 1720000000000,
     }],
   });
+}
+
+function isolatedLegacyCatalogSources(directory) {
+  return {
+    sharedDir: path.join(directory, "shared-product-catalog"),
+    supplierDir: path.join(directory, "supplier-board-product-map"),
+  };
 }
 
 test("normalizeFbaShipmentCandidateFilters keeps existing freight filter names compatible", () => {
@@ -216,8 +222,18 @@ test("getFbaShipmentCandidates forceRefresh bypasses cache", async () => {
   assert.equal(adapter.calls.length, 2);
 });
 
-test("getFbaShipmentCandidates refreshes cached rows when the product catalog is forced", async () => {
+test("getFbaShipmentCandidates refreshes cached rows when the product catalog is forced", async (t) => {
   clearFbaShipmentCandidateCache();
+  const directory = await mkdtemp(path.join(os.tmpdir(), "fba-candidate-force-refresh-test-"));
+  const repository = createProductCatalogRepository({
+    databasePath: path.join(directory, "product-catalog-v1.sqlite"),
+    now: () => 1720000000000,
+  });
+  t.after(async () => {
+    clearFbaShipmentCandidateCache();
+    repository.close();
+    await rm(directory, { recursive: true, force: true });
+  });
   const adapter = makeAdapter();
   const sellers = [{ sid: 8708, seller_id: "A1SELLERUS", marketplace_id: "ATVPDKIKX0DER" }];
   const filters = { startDate: "2026-07-01", endDate: "2026-07-11", sid: "8708" };
@@ -228,6 +244,8 @@ test("getFbaShipmentCandidates refreshes cached rows when the product catalog is
     sellers,
     productCatalogRequired: true,
     forceProductCatalogRefresh: true,
+    productCatalogRepository: repository,
+    sharedCatalogOptions: isolatedLegacyCatalogSources(directory),
   });
 
   assert.equal(adapter.calls.length, 2);
@@ -240,14 +258,9 @@ test("getFbaShipmentCandidates reuses a seeded SQLite catalog without Listing or
   const databasePath = path.join(directory, "product-catalog-v1.sqlite");
   const repository = createProductCatalogRepository({ databasePath, now: () => 1720000000000 });
   seedCatalog(repository);
-  repository.close();
-  const previousDatabasePath = process.env.PRODUCT_CATALOG_DATABASE_PATH;
-  process.env.PRODUCT_CATALOG_DATABASE_PATH = databasePath;
-  await closeProductCatalogRepositoryForTests();
   t.after(async () => {
-    await closeProductCatalogRepositoryForTests();
-    if (previousDatabasePath === undefined) delete process.env.PRODUCT_CATALOG_DATABASE_PATH;
-    else process.env.PRODUCT_CATALOG_DATABASE_PATH = previousDatabasePath;
+    clearFbaShipmentCandidateCache();
+    repository.close();
     await rm(directory, { recursive: true, force: true });
   });
 
@@ -272,6 +285,8 @@ test("getFbaShipmentCandidates reuses a seeded SQLite catalog without Listing or
     adapter,
     sellers: [{ sid: 8708, seller_id: "A1SELLERUS", marketplace_id: "ATVPDKIKX0DER" }],
     productCatalogRequired: true,
+    productCatalogRepository: repository,
+    sharedCatalogOptions: isolatedLegacyCatalogSources(directory),
   });
 
   assert.equal(result.rows[0].items[0].internalSku, "TJ-DGC-BLUE");
@@ -319,6 +334,7 @@ test("strict FBA candidate catalog resolution fails before product fallback or e
       sellers: [{ sid: 8708, name: "xiamentanjia-US" }],
       productCatalogRequired: true,
       productCatalogRepository: repository,
+      sharedCatalogOptions: isolatedLegacyCatalogSources(directory),
     }),
     /商品目录|ERP Listing/,
   );
@@ -374,6 +390,7 @@ test("getFbaShipmentCandidates passes the resolved custom runtime directory to t
     ] }),
     productCatalogRequired: true,
     productCatalogRepository: repository,
+    sharedCatalogOptions: isolatedLegacyCatalogSources(directory),
   });
 
   assert.equal(result.rows[0].items[0].internalSku, "CUSTOM-SKU");

@@ -6,7 +6,6 @@ import path from "node:path";
 import test from "node:test";
 import * as XLSX from "xlsx";
 import { createProductCatalogRepository } from "../src/services/productCatalogRepository.js";
-import { closeProductCatalogRepositoryForTests } from "../src/services/productCatalogService.js";
 import { clearFbaShipmentCandidateCache } from "../src/services/fbaShipmentCandidateService.js";
 import {
   applyProductCatalogToFbaFreightShipments,
@@ -110,6 +109,13 @@ function seedFreightCatalog(repository) {
     refreshedAtMs: 1720000000000,
   }));
   repository.upsertCatalog({ operation: "fba-freight-test-seed", products, aliases: [], listings });
+}
+
+function isolatedLegacyCatalogSources(directory) {
+  return {
+    sharedDir: path.join(directory, "shared-product-catalog"),
+    supplierDir: path.join(directory, "supplier-board-product-map"),
+  };
 }
 
 test("normalizeFbaFreightShipments maps Lingxing fba shipment rows into freight table rows", () => {
@@ -549,15 +555,9 @@ test("getFbaFreightShipments reuses a seeded SQLite catalog without Listing or p
   const databasePath = path.join(directory, "product-catalog-v1.sqlite");
   const repository = createProductCatalogRepository({ databasePath, now: () => 1720000000000 });
   seedFreightCatalog(repository);
-  repository.close();
-  const previousDatabasePath = process.env.PRODUCT_CATALOG_DATABASE_PATH;
-  process.env.PRODUCT_CATALOG_DATABASE_PATH = databasePath;
-  await closeProductCatalogRepositoryForTests();
   t.after(async () => {
     clearFbaShipmentCandidateCache();
-    await closeProductCatalogRepositoryForTests();
-    if (previousDatabasePath === undefined) delete process.env.PRODUCT_CATALOG_DATABASE_PATH;
-    else process.env.PRODUCT_CATALOG_DATABASE_PATH = previousDatabasePath;
+    repository.close();
     await rm(directory, { recursive: true, force: true });
   });
 
@@ -582,6 +582,8 @@ test("getFbaFreightShipments reuses a seeded SQLite catalog without Listing or p
     adapter,
     sellers: [{ sid: 8708, name: "xiamentanjia-US", country: "美国" }],
     productCatalogRequired: true,
+    productCatalogRepository: repository,
+    sharedCatalogOptions: isolatedLegacyCatalogSources(directory),
   });
 
   assert.equal(result.rows[0].items[0].internalSku, "TJ-DGC-BLUE");
