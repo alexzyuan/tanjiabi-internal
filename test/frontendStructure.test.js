@@ -122,6 +122,35 @@ test("budget targets use shared filters and a modal import workflow", async () =
   assert.doesNotMatch(featureSource, /budget-import-owner/);
 });
 
+test("product certificates own a persistent ledger and import workflow", async () => {
+  const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const appSource = await readFile(new URL("../app.js", import.meta.url), "utf8");
+  const featureSource = await readFile(new URL("../assets/js/features/product-certificates.js", import.meta.url), "utf8");
+  const viewStart = indexSource.indexOf('<section class="view" id="view-certificates">');
+  const viewEnd = indexSource.indexOf('<section class="view" id="view-product-design">', viewStart);
+  const view = indexSource.slice(viewStart, viewEnd);
+  const featureCall = appSource.match(/createProductCertificatesFeature\(\{[\s\S]*?\n\}\)\);/)?.[0] || "";
+
+  assert.notEqual(viewStart, -1, "certificate view is missing");
+  assert.match(view, /id="certificate-add-button"/);
+  assert.match(view, /id="certificate-import-button"/);
+  assert.match(view, /id="certificate-country-filter"/);
+  assert.match(view, /id="certificate-type-filter"/);
+  assert.match(view, /id="certificate-status-filter"/);
+  assert.match(view, /id="certificate-table"[^>]*data-table-key="product-certificates"/);
+  assert.match(view, /<th[^>]*>国家<\/th>[\s\S]*<th[^>]*>产品 SKU<\/th>[\s\S]*<th[^>]*>过期日期<\/th>[\s\S]*<th[^>]*>状态<\/th>/);
+  assert.match(view, /<dialog class="certificate-editor-dialog" id="certificate-editor-dialog"/);
+  assert.match(view, /<dialog class="certificate-import-dialog" id="certificate-import-dialog"/);
+  assert.match(view, /id="certificate-template-download"/);
+  assert.match(featureSource, /export function createProductCertificatesFeature/);
+  assert.match(featureSource, /readFileAsBase64/);
+  assert.match(featureSource, /\/api\/product-certificates\/import/);
+  assert.match(appSource, /import \{ createProductCertificatesFeature \} from "\.\/assets\/js\/features\/product-certificates\.js/);
+  assert.match(featureCall, /readFileAsBase64,/);
+  assert.match(appSource, /view === "certificates"[\s\S]*await loadProductCertificates\(\)/);
+  assert.equal(appSource.includes('bind(document, "#certificate-'), false);
+});
+
 test("store operating monthly report is a finance-owned feature with shared controls and table management", async () => {
   const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
   const appSource = await readFile(new URL("../app.js", import.meta.url), "utf8");
