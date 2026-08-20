@@ -815,6 +815,42 @@ export function getProductCatalogRevision(options = {}) {
   }
 }
 
+export function searchProductCatalogSkus({ keyword = "", limit = 20, ...options } = {}) {
+  const context = createRequestContext(options, options.feature || "catalog", "search-product-skus");
+  let repository;
+  try {
+    repository = repositoryFor(options);
+  } catch (error) {
+    const attached = databaseError(error, "商品目录数据库不可用。", context, "repository-bootstrap");
+    writeLog(options.logger || console, "error", context, "error", attached);
+    throw attached;
+  }
+  try {
+    if (typeof repository.searchProductSkus !== "function") {
+      throw new ProductCatalogDatabaseError("商品目录数据库不支持 SKU 搜索。", {
+        operation: "search-product-skus",
+        requestId: context.requestId,
+      });
+    }
+    const result = repository.searchProductSkus(keyword, {
+      limit,
+      requestId: context.requestId,
+    });
+    if (!Array.isArray(result)) throw new ProductCatalogDatabaseError("商品目录 SKU 搜索结果无效。", {
+      operation: "search-product-skus",
+      requestId: context.requestId,
+    });
+    writeLog(options.logger || console, "info", context, "success", null, { resultCount: result.length });
+    return result;
+  } catch (error) {
+    const attached = isDatabaseFailure(error)
+      ? databaseError(error, "商品目录数据库不可用。", context, error?.details?.operation || context.operation)
+      : attachError(error, context);
+    writeLog(options.logger || console, "error", context, "error", attached);
+    throw attached;
+  }
+}
+
 export function getProductCatalogHealth(options = {}) {
   const requestId = requestIdFrom(options);
   try {

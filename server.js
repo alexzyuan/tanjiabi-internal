@@ -169,6 +169,7 @@ import { generateAiListingCopy } from "./src/services/aiListingService.js";
 import {
   getProductCatalogHealth,
   refreshProductCatalogScope,
+  searchProductCatalogSkus,
 } from "./src/services/productCatalogService.js";
 import { getSharedSellers } from "./src/services/sharedDataService.js";
 import { getPacificTodayText } from "./src/utils/pacificDate.js";
@@ -192,7 +193,15 @@ const salesFactsUpstream = createSalesFactsUpstreamService({
   logger: console,
 });
 const salesFactsSyncService = createSalesFactsSyncService({ repository: salesFactsRepository, upstream: salesFactsUpstream, logger: console });
-const productCertificateService = createProductCertificateService({ logger: console });
+const productCertificateService = createProductCertificateService({
+  logger: console,
+  searchProductSkus: ({ keyword, limit }) => searchProductCatalogSkus({
+    keyword,
+    limit,
+    feature: "product-certificates",
+    logger: console,
+  }),
+});
 
 async function getSalesFactsSellerDirectory({ forceRefresh = false } = {}) {
   const result = await getSharedSellers({
@@ -900,6 +909,7 @@ const apiRoutes = createApiRoutes(buildApiRoutes({
   getProductCatalogHealth,
   refreshProductCatalogScope,
   listCertificates: productCertificateService.listCertificates,
+  listCertificateOptions: productCertificateService.listCertificateOptions,
   saveCertificate: productCertificateService.saveCertificate,
   updateCertificate: productCertificateService.updateCertificate,
   deleteCertificate: productCertificateService.deleteCertificate,

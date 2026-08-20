@@ -65,6 +65,28 @@ test("certificate status uses expiry priority at 30 and 60 day boundaries", asyn
   });
 });
 
+test("certificate options expose fixed countries, country-linked recommendations, and catalog SKU matches", async () => {
+  await withService({
+    searchProductSkus: async ({ keyword, limit }) => {
+      assert.equal(keyword, "blue");
+      assert.equal(limit, 20);
+      return [{ sku: "TJ-BLUE-001", productName: "蓝色商品" }];
+    },
+  }, async (service) => {
+    const options = await service.listCertificateOptions({ country: "美国", keyword: "blue" });
+    assert.deepEqual(options.countries, ["美国", "加拿大", "德国", "英国"]);
+    assert.deepEqual(options.certificateTypes, ["CPC全套"]);
+    assert.deepEqual(options.productSkus, [{ sku: "TJ-BLUE-001", productName: "蓝色商品" }]);
+  });
+});
+
+test("certificate writes and imports reject countries outside the fixed selector", async () => {
+  await withService({}, async (service) => {
+    await assert.rejects(() => service.saveCertificate(record({ country: "澳洲" })), /国家选项无效/u);
+    await assert.rejects(() => service.listCertificateOptions({ country: "澳洲" }), /国家选项无效/u);
+  });
+});
+
 test("certificate rejects invalid dates, inverted dates, and duplicate business keys", async () => {
   await withService({}, async (service) => {
     await assert.rejects(() => service.saveCertificate(record({ expiryDate: "2026-02-30" })), /过期日期/u);

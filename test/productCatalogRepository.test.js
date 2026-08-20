@@ -211,6 +211,28 @@ test("atomically upserts product, aliases, listing and increments revision", asy
   assert.equal(repository.getRevision(), 1);
 });
 
+test("searches reusable internal SKUs from product management with a bounded fuzzy match", async (t) => {
+  const { repository } = await createRepositoryFixture(t);
+  repository.upsertCatalog({
+    operation: "sku-search-seed",
+    products: [
+      { internalSkuKey: "tj-blue-001", internalSku: "TJ-BLUE-001", productName: "蓝色商品", source: "test", sourceUpdatedAtMs: 1, refreshedAtMs: 1 },
+      { internalSkuKey: "tj-red-001", internalSku: "TJ-RED-001", productName: "红色商品", source: "test", sourceUpdatedAtMs: 1, refreshedAtMs: 1 },
+      { internalSkuKey: "tj-blue-002", internalSku: "TJ-BLUE-002", productName: "蓝色商品二", source: "test", sourceUpdatedAtMs: 1, refreshedAtMs: 1 },
+    ],
+    aliases: [],
+    listings: [],
+  });
+
+  assert.deepEqual(repository.searchProductSkus("blue", { limit: 1 }), [
+    { sku: "TJ-BLUE-001", productName: "蓝色商品" },
+  ]);
+  assert.deepEqual(repository.searchProductSkus("", { limit: 2 }), [
+    { sku: "TJ-BLUE-001", productName: "蓝色商品" },
+    { sku: "TJ-BLUE-002", productName: "蓝色商品二" },
+  ]);
+});
+
 test("alias conflict rolls back every row and leaves revision unchanged", async (t) => {
   const { repository } = await createRepositoryFixture(t);
   seedProduct(repository, "TJ001", "101");

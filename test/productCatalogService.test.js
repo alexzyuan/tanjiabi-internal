@@ -11,6 +11,7 @@ import {
   getProductCatalogForRows,
   getProductCatalogHealth,
   getProductCatalogRevision,
+  searchProductCatalogSkus,
   ProductCatalogUpstreamError,
   refreshProductCatalogScope,
 } from "../src/services/productCatalogService.js";
@@ -780,4 +781,21 @@ test("health accessor logs degraded database errors without raw messages", () =>
     code: "SQLITE_IOERR",
   });
   assert.doesNotMatch(JSON.stringify(logs), /disk I\/O error|private\.sqlite/);
+});
+
+test("SKU search delegates to the reusable catalog database without upstream refresh", () => {
+  const calls = [];
+  const result = searchProductCatalogSkus({
+    keyword: "blue",
+    limit: 8,
+    requestId: "certificate-sku-search-1",
+    repository: {
+      searchProductSkus(keyword, options) {
+        calls.push({ keyword, options });
+        return [{ sku: "TJ-BLUE-001", productName: "蓝色商品" }];
+      },
+    },
+  });
+  assert.deepEqual(result, [{ sku: "TJ-BLUE-001", productName: "蓝色商品" }]);
+  assert.deepEqual(calls, [{ keyword: "blue", options: { limit: 8, requestId: "certificate-sku-search-1" } }]);
 });

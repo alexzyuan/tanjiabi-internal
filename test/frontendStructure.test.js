@@ -140,11 +140,17 @@ test("product certificates own a persistent ledger and import workflow", async (
   assert.match(view, /id="certificate-table"[^>]*data-table-key="product-certificates"/);
   assert.match(view, /<th[^>]*>国家<\/th>[\s\S]*<th[^>]*>产品 SKU<\/th>[\s\S]*<th[^>]*>过期日期<\/th>[\s\S]*<th[^>]*>状态<\/th>/);
   assert.match(view, /<dialog class="certificate-editor-dialog" id="certificate-editor-dialog"/);
+  assert.match(view, /id="certificate-editor-country"[^>]*><option/);
+  assert.match(view, /id="certificate-editor-product-sku"[^>]*role="combobox"/);
+  assert.match(view, /id="certificate-editor-product-sku-options"[^>]*role="listbox"/);
+  assert.match(view, /id="certificate-editor-type-options"/);
   assert.match(view, /<dialog class="certificate-import-dialog" id="certificate-import-dialog"/);
   assert.match(view, /id="certificate-template-download"/);
   assert.match(featureSource, /export function createProductCertificatesFeature/);
   assert.match(featureSource, /readFileAsBase64/);
   assert.match(featureSource, /\/api\/product-certificates\/import/);
+  assert.match(featureSource, /\/api\/product-certificates\/options/);
+  assert.match(featureSource, /aria-autocomplete/);
   assert.match(appSource, /import \{ createProductCertificatesFeature \} from "\.\/assets\/js\/features\/product-certificates\.js/);
   assert.match(appSource, /let loadProductCertificates = async \(\) => \{\};/);
   assert.match(appSource, /let setupProductCertificates = \(\) => \{\};/);

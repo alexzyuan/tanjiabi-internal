@@ -6,8 +6,24 @@ const LEDGER_FILE_NAME = "product-certificates-v1.json";
 const TEMPLATE_HEADERS = ["国家", "产品SKU", "证书类型", "证书编号", "签发日期", "过期日期"];
 const DAY_MS = 86_400_000;
 
+export const PRODUCT_CERTIFICATE_COUNTRIES = Object.freeze(["美国", "加拿大", "德国", "英国"]);
+const CERTIFICATE_TYPE_OPTIONS_BY_COUNTRY = Object.freeze({
+  美国: Object.freeze(["CPC全套"]),
+  加拿大: Object.freeze(["CCPSA"]),
+  德国: Object.freeze(["EN71 + 62115"]),
+  英国: Object.freeze(["EN71 + 62115"]),
+});
+
 function normalizeText(value) {
   return value == null ? "" : String(value).trim();
+}
+
+export function certificateTypesForCountry(country = "") {
+  const normalizedCountry = normalizeText(country);
+  if (normalizedCountry && CERTIFICATE_TYPE_OPTIONS_BY_COUNTRY[normalizedCountry]) {
+    return [...CERTIFICATE_TYPE_OPTIONS_BY_COUNTRY[normalizedCountry]];
+  }
+  return [...new Set(Object.values(CERTIFICATE_TYPE_OPTIONS_BY_COUNTRY).flat())];
 }
 
 function normalizedKeyPart(value) {
@@ -38,6 +54,12 @@ function requiredText(value, label) {
   const text = normalizeText(value);
   if (!text) throw invalidInput(`${label}不能为空。`);
   return text;
+}
+
+function requiredCountry(value) {
+  const country = requiredText(value, "国家");
+  if (!PRODUCT_CERTIFICATE_COUNTRIES.includes(country)) throw invalidInput("国家选项无效。");
+  return country;
 }
 
 function parseDateParts(value, label, { required = false } = {}) {
@@ -94,7 +116,7 @@ function normalizeRecord(input = {}, id = crypto.randomUUID()) {
   }
   return {
     id,
-    country: requiredText(input.country, "国家"),
+    country: requiredCountry(input.country),
     productSku: requiredText(input.productSku, "产品SKU"),
     certificateType: requiredText(input.certificateType, "证书类型"),
     certificateNumber: requiredText(input.certificateNumber, "证书编号"),
@@ -171,6 +193,7 @@ export function createProductCertificateService({
   directory = path.join(process.cwd(), "data-cache", "product-certificates"),
   now = () => new Date(),
   logger = console,
+  searchProductSkus = async () => [],
 } = {}) {
   const ledgerPath = path.join(directory, LEDGER_FILE_NAME);
 
@@ -217,6 +240,21 @@ export function createProductCertificateService({
 
   async function listCertificates(filters = {}) {
     return listResult((await readLedger()).rows, filters);
+  }
+
+  async function listCertificateOptions({ country = "", keyword = "" } = {}) {
+    const normalizedCountry = normalizeText(country);
+    if (normalizedCountry && !PRODUCT_CERTIFICATE_COUNTRIES.includes(normalizedCountry)) {
+      throw invalidInput("国家选项无效。");
+    }
+    const normalizedKeyword = normalizeText(keyword);
+    const productSkus = await searchProductSkus({ keyword: normalizedKeyword, limit: 20 });
+    if (!Array.isArray(productSkus)) throw new Error("产品 SKU 搜索结果无效。");
+    return {
+      countries: [...PRODUCT_CERTIFICATE_COUNTRIES],
+      certificateTypes: certificateTypesForCountry(normalizedCountry),
+      productSkus,
+    };
   }
 
   async function saveCertificate(input) {
@@ -298,6 +336,7 @@ export function createProductCertificateService({
 
   return {
     listCertificates,
+    listCertificateOptions,
     saveCertificate,
     updateCertificate,
     deleteCertificate,

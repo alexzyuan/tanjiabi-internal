@@ -9,12 +9,20 @@ function certificateFilters(url) {
   };
 }
 
+function certificateOptionFilters(url) {
+  return {
+    country: url.searchParams.get("country") || "",
+    keyword: url.searchParams.get("keyword") || "",
+  };
+}
+
 export function createProductCertificateRoutes(deps = {}) {
   const {
     readJsonBody,
     sendJson,
     contentDispositionAttachment,
     listCertificates,
+    listCertificateOptions,
     saveCertificate,
     updateCertificate,
     deleteCertificate,
@@ -28,6 +36,13 @@ export function createProductCertificateRoutes(deps = {}) {
       path: "/api/product-certificates",
       auth: "session",
       handler: async ({ res, url }) => sendJson(res, 200, await listCertificates(certificateFilters(url))),
+    },
+    {
+      method: "GET",
+      path: "/api/product-certificates/options",
+      auth: "session",
+      errorStatusCode: 400,
+      handler: async ({ res, url }) => sendJson(res, 200, await listCertificateOptions(certificateOptionFilters(url))),
     },
     {
       method: "GET",

@@ -4,12 +4,13 @@ import { createProductCertificateRoutes } from "../routes/product-certificates.j
 
 function createHarness(overrides = {}) {
   const sent = [];
-  const calls = { list: [], save: [], update: [], delete: [], import: [] };
+  const calls = { list: [], options: [], save: [], update: [], delete: [], import: [] };
   const routes = createProductCertificateRoutes({
     readJsonBody: async () => ({ country: "美国", productSku: "SKU-1" }),
     sendJson: (_res, statusCode, payload) => sent.push({ statusCode, payload }),
     contentDispositionAttachment: (fileName) => `attachment; filename=${fileName}`,
     listCertificates: async (filters) => { calls.list.push(filters); return { rows: [], summary: {}, filters: {} }; },
+    listCertificateOptions: async (filters) => { calls.options.push(filters); return { countries: ["美国"], certificateTypes: ["CPC全套"], productSkus: [] }; },
     saveCertificate: async (payload) => { calls.save.push(payload); return { id: "certificate-1", ...payload }; },
     updateCertificate: async (id, payload) => { calls.update.push({ id, payload }); return { id, ...payload }; },
     deleteCertificate: async (id) => { calls.delete.push(id); return { id }; },
@@ -22,7 +23,7 @@ function createHarness(overrides = {}) {
 
 test("certificate routes are session-protected and return filtered ledger data", async () => {
   const { routes, calls, sent } = createHarness();
-  assert.equal(routes.length, 6);
+  assert.equal(routes.length, 7);
   assert.ok(routes.every((route) => route.auth === "session"));
   const listRoute = routes.find((route) => route.path === "/api/product-certificates" && route.method === "GET");
   await listRoute.handler({
@@ -31,6 +32,17 @@ test("certificate routes are session-protected and return filtered ledger data",
   });
   assert.deepEqual(calls.list, [{ country: "美国", certificateType: "FCC", status: "预警", keyword: "sku" }]);
   assert.deepEqual(sent, [{ statusCode: 200, payload: { rows: [], summary: {}, filters: {} } }]);
+});
+
+test("certificate options route forwards country and fuzzy SKU keyword", async () => {
+  const { routes, calls, sent } = createHarness();
+  const route = routes.find((candidate) => candidate.method === "GET" && candidate.path === "/api/product-certificates/options");
+  await route.handler({
+    res: {},
+    url: new URL("http://localhost/api/product-certificates/options?country=%E5%BE%B7%E5%9B%BD&keyword=blue"),
+  });
+  assert.deepEqual(calls.options, [{ country: "德国", keyword: "blue" }]);
+  assert.deepEqual(sent, [{ statusCode: 200, payload: { countries: ["美国"], certificateTypes: ["CPC全套"], productSkus: [] } }]);
 });
 
 test("certificate write routes forward JSON bodies and return saved records", async () => {

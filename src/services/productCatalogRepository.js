@@ -170,6 +170,10 @@ function requiredText(value, message) {
   return text;
 }
 
+function escapeLikePattern(value) {
+  return String(value).replace(/[\\%_]/gu, "\\$&");
+}
+
 function nullableText(value) {
   if (value === null || value === undefined) return null;
   return String(value);
@@ -730,6 +734,28 @@ export function createProductCatalogRepository({
     }, options?.requestId);
   }
 
+  function searchProductSkus(keyword = "", options = {}) {
+    return withOperation(logger, "search-product-skus", () => {
+      const normalizedKeyword = normalizeCatalogKey(keyword);
+      const limit = Number(options?.limit ?? 20);
+      if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+        throw new ProductCatalogInputError("商品 SKU 搜索数量无效。");
+      }
+      const pattern = normalizedKeyword ? `%${escapeLikePattern(normalizedKeyword)}%` : "%";
+      const rows = db.prepare(
+        `SELECT internal_sku, product_name
+         FROM product_master
+         WHERE lower(internal_sku) LIKE ? ESCAPE '\\'
+         ORDER BY internal_sku COLLATE NOCASE
+         LIMIT ?`,
+      ).all(pattern, limit);
+      return rows.map((row) => ({
+        sku: row.internal_sku,
+        productName: row.product_name || "",
+      }));
+    }, options?.requestId);
+  }
+
   function upsertCatalog(input = {}) {
     const operation = input && typeof input === "object" && !Array.isArray(input) && input.operation
       ? String(input.operation)
@@ -822,6 +848,7 @@ export function createProductCatalogRepository({
     getSchemaInfo,
     readScope,
     readProductsByInternalSkuKeys,
+    searchProductSkus,
     upsertCatalog,
     getRevision,
     getMetadata,

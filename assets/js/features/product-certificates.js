@@ -1,3 +1,11 @@
+const CERTIFICATE_COUNTRIES = ["美国", "加拿大", "德国", "英国"];
+const CERTIFICATE_TYPES_BY_COUNTRY = {
+  美国: ["CPC全套"],
+  加拿大: ["CCPSA"],
+  德国: ["EN71 + 62115"],
+  英国: ["EN71 + 62115"],
+};
+
 export function createProductCertificatesFeature({
   root = globalThis.document,
   bind,
@@ -15,6 +23,12 @@ export function createProductCertificatesFeature({
   if (typeof refreshTable !== "function") throw new Error("createProductCertificatesFeature requires refreshTable.");
 
   let certificateData = { rows: [], summary: {}, filters: {} };
+  let certificateOptionData = { countries: CERTIFICATE_COUNTRIES, certificateTypes: [], productSkus: [] };
+  let recommendedCertificateTypes = [];
+  let selectedProductSku = "";
+  let skuSearchTimer = null;
+  let skuSearchRequest = 0;
+  let skuDropdownCloseTimer = null;
   let initialized = false;
   const query = (selector) => root?.querySelector?.(selector);
 
@@ -77,6 +91,101 @@ export function createProductCertificatesFeature({
     return data;
   }
 
+  function localCertificateTypes(country = "") {
+    return country && CERTIFICATE_TYPES_BY_COUNTRY[country]
+      ? [...CERTIFICATE_TYPES_BY_COUNTRY[country]]
+      : [...new Set(Object.values(CERTIFICATE_TYPES_BY_COUNTRY).flat())];
+  }
+
+  function renderCertificateTypeOptions(country = "", { resetType = false } = {}) {
+    const datalist = query("#certificate-editor-type-options");
+    const typeField = query("#certificate-editor-type");
+    if (!datalist) return;
+    const previousTypes = recommendedCertificateTypes;
+    const apiTypes = certificateOptionData.certificateTypes || [];
+    const types = country && CERTIFICATE_TYPES_BY_COUNTRY[country]
+      ? localCertificateTypes(country)
+      : (apiTypes.length ? apiTypes : localCertificateTypes(country));
+    recommendedCertificateTypes = [...new Set(types.map((value) => String(value).trim()).filter(Boolean))];
+    datalist.innerHTML = recommendedCertificateTypes.map((value) => `<option value="${escapeHtml(value)}">`).join("");
+    if (resetType && typeField && (!typeField.value.trim() || previousTypes.includes(typeField.value.trim()))) {
+      typeField.value = recommendedCertificateTypes[0] || "";
+    }
+  }
+
+  function setSkuDropdownOpen(open) {
+    const input = query("#certificate-editor-product-sku");
+    const listbox = query("#certificate-editor-product-sku-options");
+    if (!input || !listbox) return;
+    input.setAttribute("aria-autocomplete", "list");
+    const shouldOpen = Boolean(open && listbox.querySelector("[data-certificate-sku-option]"));
+    listbox.hidden = !shouldOpen;
+    input.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
+  }
+
+  function renderSkuOptions(rows = [], { open = false } = {}) {
+    const listbox = query("#certificate-editor-product-sku-options");
+    if (!listbox) return;
+    const unique = [];
+    const seen = new Set();
+    for (const row of Array.isArray(rows) ? rows : []) {
+      const sku = String(row?.sku || "").trim();
+      if (!sku || seen.has(sku)) continue;
+      seen.add(sku);
+      unique.push({ sku, productName: String(row?.productName || "").trim() });
+    }
+    listbox.innerHTML = unique.length
+      ? unique.map((row) => `<button class="search-result-item" type="button" role="option" data-certificate-sku-option="${escapeHtml(row.sku)}"><strong>${escapeHtml(row.sku)}</strong>${row.productName ? ` <span>${escapeHtml(row.productName)}</span>` : ""}</button>`).join("")
+      : "";
+    setSkuDropdownOpen(open && unique.length > 0);
+  }
+
+  async function loadCertificateOptions({ country = "", keyword = "", renderTypes = true } = {}) {
+    const params = new URLSearchParams();
+    if (country) params.set("country", country);
+    if (keyword) params.set("keyword", keyword);
+    const queryString = params.toString();
+    const data = await parseResponse(await fetchImpl(`/api/product-certificates/options${queryString ? `?${queryString}` : ""}`));
+    if (!Array.isArray(data.countries) || !Array.isArray(data.certificateTypes) || !Array.isArray(data.productSkus)) {
+      throw new Error("证书选项接口返回数据无效。");
+    }
+    certificateOptionData = data;
+    if (renderTypes) renderCertificateTypeOptions(country);
+    return data;
+  }
+
+  async function loadSkuSuggestions({ open = true } = {}) {
+    const request = ++skuSearchRequest;
+    const country = query("#certificate-editor-country")?.value || "";
+    const keyword = query("#certificate-editor-product-sku")?.value?.trim?.() || "";
+    try {
+      const data = await loadCertificateOptions({ country, keyword, renderTypes: false });
+      if (request !== skuSearchRequest) return;
+      renderSkuOptions(data.productSkus, { open });
+    } catch (error) {
+      if (request !== skuSearchRequest) return;
+      renderSkuOptions([]);
+      setStatus("#certificate-editor-status", `SKU 选项读取失败：${error.message}`, "danger");
+    }
+  }
+
+  function scheduleSkuSuggestions({ open = true } = {}) {
+    if (skuSearchTimer !== null) globalThis.clearTimeout?.(skuSearchTimer);
+    skuSearchTimer = globalThis.setTimeout(() => {
+      skuSearchTimer = null;
+      void loadSkuSuggestions({ open });
+    }, 180);
+  }
+
+  function selectSku(sku) {
+    const input = query("#certificate-editor-product-sku");
+    if (!input) return;
+    input.value = sku;
+    selectedProductSku = sku;
+    setSkuDropdownOpen(false);
+    input.focus();
+  }
+
   async function loadProductCertificates() {
     setStatus("#certificate-status", "正在读取证书台账。");
     try {
@@ -95,26 +204,37 @@ export function createProductCertificatesFeature({
   function openEditor(row = null) {
     const dialog = query("#certificate-editor-dialog");
     query("#certificate-editor-form")?.reset();
+    selectedProductSku = row?.productSku || "";
     setText("#certificate-editor-title", row ? "编辑证书" : "新增证书");
     const values = [["#certificate-editor-id", row?.id], ["#certificate-editor-country", row?.country], ["#certificate-editor-product-sku", row?.productSku], ["#certificate-editor-type", row?.certificateType], ["#certificate-editor-number", row?.certificateNumber], ["#certificate-editor-issued-date", row?.issuedDate], ["#certificate-editor-expiry-date", row?.expiryDate]];
     values.forEach(([selector, value]) => { const field = query(selector); if (field) field.value = value || ""; });
+    renderCertificateTypeOptions(row?.country || "", { resetType: !row });
+    renderSkuOptions([], { open: false });
     setStatus("#certificate-editor-status", "");
     if (dialog && !dialog.open) dialog.showModal();
+    void loadCertificateOptions({ country: row?.country || "", keyword: "", renderTypes: true }).catch((error) => {
+      setStatus("#certificate-editor-status", `证书选项读取失败：${error.message}`, "danger");
+    });
   }
 
   function closeDialog(selector) { query(selector)?.close(); }
 
   function editorPayload() {
-    return { country: formValue("#certificate-editor-country"), productSku: formValue("#certificate-editor-product-sku"), certificateType: formValue("#certificate-editor-type"), certificateNumber: formValue("#certificate-editor-number"), issuedDate: formValue("#certificate-editor-issued-date"), expiryDate: formValue("#certificate-editor-expiry-date") };
+    const productSku = formValue("#certificate-editor-product-sku");
+    if (!productSku || selectedProductSku !== productSku) throw new Error("请从产品管理搜索结果中选择产品 SKU。");
+    const country = formValue("#certificate-editor-country");
+    if (!CERTIFICATE_COUNTRIES.includes(country)) throw new Error("请选择有效国家。");
+    return { country, productSku, certificateType: formValue("#certificate-editor-type"), certificateNumber: formValue("#certificate-editor-number"), issuedDate: formValue("#certificate-editor-issued-date"), expiryDate: formValue("#certificate-editor-expiry-date") };
   }
 
   async function saveEditor(event) {
     event.preventDefault();
-    const id = formValue("#certificate-editor-id");
     const button = query("#certificate-editor-save");
     setButtonBusy(button, true);
     try {
-      await parseResponse(await fetchImpl(id ? `/api/product-certificates/${encodeURIComponent(id)}` : "/api/product-certificates", { method: id ? "PUT" : "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(editorPayload()) }));
+      const id = formValue("#certificate-editor-id");
+      const payload = editorPayload();
+      await parseResponse(await fetchImpl(id ? `/api/product-certificates/${encodeURIComponent(id)}` : "/api/product-certificates", { method: id ? "PUT" : "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) }));
       closeDialog("#certificate-editor-dialog");
       await loadProductCertificates();
     } catch (error) {
@@ -156,6 +276,31 @@ export function createProductCertificatesFeature({
     ["#certificate-import-close", "#certificate-import-cancel"].forEach((selector) => bind(root, selector, "click", () => closeDialog("#certificate-import-dialog")));
     ["#certificate-country-filter", "#certificate-type-filter", "#certificate-status-filter", "#certificate-keyword-filter"].forEach((selector) => bind(root, selector, "input", renderCertificates));
     bind(root, "#certificate-filter-reset", "click", () => { ["#certificate-country-filter", "#certificate-type-filter", "#certificate-status-filter", "#certificate-keyword-filter"].forEach((selector) => { const element = query(selector); if (element) element.value = ""; }); renderCertificates(); });
+    bind(root, "#certificate-editor-country", "change", () => {
+      renderCertificateTypeOptions(formValue("#certificate-editor-country"), { resetType: true });
+      scheduleSkuSuggestions({ open: false });
+    });
+    bind(root, "#certificate-editor-product-sku", "input", () => {
+      const value = formValue("#certificate-editor-product-sku");
+      if (value !== selectedProductSku) selectedProductSku = "";
+      scheduleSkuSuggestions({ open: true });
+    });
+    bind(root, "#certificate-editor-product-sku", "focus", () => scheduleSkuSuggestions({ open: true }));
+    bind(root, "#certificate-editor-product-sku", "keydown", (event) => {
+      if (event.key === "Escape") setSkuDropdownOpen(false);
+      if (event.key === "ArrowDown") {
+        const option = query("#certificate-editor-product-sku-options [data-certificate-sku-option]");
+        if (option) { event.preventDefault(); option.focus(); }
+      }
+    });
+    bind(root, "#certificate-editor-product-sku", "blur", () => {
+      if (skuDropdownCloseTimer !== null) globalThis.clearTimeout?.(skuDropdownCloseTimer);
+      skuDropdownCloseTimer = globalThis.setTimeout(() => setSkuDropdownOpen(false), 120);
+    });
+    bind(root, "#certificate-editor-product-sku-options", "click", (event) => {
+      const option = event.target?.closest?.("[data-certificate-sku-option]");
+      if (option) selectSku(option.dataset.certificateSkuOption || "");
+    });
     bind(root, "#certificate-table-body", "click", (event) => { const button = event.target.closest("button[data-certificate-edit], button[data-certificate-delete]"); if (!button) return; const id = button.dataset.certificateEdit || button.dataset.certificateDelete; const row = certificateData.rows.find((item) => item.id === id); if (button.dataset.certificateEdit) openEditor(row); else removeCertificate(id); });
   }
 
