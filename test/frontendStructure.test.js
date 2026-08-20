@@ -146,6 +146,8 @@ test("product certificates own a persistent ledger and import workflow", async (
   assert.match(featureSource, /readFileAsBase64/);
   assert.match(featureSource, /\/api\/product-certificates\/import/);
   assert.match(appSource, /import \{ createProductCertificatesFeature \} from "\.\/assets\/js\/features\/product-certificates\.js/);
+  assert.match(appSource, /let loadProductCertificates = async \(\) => \{\};/);
+  assert.match(appSource, /let setupProductCertificates = \(\) => \{\};/);
   assert.match(featureCall, /readFileAsBase64,/);
   assert.match(appSource, /view === "certificates"[\s\S]*await loadProductCertificates\(\)/);
   assert.equal(appSource.includes('bind(document, "#certificate-'), false);
