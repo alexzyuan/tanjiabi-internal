@@ -704,31 +704,11 @@
         </section>
 
         <section class="view" id="view-certificates">
-          <section class="module-hero">
-            <div>
-              <span>证书有效期</span>
-              <h2>产品认证、检测报告与到期提醒</h2>
-              <p>用于管理 CE、FCC、CPC、MSDS 等证书有效期，提前识别即将过期和缺失资料。</p>
-            </div>
-            <div class="hero-actions">
-              <button class="primary-button" type="button">新增证书</button>
-            </div>
-          </section>
-          <section class="module-grid">
-            <article class="metric-tile"><span>有效证书</span><strong>-</strong><small>当前可用</small></article>
-            <article class="metric-tile"><span>90天内到期</span><strong>-</strong><small>需续证</small></article>
-            <article class="metric-tile"><span>已过期</span><strong>-</strong><small>需停用确认</small></article>
-            <article class="metric-tile"><span>资料缺失</span><strong>-</strong><small>待补齐</small></article>
-          </section>
-          <article class="panel detail-panel">
-            <div class="panel-head"><h2>证书有效期台账</h2><span>证书类型、适用产品、有效期与提醒状态</span></div>
-            <div class="table-wrap">
-              <table>
-                <thead><tr><th>产品 / SKU</th><th>证书类型</th><th>证书编号</th><th>签发日期</th><th>到期日期</th><th>状态</th></tr></thead>
-                <tbody><tr><td colspan="6">证书有效期框架已预留，等待接入数据。</td></tr></tbody>
-              </table>
-            </div>
-          </article>
+          <section class="module-hero certificate-hero"><div><span>证书有效期</span><h2>产品认证、检测报告与到期提醒</h2><p>用于管理 CE、FCC、CPC、MSDS 等证书有效期，提前识别即将过期的产品认证资料。</p></div><div class="hero-actions"><button class="secondary-button" id="certificate-import-button" type="button">导入表格</button><button class="primary-button" id="certificate-add-button" type="button">新增证书</button></div></section>
+          <section class="module-grid certificate-summary-grid"><article class="metric-tile"><span>有效</span><strong id="certificate-valid-count">0</strong><small>超过 60 天到期</small></article><article class="metric-tile"><span>预警</span><strong id="certificate-warning-count">0</strong><small>30 天内到期</small></article><article class="metric-tile"><span>注意</span><strong id="certificate-attention-count">0</strong><small>31–60 天到期</small></article><article class="metric-tile"><span>已过期</span><strong id="certificate-expired-count">0</strong><small>需确认续证</small></article></section>
+          <article class="panel detail-panel certificate-ledger-panel"><div class="panel-head"><h2>证书有效期台账</h2><span id="certificate-table-count" aria-live="polite">加载中</span></div><section class="filter-toolbar certificate-toolbar" aria-label="证书台账筛选"><label>国家<select id="certificate-country-filter"><option value="">全部国家</option></select></label><label>证书类型<select id="certificate-type-filter"><option value="">全部类型</option></select></label><label>状态<select id="certificate-status-filter"><option value="">全部状态</option><option value="有效">有效</option><option value="预警">预警</option><option value="注意">注意</option><option value="已过期">已过期</option></select></label><label>关键词<input id="certificate-keyword-filter" type="search" placeholder="产品 SKU 或证书编号" /></label><button class="secondary-button compact-button" id="certificate-filter-reset" type="button">重置</button></section><p class="certificate-status" id="certificate-status" aria-live="polite"></p><div class="table-wrap certificate-table-wrap"><table class="data-table data-table--middle" id="certificate-table" data-table-key="product-certificates"><thead><tr><th data-column-key="country">国家</th><th data-column-key="product-sku">产品 SKU</th><th data-column-key="certificate-type">证书类型</th><th data-column-key="certificate-number">证书编号</th><th data-column-key="issued-date">签发日期</th><th data-column-key="expiry-date">过期日期</th><th data-column-key="status">状态</th><th data-column-key="actions" data-column-sortable="false">操作</th></tr></thead><tbody id="certificate-table-body"><tr><td colspan="8">正在读取证书台账。</td></tr></tbody></table></div></article>
+          <dialog class="certificate-editor-dialog" id="certificate-editor-dialog" aria-labelledby="certificate-editor-title"><form id="certificate-editor-form" novalidate><div class="modal-title-row"><h2 id="certificate-editor-title">新增证书</h2><button class="icon-button" id="certificate-editor-close" type="button" aria-label="关闭新增证书窗口">×</button></div><input id="certificate-editor-id" type="hidden" /><div class="certificate-form-grid"><label>国家<input id="certificate-editor-country" required /></label><label>产品 SKU<input id="certificate-editor-product-sku" required /></label><label>证书类型<input id="certificate-editor-type" required /></label><label>证书编号<input id="certificate-editor-number" required /></label><label>签发日期<input id="certificate-editor-issued-date" type="date" /></label><label>过期日期<input id="certificate-editor-expiry-date" type="date" required /></label></div><p class="certificate-dialog-status" id="certificate-editor-status" aria-live="polite"></p><div class="modal-foot"><button class="secondary-button" id="certificate-editor-cancel" type="button">取消</button><button class="primary-button" id="certificate-editor-save" type="submit">保存</button></div></form></dialog>
+          <dialog class="certificate-import-dialog" id="certificate-import-dialog" aria-labelledby="certificate-import-title"><form id="certificate-import-form"><div class="modal-title-row"><h2 id="certificate-import-title">导入证书台账</h2><button class="icon-button" id="certificate-import-close" type="button" aria-label="关闭导入证书窗口">×</button></div><p>请使用固定表头的 Excel 模板；导入会整批校验后写入。</p><a class="text-link" id="certificate-template-download" href="/api/product-certificates/template">下载导入模板</a><label class="certificate-file-field">选择 .xlsx 文件<input id="certificate-import-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required /></label><p class="certificate-dialog-status" id="certificate-import-status" aria-live="polite"></p><div class="modal-foot"><button class="secondary-button" id="certificate-import-cancel" type="button">取消</button><button class="primary-button" id="certificate-import-submit" type="submit">确认导入</button></div></form></dialog>
         </section>
 
         <section class="view" id="view-product-design">

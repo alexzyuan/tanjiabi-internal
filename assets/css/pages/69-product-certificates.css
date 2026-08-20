@@ -1,0 +1,80 @@
+#view-certificates .certificate-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spectrum-spacing-150);
+  align-items: end;
+  margin: var(--spectrum-spacing-200) 0 var(--spectrum-spacing-150);
+}
+
+#view-certificates .certificate-toolbar label {
+  display: grid;
+  min-width: 150px;
+  gap: var(--spectrum-spacing-75);
+  color: var(--tj-text-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+#view-certificates .certificate-toolbar input,
+#view-certificates .certificate-toolbar select {
+  min-height: var(--tj-control-height);
+}
+
+#view-certificates .certificate-status,
+#view-certificates .certificate-dialog-status {
+  min-height: 20px;
+  margin: var(--spectrum-spacing-100) 0;
+  color: var(--tj-text-muted);
+  font-size: 13px;
+}
+
+#view-certificates .certificate-table-wrap {
+  overflow-x: auto;
+}
+
+#view-certificates .certificate-editor-dialog,
+#view-certificates .certificate-import-dialog {
+  width: min(620px, calc(100vw - 40px));
+  margin: auto;
+  padding: var(--spectrum-spacing-300);
+  border: 1px solid var(--tj-border-subtle);
+  border-radius: var(--tj-modal-radius);
+  color: var(--tj-text-strong);
+  background: var(--tj-content-bg);
+  box-shadow: var(--tj-shadow-modal);
+}
+
+#view-certificates .certificate-editor-dialog::backdrop,
+#view-certificates .certificate-import-dialog::backdrop {
+  background: var(--tj-overlay-backdrop);
+}
+
+#view-certificates .certificate-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spectrum-spacing-200);
+  margin-top: var(--spectrum-spacing-200);
+}
+
+#view-certificates .certificate-form-grid label,
+#view-certificates .certificate-file-field {
+  display: grid;
+  gap: var(--spectrum-spacing-100);
+  color: var(--tj-text-muted);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+#view-certificates .certificate-file-field {
+  margin-top: var(--spectrum-spacing-200);
+}
+
+#view-certificates .certificate-import-dialog p {
+  color: var(--tj-text-muted);
+  line-height: 1.6;
+}
+
+@media (max-width: 720px) {
+  #view-certificates .certificate-toolbar label { min-width: min(100%, 260px); }
+  #view-certificates .certificate-form-grid { grid-template-columns: minmax(0, 1fr); }
+}

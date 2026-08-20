@@ -48,6 +48,7 @@ import { createAiImageWorkflowFeature } from "./assets/js/features/ai-image-work
 import { createAdminSettingsFeature } from "./assets/js/features/admin-settings.js?v=20260706-frontend-refactor-v1";
 import { createWebhookAssistantFeature } from "./assets/js/features/webhook-assistant.js?v=20260720-webhook-assistant-v1";
 import { createBudgetTargetsFeature } from "./assets/js/features/budget-targets.js?v=20260808-budget-import-modal-v2";
+import { createProductCertificatesFeature } from "./assets/js/features/product-certificates.js?v=20260820-product-certificate-ledger-v1";
 import { createStoreOperatingMonthlyReportFeature } from "./assets/js/features/store-operating-monthly-report.js?v=20260807-shared-country-store-filter-v1";
 import { createSyncCenterFeature } from "./assets/js/features/sync-center.js?v=20260706-frontend-refactor-v1";
 import { createFbaFreightFeature } from "./assets/js/features/fba-freight.js?v=20260717-shared-logistics-channels";
@@ -236,6 +237,7 @@ let loadAftersalesDashboard = async () => {};
 let loadAftersalesMailDashboard = async () => {};
 let loadBudgetUploads = async () => {};
 let loadBudgetTargets = async () => {};
+let loadProductCertificates = async () => {};
 let loadStoreOperatingMonthlyReport = async () => {};
 let loadCashflowDashboard = async () => {};
 let loadSlowMovingRiskView = async () => {};
@@ -281,6 +283,7 @@ let setupAdminSettings = () => {};
 let setupWebhookAssistant = () => {};
 let setupBreadcrumbNavigation = () => {};
 let setupBudgetTargets = () => {};
+let setupProductCertificates = () => {};
 let setupStoreOperatingMonthlyReport = () => {};
 let setupFbaFreight = () => {};
 let setupFbaShipmentVariance = () => {};
@@ -759,6 +762,16 @@ async function refreshDashboardFromFilters() {
   syncAllOptionSelection,
   trimmedFieldValue,
 }));
+({ loadProductCertificates, setupProductCertificates } = createProductCertificatesFeature({
+  root: document,
+  bind,
+  escapeHtml,
+  fetchImpl: fetch.bind(window),
+  readFileAsBase64,
+  refreshTable,
+  setButtonBusy,
+  setStatusMessage,
+}));
 
 ({
   applyStoreOperatingMonthlyReportSort,
@@ -1232,6 +1245,9 @@ function setupNavigation() {
       loadBudgetUploads();
       loadBudgetTargets();
     }
+    if (view === "certificates") {
+      await loadProductCertificates();
+    }
     if (view === "fba") {
       renderFbaLoadingState();
       await Promise.allSettled([loadFbaShops(), loadFbaAutomationState()]);
@@ -1297,6 +1313,7 @@ function setupNavigation() {
   setupFbaAutomationBoard();
   setupFbaTaskForm();
   setupBudgetTargets();
+  setupProductCertificates();
 
 }
 

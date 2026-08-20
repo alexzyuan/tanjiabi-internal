@@ -551,7 +551,7 @@ test("shared table variants replace responsive page and legacy table patches", a
   assert.match(componentSource, /^table\.data-table--detail th\s*\{/m);
   assert.match(indexSource, /class="table-wrap data-table-wrap--detail"/);
   assert.match(indexSource, /class="data-table data-table--detail"/);
-  assert.equal((indexSource.match(/class="[^"]*data-table--middle[^"]*"/g) || []).length, 4);
+  assert.equal((indexSource.match(/class="[^"]*data-table--middle[^"]*"/g) || []).length, 5);
   assert.equal(/\.app-shell\s*\{[\s\S]*?min-width:\s*1180px/s.test(factorySource), false);
   assert.equal(/\.dashboard\s*\{[\s\S]*?min-width:\s*1000px/s.test(factorySource), false);
   assert.equal(/\.sales-forecast-table \.sticky-(?:focus|hide|image)\s*\{[\s\S]*?text-align:/s.test(salesForecastSource), false);
@@ -1624,6 +1624,14 @@ test("knowledge library styles live in the page layer and use semantic tokens", 
   ].forEach((snippet) => {
     assert.equal(legacySource.includes(snippet), false, `${snippet} should be owned by assets/css/pages/68-knowledge-library.css`);
   });
+});
+
+test("product certificate styles live in the page source layer without business column widths", async () => {
+  const css = await readFile(new URL("../assets/css/pages/69-product-certificates.css", import.meta.url), "utf8");
+  assert.match(css, /\.certificate-toolbar/);
+  assert.match(css, /\.certificate-import-dialog/);
+  assert.match(css, /var\(--tj-/);
+  assert.equal(/(?:th|td):nth-child\([^)]*\)\s*\{[^}]*\b(?:width|min-width)\s*:/.test(css), false);
 });
 
 test("obsolete guide course styles are removed from legacy css", async () => {

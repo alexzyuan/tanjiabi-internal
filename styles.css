@@ -1854,6 +1854,20 @@ body:not(.login-body) .knowledge-file-row>span{padding:0 var(--spectrum-spacing-
 body:not(.login-body) .knowledge-modal-grid{grid-template-columns:1fr}
 body:not(.login-body) .knowledge-section-grid,body:not(.login-body) .knowledge-library-tree{grid-template-columns:1fr}
 }
+#view-certificates .certificate-toolbar{display:flex;flex-wrap:wrap;gap:var(--spectrum-spacing-150);align-items:end;margin:var(--spectrum-spacing-200) 0 var(--spectrum-spacing-150)}
+#view-certificates .certificate-toolbar label{display:grid;min-width:150px;gap:var(--spectrum-spacing-75);color:var(--tj-text-muted);font-size:13px;font-weight:700}
+#view-certificates .certificate-toolbar input,#view-certificates .certificate-toolbar select{min-height:var(--tj-control-height)}
+#view-certificates .certificate-status,#view-certificates .certificate-dialog-status{min-height:20px;margin:var(--spectrum-spacing-100) 0;color:var(--tj-text-muted);font-size:13px}
+#view-certificates .certificate-table-wrap{overflow-x:auto}
+#view-certificates .certificate-editor-dialog,#view-certificates .certificate-import-dialog{width:min(620px,calc(100vw - 40px));margin:auto;padding:var(--spectrum-spacing-300);border:1px solid var(--tj-border-subtle);border-radius:var(--tj-modal-radius);color:var(--tj-text-strong);background:var(--tj-content-bg);box-shadow:var(--tj-shadow-modal)}
+#view-certificates .certificate-editor-dialog::backdrop,#view-certificates .certificate-import-dialog::backdrop{background:var(--tj-overlay-backdrop)}
+#view-certificates .certificate-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--spectrum-spacing-200);margin-top:var(--spectrum-spacing-200)}
+#view-certificates .certificate-form-grid label,#view-certificates .certificate-file-field{display:grid;gap:var(--spectrum-spacing-100);color:var(--tj-text-muted);font-size:14px;font-weight:700}
+#view-certificates .certificate-file-field{margin-top:var(--spectrum-spacing-200)}
+#view-certificates .certificate-import-dialog p{color:var(--tj-text-muted);line-height:1.6}
+@media(max-width:720px){#view-certificates .certificate-toolbar label{min-width:min(100%,260px)}
+#view-certificates .certificate-form-grid{grid-template-columns:minmax(0,1fr)}
+}
 button,input,select{font:inherit}
 body:not(.login-body){min-height:100vh;background:var(--tj-page-bg) !important;background-image:none !important}
 body:not(.login-body) .app-shell,html.os-windows body:not(.login-body) .app-shell{display:grid !important;grid-template-columns:var(--sidebar-expanded-width-v1) minmax(0,1fr) !important;gap:0 !important;min-height:100vh !important;margin:0 !important;padding:0 !important;background:var(--tj-shell-bg) !important;background-image:none !important;overflow:visible !important;transition:grid-template-columns 0.2s ease !important}

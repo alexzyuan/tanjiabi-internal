@@ -177,6 +177,7 @@ import { createSalesFactsRepository } from "./src/services/salesFactsRepository.
 import { createSalesFactsUpstreamService } from "./src/services/salesFactsUpstreamService.js";
 import { createSalesFactsSyncService } from "./src/services/salesFactsSyncService.js";
 import { syncListingOwnerHistory } from "./src/services/listingOwnerHistoryService.js";
+import { createProductCertificateService } from "./src/services/productCertificateService.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -191,6 +192,7 @@ const salesFactsUpstream = createSalesFactsUpstreamService({
   logger: console,
 });
 const salesFactsSyncService = createSalesFactsSyncService({ repository: salesFactsRepository, upstream: salesFactsUpstream, logger: console });
+const productCertificateService = createProductCertificateService({ logger: console });
 
 async function getSalesFactsSellerDirectory({ forceRefresh = false } = {}) {
   const result = await getSharedSellers({
@@ -897,6 +899,12 @@ const apiRoutes = createApiRoutes(buildApiRoutes({
   getSyncStatus,
   getProductCatalogHealth,
   refreshProductCatalogScope,
+  listCertificates: productCertificateService.listCertificates,
+  saveCertificate: productCertificateService.saveCertificate,
+  updateCertificate: productCertificateService.updateCertificate,
+  deleteCertificate: productCertificateService.deleteCertificate,
+  importCertificates: productCertificateService.importCertificates,
+  createCertificateImportTemplate: productCertificateService.createCertificateImportTemplate,
   getSalesFactsHealth: (options) => salesFactsRepository.getHealth(options),
   refreshOrderProfitScope: refreshSalesFactsOrderProfit,
   refreshMonthlyReportScope: refreshSalesFactsMonthlyReport,
