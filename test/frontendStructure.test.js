@@ -441,6 +441,7 @@ test("freight rates dashboard is grouped under logistics metadata", async () => 
   const fbaFreightFeatureSource = await readFile(new URL("../assets/js/features/fba-freight.js", import.meta.url), "utf8");
   const fbaLogisticsRulesSource = await readFile(new URL("../assets/js/fba-logistics-rules.js", import.meta.url), "utf8");
   assert.match(freightRatesFeatureSource, /warehouseCodesByCountry/);
+  assert.match(freightRatesFeatureSource, /加拿大: \["YYZ", "YUX", "YOW", "YYC", "YVR", "YEG", "YHM", "XYY4"\]/);
   assert.match(freightRatesFeatureSource, /fbaLogisticsChannelNamesForCountry/);
   assert.match(fbaFreightFeatureSource, /fbaLogisticsChannelsForCountry/);
   assert.match(fbaLogisticsRulesSource, /美森闪送卡派（包税）/);

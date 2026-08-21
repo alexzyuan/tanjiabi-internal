@@ -20,7 +20,7 @@ export function createFreightRatesFeature({
     countries: ["美国", "加拿大", "澳洲", "德国", "英国"],
     warehouseCodesByCountry: {
       美国: ["MIT", "GEU", "POC", "TCY", "ONT", "GYR"],
-      加拿大: ["YYZ", "YUX", "YOW", "YYC", "YVR", "YEG", "YHM"],
+      加拿大: ["YYZ", "YUX", "YOW", "YYC", "YVR", "YEG", "YHM", "XYY4"],
       澳洲: ["BWU", "XAU", "XBW", "XYS"],
     },
     carriers: ["九方通逊", "同袍"],
