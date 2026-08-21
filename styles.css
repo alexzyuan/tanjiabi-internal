@@ -1863,6 +1863,7 @@ body:not(.login-body) .knowledge-section-grid,body:not(.login-body) .knowledge-l
 #view-certificates .certificate-editor-dialog::backdrop,#view-certificates .certificate-import-dialog::backdrop{background:var(--tj-overlay-backdrop)}
 #view-certificates .certificate-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--spectrum-spacing-200);margin-top:var(--spectrum-spacing-200)}
 #view-certificates .certificate-form-grid label,#view-certificates .certificate-file-field{display:grid;gap:var(--spectrum-spacing-100);color:var(--tj-text-muted);font-size:14px;font-weight:700}
+#view-certificates .certificate-sku-selected{display:flex;flex-wrap:wrap}
 #view-certificates .certificate-file-field{margin-top:var(--spectrum-spacing-200)}
 #view-certificates .certificate-import-dialog p{color:var(--tj-text-muted);line-height:1.6}
 @media(max-width:720px){#view-certificates .certificate-toolbar label{min-width:min(100%,260px)}

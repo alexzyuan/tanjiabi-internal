@@ -80,6 +80,19 @@ test("certificate options expose fixed countries, country-linked recommendations
   });
 });
 
+test("certificate records keep one row for a normalized multi-SKU certificate", async () => {
+  await withService({}, async (service) => {
+    const saved = await service.saveCertificate(record({ productSkus: [" SKU-200 ", "SKU-100", "SKU-200"] }));
+    assert.deepEqual(saved.productSkus, ["SKU-100", "SKU-200"]);
+    assert.equal(saved.productSku, "SKU-100、SKU-200");
+    assert.equal((await service.listCertificates({ keyword: "sku-200" })).rows.length, 1);
+    await assert.rejects(
+      () => service.saveCertificate(record({ productSkus: ["SKU-100", "SKU-200"] })),
+      /已存在/u,
+    );
+  });
+});
+
 test("certificate writes and imports reject countries outside the fixed selector", async () => {
   await withService({}, async (service) => {
     await assert.rejects(() => service.saveCertificate(record({ country: "澳洲" })), /国家选项无效/u);
@@ -141,6 +154,24 @@ test("certificate import rejects workbook duplicate keys and upserts a matching 
     ]));
     assert.deepEqual(result, { importedCount: 1, updatedCount: 1, totalCount: 1 });
     assert.equal((await service.listCertificates()).rows[0].expiryDate, "2027-12-31");
+  });
+});
+
+test("certificate import splits multi-SKU cells and template explains the supported separators", async () => {
+  await withService({}, async (service) => {
+    const result = await service.importCertificates(workbookPayload([
+      record({ productSku: "SKU-100，SKU-200\nSKU-300", certificateNumber: "MULTI" }),
+    ]));
+    assert.deepEqual(result, { importedCount: 1, updatedCount: 0, totalCount: 1 });
+    assert.deepEqual((await service.listCertificates()).rows[0].productSkus, ["SKU-100", "SKU-200", "SKU-300"]);
+
+    const workbook = XLSX.read(await service.createCertificateImportTemplate(), { type: "buffer" });
+    const exampleSheet = workbook.Sheets[workbook.SheetNames[0]];
+    assert.match(String(XLSX.utils.sheet_to_json(exampleSheet, { header: 1, blankrows: false })[1][1]), /SKU-100.*SKU-101/u);
+    assert.ok(workbook.SheetNames.includes("填写说明"));
+    const notes = XLSX.utils.sheet_to_json(workbook.Sheets["填写说明"], { header: 1, blankrows: false });
+    assert.ok(notes.some((row) => row.some((cell) => String(cell).includes("逗号"))));
+    assert.ok(notes.some((row) => row.some((cell) => String(cell).includes("建议使用产品管理中的 SKU"))));
   });
 });
 

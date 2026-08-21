@@ -6,6 +6,18 @@ const CERTIFICATE_TYPES_BY_COUNTRY = {
   英国: ["EN71 + 62115"],
 };
 
+function splitProductSkuValues(value) {
+  const values = Array.isArray(value) ? value : [value];
+  return values
+    .flatMap((item) => String(item ?? "").split(/[,，;；\n\r、]+/u))
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function normalizedProductSkus(row) {
+  return splitProductSkuValues(row?.productSkus !== undefined ? row.productSkus : row?.productSku);
+}
+
 export function createProductCertificatesFeature({
   root = globalThis.document,
   bind,
@@ -25,10 +37,11 @@ export function createProductCertificatesFeature({
   let certificateData = { rows: [], summary: {}, filters: {} };
   let certificateOptionData = { countries: CERTIFICATE_COUNTRIES, certificateTypes: [], productSkus: [] };
   let recommendedCertificateTypes = [];
-  let selectedProductSku = "";
+  let selectedProductSkus = [];
   let skuSearchTimer = null;
   let skuSearchRequest = 0;
   let skuDropdownCloseTimer = null;
+  let skipNextSkuFocusOpen = false;
   let initialized = false;
   const query = (selector) => root?.querySelector?.(selector);
 
@@ -54,7 +67,7 @@ export function createProductCertificatesFeature({
       if (country && row.country !== country) return false;
       if (type && row.certificateType !== type) return false;
       if (status && row.status !== status) return false;
-      return !keyword || `${row.productSku || ""} ${row.certificateNumber || ""}`.toLocaleLowerCase("en-US").includes(keyword);
+      return !keyword || `${row.productSku || normalizedProductSkus(row).join("、")} ${row.certificateNumber || ""}`.toLocaleLowerCase("en-US").includes(keyword);
     });
   }
 
@@ -80,7 +93,7 @@ export function createProductCertificatesFeature({
     renderSummary();
     const rows = filteredRows();
     const body = query("#certificate-table-body");
-    if (body) body.innerHTML = rows.length ? rows.map((row) => `<tr><td>${escapeHtml(row.country)}</td><td><strong>${escapeHtml(row.productSku)}</strong></td><td>${escapeHtml(row.certificateType)}</td><td>${escapeHtml(row.certificateNumber)}</td><td>${escapeHtml(row.issuedDate || "-")}</td><td>${escapeHtml(row.expiryDate)}</td><td><span class="status-pill ${statusClass(row.status)}">${escapeHtml(row.status)}</span></td><td class="table-actions"><button class="table-action" type="button" data-certificate-edit="${escapeHtml(row.id)}">编辑</button><button class="table-action danger" type="button" data-certificate-delete="${escapeHtml(row.id)}">删除</button></td></tr>`).join("") : '<tr><td colspan="8">暂无匹配的证书记录。</td></tr>';
+    if (body) body.innerHTML = rows.length ? rows.map((row) => `<tr><td>${escapeHtml(row.country)}</td><td><strong>${escapeHtml(row.productSku || normalizedProductSkus(row).join("、"))}</strong></td><td>${escapeHtml(row.certificateType)}</td><td>${escapeHtml(row.certificateNumber)}</td><td>${escapeHtml(row.issuedDate || "-")}</td><td>${escapeHtml(row.expiryDate)}</td><td><span class="status-pill ${statusClass(row.status)}">${escapeHtml(row.status)}</span></td><td class="table-actions"><button class="table-action" type="button" data-certificate-edit="${escapeHtml(row.id)}">编辑</button><button class="table-action danger" type="button" data-certificate-delete="${escapeHtml(row.id)}">删除</button></td></tr>`).join("") : '<tr><td colspan="8">暂无匹配的证书记录。</td></tr>';
     setText("#certificate-table-count", `共 ${rows.length} 条记录`);
     refreshTable(query("#certificate-table"));
   }
@@ -128,16 +141,40 @@ export function createProductCertificatesFeature({
     if (!listbox) return;
     const unique = [];
     const seen = new Set();
+    const selected = new Set(selectedProductSkus.map((sku) => sku.toLocaleLowerCase("en-US")));
     for (const row of Array.isArray(rows) ? rows : []) {
       const sku = String(row?.sku || "").trim();
-      if (!sku || seen.has(sku)) continue;
-      seen.add(sku);
+      const normalized = sku.toLocaleLowerCase("en-US");
+      if (!sku || seen.has(normalized) || selected.has(normalized)) continue;
+      seen.add(normalized);
       unique.push({ sku, productName: String(row?.productName || "").trim() });
     }
     listbox.innerHTML = unique.length
       ? unique.map((row) => `<button class="search-result-item" type="button" role="option" data-certificate-sku-option="${escapeHtml(row.sku)}"><strong>${escapeHtml(row.sku)}</strong>${row.productName ? ` <span>${escapeHtml(row.productName)}</span>` : ""}</button>`).join("")
       : "";
     setSkuDropdownOpen(open && unique.length > 0);
+  }
+
+  function renderSelectedSkuChips() {
+    const container = query("#certificate-editor-product-sku-selected");
+    if (!container) return;
+    container.innerHTML = selectedProductSkus.map((sku) => `<span class="status-pill muted certificate-sku-chip" data-certificate-sku-chip="${escapeHtml(sku)}"><span>${escapeHtml(sku)}</span><button type="button" class="table-action" data-certificate-sku-remove="${escapeHtml(sku)}" aria-label="移除 ${escapeHtml(sku)}">×</button></span>`).join("");
+  }
+
+  function addProductSku(sku) {
+    const normalized = String(sku || "").trim();
+    if (!normalized) return false;
+    const exists = selectedProductSkus.some((item) => item.toLocaleLowerCase("en-US") === normalized.toLocaleLowerCase("en-US"));
+    if (exists) return false;
+    selectedProductSkus = [...selectedProductSkus, normalized];
+    renderSelectedSkuChips();
+    return true;
+  }
+
+  function removeProductSku(sku) {
+    const normalized = String(sku || "").trim().toLocaleLowerCase("en-US");
+    selectedProductSkus = selectedProductSkus.filter((item) => item.toLocaleLowerCase("en-US") !== normalized);
+    renderSelectedSkuChips();
   }
 
   async function loadCertificateOptions({ country = "", keyword = "", renderTypes = true } = {}) {
@@ -180,10 +217,44 @@ export function createProductCertificatesFeature({
   function selectSku(sku) {
     const input = query("#certificate-editor-product-sku");
     if (!input) return;
-    input.value = sku;
-    selectedProductSku = sku;
+    if (!addProductSku(sku)) return;
+    input.value = "";
+    skuSearchRequest += 1;
+    if (skuSearchTimer !== null) {
+      globalThis.clearTimeout?.(skuSearchTimer);
+      skuSearchTimer = null;
+    }
+    if (skuDropdownCloseTimer !== null) {
+      globalThis.clearTimeout?.(skuDropdownCloseTimer);
+      skuDropdownCloseTimer = null;
+    }
     setSkuDropdownOpen(false);
+    skipNextSkuFocusOpen = true;
     input.focus();
+  }
+
+  function findExactProductSku(value) {
+    const normalized = String(value || "").trim().toLocaleLowerCase("en-US");
+    if (!normalized) return "";
+    return (certificateOptionData.productSkus || [])
+      .map((row) => String(row?.sku || "").trim())
+      .find((sku) => sku.toLocaleLowerCase("en-US") === normalized) || "";
+  }
+
+  async function ensureTypedSkuSelected() {
+    const input = query("#certificate-editor-product-sku");
+    const typed = formValue("#certificate-editor-product-sku");
+    if (!typed) return;
+    let exact = findExactProductSku(typed);
+    if (!exact) {
+      const data = await loadCertificateOptions({ country: formValue("#certificate-editor-country"), keyword: typed, renderTypes: false });
+      exact = (data.productSkus || [])
+        .map((row) => String(row?.sku || "").trim())
+        .find((sku) => sku.toLocaleLowerCase("en-US") === typed.toLocaleLowerCase("en-US")) || "";
+    }
+    if (!exact) throw new Error("请输入或选择产品管理中的有效 SKU。");
+    addProductSku(exact);
+    if (input) input.value = "";
   }
 
   async function loadProductCertificates() {
@@ -204,10 +275,11 @@ export function createProductCertificatesFeature({
   function openEditor(row = null) {
     const dialog = query("#certificate-editor-dialog");
     query("#certificate-editor-form")?.reset();
-    selectedProductSku = row?.productSku || "";
+    selectedProductSkus = normalizedProductSkus(row);
     setText("#certificate-editor-title", row ? "编辑证书" : "新增证书");
-    const values = [["#certificate-editor-id", row?.id], ["#certificate-editor-country", row?.country], ["#certificate-editor-product-sku", row?.productSku], ["#certificate-editor-type", row?.certificateType], ["#certificate-editor-number", row?.certificateNumber], ["#certificate-editor-issued-date", row?.issuedDate], ["#certificate-editor-expiry-date", row?.expiryDate]];
+    const values = [["#certificate-editor-id", row?.id], ["#certificate-editor-country", row?.country], ["#certificate-editor-product-sku", ""], ["#certificate-editor-type", row?.certificateType], ["#certificate-editor-number", row?.certificateNumber], ["#certificate-editor-issued-date", row?.issuedDate], ["#certificate-editor-expiry-date", row?.expiryDate]];
     values.forEach(([selector, value]) => { const field = query(selector); if (field) field.value = value || ""; });
+    renderSelectedSkuChips();
     renderCertificateTypeOptions(row?.country || "", { resetType: !row });
     renderSkuOptions([], { open: false });
     setStatus("#certificate-editor-status", "");
@@ -220,18 +292,18 @@ export function createProductCertificatesFeature({
   function closeDialog(selector) { query(selector)?.close(); }
 
   function editorPayload() {
-    const productSku = formValue("#certificate-editor-product-sku");
-    if (!productSku || selectedProductSku !== productSku) throw new Error("请从产品管理搜索结果中选择产品 SKU。");
+    if (!selectedProductSkus.length) throw new Error("请选择至少一个产品 SKU。");
     const country = formValue("#certificate-editor-country");
     if (!CERTIFICATE_COUNTRIES.includes(country)) throw new Error("请选择有效国家。");
-    return { country, productSku, certificateType: formValue("#certificate-editor-type"), certificateNumber: formValue("#certificate-editor-number"), issuedDate: formValue("#certificate-editor-issued-date"), expiryDate: formValue("#certificate-editor-expiry-date") };
+    return { country, productSkus: [...selectedProductSkus], certificateType: formValue("#certificate-editor-type"), certificateNumber: formValue("#certificate-editor-number"), issuedDate: formValue("#certificate-editor-issued-date"), expiryDate: formValue("#certificate-editor-expiry-date") };
   }
 
   async function saveEditor(event) {
     event.preventDefault();
     const button = query("#certificate-editor-save");
-    setButtonBusy(button, true);
+    const restoreButton = setButtonBusy(button, "保存中…", "保存");
     try {
+      await ensureTypedSkuSelected();
       const id = formValue("#certificate-editor-id");
       const payload = editorPayload();
       await parseResponse(await fetchImpl(id ? `/api/product-certificates/${encodeURIComponent(id)}` : "/api/product-certificates", { method: id ? "PUT" : "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) }));
@@ -239,7 +311,7 @@ export function createProductCertificatesFeature({
       await loadProductCertificates();
     } catch (error) {
       setStatus("#certificate-editor-status", error.message, "danger");
-    } finally { setButtonBusy(button, false); }
+    } finally { restoreButton(); }
   }
 
   async function removeCertificate(id) {
@@ -255,14 +327,14 @@ export function createProductCertificatesFeature({
     const file = query("#certificate-import-file")?.files?.[0];
     const button = query("#certificate-import-submit");
     if (!file) { setStatus("#certificate-import-status", "请选择 .xlsx 文件。", "danger"); return; }
-    setButtonBusy(button, true);
+    const restoreButton = setButtonBusy(button, "导入中…", "确认导入");
     try {
       const base64 = await readFileAsBase64(file);
       const result = await parseResponse(await fetchImpl("/api/product-certificates/import", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ fileName: file.name, base64 }) }));
       closeDialog("#certificate-import-dialog");
       await loadProductCertificates();
       setStatus("#certificate-status", `导入完成：${result.result?.importedCount || 0} 条。`, "success");
-    } catch (error) { setStatus("#certificate-import-status", error.message, "danger"); } finally { setButtonBusy(button, false); }
+    } catch (error) { setStatus("#certificate-import-status", error.message, "danger"); } finally { restoreButton(); }
   }
 
   function setupProductCertificates() {
@@ -281,11 +353,15 @@ export function createProductCertificatesFeature({
       scheduleSkuSuggestions({ open: false });
     });
     bind(root, "#certificate-editor-product-sku", "input", () => {
-      const value = formValue("#certificate-editor-product-sku");
-      if (value !== selectedProductSku) selectedProductSku = "";
       scheduleSkuSuggestions({ open: true });
     });
-    bind(root, "#certificate-editor-product-sku", "focus", () => scheduleSkuSuggestions({ open: true }));
+    bind(root, "#certificate-editor-product-sku", "focus", () => {
+      if (skipNextSkuFocusOpen) {
+        skipNextSkuFocusOpen = false;
+        return;
+      }
+      if (!selectedProductSkus.length || formValue("#certificate-editor-product-sku")) scheduleSkuSuggestions({ open: true });
+    });
     bind(root, "#certificate-editor-product-sku", "keydown", (event) => {
       if (event.key === "Escape") setSkuDropdownOpen(false);
       if (event.key === "ArrowDown") {
@@ -300,6 +376,10 @@ export function createProductCertificatesFeature({
     bind(root, "#certificate-editor-product-sku-options", "click", (event) => {
       const option = event.target?.closest?.("[data-certificate-sku-option]");
       if (option) selectSku(option.dataset.certificateSkuOption || "");
+    });
+    bind(root, "#certificate-editor-product-sku-selected", "click", (event) => {
+      const button = event.target?.closest?.("[data-certificate-sku-remove]");
+      if (button) removeProductSku(button.dataset.certificateSkuRemove || "");
     });
     bind(root, "#certificate-table-body", "click", (event) => { const button = event.target.closest("button[data-certificate-edit], button[data-certificate-delete]"); if (!button) return; const id = button.dataset.certificateEdit || button.dataset.certificateDelete; const row = certificateData.rows.find((item) => item.id === id); if (button.dataset.certificateEdit) openEditor(row); else removeCertificate(id); });
   }

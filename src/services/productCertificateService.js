@@ -18,6 +18,26 @@ function normalizeText(value) {
   return value == null ? "" : String(value).trim();
 }
 
+function splitProductSkuValues(value) {
+  const values = Array.isArray(value) ? value : [value];
+  return values
+    .flatMap((item) => normalizeText(item).split(/[,，;；\n\r、]+/u))
+    .map((item) => normalizeText(item))
+    .filter(Boolean);
+}
+
+function normalizeProductSkus(input = {}) {
+  const values = splitProductSkuValues(input.productSkus !== undefined ? input.productSkus : input.productSku);
+  const unique = new Map();
+  for (const value of values) {
+    const key = value.toLocaleLowerCase("en-US");
+    if (!unique.has(key)) unique.set(key, value);
+  }
+  const productSkus = [...unique.values()].sort((left, right) => left.localeCompare(right, "en-US", { numeric: true, sensitivity: "base" }));
+  if (!productSkus.length) throw invalidInput("产品SKU不能为空。");
+  return productSkus;
+}
+
 export function certificateTypesForCountry(country = "") {
   const normalizedCountry = normalizeText(country);
   if (normalizedCountry && CERTIFICATE_TYPE_OPTIONS_BY_COUNTRY[normalizedCountry]) {
@@ -31,7 +51,8 @@ function normalizedKeyPart(value) {
 }
 
 function certificateKey(row) {
-  return [row.country, row.productSku, row.certificateType, row.certificateNumber]
+  const productSkuKey = normalizeProductSkus(row).map(normalizedKeyPart).join("\u0002");
+  return [row.country, productSkuKey, row.certificateType, row.certificateNumber]
     .map(normalizedKeyPart)
     .join("\u0001");
 }
@@ -114,10 +135,12 @@ function normalizeRecord(input = {}, id = crypto.randomUUID()) {
   if (issuedDate && dateEpoch(expiryDate) < dateEpoch(issuedDate)) {
     throw invalidInput("过期日期不得早于签发日期。");
   }
+  const productSkus = normalizeProductSkus(input);
   return {
     id,
     country: requiredCountry(input.country),
-    productSku: requiredText(input.productSku, "产品SKU"),
+    productSkus,
+    productSku: productSkus.join("、"),
     certificateType: requiredText(input.certificateType, "证书类型"),
     certificateNumber: requiredText(input.certificateNumber, "证书编号"),
     issuedDate,
@@ -174,7 +197,7 @@ function normalizedImportRows(values) {
     if (source.every((value) => !normalizeText(value))) continue;
     try {
       const row = normalizeRecord({
-        country: source[0], productSku: source[1], certificateType: source[2], certificateNumber: source[3], issuedDate: source[4], expiryDate: source[5],
+        country: source[0], productSkus: source[1], certificateType: source[2], certificateNumber: source[3], issuedDate: source[4], expiryDate: source[5],
       });
       const key = certificateKey(row);
       if (keys.has(key)) throw invalidInput("导入文件内存在重复的证书业务键。");
@@ -227,7 +250,7 @@ export function createProductCertificateService({
     if (country) resultRows = resultRows.filter((row) => row.country === country);
     if (certificateType) resultRows = resultRows.filter((row) => row.certificateType === certificateType);
     if (status) resultRows = resultRows.filter((row) => row.status === status);
-    if (keyword) resultRows = resultRows.filter((row) => [row.productSku, row.certificateNumber].some((value) => value.toLocaleLowerCase("en-US").includes(keyword)));
+    if (keyword) resultRows = resultRows.filter((row) => [row.productSku, row.certificateNumber, ...(row.productSkus || [])].some((value) => value.toLocaleLowerCase("en-US").includes(keyword)));
     return {
       rows: resultRows,
       summary: summarize(resultRows),
@@ -327,10 +350,19 @@ export function createProductCertificateService({
     const workbook = XLSX.utils.book_new();
     const sheet = XLSX.utils.aoa_to_sheet([
       TEMPLATE_HEADERS,
-      ["美国", "SKU-100", "FCC", "FCC-2026-001", "2026-01-01", "2027-01-01"],
+      ["美国", "SKU-100，SKU-101", "CPC全套", "CPC-2026-001", "2026-01-01", "2027-01-01"],
     ]);
-    sheet["!cols"] = [12, 18, 16, 22, 14, 14].map((wch) => ({ wch }));
+    sheet["!cols"] = [12, 30, 16, 22, 14, 14].map((wch) => ({ wch }));
     XLSX.utils.book_append_sheet(workbook, sheet, "证书有效期台账");
+    const instructionSheet = XLSX.utils.aoa_to_sheet([
+      ["字段", "填写说明"],
+      ["国家", "仅支持美国、加拿大、德国、英国。"],
+      ["产品SKU", "可填写多个产品 SKU，使用逗号、中文逗号、分号或换行分隔；建议使用产品管理中的 SKU。"],
+      ["证书类型", "加拿大优先使用 CCPSA，美国优先使用 CPC全套，德国/英国优先使用 EN71 + 62115。"],
+      ["过期日期", "必填；系统按距离过期天数自动计算状态。"],
+    ]);
+    instructionSheet["!cols"] = [{ wch: 14 }, { wch: 72 }];
+    XLSX.utils.book_append_sheet(workbook, instructionSheet, "填写说明");
     return XLSX.write(workbook, { bookType: "xlsx", type: "buffer" });
   }
 
