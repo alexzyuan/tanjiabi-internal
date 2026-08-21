@@ -10,6 +10,7 @@ import {
   closeProductCatalogRepositoryForTests,
   getProductCatalogForRows,
   getProductCatalogHealth,
+  getProductCatalogProductNames,
   getProductCatalogRevision,
   searchProductCatalogSkus,
   ProductCatalogUpstreamError,
@@ -798,4 +799,26 @@ test("SKU search delegates to the reusable catalog database without upstream ref
   });
   assert.deepEqual(result, [{ sku: "TJ-BLUE-001", productName: "蓝色商品" }]);
   assert.deepEqual(calls, [{ keyword: "blue", options: { limit: 8, requestId: "certificate-sku-search-1" } }]);
+});
+
+test("product-name lookup delegates exact internal SKUs to the reusable catalog database", () => {
+  const calls = [];
+  const result = getProductCatalogProductNames({
+    skus: ["TJ001", "TJ002"],
+    requestId: "certificate-product-name-1",
+    repository: {
+      readProductsByInternalSkuKeys(skus, options) {
+        calls.push({ skus, options });
+        return [
+          { internalSku: "TJ001", productName: "蓝色商品" },
+          { internalSku: "TJ002", productName: "红色商品" },
+        ];
+      },
+    },
+  });
+  assert.deepEqual(result, [
+    { sku: "TJ001", productName: "蓝色商品" },
+    { sku: "TJ002", productName: "红色商品" },
+  ]);
+  assert.deepEqual(calls, [{ skus: ["TJ001", "TJ002"], options: { requestId: "certificate-product-name-1" } }]);
 });

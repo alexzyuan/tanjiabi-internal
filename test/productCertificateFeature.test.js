@@ -149,3 +149,36 @@ test("certificate SKU option selection keeps the dropdown closed and supports mu
   await new Promise((resolve) => setTimeout(resolve, 240));
   assert.equal(requests.filter(({ url }) => String(url).includes("/options")).length, 1);
 });
+
+test("certificate ledger renders catalog product names for every selected SKU", async () => {
+  const { elements, feature } = createHarness({
+    fetchImpl: async (url) => {
+      if (String(url).includes("/api/product-certificates")) {
+        return jsonResponse({
+          ok: true,
+          rows: [{
+            id: "certificate-1",
+            country: "美国",
+            productSku: "TJ001、TJ002",
+            productSkus: ["TJ001", "TJ002"],
+            productNames: [
+              { sku: "TJ001", productName: "蓝色商品" },
+              { sku: "TJ002", productName: "红色商品" },
+            ],
+            certificateType: "CPC全套",
+            certificateNumber: "CPC-001",
+            issuedDate: "2026-08-01",
+            expiryDate: "2027-08-01",
+            status: "有效",
+          }],
+          summary: { valid: 1 },
+          filters: { countries: ["美国"], certificateTypes: ["CPC全套"] },
+        });
+      }
+      return jsonResponse({ ok: true, countries: [], certificateTypes: [], productSkus: [] });
+    },
+  });
+  await feature.loadProductCertificates();
+  assert.match(elements["#certificate-table-body"].innerHTML, /TJ001：蓝色商品/u);
+  assert.match(elements["#certificate-table-body"].innerHTML, /TJ002：红色商品/u);
+});

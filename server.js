@@ -167,6 +167,7 @@ import {
 } from "./src/services/dingtalkAuthService.js";
 import { generateAiListingCopy } from "./src/services/aiListingService.js";
 import {
+  getProductCatalogProductNames,
   getProductCatalogHealth,
   refreshProductCatalogScope,
   searchProductCatalogSkus,
@@ -198,6 +199,11 @@ const productCertificateService = createProductCertificateService({
   searchProductSkus: ({ keyword, limit }) => searchProductCatalogSkus({
     keyword,
     limit,
+    feature: "product-certificates",
+    logger: console,
+  }),
+  resolveProductNames: ({ productSkus }) => getProductCatalogProductNames({
+    skus: productSkus,
     feature: "product-certificates",
     logger: console,
   }),

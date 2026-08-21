@@ -3,7 +3,8 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const LEDGER_FILE_NAME = "product-certificates-v1.json";
-const TEMPLATE_HEADERS = ["国家", "产品SKU", "证书类型", "证书编号", "签发日期", "过期日期"];
+const TEMPLATE_HEADERS = ["国家", "产品SKU", "产品名称", "证书类型", "证书编号", "签发日期", "过期日期"];
+const LEGACY_TEMPLATE_HEADERS = ["国家", "产品SKU", "证书类型", "证书编号", "签发日期", "过期日期"];
 const DAY_MS = 86_400_000;
 
 export const PRODUCT_CERTIFICATE_COUNTRIES = Object.freeze(["美国", "加拿大", "德国", "英国"]);
@@ -148,8 +149,21 @@ function normalizeRecord(input = {}, id = crypto.randomUUID()) {
   };
 }
 
-function decorateRecord(row, now) {
-  return { ...row, status: expiryStatus(row.expiryDate, now) };
+function withProductNames(row, productNameLookup) {
+  if (!(productNameLookup instanceof Map)) return row;
+  const productNames = (row.productSkus || []).map((sku) => ({
+    sku,
+    productName: productNameLookup.get(normalizedKeyPart(sku)) || "",
+  }));
+  return {
+    ...row,
+    productNames,
+    productName: productNames.map((entry) => entry.productName || "-").join("；") || "-",
+  };
+}
+
+function decorateRecord(row, now, productNameLookup = null) {
+  return { ...withProductNames(row, productNameLookup), status: expiryStatus(row.expiryDate, now) };
 }
 
 function summarize(rows) {
@@ -184,12 +198,20 @@ async function xlsxModule() {
   return module.default || module;
 }
 
+function importColumnIndexes(headers) {
+  if (headers.length === TEMPLATE_HEADERS.length && headers.every((header, index) => header === TEMPLATE_HEADERS[index])) {
+    return { country: 0, productSkus: 1, certificateType: 3, certificateNumber: 4, issuedDate: 5, expiryDate: 6 };
+  }
+  if (headers.length === LEGACY_TEMPLATE_HEADERS.length && headers.every((header, index) => header === LEGACY_TEMPLATE_HEADERS[index])) {
+    return { country: 0, productSkus: 1, certificateType: 2, certificateNumber: 3, issuedDate: 4, expiryDate: 5 };
+  }
+  throw invalidInput(`导入表头必须依次为：${TEMPLATE_HEADERS.join("、")}；旧版六列表头也可继续导入。`);
+}
+
 function normalizedImportRows(values) {
   if (!Array.isArray(values) || !values.length) throw invalidInput("导入表格不能为空。");
   const headers = values[0].map((value) => normalizeText(value));
-  if (headers.length !== TEMPLATE_HEADERS.length || headers.some((header, index) => header !== TEMPLATE_HEADERS[index])) {
-    throw invalidInput(`导入表头必须依次为：${TEMPLATE_HEADERS.join("、")}。`);
-  }
+  const columns = importColumnIndexes(headers);
   const rows = [];
   const keys = new Set();
   for (let index = 1; index < values.length; index += 1) {
@@ -197,7 +219,12 @@ function normalizedImportRows(values) {
     if (source.every((value) => !normalizeText(value))) continue;
     try {
       const row = normalizeRecord({
-        country: source[0], productSkus: source[1], certificateType: source[2], certificateNumber: source[3], issuedDate: source[4], expiryDate: source[5],
+        country: source[columns.country],
+        productSkus: source[columns.productSkus],
+        certificateType: source[columns.certificateType],
+        certificateNumber: source[columns.certificateNumber],
+        issuedDate: source[columns.issuedDate],
+        expiryDate: source[columns.expiryDate],
       });
       const key = certificateKey(row);
       if (keys.has(key)) throw invalidInput("导入文件内存在重复的证书业务键。");
@@ -217,6 +244,7 @@ export function createProductCertificateService({
   now = () => new Date(),
   logger = console,
   searchProductSkus = async () => [],
+  resolveProductNames = async () => [],
 } = {}) {
   const ledgerPath = path.join(directory, LEDGER_FILE_NAME);
 
@@ -239,10 +267,28 @@ export function createProductCertificateService({
     await rename(temporaryPath, ledgerPath);
   }
 
-  function listResult(rows, filters = {}) {
+  async function productNameLookupForRows(rows) {
+    const productSkus = [...new Set(rows.flatMap((row) => row.productSkus || []))];
+    if (!productSkus.length) return new Map();
+    const resolved = await resolveProductNames({ productSkus });
+    if (!Array.isArray(resolved)) throw new Error("产品名称查询结果无效。");
+    const lookup = new Map();
+    for (const item of resolved) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) throw new Error("产品名称查询结果格式无效。");
+      const sku = requiredText(item.sku, "产品 SKU");
+      lookup.set(normalizedKeyPart(sku), normalizeText(item.productName));
+    }
+    const missingSkus = productSkus.filter((sku) => !lookup.get(normalizedKeyPart(sku)));
+    if (missingSkus.length) {
+      logger.warn?.({ operation: "product-certificate-product-name-lookup", requestedCount: productSkus.length, resolvedCount: resolved.length, missingSkus });
+    }
+    return lookup;
+  }
+
+  function listResult(rows, filters = {}, productNameLookup = null) {
     const currentDate = now();
     if (!(currentDate instanceof Date) || Number.isNaN(currentDate.getTime())) throw new Error("证书状态计算时间无效。");
-    let resultRows = rows.map((row) => decorateRecord(row, currentDate));
+    let resultRows = rows.map((row) => decorateRecord(row, currentDate, productNameLookup));
     const country = normalizeText(filters.country);
     const certificateType = normalizeText(filters.certificateType);
     const status = normalizeText(filters.status);
@@ -250,7 +296,7 @@ export function createProductCertificateService({
     if (country) resultRows = resultRows.filter((row) => row.country === country);
     if (certificateType) resultRows = resultRows.filter((row) => row.certificateType === certificateType);
     if (status) resultRows = resultRows.filter((row) => row.status === status);
-    if (keyword) resultRows = resultRows.filter((row) => [row.productSku, row.certificateNumber, ...(row.productSkus || [])].some((value) => value.toLocaleLowerCase("en-US").includes(keyword)));
+    if (keyword) resultRows = resultRows.filter((row) => [row.productSku, row.productName, row.certificateNumber, ...(row.productSkus || [])].some((value) => value.toLocaleLowerCase("en-US").includes(keyword)));
     return {
       rows: resultRows,
       summary: summarize(resultRows),
@@ -262,7 +308,8 @@ export function createProductCertificateService({
   }
 
   async function listCertificates(filters = {}) {
-    return listResult((await readLedger()).rows, filters);
+    const rows = (await readLedger()).rows;
+    return listResult(rows, filters, await productNameLookupForRows(rows));
   }
 
   async function listCertificateOptions({ country = "", keyword = "" } = {}) {
@@ -289,7 +336,7 @@ export function createProductCertificateService({
     const rows = [...ledger.rows, row];
     await writeLedger(rows);
     logger.info?.({ operation: "product-certificate-save", recordCount: rows.length });
-    return decorateRecord(row, now());
+    return decorateRecord(row, now(), await productNameLookupForRows([row]));
   }
 
   async function updateCertificate(id, input) {
@@ -304,7 +351,7 @@ export function createProductCertificateService({
     const rows = ledger.rows.toSpliced(index, 1, updated);
     await writeLedger(rows);
     logger.info?.({ operation: "product-certificate-update", recordCount: rows.length });
-    return decorateRecord(updated, now());
+    return decorateRecord(updated, now(), await productNameLookupForRows([updated]));
   }
 
   async function deleteCertificate(id) {
@@ -315,7 +362,7 @@ export function createProductCertificateService({
     const [deleted] = ledger.rows.splice(index, 1);
     await writeLedger(ledger.rows);
     logger.info?.({ operation: "product-certificate-delete", recordCount: ledger.rows.length });
-    return decorateRecord(deleted, now());
+    return decorateRecord(deleted, now(), await productNameLookupForRows([deleted]));
   }
 
   async function importCertificates(payload = {}) {
@@ -350,14 +397,15 @@ export function createProductCertificateService({
     const workbook = XLSX.utils.book_new();
     const sheet = XLSX.utils.aoa_to_sheet([
       TEMPLATE_HEADERS,
-      ["美国", "SKU-100，SKU-101", "CPC全套", "CPC-2026-001", "2026-01-01", "2027-01-01"],
+      ["美国", "SKU-100，SKU-101", "由系统按 SKU 从产品目录自动读取", "CPC全套", "CPC-2026-001", "2026-01-01", "2027-01-01"],
     ]);
-    sheet["!cols"] = [12, 30, 16, 22, 14, 14].map((wch) => ({ wch }));
+    sheet["!cols"] = [12, 30, 34, 16, 22, 14, 14].map((wch) => ({ wch }));
     XLSX.utils.book_append_sheet(workbook, sheet, "证书有效期台账");
     const instructionSheet = XLSX.utils.aoa_to_sheet([
       ["字段", "填写说明"],
       ["国家", "仅支持美国、加拿大、德国、英国。"],
       ["产品SKU", "可填写多个产品 SKU，使用逗号、中文逗号、分号或换行分隔；建议使用产品管理中的 SKU。"],
+      ["产品名称", "系统按产品 SKU 从产品目录数据库自动读取，不需要手工填写；导入时会忽略此列内容。"],
       ["证书类型", "加拿大优先使用 CCPSA，美国优先使用 CPC全套，德国/英国优先使用 EN71 + 62115。"],
       ["过期日期", "必填；系统按距离过期天数自动计算状态。"],
     ]);

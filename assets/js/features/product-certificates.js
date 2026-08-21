@@ -18,6 +18,19 @@ function normalizedProductSkus(row) {
   return splitProductSkuValues(row?.productSkus !== undefined ? row.productSkus : row?.productSku);
 }
 
+function productNameEntries(row) {
+  const names = new Map((Array.isArray(row?.productNames) ? row.productNames : [])
+    .map((entry) => [String(entry?.sku || "").trim().toLocaleLowerCase("en-US"), String(entry?.productName || "").trim()]));
+  return normalizedProductSkus(row).map((sku) => ({ sku, productName: names.get(sku.toLocaleLowerCase("en-US")) || "" }));
+}
+
+function renderProductNames(row, escapeHtml) {
+  const entries = productNameEntries(row);
+  if (!entries.length) return "-";
+  if (entries.length === 1) return escapeHtml(entries[0].productName || "-");
+  return entries.map((entry) => `<div>${escapeHtml(entry.sku)}：${escapeHtml(entry.productName || "-")}</div>`).join("");
+}
+
 export function createProductCertificatesFeature({
   root = globalThis.document,
   bind,
@@ -67,7 +80,8 @@ export function createProductCertificatesFeature({
       if (country && row.country !== country) return false;
       if (type && row.certificateType !== type) return false;
       if (status && row.status !== status) return false;
-      return !keyword || `${row.productSku || normalizedProductSkus(row).join("、")} ${row.certificateNumber || ""}`.toLocaleLowerCase("en-US").includes(keyword);
+      const productNames = productNameEntries(row).map((entry) => entry.productName).join(" ");
+      return !keyword || `${row.productSku || normalizedProductSkus(row).join("、")} ${productNames} ${row.certificateNumber || ""}`.toLocaleLowerCase("en-US").includes(keyword);
     });
   }
 
@@ -93,7 +107,7 @@ export function createProductCertificatesFeature({
     renderSummary();
     const rows = filteredRows();
     const body = query("#certificate-table-body");
-    if (body) body.innerHTML = rows.length ? rows.map((row) => `<tr><td>${escapeHtml(row.country)}</td><td><strong>${escapeHtml(row.productSku || normalizedProductSkus(row).join("、"))}</strong></td><td>${escapeHtml(row.certificateType)}</td><td>${escapeHtml(row.certificateNumber)}</td><td>${escapeHtml(row.issuedDate || "-")}</td><td>${escapeHtml(row.expiryDate)}</td><td><span class="status-pill ${statusClass(row.status)}">${escapeHtml(row.status)}</span></td><td class="table-actions"><button class="table-action" type="button" data-certificate-edit="${escapeHtml(row.id)}">编辑</button><button class="table-action danger" type="button" data-certificate-delete="${escapeHtml(row.id)}">删除</button></td></tr>`).join("") : '<tr><td colspan="8">暂无匹配的证书记录。</td></tr>';
+    if (body) body.innerHTML = rows.length ? rows.map((row) => `<tr><td>${escapeHtml(row.country)}</td><td><strong>${escapeHtml(row.productSku || normalizedProductSkus(row).join("、"))}</strong></td><td>${renderProductNames(row, escapeHtml)}</td><td>${escapeHtml(row.certificateType)}</td><td>${escapeHtml(row.certificateNumber)}</td><td>${escapeHtml(row.issuedDate || "-")}</td><td>${escapeHtml(row.expiryDate)}</td><td><span class="status-pill ${statusClass(row.status)}">${escapeHtml(row.status)}</span></td><td class="table-actions"><button class="table-action" type="button" data-certificate-edit="${escapeHtml(row.id)}">编辑</button><button class="table-action danger" type="button" data-certificate-delete="${escapeHtml(row.id)}">删除</button></td></tr>`).join("") : '<tr><td colspan="9">暂无匹配的证书记录。</td></tr>';
     setText("#certificate-table-count", `共 ${rows.length} 条记录`);
     refreshTable(query("#certificate-table"));
   }

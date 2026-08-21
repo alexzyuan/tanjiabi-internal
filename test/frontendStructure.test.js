@@ -138,7 +138,7 @@ test("product certificates own a persistent ledger and import workflow", async (
   assert.match(view, /id="certificate-type-filter"/);
   assert.match(view, /id="certificate-status-filter"/);
   assert.match(view, /id="certificate-table"[^>]*data-table-key="product-certificates"/);
-  assert.match(view, /<th[^>]*>国家<\/th>[\s\S]*<th[^>]*>产品 SKU<\/th>[\s\S]*<th[^>]*>过期日期<\/th>[\s\S]*<th[^>]*>状态<\/th>/);
+  assert.match(view, /<th[^>]*>国家<\/th>[\s\S]*<th[^>]*>产品 SKU<\/th>[\s\S]*<th[^>]*data-column-key="product-name"[^>]*>产品名称<\/th>[\s\S]*<th[^>]*>过期日期<\/th>[\s\S]*<th[^>]*>状态<\/th>/);
   assert.match(view, /<dialog class="certificate-editor-dialog" id="certificate-editor-dialog"/);
   assert.match(view, /id="certificate-editor-country"[^>]*><option/);
   assert.match(view, /id="certificate-editor-product-sku"[^>]*role="combobox"/);
@@ -155,6 +155,7 @@ test("product certificates own a persistent ledger and import workflow", async (
   assert.match(featureSource, /\/api\/product-certificates\/options/);
   assert.match(featureSource, /aria-autocomplete/);
   assert.match(featureSource, /selectedProductSkus/);
+  assert.match(featureSource, /productNames/);
   assert.match(featureSource, /保存中…/u);
   assert.match(featureSource, /product-sku-options\", \"click/);
   assert.match(appSource, /import \{ createProductCertificatesFeature \} from "\.\/assets\/js\/features\/product-certificates\.js/);

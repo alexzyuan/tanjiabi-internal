@@ -851,6 +851,57 @@ export function searchProductCatalogSkus({ keyword = "", limit = 20, ...options 
   }
 }
 
+export function getProductCatalogProductNames({ skus = [], ...options } = {}) {
+  const context = createRequestContext(options, options.feature || "catalog", "read-product-names");
+  let repository;
+  try {
+    repository = repositoryFor(options);
+  } catch (error) {
+    const attached = databaseError(error, "商品目录数据库不可用。", context, "repository-bootstrap");
+    writeLog(options.logger || console, "error", context, "error", attached);
+    throw attached;
+  }
+  try {
+    if (!Array.isArray(skus)) throw new ProductCatalogInputError("产品 SKU 范围必须为数组。");
+    const normalizedSkuValues = new Map();
+    for (const sku of skus) {
+      const value = String(sku ?? "").trim();
+      const key = normalizeCatalogKey(value);
+      if (key && !normalizedSkuValues.has(key)) normalizedSkuValues.set(key, value);
+    }
+    const normalizedSkus = [...normalizedSkuValues.values()];
+    if (!normalizedSkus.length) return [];
+    if (typeof repository.readProductsByInternalSkuKeys !== "function") {
+      throw new ProductCatalogDatabaseError("商品目录数据库不支持产品名称查询。", {
+        operation: "read-product-names",
+        requestId: context.requestId,
+      });
+    }
+    const result = repository.readProductsByInternalSkuKeys(normalizedSkus, {
+      requestId: context.requestId,
+    });
+    if (!Array.isArray(result)) throw new ProductCatalogDatabaseError("商品目录产品名称查询结果无效。", {
+      operation: "read-product-names",
+      requestId: context.requestId,
+    });
+    const productNames = result.map((row) => ({
+      sku: String(row?.internalSku || "").trim(),
+      productName: String(row?.productName || "").trim(),
+    })).filter((row) => row.sku);
+    writeLog(options.logger || console, "info", context, "success", null, {
+      requestedCount: normalizedSkus.length,
+      resultCount: productNames.length,
+    });
+    return productNames;
+  } catch (error) {
+    const attached = isDatabaseFailure(error)
+      ? databaseError(error, "商品目录数据库不可用。", context, error?.details?.operation || context.operation)
+      : attachError(error, context);
+    writeLog(options.logger || console, "error", context, "error", attached);
+    throw attached;
+  }
+}
+
 export function getProductCatalogHealth(options = {}) {
   const requestId = requestIdFrom(options);
   try {

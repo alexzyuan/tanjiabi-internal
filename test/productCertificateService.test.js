@@ -47,6 +47,27 @@ function workbookPayload(rows) {
   };
 }
 
+function workbookPayloadWithProductName(rows) {
+  const sheet = XLSX.utils.aoa_to_sheet([
+    ["国家", "产品SKU", "产品名称", "证书类型", "证书编号", "签发日期", "过期日期"],
+    ...rows.map((row) => [
+      row.country,
+      row.productSku,
+      row.productName || "",
+      row.certificateType,
+      row.certificateNumber,
+      row.issuedDate,
+      row.expiryDate,
+    ]),
+  ]);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, sheet, "证书有效期台账");
+  return {
+    fileName: "产品证书有效期台账.xlsx",
+    base64: XLSX.write(workbook, { bookType: "xlsx", type: "base64" }),
+  };
+}
+
 test("certificate status uses expiry priority at 30 and 60 day boundaries", async () => {
   await withService({ now: () => new Date("2026-08-20T08:00:00+08:00") }, async (service) => {
     for (const [certificateNumber, expiryDate] of [
@@ -77,6 +98,41 @@ test("certificate options expose fixed countries, country-linked recommendations
     assert.deepEqual(options.countries, ["美国", "加拿大", "德国", "英国"]);
     assert.deepEqual(options.certificateTypes, ["CPC全套"]);
     assert.deepEqual(options.productSkus, [{ sku: "TJ-BLUE-001", productName: "蓝色商品" }]);
+  });
+});
+
+test("certificate rows enrich each SKU with the current catalog product name", async () => {
+  let requestedProductSkus = null;
+  await withService({
+    resolveProductNames: async ({ productSkus }) => {
+      requestedProductSkus = productSkus;
+      return [
+        { sku: "SKU-100", productName: "蓝色商品" },
+        { sku: "SKU-200", productName: "红色商品" },
+      ];
+    },
+  }, async (service) => {
+    await service.saveCertificate(record({ productSkus: ["SKU-200", "SKU-100"] }));
+    const data = await service.listCertificates();
+    assert.deepEqual(requestedProductSkus, ["SKU-100", "SKU-200"]);
+    assert.deepEqual(data.rows[0].productNames, [
+      { sku: "SKU-100", productName: "蓝色商品" },
+      { sku: "SKU-200", productName: "红色商品" },
+    ]);
+    assert.equal((await service.listCertificates({ keyword: "蓝色商品" })).rows.length, 1);
+  });
+});
+
+test("certificate write responses include current catalog product names", async () => {
+  await withService({
+    resolveProductNames: async () => [{ sku: "SKU-100", productName: "蓝色商品" }],
+  }, async (service) => {
+    const saved = await service.saveCertificate(record({ certificateNumber: "WRITE-NAMES" }));
+    assert.deepEqual(saved.productNames, [{ sku: "SKU-100", productName: "蓝色商品" }]);
+    const updated = await service.updateCertificate(saved.id, record({ certificateNumber: "WRITE-NAMES", expiryDate: "2027-01-01" }));
+    assert.deepEqual(updated.productNames, [{ sku: "SKU-100", productName: "蓝色商品" }]);
+    const deleted = await service.deleteCertificate(saved.id);
+    assert.deepEqual(deleted.productNames, [{ sku: "SKU-100", productName: "蓝色商品" }]);
   });
 });
 
@@ -172,6 +228,21 @@ test("certificate import splits multi-SKU cells and template explains the suppor
     const notes = XLSX.utils.sheet_to_json(workbook.Sheets["填写说明"], { header: 1, blankrows: false });
     assert.ok(notes.some((row) => row.some((cell) => String(cell).includes("逗号"))));
     assert.ok(notes.some((row) => row.some((cell) => String(cell).includes("建议使用产品管理中的 SKU"))));
+    assert.ok(notes.some((row) => row[0] === "产品名称" && String(row[1]).includes("数据库自动读取")));
+  });
+});
+
+test("certificate import accepts the new product-name column without trusting its value", async () => {
+  await withService({
+    resolveProductNames: async () => [{ sku: "SKU-100", productName: "数据库名称" }],
+  }, async (service) => {
+    const result = await service.importCertificates(workbookPayloadWithProductName([
+      record({ productName: "用户填写名称", certificateNumber: "WITH-NAME" }),
+    ]));
+    assert.deepEqual(result, { importedCount: 1, updatedCount: 0, totalCount: 1 });
+    const row = (await service.listCertificates()).rows[0];
+    assert.equal(row.productName, "数据库名称");
+    assert.deepEqual(row.productNames, [{ sku: "SKU-100", productName: "数据库名称" }]);
   });
 });
 
@@ -181,7 +252,7 @@ test("certificate template uses the fixed import headers in order", async () => 
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     assert.deepEqual(
       XLSX.utils.sheet_to_json(sheet, { header: 1, blankrows: false })[0],
-      ["国家", "产品SKU", "证书类型", "证书编号", "签发日期", "过期日期"],
+      ["国家", "产品SKU", "产品名称", "证书类型", "证书编号", "签发日期", "过期日期"],
     );
   });
 });
