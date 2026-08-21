@@ -60,6 +60,21 @@ test("sales dashboard owns a native sales-facts force refresh control", async ()
   assert.equal(appSource.includes('bind(document, "#sales-facts-force-refresh"'), false);
 });
 
+test("G4A shared filter state and feature registry stay in the composition layer", async () => {
+  const appSource = await readFile(new URL("../app.js", import.meta.url), "utf8");
+  const sharedStateSource = await readFile(new URL("../assets/js/shared-filter-state.js", import.meta.url), "utf8");
+  const registrySource = await readFile(new URL("../assets/js/feature-registry.js", import.meta.url), "utf8");
+
+  assert.match(appSource, /createSharedFilterStateStore/);
+  assert.match(appSource, /createFeatureRegistry/);
+  assert.match(appSource, /sharedFilterState/);
+  assert.match(appSource, /featureRegistry/);
+  assert.match(sharedStateSource, /export function encodeSharedFilterState/);
+  assert.match(sharedStateSource, /historyRef\.replaceState/);
+  assert.match(registrySource, /queryFilters/);
+  assert.match(registrySource, /UnsupportedFeatureFilterError/);
+});
+
 test("supplier board exposes separate semantic dashboard and product refresh actions", async () => {
   const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
   const appSource = await readFile(new URL("../app.js", import.meta.url), "utf8");
@@ -760,7 +775,7 @@ test("app.js starts using shared dashboard section loader", async () => {
   assert.match(appSource, /import \{ createSupplierDetailFeature \} from "\.\/assets\/js\/features\/supplier-detail\.js/);
   assert.match(appSource, /import \{ createPayablesDashboardFeature \} from "\.\/assets\/js\/features\/payables-dashboard\.js/);
   assert.match(appSource, /import \{ createReviewRatingFeature \} from "\.\/assets\/js\/features\/review-rating\.js/);
-  assert.match(appSource, /import \{ createSalesDashboardFeature \} from "\.\/assets\/js\/features\/sales-dashboard\.js\?v=20260810-achievement-tone-v1"/);
+  assert.match(appSource, /import \{ createSalesDashboardFeature \} from "\.\/assets\/js\/features\/sales-dashboard\.js\?v=20260821-g4a-shared-filter-state-v2"/);
   assert.match(appSource, /import \{ createSalesForecastFeature \} from "\.\/assets\/js\/features\/sales-forecast\.js/);
   assert.match(appSource, /import \{ createSidebarShellFeature \} from "\.\/assets\/js\/features\/sidebar-shell\.js/);
   assert.match(appSource, /import \{ createBreadcrumbShellFeature \} from "\.\/assets\/js\/features\/breadcrumb-shell\.js/);

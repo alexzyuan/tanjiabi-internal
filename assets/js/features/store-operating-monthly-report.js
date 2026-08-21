@@ -1,4 +1,5 @@
 import { createDateRangePicker } from "../date-range-picker.js?v=20260807-store-operating-date-range-v1";
+import { encodeSharedFilterState } from "../shared-filter-state.js";
 
 const DATE_PATTERN = /^\d{4}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/;
 const REPORT_FIXED_COLUMN_WIDTHS = Object.freeze({
@@ -111,6 +112,10 @@ export function createStoreOperatingMonthlyReportFeature({
   setModalOpenState,
   setSelectOptions,
   setText,
+  sharedFilterState = null,
+  featureRegistry = null,
+  featureId = "store-operating-monthly-report",
+  onSharedFilterProjection = () => {},
   syncAllOptionSelection,
   syncCountryStoreSelection,
 } = {}) {
@@ -131,6 +136,15 @@ export function createStoreOperatingMonthlyReportFeature({
   if (typeof setModalOpenState !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires setModalOpenState.");
   if (typeof syncAllOptionSelection !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires syncAllOptionSelection.");
   if (typeof syncCountryStoreSelection !== "function") throw new Error("createStoreOperatingMonthlyReportFeature requires syncCountryStoreSelection.");
+  if (sharedFilterState && typeof sharedFilterState.patch !== "function") {
+    throw new Error("createStoreOperatingMonthlyReportFeature requires sharedFilterState.patch.");
+  }
+  if (featureRegistry && typeof featureRegistry.projectState !== "function") {
+    throw new Error("createStoreOperatingMonthlyReportFeature requires featureRegistry.projectState.");
+  }
+  if (typeof onSharedFilterProjection !== "function") {
+    throw new Error("createStoreOperatingMonthlyReportFeature requires onSharedFilterProjection.");
+  }
 
   let storeOptions = [];
   let lastSuccessfulQuery = "";
@@ -165,13 +179,27 @@ export function createStoreOperatingMonthlyReportFeature({
   }
 
   function buildReportQuery(filters = readFilters()) {
-    const params = new URLSearchParams();
-    params.set("startDate", filters.startDate);
-    params.set("endDate", filters.endDate);
-    params.set("currencyCode", filters.currencyCode || "CNY");
-    filters.stores.forEach((value) => params.append("stores", value));
-    filters.countries.forEach((value) => params.append("countries", value));
-    return params.toString();
+    const context = {
+      date: { start: filters.startDate, end: filters.endDate },
+      country: filters.countries,
+      store: filters.stores,
+      currency: filters.currencyCode || "CNY",
+    };
+    const state = sharedFilterState
+      ? sharedFilterState.patch(context, { source: "store-operating-monthly-report-filters" })
+      : context;
+    if (!featureRegistry) {
+      const params = new URLSearchParams();
+      params.set("startDate", filters.startDate);
+      params.set("endDate", filters.endDate);
+      params.set("currencyCode", filters.currencyCode || "CNY");
+      filters.stores.forEach((value) => params.append("stores", value));
+      filters.countries.forEach((value) => params.append("countries", value));
+      return params.toString();
+    }
+    const projection = featureRegistry.projectState(featureId, state, { purpose: "query" });
+    onSharedFilterProjection(projection);
+    return encodeSharedFilterState(projection.state, { include: projection.feature.queryFilters }).toString();
   }
 
   function currentSalesFactsSids(filters = readFilters()) {
@@ -201,6 +229,15 @@ export function createStoreOperatingMonthlyReportFeature({
   }
 
   function syncReportUrl(filters) {
+    if (sharedFilterState) {
+      sharedFilterState.patch({
+        date: { start: filters.startDate, end: filters.endDate },
+        country: filters.countries,
+        store: filters.stores,
+        currency: filters.currencyCode || "CNY",
+      }, { source: "store-operating-monthly-report-url" });
+      return;
+    }
     const params = new URLSearchParams();
     params.set("startDate", filters.startDate);
     params.set("endDate", filters.endDate);

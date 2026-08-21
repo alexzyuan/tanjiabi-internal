@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createSalesDashboardFeature, getQuantityAchievementTone } from "../assets/js/features/sales-dashboard.js";
+import { createSharedFilterStateStore } from "../assets/js/shared-filter-state.js";
 
 function createFeature(overrides = {}) {
   return createSalesDashboardFeature({
@@ -270,6 +271,36 @@ test("sales dashboard feature uses only owner options returned by the dashboard"
   } finally {
     console.error = originalError;
   }
+});
+
+test("sales dashboard hydrates the owner control from shared URL context when options arrive", () => {
+  const ownerSelect = {
+    value: "",
+    options: [{ value: "" }],
+    set innerHTML(value) {
+      this._innerHTML = value;
+      this.options = [{ value: "" }, { value: "运营A" }];
+    },
+    get innerHTML() {
+      return this._innerHTML || "";
+    },
+  };
+  const sharedFilterState = createSharedFilterStateStore({
+    syncUrl: false,
+    initialState: { owner: ["运营A"] },
+  });
+  const { renderDashboard } = createSalesDashboardFeature({
+    root: { querySelector: (selector) => (selector === "#front-owner-filter" ? ownerSelect : null) },
+    bind: () => null,
+    bindAll: () => [],
+    buildDashboardQuery: () => "",
+    escapeHtml: (value) => String(value),
+    setText: () => {},
+    sharedFilterState,
+  });
+
+  renderDashboard({ filters: { ownerOptions: [{ value: "运营A", name: "运营A" }] } });
+  assert.equal(ownerSelect.value, "运营A");
 });
 
 test("sales dashboard feature shows KPI time progress in the filter toolbar", () => {

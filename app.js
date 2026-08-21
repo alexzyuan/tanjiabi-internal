@@ -2,12 +2,14 @@ import TanjiaUiUtils from "./assets/js/ui-utils.js?v=20260706-frontend-refactor-
 import { installDashboardLoadingFetchOverlay, loadDashboardSection } from "./assets/js/dashboard-loader.js?v=20260803-global-page-loading-v1";
 import { installDateRangeAutoRefresh } from "./assets/js/date-range-picker.js?v=20260803-date-auto-refresh-v1";
 import { createFilterControls } from "./assets/js/filter-controls.js?v=20260810-shared-country-store-filter-v4";
+import { createFeatureRegistry } from "./assets/js/feature-registry.js?v=20260821-g4a-shared-filter-state-v1";
+import { createSharedFilterStateStore, decodeSharedFilterState } from "./assets/js/shared-filter-state.js?v=20260821-g4a-shared-filter-state-v1";
 import {
   createFrontShopFilters,
   getDisplayShopName,
   pickSellerCountry,
   pickSellerName,
-} from "./assets/js/front-shop-filters.js?v=20260808-single-owner-filter-v2";
+} from "./assets/js/front-shop-filters.js?v=20260821-g4a-shared-filter-state-v2";
 import { readFileAsBase64 } from "./assets/js/file-utils.js?v=20260707-frontend-refactor-v1";
 import { cachedSalesImageUrl, normalizedSalesImageUrl } from "./assets/js/image-url.js?v=20260707-frontend-refactor-v1";
 import { createFbaUtils } from "./assets/js/fba-utils.js?v=20260707-frontend-refactor-v1";
@@ -22,7 +24,7 @@ import {
   getPacificTodayDate,
   getPacificTodayText,
 } from "./assets/js/date-utils.js?v=20260707-frontend-refactor-v1";
-import { createSalesShell } from "./assets/js/sales-shell.js?v=20260717-date-range-window-v3";
+import { createSalesShell } from "./assets/js/sales-shell.js?v=20260821-g4a-shared-filter-state-v1";
 import { createNavigationUtils } from "./assets/js/navigation-utils.js?v=20260707-frontend-refactor-v1";
 import { compareTableSortableValues, createTableSorter } from "./assets/js/table-sorter.js?v=20260707-frontend-refactor-v1";
 import { createDataTableManager } from "./assets/js/data-table-manager.js?v=20260717-resize-sort-guard-v1";
@@ -49,7 +51,7 @@ import { createAdminSettingsFeature } from "./assets/js/features/admin-settings.
 import { createWebhookAssistantFeature } from "./assets/js/features/webhook-assistant.js?v=20260720-webhook-assistant-v1";
 import { createBudgetTargetsFeature } from "./assets/js/features/budget-targets.js?v=20260808-budget-import-modal-v2";
 import { createProductCertificatesFeature } from "./assets/js/features/product-certificates.js?v=20260821-product-certificate-ledger-v3";
-import { createStoreOperatingMonthlyReportFeature } from "./assets/js/features/store-operating-monthly-report.js?v=20260807-shared-country-store-filter-v1";
+import { createStoreOperatingMonthlyReportFeature } from "./assets/js/features/store-operating-monthly-report.js?v=20260821-g4a-shared-filter-state-v1";
 import { createSyncCenterFeature } from "./assets/js/features/sync-center.js?v=20260706-frontend-refactor-v1";
 import { createFbaFreightFeature } from "./assets/js/features/fba-freight.js?v=20260717-shared-logistics-channels";
 import { createFbaShipmentVarianceFeature } from "./assets/js/features/fba-shipment-variance.js?v=20260803-shipment-variance-v1";
@@ -59,7 +61,7 @@ import { createFbaAutomationFeature } from "./assets/js/features/fba-automation.
 import { createFbaTaskFormFeature } from "./assets/js/features/fba-task-form.js?v=20260707-frontend-refactor-v1";
 import { createFreightRatesFeature } from "./assets/js/features/freight-rates.js?v=20260821-freight-rate-ca-xyy4";
 import { createSalesForecastFeature } from "./assets/js/features/sales-forecast.js?v=20260713-sales-forecast-locator-v2";
-import { createSalesDashboardFeature } from "./assets/js/features/sales-dashboard.js?v=20260810-achievement-tone-v1";
+import { createSalesDashboardFeature } from "./assets/js/features/sales-dashboard.js?v=20260821-g4a-shared-filter-state-v2";
 import { createSidebarShellFeature } from "./assets/js/features/sidebar-shell.js?v=20260707-frontend-refactor-v1";
 import { createTopbarStatusFeature } from "./assets/js/features/topbar-status.js?v=20260707-frontend-refactor-v1";
 import { createBreadcrumbShellFeature } from "./assets/js/features/breadcrumb-shell.js?v=20260707-frontend-refactor-v1";
@@ -74,6 +76,27 @@ import {
 
 if (!TanjiaUiUtils) {
   throw new Error("TanjiaUiUtils 未加载，请确认 assets/js/ui-utils.js 已在 app.js 前加载。");
+}
+
+const featureRegistry = createFeatureRegistry();
+const sharedFilterState = createSharedFilterStateStore({
+  initialState: decodeSharedFilterState(location.search),
+  locationRef: location,
+  historyRef: history,
+});
+
+function getSharedFrontDateRange() {
+  const date = sharedFilterState.get().date;
+  return date.start && date.end ? { start: date.start, end: date.end } : getDefaultFrontDateRange();
+}
+
+function observeSharedFilterProjection(featureId, projection) {
+  if (!projection?.omittedKeys?.length && !projection?.unsupportedKeys?.length) return;
+  console.info("[shared-filter-state] feature projection", {
+    featureId,
+    omittedKeys: projection.omittedKeys || [],
+    unsupportedKeys: projection.unsupportedKeys || [],
+  });
 }
 
 installDashboardLoadingFetchOverlay({ root: document });
@@ -173,8 +196,9 @@ const {
   fieldValue,
   formatDate,
   getDateRangeByPreset,
-  getDefaultFrontDateRange,
+  getDefaultFrontDateRange: getSharedFrontDateRange,
   onDateRangeChange: refreshDashboardFromFilters,
+  sharedFilterState,
   setElementsHidden,
   setText,
 });
@@ -195,6 +219,10 @@ const {
   selectedFilterValue,
   selectedFilterValues,
   setSelectOptions,
+  sharedFilterState,
+  featureRegistry,
+  featureId: "sales-dashboard",
+  onSharedFilterProjection: (projection) => observeSharedFilterProjection("sales-dashboard", projection),
   syncAllOptionSelection,
 });
 
@@ -402,6 +430,7 @@ let makeUnavailableDashboard = (message) => ({
   renderDataValueButtonsHtml,
   setTableSortButtonGroupState,
   setText,
+  sharedFilterState,
 }));
 
 ({ loadProductPulse, setupProductPulse } = createProductPulseFeature({
@@ -799,6 +828,10 @@ async function refreshDashboardFromFilters() {
   setModalOpenState,
   setSelectOptions,
   setText,
+  sharedFilterState,
+  featureRegistry,
+  featureId: "store-operating-monthly-report",
+  onSharedFilterProjection: (projection) => observeSharedFilterProjection("store-operating-monthly-report", projection),
   syncAllOptionSelection,
   syncCountryStoreSelection,
 }));

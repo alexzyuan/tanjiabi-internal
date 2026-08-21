@@ -1,3 +1,5 @@
+import { encodeSharedFilterState } from "./shared-filter-state.js";
+
 export function pickSellerName(seller = {}) {
   return seller.name || seller.seller_name || seller.account_name || seller.shop_name || seller.store_name || seller.sid || "-";
 }
@@ -33,6 +35,10 @@ export function createFrontShopFilters({
   selectedFilterValue,
   selectedFilterValues,
   setSelectOptions,
+  sharedFilterState = null,
+  featureRegistry = null,
+  featureId = "sales-dashboard",
+  onSharedFilterProjection = () => {},
   syncAllOptionSelection,
 } = {}) {
   if (typeof bind !== "function") throw new Error("createFrontShopFilters requires bind.");
@@ -44,8 +50,53 @@ export function createFrontShopFilters({
   if (typeof selectedFilterValues !== "function") throw new Error("createFrontShopFilters requires selectedFilterValues.");
   if (typeof setSelectOptions !== "function") throw new Error("createFrontShopFilters requires setSelectOptions.");
   if (typeof syncAllOptionSelection !== "function") throw new Error("createFrontShopFilters requires syncAllOptionSelection.");
+  if (sharedFilterState && typeof sharedFilterState.patch !== "function") {
+    throw new Error("createFrontShopFilters requires sharedFilterState.patch.");
+  }
+  if (featureRegistry && typeof featureRegistry.projectState !== "function") {
+    throw new Error("createFrontShopFilters requires featureRegistry.projectState.");
+  }
+  if (typeof onSharedFilterProjection !== "function") {
+    throw new Error("createFrontShopFilters requires onSharedFilterProjection.");
+  }
 
   let frontShopSellers = [];
+  let sharedStateApplied = false;
+  let pendingSharedOwner = sharedFilterState?.get?.()?.owner?.slice?.() || [];
+
+  function selectValues(select, values = []) {
+    if (!select?.options) return;
+    const selected = new Set(values);
+    [...select.options].forEach((option) => {
+      option.selected = option.value ? selected.has(option.value) : selected.size === 0;
+    });
+  }
+
+  function applySharedFilterStateToControls() {
+    if (!sharedFilterState || sharedStateApplied) return;
+    const state = sharedFilterState.get();
+    const countrySelect = root?.querySelector?.("#front-country-filter");
+    const shopSelect = root?.querySelector?.("#front-shop-filter");
+    const currencySelect = root?.querySelector?.("#front-currency-filter");
+    selectValues(countrySelect, state.country);
+    if (state.country.length || state.store.length) {
+      const shopOptions = frontShopSellers.map((seller) => ({
+        name: pickSellerName(seller),
+        label: pickSellerName(seller),
+        country: normalizeCountryName(pickSellerCountry(seller)),
+      }));
+      setSelectOptions(shopSelect, shopOptions, "全部店铺", {
+        groupByCountry: true,
+        countries: state.country,
+      });
+    }
+    selectValues(shopSelect, state.store);
+    if (currencySelect && state.currency && (!currencySelect.value || state.currency !== "CNY")) {
+      currencySelect.value = state.currency;
+    }
+    pendingSharedOwner = state.owner.slice();
+    sharedStateApplied = true;
+  }
 
   function getFrontShopSellers() {
     return frontShopSellers.slice();
@@ -73,6 +124,7 @@ export function createFrontShopFilters({
       countries: selectedCountries,
       selectAllVisible: selectAllStores,
     });
+    applySharedFilterStateToControls();
   }
 
   function getSelectedFrontSids() {
@@ -96,21 +148,51 @@ export function createFrontShopFilters({
 
   function buildDashboardQuery() {
     const dateRange = getFrontDateRange();
-    const params = new URLSearchParams();
-    params.set("startDate", dateRange.start);
-    params.set("endDate", dateRange.end);
-
-    const sids = getSelectedFrontSids();
-    const country = selectedFilterValue("#front-country-filter", root);
-    const shop = selectedFilterValue("#front-shop-filter", root);
-    params.set("currencyCode", fieldValue("#front-currency-filter", "CNY", root) || "CNY");
-    const listingOwner = fieldValue("#front-owner-filter", "", root);
-    if ((country || shop) && sids.length) {
-      params.set("sids", sids.join(","));
+    const sharedStateBeforeHydration = sharedFilterState?.get?.() || null;
+    const selectedSids = getSelectedFrontSids();
+    const selectedCountries = selectedFilterValues("#front-country-filter", root);
+    const selectedStores = selectedFilterValues("#front-shop-filter", root);
+    const useInitialSharedContext = Boolean(sharedFilterState && !sharedStateApplied);
+    const sids = useInitialSharedContext && !selectedSids.length
+      ? sharedStateBeforeHydration.sid.map(Number)
+      : selectedSids;
+    const countries = useInitialSharedContext && !selectedCountries.length
+      ? sharedStateBeforeHydration.country.slice()
+      : selectedCountries;
+    const stores = useInitialSharedContext && !selectedStores.length
+      ? sharedStateBeforeHydration.store.slice()
+      : selectedStores;
+    const selectedOwner = fieldValue("#front-owner-filter", "", root).trim();
+    const ownerValues = selectedOwner
+      ? [selectedOwner]
+      : pendingSharedOwner.slice();
+    const selectedCurrency = fieldValue("#front-currency-filter", "CNY", root) || "CNY";
+    const currency = useInitialSharedContext && sharedStateBeforeHydration.currency !== "CNY" && selectedCurrency === "CNY"
+      ? sharedStateBeforeHydration.currency
+      : selectedCurrency;
+    const nextContext = {
+      date: { start: dateRange.start, end: dateRange.end },
+      country: countries,
+      sid: sids,
+      store: stores,
+      owner: ownerValues,
+      currency,
+    };
+    const state = sharedFilterState
+      ? sharedFilterState.patch(nextContext, { source: "sales-dashboard-filters" })
+      : nextContext;
+    if (!featureRegistry) {
+      const params = new URLSearchParams();
+      params.set("startDate", dateRange.start);
+      params.set("endDate", dateRange.end);
+      params.set("currencyCode", currency);
+      if ((countries.length || stores.length) && sids.length) params.set("sids", sids.join(","));
+      if (ownerValues.length) params.set("listingOwner", ownerValues[0]);
+      return params.toString();
     }
-    if (listingOwner) params.set("listingOwner", listingOwner);
-
-    return params.toString();
+    const projection = featureRegistry.projectState(featureId, state, { purpose: "query" });
+    onSharedFilterProjection(projection);
+    return encodeSharedFilterState(projection.state, { include: projection.feature.queryFilters }).toString();
   }
 
   function setupFrontShopFilterControls() {
@@ -123,7 +205,10 @@ export function createFrontShopFilters({
       syncAllOptionSelection(root.querySelector("#front-shop-filter"));
       onFiltersChange();
     });
-    bind(root, "#front-owner-filter", "change", handleFrontOwnerFilterChange);
+    bind(root, "#front-owner-filter", "change", async (...args) => {
+      pendingSharedOwner = [];
+      return handleFrontOwnerFilterChange(...args);
+    });
     bind(root, "#front-currency-filter", "change", onFiltersChange);
   }
 

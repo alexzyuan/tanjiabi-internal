@@ -11,6 +11,7 @@ export function createSalesShell({
   getDateRangeByPreset,
   getDefaultFrontDateRange,
   onDateRangeChange = () => {},
+  sharedFilterState = null,
   setElementsHidden,
   setText,
 } = {}) {
@@ -23,6 +24,9 @@ export function createSalesShell({
   if (typeof getDefaultFrontDateRange !== "function") throw new Error("createSalesShell requires getDefaultFrontDateRange.");
   if (typeof setElementsHidden !== "function") throw new Error("createSalesShell requires setElementsHidden.");
   if (typeof setText !== "function") throw new Error("createSalesShell requires setText.");
+  if (sharedFilterState && typeof sharedFilterState.patch !== "function") {
+    throw new Error("createSalesShell requires sharedFilterState.patch.");
+  }
 
   let frontDateRange = getDefaultFrontDateRange();
   let frontDateRangePicker = null;
@@ -52,6 +56,7 @@ export function createSalesShell({
 
   function updateFrontDateRange(start, end) {
     frontDateRange = { start, end };
+    sharedFilterState?.patch({ date: frontDateRange }, { source: "sales-date-range" });
     const startInput = root.querySelector("#front-date-start");
     const endInput = root.querySelector("#front-date-end");
     if (startInput) startInput.value = start;

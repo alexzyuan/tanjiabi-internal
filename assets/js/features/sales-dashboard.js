@@ -34,6 +34,7 @@ export function createSalesDashboardFeature({
   setText,
   canAccessFinance,
   getCurrentAuthUser,
+  sharedFilterState = null,
 } = {}) {
   if (typeof bind !== "function") throw new Error("createSalesDashboardFeature requires bind.");
   if (typeof bindAll !== "function") throw new Error("createSalesDashboardFeature requires bindAll.");
@@ -461,16 +462,21 @@ export function createSalesDashboardFeature({
     const select = root?.querySelector?.("#front-owner-filter");
     if (!select) return;
     const selected = select.value;
+    const sharedOwner = sharedFilterState?.get?.()?.owner?.[0] || "";
     const mergedOptions = options.reduce((items, item) => {
       const value = item.value || item.name;
       if (!value || items.some((existing) => existing.value === value)) return items;
       items.push({ value, name: item.name || value });
       return items;
     }, []);
+    if (sharedOwner && !mergedOptions.some((item) => item.value === sharedOwner)) {
+      mergedOptions.push({ value: sharedOwner, name: `${sharedOwner}（URL上下文）` });
+    }
     select.innerHTML = `<option value="">全部负责人</option>${mergedOptions
       .map((item) => `<option value="${escapeHtml(item.value || item.name)}">${escapeHtml(item.name || item.value)}</option>`)
       .join("")}`;
-    if ([...select.options].some((option) => option.value === selected)) select.value = selected;
+    const nextValue = selected || sharedOwner;
+    if ([...select.options].some((option) => option.value === nextValue)) select.value = nextValue;
   }
 
   function renderHomeOverview(dashboard) {

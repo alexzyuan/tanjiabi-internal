@@ -7,6 +7,8 @@ import {
   pickSellerCountry,
   pickSellerName,
 } from "../assets/js/front-shop-filters.js";
+import { createFeatureRegistry } from "../assets/js/feature-registry.js";
+import { createSharedFilterStateStore } from "../assets/js/shared-filter-state.js";
 
 function normalizeCountryName(country) {
   const map = { AU: "澳洲", CA: "加拿大", US: "美国" };
@@ -27,6 +29,16 @@ function makeSelect(selectedValues = []) {
     multiple: true,
     selectedOptions: selectedValues.map((value) => ({ value })),
   };
+}
+
+function makeMutableSelect() {
+  const select = { multiple: true, options: [] };
+  Object.defineProperty(select, "selectedOptions", {
+    get() {
+      return select.options.filter((option) => option.selected && option.value);
+    },
+  });
+  return select;
 }
 
 function selectedFilterValues(selectorOrElement, root) {
@@ -198,4 +210,136 @@ test("front owner filter change reveals MSKU detail after dashboard refresh", as
   await bindCalls[2][3]();
 
   assert.deepEqual(order, ["refresh", "reveal"]);
+});
+
+test("front shop filters publish shared context while keeping the weekly API query projection", () => {
+  const elements = {
+    "#front-country-filter": makeSelect(["美国"]),
+    "#front-shop-filter": makeSelect(["xiamentanjia-US"]),
+    "#front-currency-filter": { value: "USD" },
+    "#front-owner-filter": { value: "运营A" },
+  };
+  const location = { pathname: "/dashboard", search: "?view=sales&keep=1" };
+  const history = {
+    replaceState(_state, _title, url) {
+      location.search = String(url).slice(location.pathname.length);
+    },
+  };
+  const sharedFilterState = createSharedFilterStateStore({ locationRef: location, historyRef: history });
+  const filters = createFrontShopFilters({
+    root: makeRoot(elements),
+    bind: () => {},
+    fieldValue,
+    getFrontDateRange: () => ({ start: "2026-07-01", end: "2026-07-06" }),
+    normalizeCountryName,
+    selectedFilterValue,
+    selectedFilterValues,
+    setSelectOptions: () => {},
+    syncAllOptionSelection: () => {},
+    sharedFilterState,
+    featureRegistry: createFeatureRegistry(),
+    featureId: "sales-dashboard",
+  });
+  filters.populateFrontShopFilters([
+    { seller_name: "xiamentanjia-US", marketplace: "US", sid: 8708 },
+  ]);
+
+  assert.equal(
+    filters.buildDashboardQuery(),
+    "startDate=2026-07-01&endDate=2026-07-06&currencyCode=USD&sids=8708&listingOwner=%E8%BF%90%E8%90%A5A",
+  );
+  assert.deepEqual(sharedFilterState.get(), {
+    date: { start: "2026-07-01", end: "2026-07-06" },
+    country: ["美国"],
+    sid: ["8708"],
+    store: ["xiamentanjia-US"],
+    owner: ["运营A"],
+    currency: "USD",
+    msku: [],
+    asin: [],
+    sku: [],
+  });
+  assert.match(location.search, /keep=1/);
+  assert.match(location.search, /countries=%E7%BE%8E%E5%9B%BD/);
+  assert.match(location.search, /stores=xiamentanjia-US/);
+});
+
+test("front shop filters hydrate country, store, and currency from the shared URL context", () => {
+  const countrySelect = makeMutableSelect();
+  const shopSelect = makeMutableSelect();
+  const currencySelect = { value: "CNY" };
+  const root = makeRoot({
+    "#front-country-filter": countrySelect,
+    "#front-shop-filter": shopSelect,
+    "#front-currency-filter": currencySelect,
+    "#front-owner-filter": { value: "" },
+  });
+  const location = {
+    pathname: "/dashboard",
+    search: "?countries=%E7%BE%8E%E5%9B%BD&stores=xiamentanjia-US&currencyCode=ORIGINAL",
+  };
+  const sharedFilterState = createSharedFilterStateStore({ locationRef: location, syncUrl: false });
+  const filters = createFrontShopFilters({
+    root,
+    bind: () => {},
+    fieldValue,
+    getFrontDateRange: () => ({ start: "2026-07-01", end: "2026-07-06" }),
+    normalizeCountryName,
+    selectedFilterValue,
+    selectedFilterValues,
+    setSelectOptions(select, options) {
+      const values = options.map((item) => typeof item === "string" ? item : item.name);
+      select.options = [{ value: "", selected: true }, ...values.map((value) => ({ value, selected: false }))];
+    },
+    syncAllOptionSelection: () => {},
+    sharedFilterState,
+  });
+
+  filters.populateFrontShopFilters([
+    { seller_name: "xiamentanjia-US", marketplace: "US", sid: 8708 },
+    { seller_name: "xiamentanjia-CA", marketplace: "CA", sid: 8709 },
+  ]);
+
+  assert.deepEqual(selectedFilterValues(countrySelect), ["美国"]);
+  assert.deepEqual(selectedFilterValues(shopSelect), ["xiamentanjia-US"]);
+  assert.equal(currencySelect.value, "ORIGINAL");
+});
+
+test("front shop filters do not erase URL context before the seller directory hydrates", () => {
+  const elements = {
+    "#front-country-filter": makeSelect([]),
+    "#front-shop-filter": makeSelect([]),
+    "#front-currency-filter": { value: "CNY" },
+    "#front-owner-filter": { value: "" },
+  };
+  const sharedFilterState = createSharedFilterStateStore({
+    syncUrl: false,
+    initialState: {
+      date: { start: "2026-08-01", end: "2026-08-07" },
+      country: ["美国"],
+      sid: ["8708"],
+      store: ["xiamentanjia-US"],
+      owner: ["运营A"],
+      currency: "ORIGINAL",
+    },
+  });
+  const filters = createFrontShopFilters({
+    root: makeRoot(elements),
+    bind: () => {},
+    fieldValue,
+    getFrontDateRange: () => ({ start: "2026-08-01", end: "2026-08-07" }),
+    normalizeCountryName,
+    selectedFilterValue,
+    selectedFilterValues,
+    setSelectOptions: () => {},
+    syncAllOptionSelection: () => {},
+    sharedFilterState,
+    featureRegistry: createFeatureRegistry(),
+  });
+
+  assert.match(filters.buildDashboardQuery(), /sids=8708/);
+  assert.equal(sharedFilterState.get().currency, "ORIGINAL");
+  assert.deepEqual(sharedFilterState.get().country, ["美国"]);
+  assert.deepEqual(sharedFilterState.get().store, ["xiamentanjia-US"]);
+  assert.deepEqual(sharedFilterState.get().owner, ["运营A"]);
 });

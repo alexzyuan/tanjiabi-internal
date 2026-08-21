@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createSalesShell } from "../assets/js/sales-shell.js";
+import { createSharedFilterStateStore } from "../assets/js/shared-filter-state.js";
 
 function makeElement(extra = {}) {
   return {
@@ -194,4 +195,29 @@ test("sales shell owns sales toolbar placement and local preview warning", () =>
   shell.showLocalFileWarning();
   assert.equal(root.body.prepended.length, 1);
   assert.match(root.body.prepended[0].innerHTML, /本地预览文件/);
+});
+
+test("sales shell publishes date changes to the shared filter context", () => {
+  const sharedFilterState = createSharedFilterStateStore({ syncUrl: false });
+  const root = makeRoot({
+    "#front-date-start": makeElement(),
+    "#front-date-end": makeElement(),
+    "#front-date-range-button": makeElement(),
+  });
+  const shell = createSalesShell({
+    root,
+    bind: () => {},
+    bindAll: () => {},
+    bindClickOutside: () => {},
+    fieldValue,
+    formatDate: (date) => date.toISOString().slice(0, 10),
+    getDateRangeByPreset: () => [new Date("2026-07-01T00:00:00Z"), new Date("2026-07-06T00:00:00Z")],
+    getDefaultFrontDateRange: () => ({ start: "2026-07-01", end: "2026-07-07" }),
+    setElementsHidden,
+    setText,
+    sharedFilterState,
+  });
+
+  shell.updateFrontDateRange("2026-08-01", "2026-08-07");
+  assert.deepEqual(sharedFilterState.get().date, { start: "2026-08-01", end: "2026-08-07" });
 });

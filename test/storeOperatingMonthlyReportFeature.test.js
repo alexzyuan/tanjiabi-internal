@@ -7,6 +7,8 @@ import {
 } from "../assets/js/features/budget-targets.js";
 import { pickSellerCountry, pickSellerName } from "../assets/js/front-shop-filters.js";
 import { createStoreOperatingMonthlyReportFeature } from "../assets/js/features/store-operating-monthly-report.js";
+import { createFeatureRegistry } from "../assets/js/feature-registry.js";
+import { createSharedFilterStateStore } from "../assets/js/shared-filter-state.js";
 
 function makeElement(value = "") {
   return {
@@ -80,6 +82,8 @@ function makeFeatureHarness({
     { sid: 1, name: "A", country: "美国" },
     { sid: 2, name: "B", country: "加拿大" },
   ],
+  sharedFilterState = null,
+  featureRegistry = null,
 } = {}) {
   const elements = {
     "#store-operating-report-start-date": makeElement(startDate),
@@ -168,6 +172,8 @@ function makeFeatureHarness({
         .map((option) => option.name);
     },
     syncAllOptionSelection() {},
+    sharedFilterState,
+    featureRegistry,
   });
   return { elements, feature, location, navTargets, optionUpdates, refreshes, requests, countryStoreSyncCalls, boundHandlers };
 }
@@ -215,6 +221,36 @@ test("monthly report seeds its current-month range before mounting the shared da
   assert.equal(elements["#store-operating-report-end-date"].value, "2026-08-07");
   assert.equal(pickerOptions.length, 1);
   assert.equal(pickerOptions[0].maxCalendarMonths, 12);
+});
+
+test("monthly report publishes shared context and keeps its explicit API query projection", async () => {
+  const sharedFilterState = createSharedFilterStateStore({ syncUrl: false });
+  const { feature, requests } = makeFeatureHarness({
+    stores: ["A"],
+    countries: ["美国"],
+    sharedFilterState,
+    featureRegistry: createFeatureRegistry(),
+  });
+
+  await feature.loadStoreOperatingMonthlyReport();
+
+  assert.equal(requests.length, 1);
+  assert.match(requests[0], /startDate=2026-06-01/);
+  assert.match(requests[0], /endDate=2026-07-31/);
+  assert.match(requests[0], /currencyCode=CNY/);
+  assert.match(requests[0], /stores=A/);
+  assert.match(requests[0], /countries=%E7%BE%8E%E5%9B%BD/);
+  assert.deepEqual(sharedFilterState.get(), {
+    date: { start: "2026-06-01", end: "2026-07-31" },
+    country: ["美国"],
+    sid: [],
+    store: ["A"],
+    owner: [],
+    currency: "CNY",
+    msku: [],
+    asin: [],
+    sku: [],
+  });
 });
 
 test("the feature requires the managed table refresher dependency", () => {
