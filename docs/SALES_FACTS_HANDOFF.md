@@ -1,11 +1,13 @@
 # Sales Facts SQLite 交接文档
 
-更新时间：2026-08-13（Asia/Shanghai）
+更新时间：2026-08-21（Asia/Shanghai）
+
+当前里程碑状态：`OPEN`（当前月月报验收已通过；自动同步观察和 legacy 对账证据仍未满足关闭条件）
 
 ## 当前生产状态
 
 - 生产分支：`main`
-- 已部署提交：`285e87121984adb7c6ca295c9b154749a9e27d0c`
+- 已部署提交：`01f28be8a96d3acfbbc8daee8e266bd6a7910e9e`
 - 服务器：`47.107.92.14`
 - 应用目录：`/opt/tanjia-bi`
 - PM2 应用：`tanjia-bi`，当前状态 `online`
@@ -13,17 +15,32 @@
 - 商品目录数据库：`/opt/tanjia-bi/data-cache/product-catalog/product-catalog-v1.sqlite`
 - 当前项目约定：不做窄屏测试；本阶段无 CSS 部署。
 
-最近一次生产验收结果：
+最近一次生产基线（2026-08-21）：
 
 - `/api/health.ok = true`
-- `sync.lastSuccessAt` 有值，`lastError = null`，最近一次同步覆盖 18 个店铺、3199 条销售事实
-- `salesFactsRevision = 2`
+- `sync.lastSuccessAt = 2026/8/21 16:12:32`，`lastError = null`，最近一次自动同步覆盖 18 个店铺、3316 条销售事实
+- `salesFactsRevision = 35`
 - `ownerRevision = 1`
-- `dailyFactCount = 3199`
-- `factCoverageCount = 540`
+- `dailyFactCount = 5491`
+- `factCoverageCount = 782`
 - `ownerPeriodCount = 820`
-- `customFeeCount = 0`、`customFeeCoverageCount = 0`：尚未用月报刷新写入自定义费用，不代表费用接口已完成验收
+- `customFeeCount = 184`、`customFeeCoverageCount = 25`
 - schema `version=1`，`quick_check=ok`
+
+当前月经营月报 + Custom Fee 生产验收：
+
+- 请求范围：`2026-08-01` 至 `2026-08-21`、CNY、18 个 active SID
+- 请求 ID：`production-monthly-acceptance-20260821`
+- 同一事务提交到 `salesFactsRevision=34`；OrderProfit 事实 2337 条、coverage 378 条、自定义费用 86 条、费用 coverage 18 条
+- 月报读取复核：`source=sales-facts-sqlite`、`customFeeSource=sales-facts-sqlite.custom_fee_monthly`、`customFeeRecordCount=86`、`unmappedCustomFeeCount=0`
+
+2026-07 legacy 对账证据：
+
+- 为补齐 SQLite 侧完整自然月，已显式强刷旧 JSON 共同可见的 7 个 SID、31 天；请求 ID：`production-reconcile-refresh-202607`，提交到 `salesFactsRevision=35`
+- SQLite 侧 coverage 已达到 `7 × 31 = 217`；旧 CNY OrderProfit JSON 只有 40 个 SID/日期组合，且只覆盖 7/18 active SID
+- 旧 JSON 没有 2026-07 可比的 seller-profit 自定义费用快照，因此该对账 artifact 为 `blocked`，不得据此关闭里程碑
+- artifact：`/opt/tanjia-bi-approvals/sales-facts-reconciliation-2026-07.json`
+- artifact SHA-256：`2c2460a8acf793216e7b9d2a631877fb8639cafbee85eccf0058f9dd0fbe09ae`
 
 负责人历史初始化实测：
 
@@ -106,15 +123,16 @@ DEPLOY_CONFIRM_BRANCH=main DEPLOY_SCOPE=sales-facts npm run package:deploy
 ## 当前已知事项
 
 - 领星会对短时间内重复的旧销售周报请求返回 `new requests too frequently`。这不影响 sales facts 自动同步；发现该日志时先等待限流窗口，不要连续强刷。
-- `customFeeCount=0` 尚未完成当前月月报费用链路验收。
-- 生产 seller directory 之前曾因旧缓存只有 7 个店铺；已在 `5cea872`/`285e871` 修复为强制刷新并转发 `forceRefresh`，当前缓存已恢复 18 个 SID。
+- 当前月 Custom Fee 链路已完成真实生产验收；后续仍需观察晚到费用的 12 小时刷新行为。
+- 2026-07 legacy 对账不能宣称完整通过：旧 CNY JSON 缺少 177 个 SID/日期组合，并无可比 custom fee 快照。
+- 生产 seller directory 已恢复 18 个 SID；对账 artifact 的 7 SID 是旧 JSON 的可比交集，不是新的生产口径。
 
-## 交接后的下一阶段计划
+## 当前收尾与下一阶段计划
 
-1. 观察 24–48 小时自动同步：确认 18 个 SID、`lastSuccessAt`、无错误、revision 和 coverage 正常变化。
-2. 手动刷新一个当前月店铺经营月报：确认 OrderProfit 与自定义费用同一事务提交，检查 `customFeeCount`、`customFeeCoverageCount` 和未映射费用元数据。
-3. 使用旧 JSON 做一个完整月份只读对账：销售额、净销售额、平台费、毛利润、自定义费用；只记录差异，不导入旧事实。
-4. 稳定观察至少 7 天后，再单独设计 `inventory-snapshots.sqlite`；库存快照、工厂库存和旧缓存清理不与销售事实继续混改。
+1. 继续观察 24–48 小时自动同步：确认 18 个 SID、`lastSuccessAt`、无错误、revision 和 coverage 正常变化；本次基线起点为 `2026/8/21 16:12:32`。
+2. 补齐可比的 2026-07 legacy 日级 OrderProfit 与 seller-profit custom fee 快照；在此之前保持 `Sales Facts Milestone = OPEN`，不把旧 JSON 差异静默解释为新事实错误。
+3. 收尾通过后，再单独设计 G4A `Frontend Shared Filter State + Feature Registry`，不得与库存 SQLite 混做。
+4. G4A 稳定后做 G4B MSKU 跨看板联动，再进入独立设计的 `inventory-snapshots.sqlite`。
 5. 旧缓存删除机制最后执行：先生成 manifest/归档并完成稳定期审批，再进行独立 retirement 变更。
 
 ## 回滚边界
