@@ -106,12 +106,15 @@ test("deployment package advertises the sales facts capability and smoke/schema 
   assert.match(packageSource, /scripts\/sales-facts-sqlite-smoke\.js/);
   assert.match(packageSource, /scripts\/validate-sales-facts-schema\.js/);
   assert.match(packageSource, /scripts\/validate-sales-facts-preflight-artifact\.js/);
+  assert.match(packageSource, /deployScope/);
+  assert.match(packageSource, /requiresSalesFactsPreflight/);
   assert.match(deploySource, /node scripts\/sales-facts-sqlite-smoke\.js/);
   assert.match(deploySource, /node scripts\/validate-sales-facts-schema\.js/);
   assert.match(deploySource, /node scripts\/validate-sales-facts-preflight-artifact\.js/);
   assert.match(deploySource, /SALES_FACTS_PREFLIGHT_ARTIFACT/);
   assert.match(deploySource, /SALES_FACTS_PREFLIGHT_ARTIFACT_SHA256/);
   assert.match(deploySource, /SKIP_SALES_FACTS_PREFLIGHT/);
+  assert.match(deploySource, /DEPLOY_SCOPE_FROM_MANIFEST/);
   assert.match(packageJson, /sales-facts:sqlite:smoke/);
   assert.match(packageJson, /sales-facts:schema:check/);
 });

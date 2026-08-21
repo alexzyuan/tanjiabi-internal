@@ -76,7 +76,13 @@ Content-Type: application/json
 
 销售事实范围刷新必须显式传 `startDate`、`endDate`、`sids`、`currencyMode`；只有确实要重刷时才传 `forceRefresh: true`。负责人字段不进入请求范围。
 
-生产部署必须使用 clean `main` 打包，并设置 `DEPLOY_CONFIRM_BRANCH=main`。部署前的只读 OrderProfit 预检必须直接运行：
+生产部署必须使用 clean `main` 打包，并设置 `DEPLOY_CONFIRM_BRANCH=main`。普通改动使用默认 `standard` scope，不需要 OrderProfit 对账门禁：
+
+```bash
+DEPLOY_CONFIRM_BRANCH=main npm run package:deploy
+```
+
+只有改动 Sales Facts/OrderProfit 数据契约时，才显式设置 `DEPLOY_SCOPE=sales-facts`，并在部署前运行只读 OrderProfit 预检：
 
 ```bash
 node scripts/audit-sales-facts-preflight.js > /opt/tanjia-bi-approvals/sales-facts-preflight.json
@@ -86,14 +92,16 @@ sha256sum /opt/tanjia-bi-approvals/sales-facts-preflight.json
 不要使用 `npm run sales-facts:preflight > file`，因为 npm 会把脚本标题写入 stdout，破坏 JSON artifact。部署时必须提供：
 
 ```bash
+export DEPLOY_SCOPE=sales-facts
+export DEPLOY_CONFIRM_BRANCH=main
 export SALES_FACTS_PREFLIGHT_ARTIFACT=/opt/tanjia-bi-approvals/sales-facts-preflight.json
 export SALES_FACTS_PREFLIGHT_ARTIFACT_SHA256=<sha256>
-bash deploy.sh
+DEPLOY_CONFIRM_BRANCH=main DEPLOY_SCOPE=sales-facts npm run package:deploy
 ```
 
-如本次发布已明确批准跳过销售事实业务预检，可改为设置 `SKIP_SALES_FACTS_PREFLIGHT=1` 后执行 `bash deploy.sh`。该开关只跳过预检 artifact 校验，不跳过部署包来源、分支确认、SQLite smoke/schema、迁移、PM2、健康检查和部署完整性门禁。
+如销售事实 scope 的本次发布已明确批准跳过业务预检，可在服务器执行 `SKIP_SALES_FACTS_PREFLIGHT=1 bash deploy.sh /opt/tanjia-bi/tanjia-bi-deploy.tar.gz`。该开关只跳过预检 artifact 校验，不跳过部署包来源、分支确认、SQLite smoke/schema、迁移、PM2、健康检查和部署完整性门禁。
 
-部署门禁会验证 branch/commit/manifest、两套 SQLite smoke、schema、artifact 的 daily 模式、分页完整、请求计数和零差异字段，然后才迁移商品目录和重启 PM2。
+部署门禁会验证 branch/commit/manifest、scope、两套 SQLite smoke、schema；sales-facts scope 还会验证 artifact 的 daily 模式、分页完整、请求计数和零差异字段，然后才迁移商品目录和重启 PM2。
 
 ## 当前已知事项
 

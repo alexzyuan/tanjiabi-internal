@@ -12,6 +12,9 @@ test("deploy package requires explicit branch confirmation and writes source man
   assert.match(source, /runGit\(\["status", "--porcelain"\]\)/);
   assert.match(source, /detached HEAD/);
   assert.match(source, /confirmedBranch: confirmedDeployBranch/);
+  assert.match(source, /const deployScope = process\.env\.DEPLOY_SCOPE \|\| "standard"/);
+  assert.match(source, /deployScope,/);
+  assert.match(source, /requiresSalesFactsPreflight: deployScope === "sales-facts"/);
   assert.match(source, /deployMetadata\.integrity = await buildDeployIntegrity\(ROOT, manifest\)/);
   assert.match(source, /JSON\.stringify\(deployMetadata, null, 2\)/);
 });
@@ -23,6 +26,9 @@ test("server deployment rejects packages without a confirmed production branch m
   assert.match(source, /validate_deploy_manifest\(\)/);
   assert.match(source, /tar -xOzf "\$ARCHIVE" \.deploy-manifest\.json/);
   assert.match(source, /manifest_confirmed_branch.*manifest_branch/);
+  assert.match(source, /manifest_scope/);
+  assert.match(source, /manifest_requires_sales_facts_preflight/);
+  assert.match(source, /DEPLOY_REQUIRES_SALES_FACTS_PREFLIGHT/);
   assert.match(source, /ALLOW_NON_PRODUCTION_DEPLOY/);
   assert.match(source, /SKIP_SALES_FACTS_PREFLIGHT/);
   assert.match(source, /deploy_integrity_check\(\)/);
@@ -90,6 +96,16 @@ test("deployment source installs, smokes, validates, checks approved preflight, 
   assert.ok(preflightIndex < restartIndex);
   assert.match(source, /SALES_FACTS_PREFLIGHT_ARTIFACT/);
   assert.match(source, /SALES_FACTS_PREFLIGHT_ARTIFACT_SHA256/);
+});
+
+test("deployment skips the sales facts business preflight for standard scope and requires it for sales-facts scope", async () => {
+  const source = await readFile(new URL("../deploy.sh", import.meta.url), "utf8");
+  const scopeGate = source.indexOf('DEPLOY_REQUIRES_SALES_FACTS_PREFLIGHT:-false');
+  const artifactIndex = source.indexOf('local artifact_path="${SALES_FACTS_PREFLIGHT_ARTIFACT:-}"');
+  assert.ok(scopeGate >= 0);
+  assert.ok(artifactIndex > scopeGate);
+  assert.match(source, /跳过销售事实业务预检：本次部署 scope=/);
+  assert.match(source, /standard\|sales-facts/);
 });
 
 test("deployment builds native dependencies in the isolated release directory before replacing live node_modules", async () => {

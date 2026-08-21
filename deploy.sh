@@ -104,7 +104,7 @@ validate_deploy_manifest() {
   fi
 
   local metadata
-  if ! metadata="$(printf '%s' "$manifest_json" | node -e 'let input = ""; process.stdin.setEncoding("utf8"); process.stdin.on("data", (chunk) => input += chunk); process.stdin.on("end", () => { const manifest = JSON.parse(input); for (const key of ["app", "branch", "commit", "clean", "confirmedBranch"]) console.log(String(manifest[key] ?? "")); });')"; then
+  if ! metadata="$(printf '%s' "$manifest_json" | node -e 'let input = ""; process.stdin.setEncoding("utf8"); process.stdin.on("data", (chunk) => input += chunk); process.stdin.on("end", () => { const manifest = JSON.parse(input); for (const key of ["app", "branch", "commit", "clean", "confirmedBranch", "deployScope", "requiresSalesFactsPreflight"]) console.log(String(manifest[key] ?? "")); });')"; then
     fail "部署包 manifest 解析失败。"
   fi
 
@@ -114,12 +114,28 @@ validate_deploy_manifest() {
   local manifest_commit="${deploy_meta[2]:-}"
   local manifest_clean="${deploy_meta[3]:-}"
   local manifest_confirmed_branch="${deploy_meta[4]:-}"
+  local manifest_scope="${deploy_meta[5]:-}"
+  local manifest_requires_sales_facts_preflight="${deploy_meta[6]:-}"
 
   [ "$manifest_app" = "tanjia-bi" ] || fail "部署包应用标识异常：$manifest_app"
   [ -n "$manifest_branch" ] || fail "部署包 manifest 缺少分支信息。"
   [ -n "$manifest_commit" ] || fail "部署包 manifest 缺少提交信息。"
   [ "$manifest_clean" = "true" ] || fail "部署包不是从干净工作区生成，拒绝部署。"
   [ "$manifest_confirmed_branch" = "$manifest_branch" ] || fail "部署包缺少分支二次确认：confirmedBranch=$manifest_confirmed_branch branch=$manifest_branch"
+  case "$manifest_scope" in
+    standard|sales-facts)
+      ;;
+    *)
+      fail "部署包 manifest 缺少有效 deployScope：$manifest_scope"
+      ;;
+  esac
+  local expected_sales_facts_preflight="false"
+  if [ "$manifest_scope" = "sales-facts" ]; then
+    expected_sales_facts_preflight="true"
+  fi
+  [ "$manifest_requires_sales_facts_preflight" = "$expected_sales_facts_preflight" ] || fail "部署包 manifest 的销售事实预检标记与 deployScope 不一致：scope=$manifest_scope requires=$manifest_requires_sales_facts_preflight"
+  DEPLOY_SCOPE_FROM_MANIFEST="$manifest_scope"
+  DEPLOY_REQUIRES_SALES_FACTS_PREFLIGHT="$manifest_requires_sales_facts_preflight"
 
   if ! tar -xOzf "$ARCHIVE" .deploy-manifest.json 2>/dev/null | node -e 'let input = ""; process.stdin.setEncoding("utf8"); process.stdin.on("data", (chunk) => input += chunk); process.stdin.on("end", () => { const manifest = JSON.parse(input); if (!Array.isArray(manifest.capabilities) || !manifest.capabilities.includes("sales-facts-sqlite-v1")) process.exit(1); });'; then
     fail "部署包缺少 sales-facts-sqlite-v1 能力声明，拒绝部署。"
@@ -129,7 +145,7 @@ validate_deploy_manifest() {
     fail "部署包来自分支 $manifest_branch，当前允许的正式部署分支是 $PRODUCTION_DEPLOY_BRANCH。如确需临时部署其他分支，请显式设置 ALLOW_NON_PRODUCTION_DEPLOY=1。"
   fi
 
-  log "部署包来源确认：branch=$manifest_branch commit=${manifest_commit:0:12}"
+  log "部署包来源确认：branch=$manifest_branch commit=${manifest_commit:0:12} scope=$manifest_scope requiresSalesFactsPreflight=$manifest_requires_sales_facts_preflight"
 }
 
 validate_sales_facts_preflight_artifact() {
@@ -144,6 +160,11 @@ validate_sales_facts_preflight_artifact() {
       fail "SKIP_SALES_FACTS_PREFLIGHT 只能设置为 0 或 1。"
       ;;
   esac
+
+  if [ "${DEPLOY_REQUIRES_SALES_FACTS_PREFLIGHT:-false}" != "true" ]; then
+    log "跳过销售事实业务预检：本次部署 scope=${DEPLOY_SCOPE_FROM_MANIFEST:-unknown}，未声明 Sales Facts/OrderProfit 数据契约变更。"
+    return
+  fi
 
   local artifact_path="${SALES_FACTS_PREFLIGHT_ARTIFACT:-}"
   local expected_hash="${SALES_FACTS_PREFLIGHT_ARTIFACT_SHA256:-}"

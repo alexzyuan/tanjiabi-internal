@@ -13,6 +13,7 @@ const allowCssDeploy = process.env.ALLOW_CSS_DEPLOY === "1";
 const allowNonProductionDeploy = process.env.ALLOW_NON_PRODUCTION_DEPLOY === "1";
 const productionDeployBranch = process.env.PRODUCTION_DEPLOY_BRANCH || "main";
 const confirmedDeployBranch = process.env.DEPLOY_CONFIRM_BRANCH || "";
+const deployScope = process.env.DEPLOY_SCOPE || "standard";
 const args = new Set(process.argv.slice(2));
 const includeCss = args.has("--include-css") || args.has("--full");
 
@@ -138,6 +139,9 @@ function resolveDeployMetadata() {
   if (confirmedDeployBranch !== branch) {
     fail(`缺少二次确认：请设置 DEPLOY_CONFIRM_BRANCH=${branch} 后重新打包。`);
   }
+  if (!["standard", "sales-facts"].includes(deployScope)) {
+    fail(`DEPLOY_SCOPE 只能是 standard 或 sales-facts，当前值：${deployScope}`);
+  }
 
   return {
     app: "tanjia-bi",
@@ -148,6 +152,8 @@ function resolveDeployMetadata() {
     confirmedBranch: confirmedDeployBranch,
     clean: true,
     includeCss,
+    deployScope,
+    requiresSalesFactsPreflight: deployScope === "sales-facts",
     capabilities: ["product-catalog-sqlite-v1", "sales-facts-sqlite-v1"],
     packagedAt: new Date().toISOString(),
   };
@@ -161,6 +167,7 @@ if (args.has("--help") || args.has("-h")) {
     "Set ALLOW_CSS_DEPLOY=1 with --include-css only for reviewed UI/CSS deploys.",
     `Set DEPLOY_CONFIRM_BRANCH=<current branch>; default production branch is ${productionDeployBranch}.`,
     "Set ALLOW_NON_PRODUCTION_DEPLOY=1 only for an intentional temporary deploy from another branch.",
+    "Set DEPLOY_SCOPE=sales-facts only when the release changes the Sales Facts/OrderProfit data contract; standard is the default for unrelated changes.",
   ].join("\n"));
   process.exit(0);
 }
