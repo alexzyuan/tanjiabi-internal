@@ -4,6 +4,7 @@ import test from "node:test";
 import { buildApiRoutes } from "../routes/index.js";
 import { createAdminRoutes } from "../routes/admin.js";
 import { createInventoryRoutes } from "../routes/inventory.js";
+import { createSyncStoreInspectionRoutes } from "../routes/sync-store-inspection.js";
 
 const routeFiles = [
   "auth.js",
@@ -63,10 +64,32 @@ test("route table requires every API route to declare auth", () => {
   assert.equal(routes.find((route) => route.method === "POST" && route.path === "/api/sales-facts/owners/sync")?.auth, "admin");
   assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/webhook-assistant/tasks")?.auth, "admin");
   assert.equal(routes.find((route) => route.method === "POST" && route.path === "/api/webhook-assistant/tasks")?.auth, "admin");
+  assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/store-inspection/persistence")?.auth, "admin");
+  assert.equal(routes.find((route) => route.method === "POST" && route.path === "/api/store-inspection/persistence/reconcile")?.auth, "admin");
   assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/dashboard/clearance-inventory"), undefined);
   assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/dashboard/slow-moving-risk/live")?.auth, "session");
   assert.equal(routes.find((route) => route.method === "GET" && route.path === "/api/dashboard/slow-moving-risk/reports")?.auth, "session");
   assert.ok(routes.some((route) => route.method === "GET" && route.pattern?.toString().includes("slow-moving-risk")));
+});
+
+test("store inspection reconciliation does not hide malformed request bodies", async () => {
+  const parseError = new Error("malformed JSON");
+  parseError.code = "INVALID_JSON";
+  let reconcileCalled = false;
+  const route = createSyncStoreInspectionRoutes({
+    readJsonBody: async () => { throw parseError; },
+    sendJson: () => {},
+    reconcileStoreInspectionPersistence: async () => {
+      reconcileCalled = true;
+      return { ok: true };
+    },
+  }).find((item) => item.method === "POST" && item.path === "/api/store-inspection/persistence/reconcile");
+
+  await assert.rejects(
+    () => route.handler({ req: {}, res: {} }),
+    (error) => error === parseError,
+  );
+  assert.equal(reconcileCalled, false);
 });
 
 test("product catalog route is composed from service entry points without refresh business logic in server", async () => {

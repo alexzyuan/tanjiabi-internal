@@ -40,6 +40,13 @@ test("parseMailSource fails when an IMAP message has no requested source", async
   assert.equal(logs[0][1].code, "MAIL_PARSE_FAILED");
 });
 
+test("parseMailSource rejects a whitespace-only raw message", async () => {
+  await assert.rejects(
+    () => parseMailSource(Buffer.from(" \r\n\t"), { mailbox: "INBOX", uid: "44", logger: { error() {} } }),
+    (error) => error.code === "MAIL_PARSE_FAILED" && error.uid === "44",
+  );
+});
+
 test("aftersales mailbox parsing propagates a source parse failure", async () => {
   await assert.rejects(
     () => parseAftersalesFetchedMessage(
@@ -50,6 +57,16 @@ test("aftersales mailbox parsing propagates a source parse failure", async () =>
   );
 });
 
+test("aftersales production parsing rejects a zero-length Buffer source", async () => {
+  await assert.rejects(
+    () => parseAftersalesFetchedMessage(
+      { uid: "af-empty", source: Buffer.alloc(0) },
+      { mailbox: "INBOX", saveAttachments: false, logger: { error() {} } },
+    ),
+    (error) => error.code === "MAIL_PARSE_FAILED" && error.uid === "af-empty",
+  );
+});
+
 test("ERP sent-mail parsing propagates a source parse failure", async () => {
   await assert.rejects(
     () => parseErpReplySentMessage(
@@ -57,6 +74,16 @@ test("ERP sent-mail parsing propagates a source parse failure", async () => {
       { mailbox: "已发送", account: "user@example.com", parser: async () => { throw new Error("bad MIME"); }, logger: { error() {} } },
     ),
     (error) => error.code === "MAIL_PARSE_FAILED" && error.mailbox === "已发送" && error.uid === "erp-1",
+  );
+});
+
+test("ERP production parsing rejects a zero-length TypedArray source", async () => {
+  await assert.rejects(
+    () => parseErpReplySentMessage(
+      { uid: "erp-empty", source: new Uint8Array(0) },
+      { mailbox: "已发送", account: "user@example.com", logger: { error() {} } },
+    ),
+    (error) => error.code === "MAIL_PARSE_FAILED" && error.uid === "erp-empty",
   );
 });
 

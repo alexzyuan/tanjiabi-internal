@@ -312,12 +312,18 @@ export async function parseFetchedMessage(message, { mailbox = "INBOX", saveAtta
   };
 }
 
-async function fetchMailboxMessages(client, mailbox, { since, maxMessages = 100, saveAttachments = true } = {}) {
+async function fetchMailboxMessages(client, mailbox, {
+  since,
+  maxMessages = 100,
+  saveAttachments = true,
+  parser,
+  logger,
+} = {}) {
   const messages = [];
   const lock = await client.getMailboxLock(mailbox);
   try {
     for await (const message of client.fetch({ since }, { uid: true, envelope: true, flags: true, source: true })) {
-      messages.push(await parseFetchedMessage(message, { mailbox, saveAttachments }));
+      messages.push(await parseFetchedMessage(message, { mailbox, saveAttachments, parser, logger }));
       if (messages.length >= maxMessages) break;
     }
   } finally {
@@ -365,7 +371,11 @@ export async function getAftersalesMailDashboard({ refresh = false } = {}) {
   return readLatest();
 }
 
-export async function syncAftersalesMail() {
+export async function syncAftersalesMail({
+  imapClientFactory = (options) => new ImapFlow(options),
+  parser,
+  logger,
+} = {}) {
   const config = getConfig().aftersalesMail;
   if (!mailConfigured(config)) {
     return writeLatest(defaultLatest(config));
@@ -375,7 +385,7 @@ export async function syncAftersalesMail() {
   const existingReplies = await readReplies();
   const knownUids = new Set((previous.messages || []).map((row) => messageUid(row.uid)));
   const previousStatus = new Map((previous.messages || []).map((row) => [messageUid(row.uid), row.status]));
-  const client = new ImapFlow({
+  const client = imapClientFactory({
     host: config.imapHost,
     port: config.imapPort,
     secure: true,
@@ -390,6 +400,8 @@ export async function syncAftersalesMail() {
       since,
       maxMessages: Number(config.maxMessages || 100),
       saveAttachments: true,
+      parser,
+      logger,
     });
     let sentMessages = [];
     let sentMailboxError = null;
@@ -399,8 +411,11 @@ export async function syncAftersalesMail() {
           since,
           maxMessages: Number(config.maxMessages || 100),
           saveAttachments: false,
+          parser,
+          logger,
         });
       } catch (error) {
+        if (error?.code === "MAIL_PARSE_FAILED") throw error;
         sentMailboxError = error;
       }
     }
@@ -435,6 +450,7 @@ export async function syncAftersalesMail() {
       },
     });
   } catch (error) {
+    if (error?.code === "MAIL_PARSE_FAILED") throw error;
     return writeLatest({
       ...previous,
       ok: false,

@@ -362,6 +362,7 @@ test("route table admin routes reject subaccounts and allow the environment admi
       "/api/sync/status",
       "/api/lingxing/shops",
       "/api/store-inspection/status",
+      "/api/store-inspection/persistence",
       "/api/store-inspection/settings",
       "/api/admin/aftersales-mail-config",
     ];
@@ -371,6 +372,12 @@ test("route table admin routes reject subaccounts and allow the environment admi
       });
       assert.equal(subaccountResponse.status, 403, path);
     }
+    const reconcileResponse = await fetch(`${server.baseUrl}/api/store-inspection/persistence/reconcile`, {
+      method: "POST",
+      headers: { cookie: subaccount.cookie, "content-type": "application/json" },
+      body: JSON.stringify({ stateSha256: "0".repeat(64) }),
+    });
+    assert.equal(reconcileResponse.status, 403);
 
     const admin = await login(server.baseUrl, {
       username: "env-admin",

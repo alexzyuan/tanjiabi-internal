@@ -4,7 +4,9 @@ export function createSyncStoreInspectionRoutes(deps = {}) {
     sendJson,
     runManualSync,
     getStoreInspectionDashboard,
+    getStoreInspectionPersistenceStatus,
     getStoreInspectionSettings,
+    reconcileStoreInspectionPersistence,
     updateStoreInspectionSettings,
     getStoreInspectionMarkdown,
     runStoreInspection,
@@ -19,6 +21,22 @@ export function createSyncStoreInspectionRoutes(deps = {}) {
       handler: async ({ res }) => {
         const result = await runManualSync();
         sendJson(res, result.ok ? 200 : 500, result);
+      },
+    },
+    {
+      method: "GET",
+      path: "/api/store-inspection/persistence",
+      auth: "admin",
+      handler: async ({ res }) => sendJson(res, 200, getStoreInspectionPersistenceStatus()),
+    },
+    {
+      method: "POST",
+      path: "/api/store-inspection/persistence/reconcile",
+      auth: "admin",
+      errorStatusCode: 400,
+      handler: async ({ req, res }) => {
+        const payload = await readJsonBody(req);
+        sendJson(res, 200, await reconcileStoreInspectionPersistence(payload));
       },
     },
     {

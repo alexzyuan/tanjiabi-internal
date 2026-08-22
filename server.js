@@ -25,8 +25,10 @@ import { getAdPerformanceReview } from "./src/services/adPerformanceReviewServic
 import { getAftersalesDashboard } from "./src/services/aftersalesService.js";
 import {
   getStoreInspectionDashboard,
+  getStoreInspectionPersistenceStatus,
   getStoreInspectionMarkdown,
   getStoreInspectionSettings,
+  reconcileStoreInspectionPersistence,
   runStoreInspection,
   startStoreInspectionScheduler,
   updateErpBuyerMessageManualStatus,
@@ -952,9 +954,11 @@ const apiRoutes = createApiRoutes(buildApiRoutes({
   deleteKnowledgeDocument,
   runManualSync,
   getStoreInspectionDashboard,
+  getStoreInspectionPersistenceStatus,
   getStoreInspectionSettings,
   updateStoreInspectionSettings,
   getStoreInspectionMarkdown,
+  reconcileStoreInspectionPersistence,
   runStoreInspection,
   updateErpBuyerMessageManualStatus,
   logger: console,

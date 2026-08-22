@@ -122,6 +122,12 @@ The complete endpoint contract matrix lives in [docs/lingxing-date-rules.md](doc
 
 If a change would add a large new feature, prefer adding a focused module under `src/` for backend code and a focused feature module under `assets/js/features/` for frontend code instead of adding an unbounded block to `app.js`.
 
+## Store Inspection Persistence And Mail Parsing
+
+- Store inspection latest/history data is authoritative in `data-cache/store-inspection-state.json` (version 1). The older `store-inspection-latest.json` and `store-inspection-history.json` files are read-only migration sources; malformed, inaccessible, or schema-invalid JSON must fail fast and must never be replaced with defaults.
+- All JSON writes use `src/utils/jsonStore.js` atomic writes. A post-rename directory fsync failure is reported as `commitState=unknown`, blocks subsequent writes for that path until an operator reconciles the current file SHA-256, and is exposed through the admin-only `/api/store-inspection/persistence` and `/api/store-inspection/persistence/reconcile` endpoints.
+- After-sales and ERP mailbox parsing must reject missing, zero-length, or whitespace-only raw sources with `MAIL_PARSE_FAILED`; callers must not convert parser failures into empty message collections. Logs may include mailbox/account identifiers and UIDs, but never raw message content.
+
 Current frontend module examples:
 
 - Dashboard loaders and common async UI state: `assets/js/dashboard-loader.js`.

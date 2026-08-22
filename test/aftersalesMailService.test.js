@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
+import { execFile as execFileCallback } from "node:child_process";
+import { access, mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
+import { promisify } from "node:util";
 import {
   buildAftersalesMailInspectionSummary,
   buildExternalSentReplies,
@@ -8,6 +13,8 @@ import {
   normalizeMailRecord,
   summarizeMailRows,
 } from "../src/services/aftersalesMailService.js";
+
+const execFile = promisify(execFileCallback);
 
 test("normalizeMailRecord creates searchable售后 mail row", () => {
   const row = normalizeMailRecord({
@@ -200,4 +207,50 @@ test("mergeMailReplies avoids duplicating ERP sent replies found in sent mailbox
   ]);
 
   assert.deepEqual(merged.map((reply) => reply.id), ["erp-1"]);
+});
+
+test("syncAftersalesMail aborts when sent-mail parsing fails instead of treating it as empty", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "aftersales-mail-sync-"));
+  const serviceUrl = path.join(process.cwd(), "src/services/aftersalesMailService.js");
+  const script = [
+    `const { syncAftersalesMail } = await import(${JSON.stringify(serviceUrl)});`,
+    "let mailbox = '';",
+    "const client = {",
+    "  async connect() {},",
+    "  async getMailboxLock(value) { mailbox = value; return { release() {} }; },",
+    "  fetch() {",
+    "    const sent = mailbox === 'SENT';",
+    "    return (async function* () { yield { uid: sent ? 'sent-1' : 'inbox-1', source: Buffer.from(sent ? 'sent-invalid' : 'inbox-valid'), envelope: { subject: sent ? 'Sent' : 'Inbox', from: [], to: [] }, flags: new Set() }; })();",
+    "  },",
+    "  async logout() {},",
+    "};",
+    "try {",
+    "  await syncAftersalesMail({ imapClientFactory: () => client, parser: async (source) => { if (Buffer.from(source).toString() === 'sent-invalid') throw new Error('bad MIME'); return { text: 'inbox message' }; }, logger: { error() {} } });",
+    "  console.log(JSON.stringify({ ok: true }));",
+    "} catch (error) {",
+    "  console.log(JSON.stringify({ ok: false, code: error.code, message: error.message }));",
+    "}",
+  ].join("\n");
+
+  try {
+    const { stdout } = await execFile(process.execPath, ["--input-type=module", "--eval", script], {
+      cwd: directory,
+      env: {
+        ...process.env,
+        AFTERSALES_MAIL_ENABLED: "true",
+        AFTERSALES_MAIL_USER: "fixture@example.com",
+        AFTERSALES_MAIL_PASSWORD: "fixture-password",
+        AFTERSALES_MAIL_SENT_MAILBOX: "SENT",
+        AFTERSALES_MAIL_SMTP_HOST: "smtp.fixture.test",
+      },
+    });
+    assert.deepEqual(JSON.parse(stdout.trim()), {
+      ok: false,
+      code: "MAIL_PARSE_FAILED",
+      message: "Mail source parse failed: mailbox=SENT uid=sent-1",
+    });
+    await assert.rejects(() => access(path.join(directory, "data-cache", "aftersales-mail-latest.json")), (error) => error.code === "ENOENT");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });

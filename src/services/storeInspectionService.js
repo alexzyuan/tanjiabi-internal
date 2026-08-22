@@ -5,7 +5,13 @@ import { sendDingTalkMarkdown, sendDingTalkText } from "./dingtalkService.js";
 import { getAftersalesMailInspectionSummary } from "./aftersalesMailService.js";
 import { getLowInventoryFeeDashboard } from "./lowInventoryFeeService.js";
 import { readLingxingSellersCache, saveLingxingSellersCache } from "../utils/cacheStore.js";
-import { JsonStoreError, readJson, writeJsonAtomic } from "../utils/jsonStore.js";
+import {
+  JsonStoreError,
+  getJsonStoreCommitUncertainty,
+  readJson,
+  reconcileJsonStoreCommit,
+  writeJsonAtomic,
+} from "../utils/jsonStore.js";
 
 const cacheFile = path.join(process.cwd(), "data-cache", "store-inspection-latest.json");
 const historyFile = path.join(process.cwd(), "data-cache", "store-inspection-history.json");
@@ -27,6 +33,10 @@ const state = {
   lastSuccessAt: null,
   lastStatus: "等待首次自动巡检",
   lastError: null,
+  lastErrorCode: null,
+  lastCommitState: null,
+  lastRequiresReconciliation: null,
+  lastRetryable: null,
 };
 
 let timer = null;
@@ -66,6 +76,12 @@ function logPersistenceFailure(operation, filePath, error) {
     filePath,
     code: error?.code || "UNKNOWN",
     errorName: error?.name || "Error",
+    commitState: error?.commitState || "not-committed",
+    targetMayContainNewValue: error?.targetMayContainNewValue === true,
+    requiresReconciliation: error?.requiresReconciliation === true,
+    markerPersisted: error?.markerPersisted === true,
+    markerPersistenceErrorCode: error?.markerPersistenceErrorCode,
+    retryable: typeof error?.retryable === "boolean" ? error.retryable : null,
   });
 }
 
@@ -1314,6 +1330,29 @@ export async function readLatestStoreInspection() {
   return (await readStoreInspectionState()).latest;
 }
 
+export function getStoreInspectionPersistenceStatus() {
+  const uncertainty = getJsonStoreCommitUncertainty(stateFile);
+  return {
+    ok: !uncertainty,
+    status: uncertainty ? "reconciliation_required" : "clear",
+    filePath: stateFile,
+    uncertainty,
+  };
+}
+
+export async function reconcileStoreInspectionPersistence({ stateSha256 = "" } = {}) {
+  const hash = String(stateSha256 || "").trim().toLowerCase();
+  if (!/^[a-f0-9]{64}$/u.test(hash)) {
+    const error = new JsonStoreError("需要提供当前巡检状态文件的 SHA-256 才能解除写入阻断。", {
+      code: "RECONCILIATION_HASH_INVALID",
+      filePath: stateFile,
+      statusCode: 400,
+    });
+    throw error;
+  }
+  return reconcileJsonStoreCommit(stateFile, { expectedSha256: hash });
+}
+
 export function recomputeInspectionOverall(result) {
   const coreChecks = [
     result.feedback,
@@ -1436,6 +1475,10 @@ export async function runStoreInspection({ trigger = "manual", notify = true } =
   state.lastStartedAt = nowText();
   state.lastStatus = "巡检中";
   state.lastError = null;
+  state.lastErrorCode = null;
+  state.lastCommitState = null;
+  state.lastRequiresReconciliation = null;
+  state.lastRetryable = null;
   try {
     if (config.dataProvider !== "lingxing") {
       const mockResult = await runMockInspection({ notify: false });
@@ -1547,7 +1590,22 @@ export async function runStoreInspection({ trigger = "manual", notify = true } =
     state.lastFinishedAt = nowText();
     state.lastStatus = "巡检失败";
     state.lastError = error.message;
-    return { ok: false, error: error.message, state: getStoreInspectionState() };
+    state.lastErrorCode = error?.code || "UNKNOWN";
+    state.lastCommitState = error?.commitState || null;
+    state.lastRequiresReconciliation = error?.requiresReconciliation === true;
+    state.lastRetryable = typeof error?.retryable === "boolean" ? error.retryable : null;
+    return {
+      ok: false,
+      error: error.message,
+      errorCode: error?.code || "UNKNOWN",
+      commitState: error?.commitState || null,
+      targetMayContainNewValue: error?.targetMayContainNewValue === true,
+      requiresReconciliation: error?.requiresReconciliation === true,
+      markerPersisted: error?.markerPersisted === true,
+      markerPersistenceErrorCode: error?.markerPersistenceErrorCode,
+      retryable: typeof error?.retryable === "boolean" ? error.retryable : null,
+      state: getStoreInspectionState(),
+    };
   } finally {
     state.running = false;
   }

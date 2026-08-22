@@ -24,6 +24,24 @@ function mailParseFailure({ mailbox, uid, account, cause, logger }) {
   return error;
 }
 
+function isWhitespaceByte(value) {
+  return value === 9 || value === 10 || value === 11 || value === 12 || value === 13 || value === 32;
+}
+
+function isEmptyMailSource(source) {
+  if (source === null || source === undefined) return true;
+  if (typeof source === "string") return source.trim().length === 0;
+  if (ArrayBuffer.isView(source)) {
+    if (source.byteLength === 0) return true;
+    return new Uint8Array(source.buffer, source.byteOffset, source.byteLength).every(isWhitespaceByte);
+  }
+  if (source instanceof ArrayBuffer) {
+    if (source.byteLength === 0) return true;
+    return new Uint8Array(source).every(isWhitespaceByte);
+  }
+  return false;
+}
+
 export async function parseMailSource(source, {
   mailbox = "INBOX",
   uid = "",
@@ -31,8 +49,8 @@ export async function parseMailSource(source, {
   parser = simpleParser,
   logger = console,
 } = {}) {
-  if (source === null || source === undefined || source === "") {
-    throw mailParseFailure({ mailbox, uid, account, cause: new Error("Mail source missing"), logger });
+  if (isEmptyMailSource(source)) {
+    throw mailParseFailure({ mailbox, uid, account, cause: new Error("Mail source missing or empty"), logger });
   }
   try {
     return await parser(source);
