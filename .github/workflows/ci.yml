@@ -31,11 +31,8 @@ jobs:
       - name: Install pinned browser for computed-style tests
         run: ./node_modules/.bin/playwright install --with-deps chromium
 
-      - name: Check JavaScript syntax
-        run: npm run check:js
-
-      - name: Check generated CSS
-        run: node scripts/build-styles.js --check
+      - name: Run repository checks
+        run: npm run check
 
       - name: Run tests
         run: npm test

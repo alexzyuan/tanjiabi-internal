@@ -315,6 +315,14 @@ test("browser CSS cascade runner is pinned, bounded, and included in CI", async 
   assert.match(ciSource, /\.\/node_modules\/\.bin\/playwright install --with-deps chromium/);
 });
 
+test("CI runs the unified repository check gate without duplicate checks", async () => {
+  const ciSource = await readFile(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
+
+  assert.match(ciSource, /- name: Run repository checks\n\s+run: npm run check/);
+  assert.doesNotMatch(ciSource, /run: npm run check:js/);
+  assert.doesNotMatch(ciSource, /run: node scripts\/build-styles\.js --check/);
+});
+
 test("index.html startup health check centralizes sync tone class switching", async () => {
   const source = await readFile(new URL("../index.html", import.meta.url), "utf8");
   const healthStart = source.indexOf("window.__tanjiaBasicNavigationReady = true;");
