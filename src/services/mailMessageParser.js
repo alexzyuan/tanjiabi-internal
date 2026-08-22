@@ -12,6 +12,18 @@ export class MailParseError extends Error {
   }
 }
 
+function mailParseFailure({ mailbox, uid, account, cause, logger }) {
+  const error = new MailParseError({ mailbox, uid, account, cause });
+  logger?.error?.("[mail-parse]", {
+    mailbox: error.mailbox,
+    uid: error.uid,
+    code: error.code,
+    errorName: cause?.name || "Error",
+    account: error.account,
+  });
+  return error;
+}
+
 export async function parseMailSource(source, {
   mailbox = "INBOX",
   uid = "",
@@ -19,18 +31,12 @@ export async function parseMailSource(source, {
   parser = simpleParser,
   logger = console,
 } = {}) {
-  if (source === null || source === undefined || source === "") return {};
+  if (source === null || source === undefined || source === "") {
+    throw mailParseFailure({ mailbox, uid, account, cause: new Error("Mail source missing"), logger });
+  }
   try {
     return await parser(source);
   } catch (cause) {
-    const error = new MailParseError({ mailbox, uid, account, cause });
-    logger?.error?.("[mail-parse]", {
-      mailbox: error.mailbox,
-      uid: error.uid,
-      code: error.code,
-      errorName: cause?.name || "Error",
-      account: error.account,
-    });
-    throw error;
+    throw mailParseFailure({ mailbox, uid, account, cause, logger });
   }
 }

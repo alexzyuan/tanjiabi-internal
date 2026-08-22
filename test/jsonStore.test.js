@@ -49,6 +49,36 @@ test("writeJsonAtomic does not replace old file when serialization fails", async
   });
 });
 
+test("writeJsonAtomic surfaces directory fsync I/O failures", async () => {
+  await withTempDir(async (dir) => {
+    const file = path.join(dir, "state.json");
+    const syncDirectory = async () => {
+      const error = new Error("directory sync failed");
+      error.code = "EIO";
+      throw error;
+    };
+
+    await assert.rejects(
+      () => writeJsonAtomic(file, { version: 1 }, { syncDirectory }),
+      (error) => error.code === "DIRECTORY_FSYNC_FAILED" && error.filePath === dir,
+    );
+  });
+});
+
+test("writeJsonAtomic tolerates an explicitly unsupported directory fsync", async () => {
+  await withTempDir(async (dir) => {
+    const file = path.join(dir, "state.json");
+    const syncDirectory = async () => {
+      const error = new Error("directory sync unsupported");
+      error.code = "EOPNOTSUPP";
+      throw error;
+    };
+
+    await writeJsonAtomic(file, { version: 1 }, { syncDirectory });
+    assert.deepEqual(JSON.parse(await readFile(file, "utf8")), { version: 1 });
+  });
+});
+
 test("readJson throws a clear parse error for invalid JSON", async () => {
   await withTempDir(async (dir) => {
     const file = path.join(dir, "broken.json");

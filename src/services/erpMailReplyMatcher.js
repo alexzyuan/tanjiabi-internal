@@ -116,6 +116,21 @@ export async function parseErpReplySentMessage(message, { mailbox = "已发送",
   };
 }
 
+export async function parseErpReplySentMailbox(messages, {
+  mailbox = "已发送",
+  account = "",
+  parser,
+  logger,
+  maxMessages = Infinity,
+} = {}) {
+  const parsedMessages = [];
+  for await (const message of messages) {
+    parsedMessages.push(await parseErpReplySentMessage(message, { mailbox, account, parser, logger }));
+    if (parsedMessages.length >= maxMessages) break;
+  }
+  return parsedMessages;
+}
+
 export async function fetchErpReplySentMessages(config = {}) {
   const accounts = Array.isArray(config.mailboxes) ? config.mailboxes : [];
   const allMessages = [];
@@ -135,19 +150,21 @@ export async function fetchErpReplySentMessages(config = {}) {
       await client.connect();
       const lock = await client.getMailboxLock(config.sentMailbox || "已发送");
       try {
-        const messages = [];
-        for await (const message of client.fetch({ since }, { uid: true, envelope: true, flags: true, source: true })) {
-          messages.push(await parseErpReplySentMessage(message, {
+        const messages = await parseErpReplySentMailbox(
+          client.fetch({ since }, { uid: true, envelope: true, flags: true, source: true }),
+          {
             mailbox: config.sentMailbox || "已发送",
             account: account.user,
-          }));
-          if (messages.length >= Number(config.maxMessages || 200)) break;
-        }
+            logger: config.logger,
+            maxMessages: Number(config.maxMessages || 200),
+          },
+        );
         allMessages.push(...messages);
       } finally {
         lock.release();
       }
     } catch (error) {
+      if (error?.code === "MAIL_PARSE_FAILED") throw error;
       errors.push({ account: account.user, message: error.message });
     } finally {
       await client.logout().catch(() => {});

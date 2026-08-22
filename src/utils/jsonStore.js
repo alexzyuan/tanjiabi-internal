@@ -23,6 +23,20 @@ function jsonParseError(filePath, error) {
   });
 }
 
+const unsupportedDirectorySyncCodes = new Set(["EINVAL", "ENOSYS", "ENOTSUP", "EOPNOTSUPP", "ENOTTY"]);
+
+function isUnsupportedDirectorySyncError(error) {
+  return unsupportedDirectorySyncCodes.has(error?.code);
+}
+
+function directorySyncError(dir, error) {
+  return new JsonStoreError(`Directory fsync failed: ${dir}`, {
+    code: "DIRECTORY_FSYNC_FAILED",
+    filePath: dir,
+    cause: error,
+  });
+}
+
 async function fsyncFile(filePath) {
   const handle = await open(filePath, "r");
   try {
@@ -40,8 +54,9 @@ async function fsyncDirectory(dir) {
     } finally {
       await handle.close();
     }
-  } catch {
-    // Some platforms/filesystems do not support directory fsync. File fsync + rename still preserves the old file on write failure.
+  } catch (error) {
+    if (isUnsupportedDirectorySyncError(error)) return;
+    throw directorySyncError(dir, error);
   }
 }
 
@@ -56,7 +71,7 @@ export async function readJson(filePath, fallback) {
   }
 }
 
-export async function writeJsonAtomic(filePath, data) {
+export async function writeJsonAtomic(filePath, data, { syncDirectory = fsyncDirectory } = {}) {
   const dir = path.dirname(filePath);
   const json = `${JSON.stringify(data, null, 2)}\n`;
   await mkdir(dir, { recursive: true });
@@ -64,7 +79,13 @@ export async function writeJsonAtomic(filePath, data) {
   await writeFile(tempFile, json, "utf8");
   await fsyncFile(tempFile);
   await rename(tempFile, filePath);
-  await fsyncDirectory(dir);
+  try {
+    await syncDirectory(dir);
+  } catch (error) {
+    if (isUnsupportedDirectorySyncError(error)) return data;
+    if (error?.code === "DIRECTORY_FSYNC_FAILED") throw error;
+    throw directorySyncError(dir, error);
+  }
   return data;
 }
 

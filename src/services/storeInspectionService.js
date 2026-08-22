@@ -9,9 +9,12 @@ import { JsonStoreError, readJson, writeJsonAtomic } from "../utils/jsonStore.js
 
 const cacheFile = path.join(process.cwd(), "data-cache", "store-inspection-latest.json");
 const historyFile = path.join(process.cwd(), "data-cache", "store-inspection-history.json");
+const stateFile = path.join(process.cwd(), "data-cache", "store-inspection-state.json");
 const settingsFile = path.join(process.cwd(), "data-cache", "store-inspection-settings.json");
 const erpBuyerMessageStatusFile = path.join(process.cwd(), "data-cache", "erp-buyer-message-status.json");
 const historyLimit = 30;
+const inspectionStateVersion = 1;
+const inspectionStateMissing = Symbol("store-inspection-state-missing");
 const schedulerPollMs = 30 * 1000;
 const scheduleTimeZone = "Asia/Shanghai";
 const defaultSellerFeedbackEndpoint = "/erp/sc/cs/feedback/listMws";
@@ -46,6 +49,17 @@ function requireJsonArray(value, filePath) {
   return value;
 }
 
+function requireInspectionState(value, filePath) {
+  if (value === inspectionStateMissing) return value;
+  const state = requireJsonRecord(value, filePath);
+  if (state.version !== inspectionStateVersion) throw invalidJsonShape(filePath, `object(version=${inspectionStateVersion})`);
+  return {
+    version: inspectionStateVersion,
+    latest: state.latest === null ? null : requireJsonRecord(state.latest, filePath),
+    history: requireJsonArray(state.history, filePath),
+  };
+}
+
 function logPersistenceFailure(operation, filePath, error) {
   console.error("[store-inspection-persistence]", {
     operation,
@@ -72,6 +86,23 @@ async function writeInspectionJson(filePath, value, operation) {
     logPersistenceFailure(operation, filePath, error);
     throw error;
   }
+}
+
+async function readLegacyInspectionHistory() {
+  return readInspectionJson(historyFile, [], "read-history", requireJsonArray);
+}
+
+async function readLegacyLatestInspection() {
+  return readInspectionJson(cacheFile, null, "read-latest", (value, filePath) => (
+    value === null ? null : requireJsonRecord(value, filePath)
+  ));
+}
+
+async function readStoreInspectionState() {
+  const stored = await readInspectionJson(stateFile, inspectionStateMissing, "read-state", requireInspectionState);
+  if (stored !== inspectionStateMissing) return stored;
+  const [latest, history] = await Promise.all([readLegacyLatestInspection(), readLegacyInspectionHistory()]);
+  return { version: inspectionStateVersion, latest, history };
 }
 
 function normalizeScheduleTime(value, fallback = "08:30") {
@@ -1267,19 +1298,20 @@ export async function getStoreInspectionMarkdown() {
 }
 
 async function saveInspectionResult(result) {
-  const history = await readInspectionHistory();
-  await writeInspectionJson(historyFile, [result, ...history].slice(0, historyLimit), "write-history");
-  await writeInspectionJson(cacheFile, result, "write-latest");
+  const current = await readStoreInspectionState();
+  await writeInspectionJson(stateFile, {
+    version: inspectionStateVersion,
+    latest: result,
+    history: [result, ...current.history].slice(0, historyLimit),
+  }, "write-state");
 }
 
 export async function readInspectionHistory() {
-  return readInspectionJson(historyFile, [], "read-history", requireJsonArray);
+  return (await readStoreInspectionState()).history;
 }
 
 export async function readLatestStoreInspection() {
-  return readInspectionJson(cacheFile, null, "read-latest", (value, filePath) => (
-    value === null ? null : requireJsonRecord(value, filePath)
-  ));
+  return (await readStoreInspectionState()).latest;
 }
 
 export function recomputeInspectionOverall(result) {
@@ -1353,7 +1385,12 @@ export async function updateErpBuyerMessageManualStatus(messageId, status = "rep
     erpBuyerMessages,
   });
   next.checks = buildChecks(next);
-  await writeInspectionJson(cacheFile, next, "write-latest");
+  const current = await readStoreInspectionState();
+  await writeInspectionJson(stateFile, {
+    version: inspectionStateVersion,
+    latest: next,
+    history: current.history,
+  }, "write-state");
   return { ok: true, messageId: id, status, latest: next };
 }
 

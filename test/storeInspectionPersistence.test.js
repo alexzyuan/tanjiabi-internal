@@ -9,16 +9,17 @@ import test from "node:test";
 const execFile = promisify(execFileCallback);
 const serviceUrl = path.join(process.cwd(), "src/services/storeInspectionService.js");
 
-async function readDashboardFromDirectory(directory) {
+async function runServiceScript(directory, body, { captureLogs = false } = {}) {
+  const logSetup = captureLogs
+    ? ["const logs = [];", "console.error = (...args) => logs.push(args);"]
+    : [];
+  const logField = captureLogs ? ", logs" : "";
   const script = [
-    `import { getStoreInspectionDashboard } from ${JSON.stringify(serviceUrl)};`,
-    "const logs = [];",
-    "console.error = (...args) => logs.push(args);",
+    ...logSetup,
     "try {",
-    "  const dashboard = await getStoreInspectionDashboard();",
-    "  console.log(JSON.stringify({ ok: true, dashboard, logs }));",
+    body,
     "} catch (error) {",
-    "  console.log(JSON.stringify({ ok: false, name: error.name, code: error.code, filePath: error.filePath, message: error.message, logs }));",
+    `  console.log(JSON.stringify({ ok: false, name: error.name, code: error.code, filePath: error.filePath, message: error.message${logField} }));`,
     "}",
   ].join("\n");
   const { stdout } = await execFile(process.execPath, ["--input-type=module", "--eval", script], {
@@ -26,55 +27,38 @@ async function readDashboardFromDirectory(directory) {
     env: { ...process.env, DATA_PROVIDER: "mock" },
   });
   return JSON.parse(stdout.trim());
+}
+
+async function readDashboardFromDirectory(directory) {
+  return runServiceScript(directory, [
+    `const { getStoreInspectionDashboard } = await import(${JSON.stringify(serviceUrl)});`,
+    "const dashboard = await getStoreInspectionDashboard();",
+    "console.log(JSON.stringify({ ok: true, dashboard, logs }));",
+  ].join("\n"), { captureLogs: true });
 }
 
 async function updateManualStatusFromDirectory(directory) {
-  const script = [
-    `import { updateErpBuyerMessageManualStatus } from ${JSON.stringify(serviceUrl)};`,
-    "try {",
-    "  const result = await updateErpBuyerMessageManualStatus('message-1', 'replied');",
-    "  console.log(JSON.stringify({ ok: true, result }));",
-    "} catch (error) {",
-    "  console.log(JSON.stringify({ ok: false, name: error.name, code: error.code, filePath: error.filePath, message: error.message }));",
-    "}",
-  ].join("\n");
-  const { stdout } = await execFile(process.execPath, ["--input-type=module", "--eval", script], {
-    cwd: directory,
-    env: { ...process.env, DATA_PROVIDER: "mock" },
-  });
-  return JSON.parse(stdout.trim());
+  return runServiceScript(directory, [
+    `const { updateErpBuyerMessageManualStatus } = await import(${JSON.stringify(serviceUrl)});`,
+    "const result = await updateErpBuyerMessageManualStatus('message-1', 'replied');",
+    "console.log(JSON.stringify({ ok: true, result }));",
+  ].join("\n"));
 }
 
 async function updateSettingsFromDirectory(directory) {
-  const script = [
-    `import { updateStoreInspectionSettings } from ${JSON.stringify(serviceUrl)};`,
-    "const logs = [];",
-    "console.error = (...args) => logs.push(args);",
-    "try {",
-    "  const result = await updateStoreInspectionSettings({ enabled: true, sendTime: '09:00' });",
-    "  console.log(JSON.stringify({ ok: true, result, logs }));",
-    "} catch (error) {",
-    "  console.log(JSON.stringify({ ok: false, name: error.name, code: error.code, filePath: error.filePath, message: error.message, logs }));",
-    "}",
-  ].join("\n");
-  const { stdout } = await execFile(process.execPath, ["--input-type=module", "--eval", script], {
-    cwd: directory,
-    env: { ...process.env, DATA_PROVIDER: "mock" },
-  });
-  return JSON.parse(stdout.trim());
+  return runServiceScript(directory, [
+    `const { updateStoreInspectionSettings } = await import(${JSON.stringify(serviceUrl)});`,
+    "const result = await updateStoreInspectionSettings({ enabled: true, sendTime: '09:00' });",
+    "console.log(JSON.stringify({ ok: true, result, logs }));",
+  ].join("\n"), { captureLogs: true });
 }
 
-async function runInspectionFromDirectory(directory) {
-  const script = [
-    `import { runStoreInspection } from ${JSON.stringify(serviceUrl)};`,
+async function runInspectionFromDirectory(directory, { captureLogs = false } = {}) {
+  return runServiceScript(directory, [
+    `const { runStoreInspection } = await import(${JSON.stringify(serviceUrl)});`,
     "const result = await runStoreInspection({ notify: false });",
-    "console.log(JSON.stringify({ ok: result.ok, error: result.error || '' }));",
-  ].join("\n");
-  const { stdout } = await execFile(process.execPath, ["--input-type=module", "--eval", script], {
-    cwd: directory,
-    env: { ...process.env, DATA_PROVIDER: "mock" },
-  });
-  return JSON.parse(stdout.trim());
+    `console.log(JSON.stringify({ ok: result.ok, error: result.error || ''${captureLogs ? ", logs" : ""} }));`,
+  ].join("\n"), { captureLogs });
 }
 
 test("store inspection dashboard fails when settings JSON is corrupted", async () => {
@@ -124,6 +108,23 @@ test("store inspection dashboard fails when latest inspection JSON is corrupted"
     assert.equal(result.ok, false);
     assert.equal(result.code, "JSON_PARSE_FAILED");
     assert.ok(result.filePath.endsWith(path.join("data-cache", "store-inspection-latest.json")));
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("store inspection dashboard fails when the authoritative state JSON is corrupted", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "store-inspection-persistence-"));
+  const filePath = path.join(directory, "data-cache", "store-inspection-state.json");
+  try {
+    await mkdir(path.dirname(filePath), { recursive: true });
+    await writeFile(filePath, "{broken", "utf8");
+
+    const result = await readDashboardFromDirectory(directory);
+
+    assert.equal(result.ok, false);
+    assert.equal(result.code, "JSON_PARSE_FAILED");
+    assert.ok(result.filePath.endsWith(path.join("data-cache", "store-inspection-state.json")));
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -219,6 +220,49 @@ test("failed inspection save preserves the previous latest result when history i
     assert.deepEqual(JSON.parse(await readFile(latestPath, "utf8")), previousLatest);
     assert.equal(await readFile(historyPath, "utf8"), "{broken");
   } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("successful inspection save commits latest and history in one authoritative state file", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "store-inspection-persistence-"));
+  const dataDirectory = path.join(directory, "data-cache");
+  const statePath = path.join(dataDirectory, "store-inspection-state.json");
+  try {
+    await mkdir(dataDirectory, { recursive: true });
+
+    const result = await runInspectionFromDirectory(directory);
+
+    assert.equal(result.ok, true);
+    const state = JSON.parse(await readFile(statePath, "utf8"));
+    assert.equal(state.version, 1);
+    assert.equal(state.latest.provider, "mock");
+    assert.ok(Array.isArray(state.history));
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("failed inspection state write reports the state file and preserves the directory", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "store-inspection-persistence-"));
+  const dataDirectory = path.join(directory, "data-cache");
+  const statePath = path.join(dataDirectory, "store-inspection-state.json");
+  const aftersalesLatestPath = path.join(dataDirectory, "aftersales-mail-latest.json");
+  try {
+    await mkdir(dataDirectory, { recursive: true });
+    await writeFile(aftersalesLatestPath, "{}\n", "utf8");
+    await chmod(dataDirectory, 0o555);
+
+    const result = await runInspectionFromDirectory(directory, { captureLogs: true });
+
+    assert.equal(result.ok, false);
+    const stateLog = result.logs.find(([message, details]) => message === "[store-inspection-persistence]" && details.operation === "write-state");
+    assert.ok(stateLog, JSON.stringify(result));
+    assert.ok(["EACCES", "EPERM"].includes(stateLog[1].code));
+    assert.ok(stateLog[1].filePath.endsWith(path.join("data-cache", "store-inspection-state.json")));
+    await assert.rejects(() => readFile(statePath, "utf8"), (error) => error.code === "ENOENT");
+  } finally {
+    await chmod(dataDirectory, 0o755);
     await rm(directory, { recursive: true, force: true });
   }
 });

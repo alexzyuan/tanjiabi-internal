@@ -292,10 +292,7 @@ function parserReferences(parsed = {}) {
 }
 
 export async function parseFetchedMessage(message, { mailbox = "INBOX", saveAttachments = true, parser, logger } = {}) {
-  let parsed = {};
-  if (message.source) {
-    parsed = await parseMailSource(message.source, { mailbox, uid: message.uid, parser, logger });
-  }
+  const parsed = await parseMailSource(message?.source, { mailbox, uid: message?.uid, parser, logger });
   const attachments = saveAttachments ? await saveParsedImageAttachments(message.uid, parsed.attachments || []) : [];
   return {
     uid: message.uid,

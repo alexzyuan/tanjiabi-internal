@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { parseMailSource } from "../src/services/mailMessageParser.js";
 import { parseFetchedMessage as parseAftersalesFetchedMessage } from "../src/services/aftersalesMailService.js";
-import { parseErpReplySentMessage } from "../src/services/erpMailReplyMatcher.js";
+import { parseErpReplySentMailbox, parseErpReplySentMessage } from "../src/services/erpMailReplyMatcher.js";
 
 test("parseMailSource exposes a structured error instead of returning an empty message", async () => {
   const logs = [];
@@ -29,10 +29,15 @@ test("parseMailSource exposes a structured error instead of returning an empty m
   assert.ok(!JSON.stringify(logs).includes(source));
 });
 
-test("parseMailSource keeps missing source compatible with envelope-only messages", async () => {
-  const parsed = await parseMailSource(null, { mailbox: "INBOX", uid: "43", parser: async () => ({ shouldNotRun: true }) });
+test("parseMailSource fails when an IMAP message has no requested source", async () => {
+  const logs = [];
 
-  assert.deepEqual(parsed, {});
+  await assert.rejects(
+    () => parseMailSource(null, { mailbox: "INBOX", uid: "43", parser: async () => ({ shouldNotRun: true }), logger: { error: (...args) => logs.push(args) } }),
+    (error) => error.code === "MAIL_PARSE_FAILED" && error.mailbox === "INBOX" && error.uid === "43",
+  );
+
+  assert.equal(logs[0][1].code, "MAIL_PARSE_FAILED");
 });
 
 test("aftersales mailbox parsing propagates a source parse failure", async () => {
@@ -52,5 +57,21 @@ test("ERP sent-mail parsing propagates a source parse failure", async () => {
       { mailbox: "已发送", account: "user@example.com", parser: async () => { throw new Error("bad MIME"); }, logger: { error() {} } },
     ),
     (error) => error.code === "MAIL_PARSE_FAILED" && error.mailbox === "已发送" && error.uid === "erp-1",
+  );
+});
+
+test("ERP sent-mail mailbox collection does not resolve with an empty message list after parse failure", async () => {
+  async function* messages() {
+    yield { uid: "erp-mailbox-1", source: Buffer.from("malformed") };
+  }
+
+  await assert.rejects(
+    () => parseErpReplySentMailbox(messages(), {
+      mailbox: "已发送",
+      account: "user@example.com",
+      parser: async () => { throw new Error("bad MIME"); },
+      logger: { error() {} },
+    }),
+    (error) => error.code === "MAIL_PARSE_FAILED" && error.uid === "erp-mailbox-1",
   );
 });
