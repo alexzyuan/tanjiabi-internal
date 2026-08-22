@@ -1,8 +1,8 @@
 import crypto from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
+import { readJson, writeJsonAtomic } from "../utils/jsonStore.js";
 
 const scrypt = promisify(crypto.scrypt);
 const dataDir = path.join(process.cwd(), "data-cache");
@@ -123,45 +123,76 @@ function sanitizeDingtalkUser(user, extra = {}) {
   };
 }
 
-async function ensureStoreDir() {
-  await mkdir(dataDir, { recursive: true });
+function invalidAuthUserStore(filePath, cause) {
+  const error = new Error(`Auth user store is invalid: ${filePath}`);
+  error.name = "AuthUserStoreError";
+  error.code = "AUTH_USER_STORE_INVALID";
+  error.filePath = filePath;
+  error.cause = cause;
+  return error;
 }
 
-function parseUserFile(content) {
+function normalizeStoreUsers(parsed, { filePath, normalize, identityKey }) {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || !Array.isArray(parsed.users)) {
+    throw invalidAuthUserStore(filePath, new TypeError("Account store must contain a users array."));
+  }
+  if (parsed.users.some((user) => !user || typeof user !== "object" || Array.isArray(user))) {
+    throw invalidAuthUserStore(filePath, new TypeError("Account store users must be objects."));
+  }
+  return parsed.users.map(normalize).filter((user) => user[identityKey]);
+}
+
+function parseUserFile(content, filePath = userStorePath) {
   try {
-    const parsed = JSON.parse(content);
-    return Array.isArray(parsed.users) ? parsed.users.map(normalizeUser).filter((user) => user.username) : [];
-  } catch {
-    return [];
+    return normalizeStoreUsers(JSON.parse(content), {
+      filePath,
+      normalize: normalizeUser,
+      identityKey: "username",
+    });
+  } catch (error) {
+    if (error?.code === "AUTH_USER_STORE_INVALID") throw error;
+    throw invalidAuthUserStore(filePath, error);
   }
 }
 
-function parseDingtalkUserFile(content) {
+function parseDingtalkUserFile(content, filePath = dingtalkUserStorePath) {
   try {
-    const parsed = JSON.parse(content);
-    return Array.isArray(parsed.users)
-      ? parsed.users.map(normalizeDingtalkUser).filter((user) => user.id)
-      : [];
-  } catch {
-    return [];
+    return normalizeStoreUsers(JSON.parse(content), {
+      filePath,
+      normalize: normalizeDingtalkUser,
+      identityKey: "id",
+    });
+  } catch (error) {
+    if (error?.code === "AUTH_USER_STORE_INVALID") throw error;
+    throw invalidAuthUserStore(filePath, error);
   }
 }
 
 async function readManagedUsers() {
   try {
-    const content = await readFile(userStorePath, "utf8");
-    return parseUserFile(content);
-  } catch {
-    return [];
+    const parsed = await readJson(userStorePath, { users: [] });
+    return normalizeStoreUsers(parsed, {
+      filePath: userStorePath,
+      normalize: normalizeUser,
+      identityKey: "username",
+    });
+  } catch (error) {
+    if (error?.code === "AUTH_USER_STORE_INVALID") throw error;
+    throw invalidAuthUserStore(userStorePath, error);
   }
 }
 
 async function readDingtalkUsers() {
   try {
-    const content = await readFile(dingtalkUserStorePath, "utf8");
-    return parseDingtalkUserFile(content);
-  } catch {
-    return [];
+    const parsed = await readJson(dingtalkUserStorePath, { users: [] });
+    return normalizeStoreUsers(parsed, {
+      filePath: dingtalkUserStorePath,
+      normalize: normalizeDingtalkUser,
+      identityKey: "id",
+    });
+  } catch (error) {
+    if (error?.code === "AUTH_USER_STORE_INVALID") throw error;
+    throw invalidAuthUserStore(dingtalkUserStorePath, error);
   }
 }
 
@@ -171,13 +202,11 @@ function readManagedUsersSync() {
 }
 
 async function writeManagedUsers(users) {
-  await ensureStoreDir();
   const sortedUsers = [...users].sort((a, b) => a.username.localeCompare(b.username));
-  await writeFile(userStorePath, JSON.stringify({ users: sortedUsers }, null, 2), "utf8");
+  await writeJsonAtomic(userStorePath, { users: sortedUsers });
 }
 
 async function writeDingtalkUsers(users) {
-  await ensureStoreDir();
   const sortedUsers = [...users].sort((a, b) => {
     const statusOrder = { pending: 0, active: 1, disabled: 2, rejected: 3 };
     const leftOrder = statusOrder[a.status] ?? 9;
@@ -185,7 +214,7 @@ async function writeDingtalkUsers(users) {
     if (leftOrder !== rightOrder) return leftOrder - rightOrder;
     return String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""));
   });
-  await writeFile(dingtalkUserStorePath, JSON.stringify({ users: sortedUsers }, null, 2), "utf8");
+  await writeJsonAtomic(dingtalkUserStorePath, { users: sortedUsers });
 }
 
 async function hashPassword(password) {
@@ -212,6 +241,13 @@ function validateUsername(username) {
 
 export function hasManagedAuthUsers() {
   return readManagedUsersSync().some((user) => user.status !== "disabled");
+}
+
+export function validateAuthUserStoresSync() {
+  if (existsSync(userStorePath)) parseUserFile(readFileSync(userStorePath, "utf8"), userStorePath);
+  if (existsSync(dingtalkUserStorePath)) {
+    parseDingtalkUserFile(readFileSync(dingtalkUserStorePath, "utf8"), dingtalkUserStorePath);
+  }
 }
 
 export async function listAuthUsers(authConfig) {

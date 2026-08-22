@@ -44,6 +44,53 @@ async function writeManagedUser(cwd) {
   }, null, 2), "utf8");
 }
 
+async function startServerWithCorruptManagedStore() {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), "tanjia-bi-corrupt-auth-"));
+  const dataDir = path.join(cwd, "data-cache");
+  await mkdir(dataDir, { recursive: true });
+  await writeFile(path.join(dataDir, "auth-users.json"), "{\"users\":[", "utf8");
+  const port = await getFreePort();
+  const child = spawn(process.execPath, [serverPath], {
+    cwd,
+    env: {
+      PATH: process.env.PATH,
+      HOME: process.env.HOME,
+      NODE_ENV: "production",
+      DATA_PROVIDER: "lingxing",
+      LINGXING_APP_KEY: "server-security-app-key",
+      LINGXING_APP_SECRET: "server-security-app-secret",
+      SESSION_SECRET: "server-security-test-secret",
+      PORT: String(port),
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let output = "";
+  const appendOutput = (chunk) => {
+    output += String(chunk);
+  };
+  child.stdout.on("data", appendOutput);
+  child.stderr.on("data", appendOutput);
+
+  const outcome = await Promise.race([
+    new Promise((resolve) => child.once("exit", (code) => resolve({ started: false, code }))),
+    new Promise((resolve) => {
+      const onReady = (chunk) => {
+        if (!String(chunk).includes(`localhost:${port}`)) return;
+        child.stdout.off("data", onReady);
+        resolve({ started: true, code: null });
+      };
+      child.stdout.on("data", onReady);
+    }),
+  ]);
+
+  if (outcome.started) {
+    child.kill("SIGTERM");
+    await new Promise((resolve) => child.once("exit", resolve));
+  }
+  await rm(cwd, { recursive: true, force: true });
+  return { ...outcome, output };
+}
+
 function waitForServer(child, port) {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
@@ -161,6 +208,15 @@ test("password login accepts active managed users instead of only the env admin"
   } finally {
     await server.stop();
   }
+});
+
+test("production refuses to start with a corrupt managed-user store", async () => {
+  const outcome = await startServerWithCorruptManagedStore();
+
+  assert.equal(outcome.started, false);
+  assert.notEqual(outcome.code, 0);
+  assert.match(outcome.output, /auth-users\.json/);
+  assert.equal(outcome.output.includes("server-security-app-secret"), false);
 });
 
 test("public health and auth status routes remain available without a session", async () => {

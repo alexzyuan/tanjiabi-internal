@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -125,5 +125,26 @@ test("DingTalk auth users are persisted, role-gated for admin access, and disabl
     assert.match(rejectedLogin.reason, /已被禁用/);
     assert.equal(deleted.id, "union-1");
     assert.deepEqual(users, []);
+  });
+});
+
+test("a corrupt managed-user store fails loudly and is never overwritten", async () => {
+  await withTempService(async ({ createAuthUser, hasManagedAuthUsers, listAuthUsers }, dir) => {
+    const storePath = path.join(dir, "data-cache", "auth-users.json");
+    const corruptContent = "{\"users\":[";
+    await mkdir(path.dirname(storePath), { recursive: true });
+    await writeFile(storePath, corruptContent, "utf8");
+
+    const isStoreError = (error) => (
+      error?.code === "AUTH_USER_STORE_INVALID"
+      && String(error?.filePath || "").endsWith("/data-cache/auth-users.json")
+    );
+    await assert.rejects(() => listAuthUsers({}), isStoreError);
+    await assert.rejects(
+      () => createAuthUser({ username: "new.user", password: "strong-password" }),
+      isStoreError,
+    );
+    assert.throws(() => hasManagedAuthUsers(), isStoreError);
+    assert.equal(await readFile(storePath, "utf8"), corruptContent);
   });
 });

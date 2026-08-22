@@ -145,6 +145,7 @@ import {
   resolveDingtalkLogin,
   updateDingtalkAuthUser,
   updateAuthUser,
+  validateAuthUserStoresSync,
   validatePasswordLogin,
 } from "./src/services/authUserService.js";
 import {
@@ -184,6 +185,7 @@ import { createProductCertificateService } from "./src/services/productCertifica
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const config = getConfig();
+validateAuthUserStoresSync();
 const aftersalesMailSettingsService = createAftersalesMailSettingsService();
 const slowMovingRiskSnapshotStore = createSlowMovingRiskSnapshotStore();
 const storeOperatingMonthlyReportRowVisibilityService = createStoreOperatingMonthlyReportRowVisibilityService();
@@ -631,7 +633,7 @@ function readSignedSessionCookie(value) {
 }
 
 function isAuthEnabled() {
-  return config.auth.enabled || hasManagedAuthUsers();
+  return config.auth.enabled;
 }
 
 function isPasswordLoginEnabled() {

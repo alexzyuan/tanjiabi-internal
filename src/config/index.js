@@ -125,9 +125,11 @@ export function getConfig() {
   const lingxingAppSecret = readEnv("LINGXING_APP_SECRET");
   const explicitDataProvider = readEnv("DATA_PROVIDER");
   const dataProvider = explicitDataProvider || (lingxingAppKey && lingxingAppSecret ? "lingxing" : "mock");
+  const environment = String(readEnv("NODE_ENV", "development")).trim().toLowerCase() || "development";
+  const production = environment === "production";
   const authEnabled = hasEnv("AUTH_ENABLED")
     ? readBool("AUTH_ENABLED", false)
-    : dingtalkLoginConfigured || localLoginConfigured;
+    : production || dingtalkLoginConfigured || localLoginConfigured;
 
   return {
     port: Number(readEnv("PORT", DEFAULT_PORT)),
@@ -140,6 +142,8 @@ export function getConfig() {
       envPath: dotEnvPath,
       envLoaded: dotEnvLoaded,
       dataProviderExplicit: Boolean(explicitDataProvider),
+      environment,
+      production,
     },
     auth: {
       enabled: authEnabled,
