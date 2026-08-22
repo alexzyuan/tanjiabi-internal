@@ -1,8 +1,6 @@
 import http from "node:http";
 import crypto from "node:crypto";
-import dns from "node:dns/promises";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
-import net from "node:net";
+import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getConfig } from "./src/config/index.js";
@@ -44,6 +42,7 @@ import {
   updateAftersalesMailStatus,
 } from "./src/services/aftersalesMailService.js";
 import { createAftersalesMailSettingsService } from "./src/services/aftersalesMailSettingsService.js";
+import { createImageCacheProxyService } from "./src/services/imageCacheProxyService.js";
 import {
   debugInventoryProvisionSource,
   exportInventoryProvisionDetailXlsx,
@@ -296,6 +295,7 @@ const sessions = new Map();
 const oauthStates = new Map();
 const frameLoginTickets = new Map();
 const imageCacheDir = path.join(__dirname, "data-cache", "image-cache");
+const imageCacheProxyService = createImageCacheProxyService({ cacheDir: imageCacheDir });
 const resolvedSessionSecret = config.auth.sessionSecret || crypto.randomBytes(32).toString("base64url");
 const staticFileCache = new Map();
 const staticFileCacheLoads = new Map();
@@ -399,136 +399,21 @@ function contentDispositionAttachment(filename) {
   return `attachment; filename="${fallback}"; filename*=UTF-8''${encodeURIComponent(filename || fallback)}`;
 }
 
-function imageExtension(contentType = "", imageUrl = "") {
-  if (contentType.includes("png")) return ".png";
-  if (contentType.includes("webp")) return ".webp";
-  if (contentType.includes("gif")) return ".gif";
-  if (contentType.includes("svg")) return ".svg";
-  const ext = path.extname(new URL(imageUrl).pathname).toLowerCase();
-  if ([".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"].includes(ext)) return ext;
-  return ".jpg";
-}
-
-function isImageContentType(contentType = "") {
-  return String(contentType || "").trim().toLowerCase().startsWith("image/");
-}
-
-function isPrivateIpv4(address) {
-  const parts = String(address || "").split(".").map((part) => Number(part));
-  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return true;
-  const [first, second, third] = parts;
-  return (
-    first === 0
-    || first === 10
-    || first === 127
-    || (first === 100 && second >= 64 && second <= 127)
-    || (first === 169 && second === 254)
-    || (first === 172 && second >= 16 && second <= 31)
-    || (first === 192 && second === 168)
-    || (first === 192 && second === 0 && third === 0)
-    || (first === 192 && second === 0 && third === 2)
-    || (first === 198 && (second === 18 || second === 19))
-    || (first === 198 && second === 51 && third === 100)
-    || (first === 203 && second === 0 && third === 113)
-    || first >= 224
-  );
-}
-
-function isPrivateIpv6(address) {
-  const normalized = String(address || "").toLowerCase();
-  if (!normalized || normalized === "::" || normalized === "::1") return true;
-  if (normalized.startsWith("fc") || normalized.startsWith("fd") || normalized.startsWith("fe80:")) return true;
-  const mappedIpv4 = normalized.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/)?.[1];
-  return mappedIpv4 ? isPrivateIpv4(mappedIpv4) : false;
-}
-
-function isBlockedIpAddress(address) {
-  const family = net.isIP(address);
-  if (family === 4) return isPrivateIpv4(address);
-  if (family === 6) return isPrivateIpv6(address);
-  return true;
-}
-
-async function validateImageCacheTarget(parsed) {
-  const hostname = parsed.hostname.toLowerCase();
-  if (!hostname || hostname === "localhost" || hostname.endsWith(".localhost")) {
-    throw new Error("图片地址不允许指向本机或内网。");
-  }
-
-  if (net.isIP(hostname)) {
-    if (isBlockedIpAddress(hostname)) throw new Error("图片地址不允许指向本机或内网。");
-    return;
-  }
-
-  const addresses = await dns.lookup(hostname, { all: true, verbatim: true });
-  if (!addresses.length || addresses.some((entry) => isBlockedIpAddress(entry.address))) {
-    throw new Error("图片地址不允许指向本机或内网。");
-  }
-}
-
 async function sendCachedImage(res, imageUrl) {
-  let parsed = null;
   try {
-    parsed = new URL(imageUrl);
-  } catch {
-    sendJson(res, 400, { ok: false, error: "图片地址无效。" });
-    return;
-  }
-  if (!["http:", "https:"].includes(parsed.protocol)) {
-    sendJson(res, 400, { ok: false, error: "只支持 http/https 图片。" });
-    return;
-  }
-  try {
-    await validateImageCacheTarget(parsed);
-  } catch (error) {
-    sendJson(res, 400, { ok: false, error: error.message || "图片地址不允许访问。" });
-    return;
-  }
-
-  await mkdir(imageCacheDir, { recursive: true });
-  const key = crypto.createHash("sha1").update(parsed.href).digest("hex");
-  const metaPath = path.join(imageCacheDir, `${key}.json`);
-  try {
-    const meta = JSON.parse(await readFile(metaPath, "utf8"));
-    if (!isImageContentType(meta.contentType)) throw new Error("Cached content is not an image");
-    const cached = await readFile(path.join(imageCacheDir, meta.file));
+    const image = await imageCacheProxyService.getImage(imageUrl);
     res.writeHead(200, {
-      "content-type": meta.contentType,
+      "content-type": image.contentType,
       "cache-control": "public, max-age=604800",
     });
-    res.end(cached);
-    return;
-  } catch {
-    // Cache miss; fetch below.
-  }
-
-  try {
-    const response = await fetch(parsed.href, {
-      headers: {
-        "user-agent": "Mozilla/5.0",
-        "accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-      },
-    });
-    if (!response.ok) {
-      sendJson(res, 502, { ok: false, error: `图片读取失败：${response.status}` });
-      return;
-    }
-    const contentType = response.headers.get("content-type") || "";
-    if (!isImageContentType(contentType)) {
-      sendJson(res, 502, { ok: false, error: "图片读取失败：返回内容不是图片。" });
-      return;
-    }
-    const bytes = Buffer.from(await response.arrayBuffer());
-    const file = `${key}${imageExtension(contentType, parsed.href)}`;
-    await writeFile(path.join(imageCacheDir, file), bytes);
-    await writeFile(metaPath, JSON.stringify({ file, contentType, source: parsed.href }, null, 2), "utf8");
-    res.writeHead(200, {
-      "content-type": contentType,
-      "cache-control": "public, max-age=604800",
-    });
-    res.end(bytes);
+    res.end(image.bytes);
   } catch (error) {
-    sendJson(res, 502, { ok: false, error: `图片读取失败：${error.message}` });
+    const controlledError = Number.isInteger(error?.statusCode);
+    sendJson(res, error?.statusCode || 502, {
+      ok: false,
+      error: controlledError ? error.message : "图片读取失败。",
+      code: error?.code || "IMAGE_CACHE_FAILED",
+    });
   }
 }
 
