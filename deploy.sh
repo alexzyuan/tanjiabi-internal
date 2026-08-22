@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+export NODE_ENV=production
+
 APP_DIR="${APP_DIR:-/opt/tanjia-bi}"
 APP_NAME="${PM2_APP_NAME:-tanjia-bi}"
 KEEP_RELEASES="${KEEP_RELEASES:-3}"
@@ -262,6 +264,9 @@ validate_sales_facts_preflight_artifact
 
 log "迁移共享商品目录缓存"
 node scripts/migrate-product-catalog.js
+
+log "校验生产数据源配置"
+node -e 'import("./src/config/index.js").then(({ getConfig }) => { const config = getConfig(); console.log(`production provider: ${config.dataProvider}`); })'
 
 log "重启 PM2 应用：$APP_NAME"
 if pm2 describe "$APP_NAME" >/dev/null 2>&1; then

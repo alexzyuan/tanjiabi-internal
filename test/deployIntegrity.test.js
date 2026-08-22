@@ -9,6 +9,7 @@ import {
   validateFrontendIntegrity,
   verifySalesReviewSmoke,
 } from "../scripts/deploy-integrity.js";
+import * as deployIntegrity from "../scripts/deploy-integrity.js";
 
 function jsonResponse(payload, { status = 200, headers = {} } = {}) {
   return {
@@ -188,4 +189,23 @@ test("healthy sales facts diagnostics retain schema, revision, and count fields"
       factCoverageCount: 3,
     },
   }), []);
+});
+
+test("deployment integrity rejects non-production or implicit data providers", () => {
+  assert.deepEqual(deployIntegrity.validateProductionProviderHealth({
+    provider: "lingxing",
+    runtime: { production: true, dataProviderExplicit: true },
+  }), []);
+  assert.deepEqual(deployIntegrity.validateProductionProviderHealth({
+    provider: "mock",
+    runtime: { production: true, dataProviderExplicit: true },
+  }), ["生产数据源异常：provider=mock"]);
+  assert.deepEqual(deployIntegrity.validateProductionProviderHealth({
+    provider: "lingxing",
+    runtime: { production: false, dataProviderExplicit: true },
+  }), ["生产运行模式异常：production=false"]);
+  assert.deepEqual(deployIntegrity.validateProductionProviderHealth({
+    provider: "lingxing",
+    runtime: { production: true, dataProviderExplicit: false },
+  }), ["生产数据源必须显式配置 DATA_PROVIDER=lingxing"]);
 });

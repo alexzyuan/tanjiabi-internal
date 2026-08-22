@@ -56,6 +56,34 @@ function hasEnv(name) {
   return process.env[name] !== undefined || dotEnv[name] !== undefined;
 }
 
+function configurationError(message, code) {
+  const error = new Error(message);
+  error.name = "ConfigurationError";
+  error.code = code;
+  return error;
+}
+
+function resolveDataProvider({ explicitProvider, production, appKey, appSecret }) {
+  const normalizedProvider = String(explicitProvider || "").trim().toLowerCase();
+  if (production && normalizedProvider !== "lingxing") {
+    throw configurationError(
+      "Production requires explicit DATA_PROVIDER=lingxing.",
+      "PRODUCTION_DATA_PROVIDER_REQUIRED",
+    );
+  }
+  const provider = normalizedProvider || "mock";
+  if (!new Set(["mock", "lingxing"]).has(provider)) {
+    throw configurationError(`Unsupported DATA_PROVIDER: ${provider}`, "DATA_PROVIDER_INVALID");
+  }
+  if (provider === "lingxing" && (!appKey || !appSecret)) {
+    throw configurationError(
+      "Lingxing provider requires LINGXING_APP_KEY and LINGXING_APP_SECRET.",
+      "LINGXING_CREDENTIALS_REQUIRED",
+    );
+  }
+  return provider;
+}
+
 function readList(name) {
   return readEnv(name)
     .split(",")
@@ -124,9 +152,14 @@ export function getConfig() {
   const lingxingAppKey = readEnv("LINGXING_APP_KEY");
   const lingxingAppSecret = readEnv("LINGXING_APP_SECRET");
   const explicitDataProvider = readEnv("DATA_PROVIDER");
-  const dataProvider = explicitDataProvider || (lingxingAppKey && lingxingAppSecret ? "lingxing" : "mock");
   const environment = String(readEnv("NODE_ENV", "development")).trim().toLowerCase() || "development";
   const production = environment === "production";
+  const dataProvider = resolveDataProvider({
+    explicitProvider: explicitDataProvider,
+    production,
+    appKey: lingxingAppKey,
+    appSecret: lingxingAppSecret,
+  });
   const authEnabled = hasEnv("AUTH_ENABLED")
     ? readBool("AUTH_ENABLED", false)
     : production || dingtalkLoginConfigured || localLoginConfigured;

@@ -117,7 +117,11 @@ export function createCoreRoutes({
           ok: true,
           name: "探嘉数据分析系统",
           provider: config.dataProvider,
-          runtime: config.runtime,
+          runtime: {
+            environment: config.runtime?.environment || "unknown",
+            production: config.runtime?.production === true,
+            dataProviderExplicit: config.runtime?.dataProviderExplicit === true,
+          },
           sync: getSyncState(),
           productCatalog: readProductCatalogHealth(),
           salesFacts: readSalesFactsHealth(),

@@ -226,6 +226,11 @@ test("public health and auth status routes remain available without a session", 
     assert.equal(healthResponse.status, 200);
     const health = await healthResponse.json();
     assert.equal(health.ok, true);
+    assert.deepEqual(health.runtime, {
+      environment: "test",
+      production: false,
+      dataProviderExplicit: true,
+    });
 
     const authResponse = await fetch(`${server.baseUrl}/api/auth/me`);
     assert.equal(authResponse.status, 200);

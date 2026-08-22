@@ -9,6 +9,19 @@ import { safeQuickCheckDiagnostic } from "../src/utils/safeQuickCheckDiagnostic.
 
 export const DEPLOY_INTEGRITY_VERSION = 1;
 
+export function validateProductionProviderHealth(health) {
+  const errors = [];
+  const provider = String(health?.provider || "missing");
+  if (provider !== "lingxing") errors.push(`生产数据源异常：provider=${provider}`);
+  if (health?.runtime?.production !== true) {
+    errors.push(`生产运行模式异常：production=${String(health?.runtime?.production ?? "missing")}`);
+  }
+  if (health?.runtime?.dataProviderExplicit !== true) {
+    errors.push("生产数据源必须显式配置 DATA_PROVIDER=lingxing");
+  }
+  return errors;
+}
+
 function decodeHtmlEntities(value) {
   return String(value || "")
     .replace(/&nbsp;/g, " ")
@@ -365,6 +378,7 @@ export async function verifyDeployedApp({ root = process.cwd(), baseUrl }) {
   if (health?.ok !== true) {
     errors.push(`/api/health 返回异常：${JSON.stringify(health).slice(0, 200)}`);
   }
+  errors.push(...validateProductionProviderHealth(health));
   errors.push(...validateProductCatalogHealth(health));
   errors.push(...validateSalesFactsHealth(health));
 
