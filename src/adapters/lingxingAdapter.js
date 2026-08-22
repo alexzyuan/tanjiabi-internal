@@ -1530,7 +1530,6 @@ export class LingxingAdapter {
           "head_shipping_fee",
           "head_freight",
           "first_logistics_fee",
-          "shipping_cost",
           "cgTransportCostsTotal",
         ]),
         firstLegCostRate: record.proportionOfCgTransport,

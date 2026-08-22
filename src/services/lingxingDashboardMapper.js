@@ -301,8 +301,6 @@ const fieldMap = {
     "head_freight",
     "firstLogisticsFee",
     "first_logistics_fee",
-    "shippingCost",
-    "shipping_cost",
     "cgTransportCostsTotal",
   ],
   grossRate: ["grossRate", "gross_rate", "grossMargin", "gross_margin"],
