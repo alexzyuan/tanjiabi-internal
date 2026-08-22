@@ -26,6 +26,29 @@ function readFirstNumber(item, keys) {
   return Number.isFinite(number) ? number : value;
 }
 
+function safeDiagnosticCode(value) {
+  const normalized = String(value ?? "").trim();
+  if (!/^[A-Za-z0-9_.:-]{1,64}$/u.test(normalized)) return null;
+  return /(token|secret|password|payload|raw|body)/iu.test(normalized) ? null : normalized;
+}
+
+function safeDiagnosticErrorName(value) {
+  const normalized = String(value || "Error").trim();
+  return /^[A-Za-z][A-Za-z0-9._-]{0,63}$/u.test(normalized) ? normalized : "Error";
+}
+
+function safeDiagnosticKeys(value) {
+  if (!value || typeof value !== "object") return [];
+  return Object.keys(value)
+    .filter((key) => /^[A-Za-z][A-Za-z0-9_]{0,63}$/u.test(key))
+    .slice(0, 100);
+}
+
+function safeDiagnosticDate(value) {
+  const normalized = String(value || "").trim();
+  return /^\d{4}-\d{2}-\d{2}$/u.test(normalized) ? normalized : "";
+}
+
 function isCoreSeller(seller) {
   const name = readFirst(seller, ["name", "seller_name", "shop_name", "store_name", "account_name"]);
   const country = readFirst(seller, ["country", "countryName", "country_name", "marketplace", "marketplaceName"]);
@@ -1190,21 +1213,17 @@ export class LingxingAdapter {
         results.push({
           ok: true,
           searchDateField: variant.search_date_field || "default",
-          requestParams,
-          code: payload.code,
-          message: payload.message || payload.msg || "",
+          code: safeDiagnosticCode(payload.code),
           recordCount: records.length,
-          dataKeys: Object.keys(payload.data || {}),
-          sampleKeys: Object.keys(records[0] || {}),
-          sample: records[0] || null,
+          dataKeys: safeDiagnosticKeys(payload.data),
+          sampleKeys: safeDiagnosticKeys(records[0]),
         });
       } catch (error) {
         results.push({
           ok: false,
           searchDateField: variant.search_date_field || "default",
-          requestParams,
-          error: error.message,
-          details: error.details || null,
+          errorName: safeDiagnosticErrorName(error?.name),
+          errorCode: safeDiagnosticCode(error?.code),
         });
       }
     }
@@ -1337,36 +1356,26 @@ export class LingxingAdapter {
             ok: true,
             source: source.name,
             endpoint: source.endpoint,
-            requestParams,
-            code: payload.code,
-            message: payload.message || payload.msg || "",
+            code: safeDiagnosticCode(payload.code),
             recordCount: records.length,
             totals: this.summarizeProfitRecords(records),
-            dataKeys: Object.keys(payload.data || {}),
-            sampleKeys: Object.keys(records[0] || {}),
-            sample: records[0] || null,
+            dataKeys: safeDiagnosticKeys(payload.data),
+            sampleKeys: safeDiagnosticKeys(records[0]),
           });
         } catch (error) {
           results.push({
             ok: false,
             source: source.name,
             endpoint: source.endpoint,
-            requestParams,
-            error: error.message,
-            details: error.details || null,
+            errorName: safeDiagnosticErrorName(error?.name),
+            errorCode: safeDiagnosticCode(error?.code),
           });
         }
       }
     }
 
     return {
-      dateRange: { startDate: baseStart, endDate: baseEnd },
-      targetFromErpScreenshot: {
-        salesAmount: 45434.88,
-        grossProfit: 1532.47,
-        quantity: 300,
-        adsSales: 16153.5,
-      },
+      dateRange: { startDate: safeDiagnosticDate(baseStart), endDate: safeDiagnosticDate(baseEnd) },
       results,
     };
   }

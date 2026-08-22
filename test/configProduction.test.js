@@ -14,6 +14,7 @@ const controlledKeys = [
   "AUTH_ENABLED",
   "AUTH_USERNAME",
   "AUTH_PASSWORD",
+  "LINGXING_FINANCE_DEBUG_ENABLED",
 ];
 
 async function loadConfig(env = {}) {
@@ -78,4 +79,15 @@ test("valid production Lingxing configuration is explicit and fail-closed", asyn
   assert.equal(config.runtime.production, true);
   assert.equal(config.runtime.dataProviderExplicit, true);
   assert.equal(config.auth.enabled, true);
+  assert.equal(config.debug.lingxingFinancialEnabled, false);
+});
+
+test("Lingxing financial diagnostics require an explicit feature flag", async () => {
+  const config = await loadConfig({
+    NODE_ENV: "development",
+    DATA_PROVIDER: "mock",
+    LINGXING_FINANCE_DEBUG_ENABLED: "true",
+  });
+
+  assert.equal(config.debug.lingxingFinancialEnabled, true);
 });

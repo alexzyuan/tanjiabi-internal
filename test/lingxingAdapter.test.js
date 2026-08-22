@@ -14,6 +14,54 @@ const lingxingTestConfig = {
   appSecret: "secret",
 };
 
+function assertKeysAbsent(value, forbiddenKeys) {
+  if (!value || typeof value !== "object") return;
+  for (const [key, nested] of Object.entries(value)) {
+    assert.equal(forbiddenKeys.has(key), false, `diagnostic payload must not expose ${key}`);
+    if (Array.isArray(nested)) nested.forEach((item) => assertKeysAbsent(item, forbiddenKeys));
+    else assertKeysAbsent(nested, forbiddenKeys);
+  }
+}
+
+test("Lingxing financial diagnostics expose schema summaries without raw records or errors", async () => {
+  const adapter = new LingxingAdapter(lingxingTestConfig);
+  const successPayload = {
+    code: "SUCCESS",
+    message: "upstream-secret-message",
+    data: { records: [{ amount: 12, customerEmail: "customer-secret@example.com" }] },
+  };
+  adapter.fetchOrderProfitReport = async () => successPayload;
+  adapter.fetchSellerProfitReport = async () => successPayload;
+  adapter.fetchSellerProfitStatistics = async () => successPayload;
+  adapter.fetchMskuOrderProfit = async () => successPayload;
+
+  const orderProfit = await adapter.debugOrderProfitReport({
+    start_date: "2026-08-01",
+    end_date: "2026-08-22",
+  });
+  const profitSources = await adapter.debugProfitSources({
+    startDate: "2026-08-01",
+    endDate: "2026-08-22",
+  });
+
+  const combined = { orderProfit, profitSources };
+  assertKeysAbsent(combined, new Set(["sample", "details", "requestParams", "message"]));
+  const serialized = JSON.stringify(combined);
+  assert.equal(serialized.includes("customer-secret@example.com"), false);
+  assert.equal(serialized.includes("upstream-secret-message"), false);
+  assert.match(serialized, /customerEmail/);
+
+  const upstreamError = new Error("access_token upstream-secret-token");
+  upstreamError.code = "UPSTREAM_REJECTED";
+  upstreamError.details = { response: "raw-secret-details" };
+  adapter.fetchOrderProfitReport = async () => { throw upstreamError; };
+  const failed = await adapter.debugOrderProfitReport({ start_date: "2026-08-01", end_date: "2026-08-22" });
+  const serializedFailure = JSON.stringify(failed);
+  assert.equal(serializedFailure.includes("upstream-secret-token"), false);
+  assert.equal(serializedFailure.includes("raw-secret-details"), false);
+  assert.ok(failed.results.every((result) => result.errorCode === "UPSTREAM_REJECTED"));
+});
+
 test("normalized order profit keeps currency and Lingxing rate metadata", () => {
   const adapter = new LingxingAdapter(lingxingTestConfig);
   const [row] = adapter.normalizeMskuOrderProfitRecords([{

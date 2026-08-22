@@ -190,6 +190,9 @@ export function getConfig() {
       allowedUnionIds: readList("AUTH_ALLOWED_UNION_IDS"),
       allowedOpenIds: readList("AUTH_ALLOWED_OPEN_IDS"),
     },
+    debug: {
+      lingxingFinancialEnabled: readBool("LINGXING_FINANCE_DEBUG_ENABLED", false),
+    },
     lingxing: {
       baseUrl: readEnv("LINGXING_BASE_URL", "https://openapi.lingxing.com"),
       appKey: lingxingAppKey,
