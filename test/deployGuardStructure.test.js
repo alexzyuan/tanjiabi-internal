@@ -37,10 +37,15 @@ test("server deployment rejects packages without a confirmed production branch m
   assert.match(source, /health_check[\s\S]*deploy_integrity_check[\s\S]*cleanup_old_releases/);
 });
 
-test("deployment package source lists catalog smoke and migration scripts explicitly", async () => {
-  const source = await readFile(new URL("../scripts/package-deploy.js", import.meta.url), "utf8");
-  assert.match(source, /scripts\/product-catalog-sqlite-smoke\.js/);
-  assert.match(source, /scripts\/migrate-product-catalog\.js/);
+test("deployment package explicitly includes required deploy-time tools and prechecks release pruning", async () => {
+  const [packageSource, deploySource] = await Promise.all([
+    readFile(new URL("../scripts/package-deploy.js", import.meta.url), "utf8"),
+    readFile(new URL("../deploy.sh", import.meta.url), "utf8"),
+  ]);
+  assert.match(packageSource, /scripts\/product-catalog-sqlite-smoke\.js/);
+  assert.match(packageSource, /scripts\/migrate-product-catalog\.js/);
+  assert.match(packageSource, /scripts\/prune-deploy-releases\.js/);
+  assert.match(deploySource, /\[ -f "\$TMP_DIR\/scripts\/prune-deploy-releases\.js" \] \|\| fail/);
 });
 
 test("deployment package includes the controlled inventory-ledger rebuild command", async () => {

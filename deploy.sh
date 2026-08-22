@@ -35,17 +35,10 @@ read_port() {
 }
 
 cleanup_old_releases() {
-  mapfile -t releases < <(find "$RELEASES_DIR" -mindepth 1 -maxdepth 1 -type d | sort)
-  local count="${#releases[@]}"
-  if [ "$count" -le "$KEEP_RELEASES" ]; then
-    return
-  fi
-
-  local remove_count=$((count - KEEP_RELEASES))
-  for old_release in "${releases[@]:0:$remove_count}"; do
-    log "删除旧备份：$old_release"
-    rm -rf "$old_release"
-  done
+  node scripts/prune-deploy-releases.js \
+    --releases-dir "$RELEASES_DIR" \
+    --keep "$KEEP_RELEASES" \
+    --protect "$BACKUP_DIR"
 }
 
 backup_sales_forecast_runtime_data() {
@@ -213,6 +206,7 @@ tar -xzf "$ARCHIVE" -C "$TMP_DIR"
 [ -f "$TMP_DIR/scripts/validate-sales-facts-schema.js" ] || fail "部署包缺少销售事实 schema 校验脚本"
 [ -f "$TMP_DIR/scripts/validate-sales-facts-preflight-artifact.js" ] || fail "部署包缺少销售事实 preflight artifact 校验脚本"
 [ -f "$TMP_DIR/scripts/inventory-provision-deploy-snapshot.js" ] || fail "部署包缺少库存计提保护快照工具"
+[ -f "$TMP_DIR/scripts/prune-deploy-releases.js" ] || fail "部署包缺少部署备份清理工具"
 
 log "备份当前版本到：$BACKUP_DIR"
 mkdir -p "$BACKUP_DIR"

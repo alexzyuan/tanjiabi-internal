@@ -38,6 +38,7 @@ const explicitFiles = [
   "scripts/retire-product-catalog-legacy-cache.js",
   "scripts/rebuild-inventory-ledger.js",
   "scripts/inventory-provision-deploy-snapshot.js",
+  "scripts/prune-deploy-releases.js",
   "assets/favicon.svg",
   "assets/jm-logo.jpg",
   "assets/jm-favicon.png",
