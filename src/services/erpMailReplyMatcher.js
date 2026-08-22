@@ -1,5 +1,5 @@
 import { ImapFlow } from "imapflow";
-import { simpleParser } from "mailparser";
+import { parseMailSource } from "./mailMessageParser.js";
 
 function safeText(value, maxLength = 2000) {
   return String(value || "").replace(/\s+/g, " ").trim().slice(0, maxLength);
@@ -97,8 +97,8 @@ export function applyErpBuyerMessageReplyStatus(rows = [], sentMessages = []) {
   });
 }
 
-async function parseFetchedMessage(message, { mailbox = "已发送", account = "" } = {}) {
-  const parsed = message.source ? await simpleParser(message.source).catch(() => ({})) : {};
+export async function parseErpReplySentMessage(message, { mailbox = "已发送", account = "", parser, logger } = {}) {
+  const parsed = await parseMailSource(message.source, { mailbox, uid: message.uid, account, parser, logger });
   return {
     uid: String(message.uid ?? ""),
     account,
@@ -137,7 +137,7 @@ export async function fetchErpReplySentMessages(config = {}) {
       try {
         const messages = [];
         for await (const message of client.fetch({ since }, { uid: true, envelope: true, flags: true, source: true })) {
-          messages.push(await parseFetchedMessage(message, {
+          messages.push(await parseErpReplySentMessage(message, {
             mailbox: config.sentMailbox || "已发送",
             account: account.user,
           }));

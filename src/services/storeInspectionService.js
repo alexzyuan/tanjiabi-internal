@@ -1,4 +1,3 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { getConfig } from "../config/index.js";
 import { filterCoreSellers, getLingxingAdapter } from "../adapters/lingxingAdapter.js";
@@ -6,6 +5,7 @@ import { sendDingTalkMarkdown, sendDingTalkText } from "./dingtalkService.js";
 import { getAftersalesMailInspectionSummary } from "./aftersalesMailService.js";
 import { getLowInventoryFeeDashboard } from "./lowInventoryFeeService.js";
 import { readLingxingSellersCache, saveLingxingSellersCache } from "../utils/cacheStore.js";
+import { JsonStoreError, readJson, writeJsonAtomic } from "../utils/jsonStore.js";
 
 const cacheFile = path.join(process.cwd(), "data-cache", "store-inspection-latest.json");
 const historyFile = path.join(process.cwd(), "data-cache", "store-inspection-history.json");
@@ -27,6 +27,52 @@ const state = {
 };
 
 let timer = null;
+
+function invalidJsonShape(filePath, expected) {
+  return new JsonStoreError(`JSON schema invalid: ${filePath}`, {
+    code: "JSON_SCHEMA_INVALID",
+    filePath,
+    expected,
+  });
+}
+
+function requireJsonRecord(value, filePath) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw invalidJsonShape(filePath, "object");
+  return value;
+}
+
+function requireJsonArray(value, filePath) {
+  if (!Array.isArray(value)) throw invalidJsonShape(filePath, "array");
+  return value;
+}
+
+function logPersistenceFailure(operation, filePath, error) {
+  console.error("[store-inspection-persistence]", {
+    operation,
+    filePath,
+    code: error?.code || "UNKNOWN",
+    errorName: error?.name || "Error",
+  });
+}
+
+async function readInspectionJson(filePath, fallback, operation, validator = null) {
+  try {
+    const value = await readJson(filePath, fallback);
+    return validator ? validator(value, filePath) : value;
+  } catch (error) {
+    logPersistenceFailure(operation, filePath, error);
+    throw error;
+  }
+}
+
+async function writeInspectionJson(filePath, value, operation) {
+  try {
+    return await writeJsonAtomic(filePath, value);
+  } catch (error) {
+    logPersistenceFailure(operation, filePath, error);
+    throw error;
+  }
+}
 
 function normalizeScheduleTime(value, fallback = "08:30") {
   const time = String(value || "").trim();
@@ -69,38 +115,26 @@ async function readStoreInspectionSettings() {
     lastRunAt: "",
     updatedAt: "",
   };
-  try {
-    const saved = JSON.parse(await readFile(settingsFile, "utf8"));
-    return {
-      ...defaults,
-      ...saved,
-      enabled: saved.enabled !== false,
-      sendTime: normalizeScheduleTime(saved.sendTime, defaults.sendTime),
-      timezone: scheduleTimeZone,
-    };
-  } catch {
-    return defaults;
-  }
+  const saved = await readInspectionJson(settingsFile, defaults, "read-settings", requireJsonRecord);
+  return {
+    ...defaults,
+    ...saved,
+    enabled: saved.enabled !== false,
+    sendTime: normalizeScheduleTime(saved.sendTime, defaults.sendTime),
+    timezone: scheduleTimeZone,
+  };
 }
 
 async function saveStoreInspectionSettings(settings) {
-  await mkdir(path.dirname(settingsFile), { recursive: true });
-  await writeFile(settingsFile, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
-  return settings;
+  return writeInspectionJson(settingsFile, settings, "write-settings");
 }
 
 async function readErpBuyerMessageStatuses() {
-  try {
-    return JSON.parse(await readFile(erpBuyerMessageStatusFile, "utf8"));
-  } catch {
-    return {};
-  }
+  return readInspectionJson(erpBuyerMessageStatusFile, {}, "read-erp-buyer-message-status", requireJsonRecord);
 }
 
 async function writeErpBuyerMessageStatuses(statuses) {
-  await mkdir(path.dirname(erpBuyerMessageStatusFile), { recursive: true });
-  await writeFile(erpBuyerMessageStatusFile, `${JSON.stringify(statuses, null, 2)}\n`, "utf8");
-  return statuses;
+  return writeInspectionJson(erpBuyerMessageStatusFile, statuses, "write-erp-buyer-message-status");
 }
 
 export async function getStoreInspectionSettings() {
@@ -1233,26 +1267,19 @@ export async function getStoreInspectionMarkdown() {
 }
 
 async function saveInspectionResult(result) {
-  await mkdir(path.dirname(cacheFile), { recursive: true });
-  await writeFile(cacheFile, `${JSON.stringify(result, null, 2)}\n`, "utf8");
   const history = await readInspectionHistory();
-  await writeFile(historyFile, `${JSON.stringify([result, ...history].slice(0, historyLimit), null, 2)}\n`, "utf8");
+  await writeInspectionJson(historyFile, [result, ...history].slice(0, historyLimit), "write-history");
+  await writeInspectionJson(cacheFile, result, "write-latest");
 }
 
 export async function readInspectionHistory() {
-  try {
-    return JSON.parse(await readFile(historyFile, "utf8"));
-  } catch {
-    return [];
-  }
+  return readInspectionJson(historyFile, [], "read-history", requireJsonArray);
 }
 
 export async function readLatestStoreInspection() {
-  try {
-    return JSON.parse(await readFile(cacheFile, "utf8"));
-  } catch {
-    return null;
-  }
+  return readInspectionJson(cacheFile, null, "read-latest", (value, filePath) => (
+    value === null ? null : requireJsonRecord(value, filePath)
+  ));
 }
 
 export function recomputeInspectionOverall(result) {
@@ -1326,8 +1353,7 @@ export async function updateErpBuyerMessageManualStatus(messageId, status = "rep
     erpBuyerMessages,
   });
   next.checks = buildChecks(next);
-  await mkdir(path.dirname(cacheFile), { recursive: true });
-  await writeFile(cacheFile, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+  await writeInspectionJson(cacheFile, next, "write-latest");
   return { ok: true, messageId: id, status, latest: next };
 }
 

@@ -2,11 +2,11 @@ import crypto from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ImapFlow } from "imapflow";
-import { simpleParser } from "mailparser";
 import nodemailer from "nodemailer";
 import { getConfig } from "../config/index.js";
 import { generateAftersalesReplySuggestion } from "./modelscopeService.js";
 import { resolveActiveAiProviderConfig } from "./aiProviderService.js";
+import { parseMailSource } from "./mailMessageParser.js";
 
 const cacheDir = path.join(process.cwd(), "data-cache");
 const latestFile = path.join(cacheDir, "aftersales-mail-latest.json");
@@ -291,10 +291,10 @@ function parserReferences(parsed = {}) {
   return [];
 }
 
-async function parseFetchedMessage(message, { mailbox = "INBOX", saveAttachments = true } = {}) {
+export async function parseFetchedMessage(message, { mailbox = "INBOX", saveAttachments = true, parser, logger } = {}) {
   let parsed = {};
   if (message.source) {
-    parsed = await simpleParser(message.source).catch(() => ({}));
+    parsed = await parseMailSource(message.source, { mailbox, uid: message.uid, parser, logger });
   }
   const attachments = saveAttachments ? await saveParsedImageAttachments(message.uid, parsed.attachments || []) : [];
   return {
