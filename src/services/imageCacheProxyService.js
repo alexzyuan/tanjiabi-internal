@@ -153,7 +153,7 @@ async function readCachedImage(cacheDir, metaPath, key, maxBytes) {
     bytes,
     contentType,
     cacheHit: true,
-    sourceUrl: String(meta.source || ""),
+    sourceUrl: "",
   };
 }
 
@@ -245,6 +245,7 @@ export function createImageCacheProxyService({
           response = await timedFetch.request;
           if (REDIRECT_STATUSES.has(response.status)) {
             timedFetch.stopTimeout();
+            await response.body?.cancel?.();
             if (redirectCount >= maxRedirects) {
               throw imageProxyError("图片重定向次数过多。", "IMAGE_CACHE_REDIRECT_LIMIT", 502);
             }
@@ -277,7 +278,6 @@ export function createImageCacheProxyService({
             await writeJsonAtomic(metaPath, {
               file,
               contentType,
-              source: current.href,
               bytes: totalBytes,
             });
             committed = true;

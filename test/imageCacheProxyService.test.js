@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
@@ -129,8 +129,9 @@ test("image proxy atomically caches a bounded image and reuses it", async () => 
       });
     },
   }, async (service, cacheDir) => {
-    const first = await service.getImage("https://images.example.com/product.png");
-    const second = await service.getImage("https://images.example.com/product.png");
+    const signedUrl = "https://images.example.com/product.png?token=must-not-be-persisted";
+    const first = await service.getImage(signedUrl);
+    const second = await service.getImage(signedUrl);
 
     assert.equal(first.bytes.toString("utf8"), "12345678");
     assert.equal(first.contentType, "image/png");
@@ -138,6 +139,10 @@ test("image proxy atomically caches a bounded image and reuses it", async () => 
     assert.equal(second.bytes.toString("utf8"), "12345678");
     assert.equal(second.cacheHit, true);
     assert.equal(callCount, 1);
-    assert.equal((await readdir(cacheDir)).some((name) => name.endsWith(".tmp")), false);
+    const cacheFiles = await readdir(cacheDir);
+    assert.equal(cacheFiles.some((name) => name.endsWith(".tmp")), false);
+    const metadataFile = cacheFiles.find((name) => name.endsWith(".json"));
+    const metadata = await readFile(path.join(cacheDir, metadataFile), "utf8");
+    assert.equal(metadata.includes("must-not-be-persisted"), false);
   });
 });
