@@ -117,6 +117,21 @@ test("image proxy rejects declared and streamed responses over the byte limit", 
   });
 });
 
+test("image proxy rejects active SVG content instead of serving it from the application origin", async () => {
+  await withService({
+    fetchImpl: async () => response({
+      headers: { "content-type": "image/svg+xml" },
+      chunks: ["<svg><script>alert(1)</script></svg>"],
+    }),
+  }, async (service, cacheDir) => {
+    await assert.rejects(
+      () => service.getImage("https://images.example.com/active.svg"),
+      (error) => error?.code === "IMAGE_CACHE_UNSAFE_TYPE" && error?.statusCode === 502,
+    );
+    assert.deepEqual(await readdir(cacheDir), []);
+  });
+});
+
 test("image proxy atomically caches a bounded image and reuses it", async () => {
   let callCount = 0;
   await withService({

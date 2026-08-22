@@ -405,6 +405,7 @@ async function sendCachedImage(res, imageUrl) {
     res.writeHead(200, {
       "content-type": image.contentType,
       "cache-control": "public, max-age=604800",
+      "x-content-type-options": "nosniff",
     });
     res.end(image.bytes);
   } catch (error) {

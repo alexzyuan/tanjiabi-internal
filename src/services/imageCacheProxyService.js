@@ -10,6 +10,14 @@ const DEFAULT_TIMEOUT_MS = 8_000;
 const DEFAULT_MAX_BYTES = 8 * 1024 * 1024;
 const DEFAULT_MAX_REDIRECTS = 3;
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+const SAFE_IMAGE_EXTENSIONS = new Map([
+  ["image/apng", ".png"],
+  ["image/avif", ".avif"],
+  ["image/gif", ".gif"],
+  ["image/jpeg", ".jpg"],
+  ["image/png", ".png"],
+  ["image/webp", ".webp"],
+]);
 
 function imageProxyError(message, code, statusCode, cause) {
   const error = new Error(message, cause ? { cause } : undefined);
@@ -103,21 +111,13 @@ function normalizeContentType(value) {
 }
 
 function imageExtension(contentType) {
-  const extensions = new Map([
-    ["image/avif", ".avif"],
-    ["image/gif", ".gif"],
-    ["image/jpeg", ".jpg"],
-    ["image/png", ".png"],
-    ["image/svg+xml", ".svg"],
-    ["image/webp", ".webp"],
-  ]);
-  return extensions.get(contentType) || ".img";
+  return SAFE_IMAGE_EXTENSIONS.get(contentType) || ".img";
 }
 
 function assertImageContentType(value) {
   const contentType = normalizeContentType(value);
-  if (!contentType.startsWith("image/")) {
-    throw imageProxyError("图片读取失败：返回内容不是图片。", "IMAGE_CACHE_NOT_IMAGE", 502);
+  if (!SAFE_IMAGE_EXTENSIONS.has(contentType)) {
+    throw imageProxyError("图片读取失败：返回内容不是安全的图片格式。", "IMAGE_CACHE_UNSAFE_TYPE", 502);
   }
   return contentType;
 }
