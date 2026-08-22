@@ -139,9 +139,9 @@ if (!production && !explicitProvider) provider = "mock";
 - Consumes: the completed G0-G4 commits.
 - Produces: fresh verification evidence, a clean review summary, and deployment handoff status.
 
-- [ ] Run focused security tests for every goal.
-- [ ] Run `npm test` and confirm zero failures.
-- [ ] Run `npm run check` and confirm zero failures.
-- [ ] Run `git diff --check` and inspect `git diff main...HEAD` for secrets and unrelated changes.
-- [ ] Confirm the worktree is committed before considering a deployment package; package creation must still satisfy the repository deployment guard.
-- [ ] Mark the Codex goal complete only after all required work and verification are finished.
+- [x] Run focused security tests for every goal (104/104 passed before the final image hardening follow-ups).
+- [x] Run `npm test` and confirm zero failures (1267/1267 Node tests plus browser CSS verification).
+- [x] Run `npm run check` and confirm zero failures.
+- [x] Run `git diff --check` and inspect `git diff main...HEAD` for secrets and unrelated changes.
+- [x] Confirm the worktree is committed before considering a deployment package; package creation must still satisfy the repository deployment guard.
+- [x] Mark the Codex goal complete only after all required work and verification are finished.
