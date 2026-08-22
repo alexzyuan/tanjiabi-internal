@@ -75,7 +75,7 @@ function resolveDataProvider({ explicitProvider, production, appKey, appSecret }
   if (!new Set(["mock", "lingxing"]).has(provider)) {
     throw configurationError(`Unsupported DATA_PROVIDER: ${provider}`, "DATA_PROVIDER_INVALID");
   }
-  if (provider === "lingxing" && (!appKey || !appSecret)) {
+  if (production && provider === "lingxing" && (!appKey || !appSecret)) {
     throw configurationError(
       "Lingxing provider requires LINGXING_APP_KEY and LINGXING_APP_SECRET.",
       "LINGXING_CREDENTIALS_REQUIRED",

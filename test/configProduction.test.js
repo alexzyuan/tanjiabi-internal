@@ -60,11 +60,14 @@ test("Lingxing provider requires both application credentials", async () => {
 test("test and development runtimes may explicitly use mock data", async () => {
   const implicitTest = await loadConfig({ NODE_ENV: "test" });
   const explicitDevelopment = await loadConfig({ NODE_ENV: "development", DATA_PROVIDER: "mock" });
+  const injectedLingxingTest = await loadConfig({ NODE_ENV: "test", DATA_PROVIDER: "lingxing" });
 
   assert.equal(implicitTest.dataProvider, "mock");
   assert.equal(implicitTest.runtime.dataProviderExplicit, false);
   assert.equal(explicitDevelopment.dataProvider, "mock");
   assert.equal(explicitDevelopment.runtime.dataProviderExplicit, true);
+  assert.equal(injectedLingxingTest.dataProvider, "lingxing");
+  assert.equal(injectedLingxingTest.runtime.production, false);
 });
 
 test("valid production Lingxing configuration is explicit and fail-closed", async () => {

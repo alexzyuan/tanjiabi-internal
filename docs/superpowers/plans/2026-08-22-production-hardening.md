@@ -50,13 +50,13 @@
 - Consumes: `data-cache/auth-users.json`, `data-cache/dingtalk-auth-users.json`, `AUTH_ENABLED`, and the selected runtime provider.
 - Produces: validated account arrays, atomic account writes, and an authentication policy independent of parsed account-file contents.
 
-- [ ] Add a failing service test that writes malformed JSON and expects list/login/create operations to reject without overwriting the file.
-- [ ] Add a failing server test proving a malformed managed-user file cannot make a protected route public.
-- [ ] Replace catch-all reads with `readJson(path, { users: [] })`; validate that the root is an object and `users` is an array.
-- [ ] Replace direct account-file writes with `writeJsonAtomic(path, { users })`.
-- [ ] Add startup validation for existing account stores and make production authentication default enabled.
-- [ ] Remove `hasManagedAuthUsers()` from the `isAuthEnabled()` security decision.
-- [ ] Run `node --test test/authUserService.test.js test/serverSecurity.test.js` and commit `fix: fail closed on damaged auth stores`.
+- [x] Add a failing service test that writes malformed JSON and expects list/login/create operations to reject without overwriting the file.
+- [x] Add a failing server test proving a malformed managed-user file cannot make a protected route public.
+- [x] Replace catch-all reads with strict JSON reads; validate that the root is an object and `users` is an array.
+- [x] Replace direct account-file writes with `writeJsonAtomic(path, { users })`.
+- [x] Add startup validation for existing account stores and make production authentication default enabled.
+- [x] Remove `hasManagedAuthUsers()` from the `isAuthEnabled()` security decision.
+- [x] Run `node --test test/authUserService.test.js test/serverSecurity.test.js` and commit `fix: fail closed on damaged auth stores` (`520ddb0`).
 
 ### Goal G2: Prevent production mock-data fallback
 
@@ -73,20 +73,20 @@
 - Consumes: `NODE_ENV`, `DATA_PROVIDER`, `LINGXING_APP_KEY`, and `LINGXING_APP_SECRET`.
 - Produces: a validated runtime provider and health metadata that deployment verification can enforce.
 
-- [ ] Add failing configuration tests for production with missing `DATA_PROVIDER`, `DATA_PROVIDER=mock`, and incomplete Lingxing credentials.
-- [ ] Add a failing deployment-integrity test for `health.provider !== "lingxing"` or a non-explicit production provider.
-- [ ] Resolve the provider with this policy:
+- [x] Add failing configuration tests for production with missing `DATA_PROVIDER`, `DATA_PROVIDER=mock`, and incomplete Lingxing credentials.
+- [x] Add a failing deployment-integrity test for `health.provider !== "lingxing"` or a non-explicit production provider.
+- [x] Resolve the provider with this policy:
 
 ```js
 if (production && explicitProvider !== "lingxing") throw configurationError;
-if (provider === "lingxing" && (!appKey || !appSecret)) throw configurationError;
+if (production && provider === "lingxing" && (!appKey || !appSecret)) throw configurationError;
 if (!production && !explicitProvider) provider = "mock";
 ```
 
-- [ ] Expose only safe runtime policy fields in `/api/health`: environment, provider, and explicit-provider status.
-- [ ] Export `NODE_ENV=production` in `deploy.sh` before PM2 restart and integrity checks.
-- [ ] Update `.env.example` so production instructions require `DATA_PROVIDER=lingxing` while local examples explicitly use `mock`.
-- [ ] Run configuration and deployment tests, then commit `fix: reject mock provider in production`.
+- [x] Expose only safe runtime policy fields in `/api/health`: environment, provider, and explicit-provider status.
+- [x] Export `NODE_ENV=production` in `deploy.sh` before PM2 restart and integrity checks.
+- [x] Update `.env.example` so production instructions require `DATA_PROVIDER=lingxing` while local examples explicitly use `mock`.
+- [x] Run configuration and deployment tests, then commit `fix: reject mock provider in production` (`70b030a`).
 
 ### Goal G3: Harden the image cache proxy
 
@@ -100,13 +100,13 @@ if (!production && !explicitProvider) provider = "mock";
 - Consumes: an HTTP(S) image URL and injected `fetch`/DNS dependencies for tests.
 - Produces: a validated image response or a controlled error without accessing private networks or consuming unbounded resources.
 
-- [ ] Add failing tests for a public URL redirecting to loopback, excessive redirects, timeout, misleading `Content-Length`, and streamed bytes over the limit.
-- [ ] Implement manual redirect traversal with a maximum of three hops and validate protocol plus DNS/IP on every hop.
-- [ ] Fetch with `redirect: "manual"` and an abort timeout; reject missing/invalid redirect locations.
-- [ ] Reject responses larger than 8 MiB using both `Content-Length` and streamed byte counting.
-- [ ] Stream to a unique temporary file and atomically rename only after content-type and byte-count validation.
-- [ ] Keep error responses controlled and ensure temporary files are removed after failure.
-- [ ] Run image proxy and server security tests, then commit `fix: constrain image cache proxy requests`.
+- [x] Add failing tests for a public URL redirecting to loopback, excessive redirects, timeout, misleading `Content-Length`, and streamed bytes over the limit.
+- [x] Implement manual redirect traversal with a maximum of three hops and validate protocol plus DNS/IP on every hop.
+- [x] Fetch with `redirect: "manual"` and an abort timeout; reject missing/invalid redirect locations.
+- [x] Reject responses larger than 8 MiB using both `Content-Length` and streamed byte counting.
+- [x] Stream to a unique temporary file and atomically rename only after content-type and byte-count validation.
+- [x] Keep error responses controlled and ensure temporary files are removed after failure.
+- [x] Run image proxy and server security tests, then commit `fix: constrain image cache proxy requests` (`3da1c72`).
 
 ### Goal G4: Lock down financial debug APIs
 
@@ -122,13 +122,13 @@ if (!production && !explicitProvider) provider = "mock";
 - Consumes: authenticated administrator identity, `LINGXING_FINANCE_DEBUG_ENABLED`, and safe date filters.
 - Produces: rate-limited diagnostic metadata containing counts and field names but no upstream records or raw error details.
 
-- [ ] Add failing route tests proving ordinary sessions cannot access financial debug endpoints and disabled endpoints are not registered.
-- [ ] Add failing adapter tests with embedded secrets and assert diagnostic results contain no `sample`, `details`, raw message, token, or password value.
-- [ ] Register the two financial debug routes only when `LINGXING_FINANCE_DEBUG_ENABLED=true` and mark them `auth: "admin"`.
-- [ ] Limit each actor to five financial debug requests per minute and return controlled HTTP 429 after the limit.
-- [ ] Log actor, endpoint, date range, result state, and duration without request/response payloads.
-- [ ] Return only endpoint, request variant name, status, row count, totals, top-level keys, and sample field names.
-- [ ] Run route and adapter tests, then commit `fix: restrict financial debug diagnostics`.
+- [x] Add failing route tests proving ordinary sessions cannot access financial debug endpoints and disabled endpoints are not registered.
+- [x] Add failing adapter tests with embedded secrets and assert diagnostic results contain no `sample`, `details`, raw message, token, or password value.
+- [x] Register the two financial debug routes only when `LINGXING_FINANCE_DEBUG_ENABLED=true` and mark them `auth: "admin"`.
+- [x] Limit each actor to five financial debug requests per minute and return controlled HTTP 429 after the limit.
+- [x] Log actor, endpoint, date range, result state, and duration without request/response payloads.
+- [x] Return only endpoint, request variant name, status, row count, totals, top-level keys, and sample field names.
+- [x] Run route and adapter tests, then commit `fix: lock down Lingxing finance diagnostics` (`20377d6`).
 
 ### Goal G5: Final verification and delivery
 
